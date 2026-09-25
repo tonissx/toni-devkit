@@ -81,7 +81,7 @@ function App() {
     else go(it.id);
   };
 
-  const title = (tool ? tool.name : route === 'settings' ? 'Configurações' : 'Início') + ' — Toni Devkit';
+  const title = (tool ? tool.name : route === 'settings' ? 'Configurações' : 'Início') + ' — Devkit';
 
   return (
     <div className="tk-root" style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--tk-bg)', position: 'relative', overflow: 'hidden' }}>
