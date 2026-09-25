@@ -22,7 +22,7 @@ Outros comandos úteis:
 
 ```bash
 npm run dev        # como o start, mas com DevTools abertas
-npm test           # testa o motor SQL no Node (sem Electron)
+npm test           # testa os motores SQL e XML no Node (sem Electron)
 npm run dist       # gera instalador Windows (NSIS) + portable em dist/
 npm run dist:mac   # gera .dmg (macOS)
 npm run dist:linux # gera AppImage (Linux)
@@ -33,6 +33,7 @@ npm run dist:linux # gera AppImage (Linux)
 | Ferramenta | Status |
 | --- | --- |
 | **SQL Formatter**: formata no mesmo padrão do sqlformat.org | ✅ |
+| **XML Formatter**: formata nos moldes do vscode-xml (LemMinX) | ✅ |
 
 ### SQL Formatter
 
@@ -52,6 +53,27 @@ Opções (persistidas localmente):
 Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar saída · `Ctrl+O` abrir .sql · `Ctrl+S` salvar saída ·
 `Ctrl+K` command palette · `Ctrl+\` recolher sidebar · `Ctrl+,` configurações · `Ctrl+1` SQL Formatter.
 
+### XML Formatter
+
+Formatador de XML próprio, em JS puro (sem dependências, roda direto no renderer). As opções seguem os moldes
+do **[LemMinX](https://github.com/eclipse-lemminx/lemminx)** — o motor de formatação Java por trás da extensão
+[vscode-xml](https://github.com/redhat-developer/vscode-xml) — mas a formatação em si é reimplementada em JS
+(o LemMinX é um language server Java, inviável de embutir num app Electron offline). Valida apenas boa-formação
+(tags fechadas, aspas terminadas etc.), não contra XSD/DTD.
+
+Opções (persistidas localmente, padrões = padrões do LemMinX):
+
+- **Indentação**: 1, 2, 3, 4 ou 8 espaços, ou Tab (padrão: 4 espaços)
+- **Largura máx.**: 80 / 100 / 120 colunas ou sem limite — atributos que estourarem quebram em várias linhas
+- **Elementos vazios**: Manter · `<a/>` · `<a></a>` (padrão: Manter)
+- **Aspas**: Manter · `"` · `'` (padrão: Manter)
+- **Dividir atributos** (um por linha sempre), **Fechamento em nova linha**, **Espaço antes de `/>`**,
+  **Juntar linhas de texto/comentário/CDATA**, **Formatar ao digitar**
+- Elementos com `xml:space="preserve"` e conteúdo misto (texto + tags juntos) não são reindentados por dentro
+- Botão **Padrão VS Code XML** restaura os padrões do LemMinX
+
+Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar saída · `Ctrl+O` abrir .xml · `Ctrl+S` salvar saída · `Ctrl+2` XML Formatter.
+
 ## Estrutura
 
 ```
@@ -68,6 +90,7 @@ src/                 código do app (JSX → renderer/dist/app.js via esbuild)
   main.jsx           shell: TitleBar, Sidebar, command palette, toasts, roteamento
   tools/registry.js  registro de ferramentas
   tools/sql-formatter/SqlFormatter.jsx
+  tools/xml-formatter/XmlFormatter.jsx, engine.js (parser/serializer XML, JS puro)
   screens/Home.jsx, screens/Settings.jsx
 vendor/python/       wheel do sqlparse (offline)
 ```
