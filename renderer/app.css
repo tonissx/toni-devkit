@@ -30,5 +30,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .set-row__label { font-size: 13px; color: var(--tk-text); }
 .set-row__hint { font-size: 12px; color: var(--tk-text-3); margin-top: 2px; }
 .set-row__ctl { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.set-link { font: 500 12.5px var(--tk-font-mono); color: var(--tk-accent-text); text-decoration: none; }
+.set-link:hover { text-decoration: underline; }
 
 .toasts { position: absolute; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 70; }

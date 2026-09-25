@@ -48,7 +48,11 @@ export function Settings({ prefs, setPrefs, info, sqlVersion }) {
         </Card>
         <Card padding={24}>
           <div className="tk-card__title">Sobre</div>
-          <Row label="Toni Devkit" hint="Ferramentas para devs · Toni Devkit Design System"><Badge size="sm" mono>v{info?.version || '—'}</Badge></Row>
+          <Row label="Toni Devkit" hint="Ferramentas para devs"><Badge size="sm" mono>v{info?.version || '—'}</Badge></Row>
+          <Row label="Desenvolvido por"><Badge size="sm">Antônio Gonçalves</Badge></Row>
+          <Row label="Repositório">
+            <a className="set-link" href="https://github.com/tonissx/toni-devkit" target="_blank" rel="noreferrer">github.com/tonissx/toni-devkit</a>
+          </Row>
           <Row label="Electron"><Badge size="sm" mono>{info?.electron || '—'}</Badge></Row>
           <Row label="Motor SQL" hint="sqlparse (Python) sobre Pyodide — o mesmo usado pelo sqlformat.org, 100% offline">
             <Badge size="sm" mono variant={sqlVersion ? 'ok' : 'neutral'} dot>{sqlVersion ? 'sqlparse ' + sqlVersion : 'carregando…'}</Badge>
