@@ -1,13 +1,11 @@
 # Toni Devkit
 
-Aplicativo desktop (Electron) que reúne ferramentas para devs, construído sobre o **Toni Devkit Design System**
-(tokens, fontes Geist, ícones Lucide e componentes React do kit).
+Aplicativo desktop (Electron) que reúne ferramentas para devs.
 
 ## Objetivo
 
 O Toni Devkit é uma caixa de ferramentas offline para o dia a dia de desenvolvimento — cada ferramenta roda
-localmente, sem depender de sites externos, mantendo a mesma identidade visual e a mesma UX (sidebar, command
-palette, atalhos de teclado) em todas elas.
+localmente, sem depender de sites externos.
 
 ## Instalação
 
