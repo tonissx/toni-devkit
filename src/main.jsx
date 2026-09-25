@@ -76,7 +76,7 @@ function App() {
     { id: 'settings', group: 'Ações', label: 'Abrir configurações', icon: 'settings', shortcut: mod(',') },
   ];
   const onSelect = (it) => {
-    if (it.id === 'a-theme') { setPrefs((p) => ({ ...p, theme: document.documentElement.dataset.theme === 'light' ? 'dark' : 'light' })); setPalette(false); }
+    if (it.id === 'a-theme') { setPrefs((p) => ({ ...p, theme: p.theme === 'light' ? 'dark' : 'light' })); setPalette(false); }
     else if (it.id === 'a-sidebar') { toggleSidebar(); setPalette(false); }
     else go(it.id);
   };

@@ -103,7 +103,9 @@ ipcMain.on('win:toggle-maximize', (e) => {
 ipcMain.on('win:close', (e) => fromEvent(e)?.close());
 
 ipcMain.handle('theme:set', (_e, theme) => {
-  nativeTheme.themeSource = theme === 'light' ? 'light' : theme === 'dark' ? 'dark' : 'system';
+  // Qualquer tema que não seja claro/sistema é uma variante escura (hacking, dracula, etc.) —
+  // o chrome nativo da janela só entende claro/escuro/sistema.
+  nativeTheme.themeSource = theme === 'light' ? 'light' : theme === 'system' ? 'system' : 'dark';
   return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
 });
 

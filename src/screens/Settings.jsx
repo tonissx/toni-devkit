@@ -1,6 +1,16 @@
 import { DS, mod } from '../lib/ds.js';
 
-const { PageHeader, Card, SegmentedControl, Kbd, Badge, Toggle } = DS;
+const { PageHeader, Card, Select, Kbd, Badge, Toggle } = DS;
+
+const THEME_OPTIONS = [
+  { value: 'system', label: 'Sistema' },
+  { value: 'light', label: 'Claro' },
+  { value: 'dark', label: 'Hacking (padrão)' },
+  { value: 'min-dark', label: 'Min Dark' },
+  { value: 'dracula', label: 'Dracula' },
+  { value: 'tokyo-nightstorm', label: 'Tokyo Night Storm' },
+  { value: 'night-owl', label: 'Night Owl' },
+];
 
 const Row = ({ label, hint, children }) => (
   <div className="set-row">
@@ -25,9 +35,8 @@ export function Settings({ prefs, setPrefs, info, sqlVersion }) {
       <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 820 }}>
         <Card padding={24}>
           <div className="tk-card__title">Aparência</div>
-          <Row label="Tema" hint="Escuro é o padrão do Toni Devkit">
-            <SegmentedControl size="sm" value={prefs.theme} onChange={(theme) => setPrefs((p) => ({ ...p, theme }))}
-              options={[{ value: 'dark', label: 'Escuro', icon: 'moon' }, { value: 'light', label: 'Claro', icon: 'sun' }, { value: 'system', label: 'Sistema', icon: 'monitor' }]} />
+          <Row label="Tema" hint="Hacking é o padrão do Toni Devkit">
+            <Select options={THEME_OPTIONS} value={prefs.theme} onChange={(theme) => setPrefs((p) => ({ ...p, theme }))} style={{ width: 200 }} />
           </Row>
           <Row label="Sidebar recolhida" hint="Mostra só os ícones das ferramentas">
             <Toggle checked={prefs.collapsed} onChange={(collapsed) => setPrefs((p) => ({ ...p, collapsed }))} />
