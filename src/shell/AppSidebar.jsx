@@ -11,12 +11,24 @@ export function AppSidebar({ route, go, collapsed, onCollapse }) {
     g.items.push(t);
   });
 
+  const ball = (props) => (
+    <span className="app-brand__ballwrap" tabIndex={0} {...props}>
+      <span className="app-brand__ballcore">
+        <img src="assets/symbol.svg" alt="Toni Devkit" className="app-brand__ball" />
+        <span className="app-brand__ball-tex" aria-hidden="true" />
+      </span>
+      <span className="app-brand__wind" aria-hidden="true" />
+      <span className="app-brand__wind" aria-hidden="true" />
+      <span className="app-brand__wind" aria-hidden="true" />
+    </span>
+  );
+
   const header = collapsed
-    ? <img src="assets/symbol.svg" height="28" alt="Toni Devkit" title="Expandir" style={{ cursor: 'pointer' }} onClick={onCollapse} />
+    ? ball({ title: 'Expandir', style: { cursor: 'pointer', height: 28, width: 28 }, onClick: onCollapse })
     : <>
         <span className="app-brand">
-          <img src="assets/symbol.svg" height="22" alt="" />
-          <span className="app-brand__name">Toni <b>Devkit</b></span>
+          {ball({ style: { height: 22, width: 22 } })}
+          <span className="app-brand__name"><b>Devkit</b></span>
         </span>
         <IconButton icon="panel-left-close" label={'Recolher (' + mod('\\') + ')'} size="sm" onClick={onCollapse} style={{ marginLeft: 'auto' }} />
       </>;
