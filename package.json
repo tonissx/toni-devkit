@@ -1,0 +1,72 @@
+{
+  "name": "toni-devkit",
+  "productName": "Toni Devkit",
+  "version": "0.1.0",
+  "description": "Toni Devkit — caixa de ferramentas desktop para devs (Electron). Primeira ferramenta: SQL Formatter no padrão sqlformat.org.",
+  "author": "Antonio Gonçalves",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "build": "node scripts/build-renderer.mjs",
+    "watch": "node scripts/build-renderer.mjs --watch",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron . --dev",
+    "test": "node scripts/test-sql.mjs",
+    "dist": "npm run build && electron-builder --win --x64",
+    "dist:dir": "npm run build && electron-builder --dir",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "pyodide": "314.0.7"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.0.0",
+    "esbuild": "^0.25.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "build": {
+    "appId": "br.com.navship.tonidevkit",
+    "productName": "Toni Devkit",
+    "files": [
+      "electron/**",
+      "renderer/**",
+      "!renderer/dist/*.map",
+      "vendor/**",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/pyodide/**",
+      "vendor/python/**",
+      "electron/sql/**"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "build/icon.png",
+      "category": "Development"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools"
+    }
+  }
+}
