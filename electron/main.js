@@ -137,6 +137,30 @@ ipcMain.handle('file:save-sql', async (e, content, suggestedName) => {
   return { path: r.filePath, name: path.basename(r.filePath) };
 });
 
+const XML_FILTERS = [
+  { name: 'XML', extensions: ['xml', 'xsd', 'xsl', 'xslt', 'svg', 'wsdl', 'pom'] },
+  { name: 'Todos os arquivos', extensions: ['*'] },
+];
+
+ipcMain.handle('file:open-xml', async (e) => {
+  const r = await dialog.showOpenDialog(fromEvent(e), { properties: ['openFile'], filters: XML_FILTERS });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const file = r.filePaths[0];
+  const stat = await fs.stat(file);
+  if (stat.size > 20 * 1024 * 1024) throw new Error('Arquivo maior que 20 MB');
+  return { path: file, name: path.basename(file), content: await fs.readFile(file, 'utf8') };
+});
+
+ipcMain.handle('file:save-xml', async (e, content, suggestedName) => {
+  const r = await dialog.showSaveDialog(fromEvent(e), {
+    defaultPath: suggestedName || 'formatado.xml',
+    filters: XML_FILTERS,
+  });
+  if (r.canceled || !r.filePath) return null;
+  await fs.writeFile(r.filePath, String(content ?? ''), 'utf8');
+  return { path: r.filePath, name: path.basename(r.filePath) };
+});
+
 /* ─────────────── Ciclo de vida ─────────────── */
 if (!app.requestSingleInstanceLock()) {
   app.quit();

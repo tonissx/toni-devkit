@@ -309,6 +309,9 @@ function tokenize(line, lang) {
   const out = [];
   let m;
   let s = line;
+  // Sem estado entre linhas: se a linha parece uma continuação de tag (ex.: atributo
+  // quebrado por splitAttributes), assume que já começa "dentro" de uma tag.
+  let xmlInTag = lang === 'xml' && /^\s*(\/?>|\?>|[A-Za-z_][\w:.-]*\s*=)/.test(s);
   const push = (c, t) => out.push([c, t]);
   while (s.length) {
     if (lang === 'json') {
@@ -327,6 +330,11 @@ function tokenize(line, lang) {
         push('', s[0]);
         m = [s[0]];
       }
+    } else if (lang === 'xml') {
+      if (m = s.match(/^\s+/)) push('', m[0]);else if (m = s.match(/^<!--.*?-->/)) push('comment', m[0]);else if (m = s.match(/^<!--/)) push('comment', m[0]);else if (m = s.match(/^<!\[CDATA\[.*?\]\]>/)) push('string', m[0]);else if (m = s.match(/^<!\[CDATA\[/)) push('punct', m[0]);else if (m = s.match(/^\]\]>/)) push('punct', m[0]);else if (m = s.match(/^<!DOCTYPE/i)) { xmlInTag = true; push('keyword', m[0]); } else if (m = s.match(/^<\?/)) { xmlInTag = true; push('punct', m[0]); } else if (m = s.match(/^<\/?/)) { xmlInTag = true; push('punct', m[0]); } else if (xmlInTag && (m = s.match(/^(\/?>|\?>)/))) { xmlInTag = false; push('punct', m[0]); } else if (xmlInTag && (m = s.match(/^[A-Za-z_][\w:.-]*(?=\s*=)/))) push('key', m[0]);else if (xmlInTag && (m = s.match(/^[A-Za-z_][\w:.-]*/))) push('keyword', m[0]);else if (xmlInTag && (m = s.match(/^=/))) push('punct', m[0]);else if (xmlInTag && (m = s.match(/^"[^"]*"?/))) push('string', m[0]);else if (xmlInTag && (m = s.match(/^'[^']*'?/))) push('string', m[0]);else if (m = s.match(/^&[#\w]+;/)) push('bool', m[0]);else if (m = s.match(/^[^<&]+/)) push('', m[0]);else {
+        push('', s[0]);
+        m = [s[0]];
+      }
     } else {
       push('', s);
       m = [s];
@@ -340,6 +348,7 @@ const LANG = {
   js: 'JavaScript',
   sql: 'SQL',
   http: 'HTTP',
+  xml: 'XML',
   text: 'Texto'
 };
 const fmtSize = n => n < 1024 ? n + ' B' : (n / 1024).toFixed(1) + ' KB';
