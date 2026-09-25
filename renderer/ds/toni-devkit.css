@@ -210,6 +210,130 @@
   --tk-syn-fn:#0A0A0B;
 }
 
+/* Min Dark — quase monocromático, accent azul sóbrio (aproximação; não é 1:1 com o tema original) */
+[data-theme="min-dark"]{
+  --tk-bg:#1E1E1E;
+  --tk-surface-1:#232323;
+  --tk-surface-2:#262626;
+  --tk-surface-3:#2D2D2D;
+  --tk-surface-4:#383838;
+  --tk-border:#333333;
+  --tk-border-strong:#3F3F3F;
+  --tk-highlight:rgba(255,255,255,.05);
+  --tk-overlay:rgba(0,0,0,.72);
+  --tk-text:#D4D4D4;
+  --tk-text-2:#9D9D9D;
+  --tk-text-3:#6E6E6E;
+  --tk-text-inv:#1E1E1E;
+  --tk-accent:#569CD6;
+  --tk-accent-hover:#4E8EC2;
+  --tk-accent-text:#6AB0E0;
+  --tk-on-accent:#0E0E0E;
+  --tk-green-900:#1B2733;
+  --tk-dot-off:rgba(255,255,255,.10);
+  --tk-syn-key:#9CDCFE;
+  --tk-syn-string:#CE9178;
+  --tk-syn-number:#B5CEA8;
+  --tk-syn-keyword:#569CD6;
+  --tk-syn-bool:#569CD6;
+  --tk-syn-comment:#6A9955;
+  --tk-syn-punct:#D4D4D4;
+  --tk-syn-fn:#DCDCAA;
+}
+
+/* Dracula — paleta oficial (draculatheme.com) */
+[data-theme="dracula"]{
+  --tk-bg:#282A36;
+  --tk-surface-1:#2B2D3A;
+  --tk-surface-2:#313342;
+  --tk-surface-3:#383A4A;
+  --tk-surface-4:#44475A;
+  --tk-border:#3B3D4D;
+  --tk-border-strong:#44475A;
+  --tk-highlight:rgba(255,255,255,.06);
+  --tk-overlay:rgba(20,21,28,.72);
+  --tk-text:#F8F8F2;
+  --tk-text-2:#BFBFD6;
+  --tk-text-3:#6272A4;
+  --tk-text-inv:#191A21;
+  --tk-accent:#BD93F9;
+  --tk-accent-hover:#A67FF0;
+  --tk-accent-text:#CAA4FF;
+  --tk-on-accent:#191A21;
+  --tk-green-900:#1B3A2A;
+  --tk-dot-off:rgba(255,255,255,.10);
+  --tk-syn-key:#50FA7B;
+  --tk-syn-string:#F1FA8C;
+  --tk-syn-number:#BD93F9;
+  --tk-syn-keyword:#FF79C6;
+  --tk-syn-bool:#8BE9FD;
+  --tk-syn-comment:#6272A4;
+  --tk-syn-punct:#A9B1D6;
+  --tk-syn-fn:#F8F8F2;
+}
+
+/* Tokyo Night Storm — variante "storm" (github.com/folke/tokyonight.nvim) */
+[data-theme="tokyo-nightstorm"]{
+  --tk-bg:#24283B;
+  --tk-surface-1:#262A40;
+  --tk-surface-2:#292E42;
+  --tk-surface-3:#2F3449;
+  --tk-surface-4:#414868;
+  --tk-border:#363B54;
+  --tk-border-strong:#414868;
+  --tk-highlight:rgba(255,255,255,.06);
+  --tk-overlay:rgba(15,17,26,.72);
+  --tk-text:#C0CAF5;
+  --tk-text-2:#A9B1D6;
+  --tk-text-3:#565F89;
+  --tk-text-inv:#1A1B26;
+  --tk-accent:#7AA2F7;
+  --tk-accent-hover:#6690E8;
+  --tk-accent-text:#89B4FA;
+  --tk-on-accent:#1A1B26;
+  --tk-green-900:#253A2A;
+  --tk-dot-off:rgba(255,255,255,.10);
+  --tk-syn-key:#9ECE6A;
+  --tk-syn-string:#E0AF68;
+  --tk-syn-number:#BB9AF7;
+  --tk-syn-keyword:#7AA2F7;
+  --tk-syn-bool:#2AC3DE;
+  --tk-syn-comment:#565F89;
+  --tk-syn-punct:#A9B1D6;
+  --tk-syn-fn:#7DCFFF;
+}
+
+/* Night Owl — paleta de Sarah Drasner (github.com/sdras/night-owl-vscode-theme) */
+[data-theme="night-owl"]{
+  --tk-bg:#011627;
+  --tk-surface-1:#061C2C;
+  --tk-surface-2:#0B2332;
+  --tk-surface-3:#112B3C;
+  --tk-surface-4:#1D3B53;
+  --tk-border:#16324A;
+  --tk-border-strong:#1D3B53;
+  --tk-highlight:rgba(255,255,255,.06);
+  --tk-overlay:rgba(1,10,18,.72);
+  --tk-text:#D6DEEB;
+  --tk-text-2:#A1B3C9;
+  --tk-text-3:#637777;
+  --tk-text-inv:#011627;
+  --tk-accent:#82AAFF;
+  --tk-accent-hover:#6D95E8;
+  --tk-accent-text:#97B6FF;
+  --tk-on-accent:#011627;
+  --tk-green-900:#163224;
+  --tk-dot-off:rgba(255,255,255,.10);
+  --tk-syn-key:#ADDB67;
+  --tk-syn-string:#ECC48D;
+  --tk-syn-number:#F78C6C;
+  --tk-syn-keyword:#C792EA;
+  --tk-syn-bool:#7FDBCA;
+  --tk-syn-comment:#637777;
+  --tk-syn-punct:#D6DEEB;
+  --tk-syn-fn:#82AAFF;
+}
+
 :root{
   --tk-font-sans:"Geist","Inter",system-ui,sans-serif;
   --tk-font-mono:"Geist Mono","JetBrains Mono",ui-monospace,monospace;
