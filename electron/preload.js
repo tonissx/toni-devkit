@@ -31,4 +31,31 @@ contextBridge.exposeInMainWorld('devkit', {
     status: () => ipcRenderer.invoke('sql:status'),
     format: (sql, options) => ipcRenderer.invoke('sql:format', sql, options),
   },
+  palette: {
+    toggle: () => ipcRenderer.send('palette:toggle'),
+    hide: () => ipcRenderer.send('palette:hide'),
+    resize: (height) => ipcRenderer.send('palette:resize', height),
+    status: () => ipcRenderer.invoke('palette:status'),
+    onOpened: (cb) => {
+      const h = (_e, info) => cb(info);
+      ipcRenderer.on('palette:opened', h);
+      return () => ipcRenderer.removeListener('palette:opened', h);
+    },
+  },
+  app: {
+    /** Mostra a janela principal (e navega para a rota, se houver). */
+    open: (route) => ipcRenderer.send('app:open', route),
+    /** Comando para a janela principal: { type: 'go'|'theme'|'sidebar', ... }. */
+    command: (cmd) => ipcRenderer.send('app:command', cmd),
+    onCommand: (cb) => {
+      const h = (_e, cmd) => cb(cmd);
+      ipcRenderer.on('app:command', h);
+      return () => ipcRenderer.removeListener('app:command', h);
+    },
+    quit: () => ipcRenderer.send('app:quit'),
+    loginItem: (enable) => ipcRenderer.invoke('app:login-item', enable),
+  },
+  shell: {
+    openUrl: (url) => ipcRenderer.invoke('shell:open-url', url),
+  },
 });

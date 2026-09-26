@@ -1,24 +1,12 @@
 import { DS, mod, isMod } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { formatXml } from './engine.js';
+import { DEFAULT_XML_OPTIONS } from './defaults.js';
 
 const {
   PageHeader, SplitView, CodeEditor, SegmentedControl, Select, Toggle, Button,
   Alert, EmptyState,
 } = DS;
-
-/** Padrões iguais aos do LemMinX (motor de formatação do vscode-xml). */
-export const DEFAULT_XML_OPTIONS = {
-  indent: 4,
-  maxLineWidth: 80,
-  emptyElements: 'ignore',
-  quoteStyle: 'ignore',
-  splitAttributes: false,
-  closingBracketNewLine: false,
-  spaceBeforeEmptyCloseTag: true,
-  joinLines: false,
-  autoFormat: true,
-};
 
 const INDENT_OPTIONS = [
   { value: 4, label: '4 espaços' },

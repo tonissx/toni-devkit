@@ -91,21 +91,67 @@ Comparador de textos inspirado no [diffchecker.com](https://www.diffchecker.com/
 Atalhos: `Ctrl+Enter` comparar · `Alt+↓` / `Alt+↑` próxima/anterior mudança · `Ctrl+O` abrir no Original ·
 `Ctrl+Shift+O` abrir no Alterado · `Ctrl+Shift+S` trocar lados · `Ctrl+3` Diff Checker.
 
+## Command Palette
+
+O centro de interação do Devkit. **`Ctrl+Alt+Space`** é o único atalho global: abre a palette de qualquer lugar —
+com o app minimizado, em segundo plano ou só na bandeja — flutuando sobre o app atual, no monitor do cursor,
+sem restaurar a janela principal. Dentro do Devkit, `Ctrl+K` abre a mesma palette.
+
+- **Categorias**: com o campo vazio, `S` → **Search**, `T` → **Tools**, `A` → **Actions**. Depois do 1º caractere,
+  tudo é texto normal; `Backspace` com o campo vazio volta para o início
+- **Search**: buscas na web com o texto digitado (Google, MDN, Stack Overflow, GitHub, npm, TDN TOTVS) e busca
+  dentro do app (comandos, ferramentas, configurações e o texto dos rascunhos das ferramentas)
+- **Tools**: abre qualquer ferramenta. **Actions**: formatar SQL/XML da área de transferência (sem abrir a janela),
+  temas, sidebar, configurações, sair
+- Busca por nome, keywords/aliases, descrição e categoria, sem acento e sem maiúsculas; comandos recentes sobem
+- `↑`/`↓` navegar · `↵` executar · `Esc` fechar. Sem resultados, oferece buscar na web; erros aparecem na própria
+  palette sem fechá-la
+- **Bandeja**: fechar a janela mantém o Devkit rodando (o atalho continua valendo). Em Configurações:
+  **Iniciar com o Windows** (sobe em segundo plano) e o status do atalho (avisa se outro app já usa `Ctrl+Alt+Space`)
+
+### Adicionando um comando
+
+Inclua um objeto em `src/commands/registry.js`:
+
+```js
+{
+  id: 'clipboard:json',
+  name: 'Formatar JSON da área de transferência',
+  description: 'Formata o JSON copiado e copia o resultado',
+  category: 'actions',            // 'search' | 'tools' | 'actions'
+  icon: 'braces',                 // ícone Lucide
+  shortcut: undefined,            // só exibição (ex.: 'Ctrl+1')
+  keywords: ['clipboard', 'pretty'],
+  run: async (ctx, query) => {    // ctx: openApp, appCommand, openUrl, clipboard, sql, storage, quit
+    const text = await ctx.clipboard.read();
+    await ctx.clipboard.write(JSON.stringify(JSON.parse(text), null, 2));
+    return 'JSON formatado e copiado'; // opcional: confirmação antes de fechar; throw → erro na palette
+  },
+}
+```
+
+Ferramentas novas entram na palette sozinhas a partir de `src/tools/meta.js`.
+
 ## Estrutura
 
 ```
 electron/
-  main.js            janela, IPC (arquivos, clipboard, tema, controles de janela)
+  main.js            janela principal (sob demanda), bandeja, login item, IPC
+  palette.js         janela da command palette + atalho global Ctrl+Alt+Space
   preload.js         API segura exposta ao renderer: window.devkit
   sql/engine.js      Pyodide + sqlparse (mapeia opções da UI → sqlparse.format)
   sql/worker.js      worker thread que hospeda o engine
 renderer/
   index.html         carrega React UMD, Lucide, o DS e dist/app.js
+  palette.html       janela da command palette (dist/palette.js + palette.css)
   ds/                Toni Devkit DS: toni-devkit.css (tokens + componentes), toni-devkit.js (bundle), fonts/
   app.css            ajustes de layout do app (somente tokens do DS)
 src/                 código do app (JSX → renderer/dist/app.js via esbuild)
-  main.jsx           shell: TitleBar, Sidebar, command palette, toasts, roteamento
-  tools/registry.js  registro de ferramentas
+  main.jsx           shell: TitleBar, Sidebar, toasts, roteamento
+  palette.jsx        entrada da command palette → palette/Palette.jsx
+  commands/          registry.js (comandos), search.js (busca), providers.js (resultados dinâmicos)
+  tools/meta.js      metadados das ferramentas (sidebar, Início, palette)
+  tools/registry.js  associa cada ferramenta ao seu componente
   tools/sql-formatter/SqlFormatter.jsx
   tools/xml-formatter/XmlFormatter.jsx, engine.js (parser/serializer XML, JS puro)
   tools/diff-checker/DiffChecker.jsx, DiffView.jsx, engine.js (Myers + diff na linha), syntax.js
@@ -116,8 +162,9 @@ vendor/python/       wheel do sqlparse (offline)
 ## Adicionando uma nova ferramenta
 
 1. Crie `src/tools/<id>/<Nome>.jsx` exportando um componente que recebe `{ toast }`.
-2. Registre em `src/tools/registry.js` (`id`, `name`, `icon` Lucide, `group`, `desc`, `shortcutKey`, `component`).
-3. Pronto: ela aparece na sidebar, no Início e na command palette (`Ctrl+K`).
+2. Descreva em `src/tools/meta.js` (`id`, `name`, `icon` Lucide, `group`, `desc`, `shortcutKey`, `keywords`) e associe
+   o componente em `COMPONENTS` (`src/tools/registry.js`).
+3. Pronto: ela aparece na sidebar, no Início e na command palette.
 
 Se a ferramenta precisar de Node/sistema (arquivos, rede, processos), exponha só o necessário em `electron/preload.js`
 e trate no `electron/main.js`. O renderer roda com `contextIsolation` + `sandbox`.
