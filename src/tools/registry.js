@@ -3,6 +3,7 @@
 // Ela aparece automaticamente na sidebar, no Início e na command palette.
 import { SqlFormatter } from './sql-formatter/SqlFormatter.jsx';
 import { XmlFormatter } from './xml-formatter/XmlFormatter.jsx';
+import { DiffChecker } from './diff-checker/DiffChecker.jsx';
 
 export const TOOLS = [
   {
@@ -22,6 +23,15 @@ export const TOOLS = [
     desc: 'Formata e indenta XML nos moldes do vscode-xml (LemMinX)',
     shortcutKey: '2',
     component: XmlFormatter,
+  },
+  {
+    id: 'diff',
+    name: 'Diff Checker',
+    icon: 'git-compare',
+    group: 'Texto & código',
+    desc: 'Compara dois textos lado a lado, com destaque por caractere e merge',
+    shortcutKey: '3',
+    component: DiffChecker,
   },
 ];
 

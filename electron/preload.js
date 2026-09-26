@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('devkit', {
     saveSql: (content, name) => ipcRenderer.invoke('file:save-sql', content, name),
     openXml: () => ipcRenderer.invoke('file:open-xml'),
     saveXml: (content, name) => ipcRenderer.invoke('file:save-xml', content, name),
+    openText: () => ipcRenderer.invoke('file:open-text'),
   },
   sql: {
     status: () => ipcRenderer.invoke('sql:status'),

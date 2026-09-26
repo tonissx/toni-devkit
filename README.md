@@ -34,6 +34,7 @@ npm run dist:linux # gera AppImage (Linux)
 | --- | --- |
 | **SQL Formatter**: formata no mesmo padrão do sqlformat.org | ✅ |
 | **XML Formatter**: formata nos moldes do vscode-xml (LemMinX) | ✅ |
+| **Diff Checker**: compara dois textos nos moldes do diffchecker.com | ✅ |
 
 ### SQL Formatter
 
@@ -74,6 +75,22 @@ Opções (persistidas localmente, padrões = padrões do LemMinX):
 
 Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar saída · `Ctrl+O` abrir .xml · `Ctrl+S` salvar saída · `Ctrl+2` XML Formatter.
 
+### Diff Checker
+
+Comparador de textos inspirado no [diffchecker.com](https://www.diffchecker.com/pt/). Motor próprio em JS puro
+(algoritmo de Myers O(ND) em espaço linear, sem dependências), roda direto no renderer.
+
+- **Visualização**: Lado a lado (com scroll sincronizado) ou Unificado (estilo git)
+- **Destaque dentro da linha**: Inteligente (caractere para mudanças pequenas, palavra para as maiores) · Palavra · Caractere
+- **Sintaxe**: automática (pela extensão do arquivo ou pelo conteúdo) ou JSON / JavaScript / SQL / XML / Texto
+- **Ignorar espaços**, **Ignorar maiúsculas**, **Recolher iguais** (mantém 3 linhas de contexto), **Comparar ao digitar**
+- **Mesclar**: os botões `→` / `←` entre os lados aplicam um bloco de mudança no outro texto
+- Abrir arquivo em cada lado pelo diálogo ou arrastando o arquivo para o editor (até 20 MB)
+- **Recolher editores** deixa a tela toda para o resultado
+
+Atalhos: `Ctrl+Enter` comparar · `Alt+↓` / `Alt+↑` próxima/anterior mudança · `Ctrl+O` abrir no Original ·
+`Ctrl+Shift+O` abrir no Alterado · `Ctrl+Shift+S` trocar lados · `Ctrl+3` Diff Checker.
+
 ## Estrutura
 
 ```
@@ -91,6 +108,7 @@ src/                 código do app (JSX → renderer/dist/app.js via esbuild)
   tools/registry.js  registro de ferramentas
   tools/sql-formatter/SqlFormatter.jsx
   tools/xml-formatter/XmlFormatter.jsx, engine.js (parser/serializer XML, JS puro)
+  tools/diff-checker/DiffChecker.jsx, DiffView.jsx, engine.js (Myers + diff na linha), syntax.js
   screens/Home.jsx, screens/Settings.jsx
 vendor/python/       wheel do sqlparse (offline)
 ```

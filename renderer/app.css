@@ -69,3 +69,51 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .set-link:hover { text-decoration: underline; }
 
 .toasts { position: absolute; right: 16px; bottom: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 70; }
+
+/* ─── Diff Checker ─── */
+.dfc-editors { flex: 0 0 38%; min-height: 160px; }
+.dfc-drop { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dfc-drop > .tk-code { flex: 1; min-height: 0; }
+.dfc-drop.is-over > .tk-code { border-color: var(--tk-accent); }
+.dfc-drop__hint {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none;
+  border: 1px dashed var(--tk-accent); border-radius: var(--tk-radius-md);
+  background: color-mix(in srgb, var(--tk-bg) 80%, transparent);
+  font: 500 13px var(--tk-font-sans); color: var(--tk-accent-text);
+}
+
+.dfc-result { flex: 1; min-height: 0; }
+.dfc-bar { flex-shrink: 0; }
+.dfc-bar__nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.dfc-bar__nav > span { margin-right: 4px; font-variant-numeric: tabular-nums; }
+.dfc-center { flex: 1; display: flex; align-items: center; justify-content: center; }
+.dfc-scroll { flex: 1; min-height: 0; overflow: auto; }
+
+/* Lado a lado: uma linha de grid por item → os dois lados sempre alinhados. Linhas longas quebram. */
+.dfc-row[data-split] { display: grid; grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr); }
+.dfc-row .tk-diff__row { min-width: 0; }
+.dfc-row .tk-diff__text { white-space: pre-wrap; overflow-wrap: anywhere; flex: 1; min-width: 0; }
+.dfc-row.is-cur { box-shadow: inset 3px 0 0 var(--tk-accent); }
+.dfc-row[data-split].is-cur .dfc-gutter { background: var(--tk-surface-2); }
+.dfc-row[data-split] .tk-diff__row + .dfc-gutter { border-left: 1px solid var(--tk-border); }
+.dfc-gutter { display: flex; align-items: flex-start; justify-content: center; gap: 2px; border-right: 1px solid var(--tk-border); background: var(--tk-surface-1); }
+.dfc-merge {
+  display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-top: 1px;
+  padding: 0; border: 1px solid var(--tk-border); border-radius: 4px; cursor: pointer;
+  background: var(--tk-surface-2); color: var(--tk-text-3);
+}
+.dfc-merge:hover { color: var(--tk-accent-text); border-color: var(--tk-accent); }
+
+/* Trecho alterado dentro da linha. */
+.dfc-chg { border-radius: 2px; }
+.tk-diff__row.is-del .dfc-chg { background: rgba(255, 92, 92, .32); }
+.tk-diff__row.is-add .dfc-chg { background: rgba(61, 220, 132, .3); }
+[data-theme="light"] .tk-diff__row.is-del .dfc-chg { background: rgba(220, 38, 38, .22); }
+[data-theme="light"] .tk-diff__row.is-add .dfc-chg { background: rgba(22, 163, 74, .24); }
+
+.dfc-fold {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 26px; padding: 0 12px;
+  border: 0; border-block: 1px solid var(--tk-border); cursor: pointer;
+  background: var(--tk-surface-1); color: var(--tk-text-3); font: 500 11.5px var(--tk-font-sans);
+}
+.dfc-fold:hover { color: var(--tk-accent-text); background: var(--tk-surface-2); }
