@@ -1,6 +1,7 @@
 import { DS, mod, isMod } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { DEFAULT_SQL_OPTIONS } from './defaults.js';
+import { emit } from '../../lib/events.js';
 
 const {
   PageHeader, SplitView, CodeEditor, SegmentedControl, Select, Toggle, Button,
@@ -72,6 +73,7 @@ export function SqlFormatter({ toast }) {
     try {
       const r = await window.devkit.sql.format(text, o);
       if (id === reqId.current) setOut({ text: r.result, ms: r.ms, error: null, busy: false, jsConcat: r.jsConcat || null });
+      emit('tool.used', { tool: 'sql' });
       return r.result;
     } catch (e) {
       const msg = String(e.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');

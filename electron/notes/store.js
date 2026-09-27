@@ -11,40 +11,16 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { serialize, parse } = require('../../src/notes/format.js');
-
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/** rename com novas tentativas: no Windows, antivírus/OneDrive seguram o arquivo por instantes (EPERM/EBUSY). */
-async function renameRetry(from, to, tries = 5) {
-  for (let i = 0; ; i++) {
-    try { return await fs.rename(from, to); } catch (e) {
-      if (i >= tries - 1 || !['EPERM', 'EBUSY', 'EACCES'].includes(e.code)) throw e;
-      await sleep(40 * (i + 1));
-    }
-  }
-}
+const { atomicWrite, renameRetry, createQueue } = require('../lib/fsx.js');
 
 function createStore(dir) {
-  const queues = new Map(); // arquivo → promessa da última gravação
+  const queue = createQueue(); // gravações por arquivo, em ordem
   const trashDir = path.join(dir, '.trash');
   const stateFile = path.join(dir, '.devkit', 'state.json');
 
   const fileOf = (note) => path.join(dir, note.file || note.id + '.md');
 
-  async function atomicWrite(file, text) {
-    await fs.mkdir(path.dirname(file), { recursive: true });
-    const tmp = file + '.' + process.pid + '.tmp';
-    await fs.writeFile(tmp, text, 'utf8');
-    try { await renameRetry(tmp, file); } catch (e) { fs.unlink(tmp).catch(() => {}); throw e; }
-  }
-
-  function enqueue(file, job) {
-    const prev = queues.get(file) || Promise.resolve();
-    const next = prev.catch(() => {}).then(job);
-    queues.set(file, next);
-    next.catch(() => {}).finally(() => { if (queues.get(file) === next) queues.delete(file); });
-    return next;
-  }
+  const enqueue = (file, job) => queue.run(file, job);
 
   return {
     dir,
@@ -87,9 +63,7 @@ function createStore(dir) {
     },
 
     /** Espera todas as gravações pendentes (usado antes de sair). */
-    async flush() {
-      await Promise.all([...queues.values()].map((p) => p.catch(() => {})));
-    },
+    flush: () => queue.flush(),
 
     async readState() {
       try { return JSON.parse(await fs.readFile(stateFile, 'utf8')) || {}; } catch { return {}; }

@@ -6,8 +6,9 @@ import { SqlFormatter } from './sql-formatter/SqlFormatter.jsx';
 import { XmlFormatter } from './xml-formatter/XmlFormatter.jsx';
 import { DiffChecker } from './diff-checker/DiffChecker.jsx';
 import { NotesScreen } from './notes/NotesScreen.jsx';
+import { DevCoreScreen } from './devcore/DevCoreScreen.jsx';
 
-const COMPONENTS = { sql: SqlFormatter, xml: XmlFormatter, diff: DiffChecker, notes: NotesScreen };
+const COMPONENTS = { sql: SqlFormatter, xml: XmlFormatter, diff: DiffChecker, notes: NotesScreen, devcore: DevCoreScreen };
 
 export const TOOLS = TOOL_META.map((t) => ({ ...t, component: COMPONENTS[t.id] }));
 

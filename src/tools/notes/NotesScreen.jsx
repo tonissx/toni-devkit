@@ -4,6 +4,7 @@ import { notesApi, recoverUnsaved, shortTime, cleanError } from '../../notes/cli
 import { createNote } from '../../notes/note.js';
 import { normalize } from '../../commands/search.js';
 import { NoteEditor } from './NoteEditor.jsx';
+import { emit } from '../../lib/events.js';
 
 const { PageHeader, Button, EmptyState, Icon, Kbd, Spinner } = DS;
 
@@ -111,7 +112,7 @@ export function NotesScreen({ toast, request }) {
 
   const openLink = async (title) => {
     const id = await notesApi().resolveLink(title);
-    if (id) openNote(id); else newNote(title);
+    if (id) openNote(id); else { newNote(title); emit('note.linked'); }
   };
 
   const remove = async (note) => {

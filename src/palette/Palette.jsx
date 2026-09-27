@@ -1,12 +1,14 @@
 import { DS } from '../lib/ds.js';
 import { resolveTheme } from '../lib/themes.js';
-import { CATEGORIES, COMMANDS, categoryName } from '../commands/registry.js';
+import { CATEGORIES, COMMANDS, categoryName, abilityCommands } from '../commands/registry.js';
+import { formatDuration } from '../devcore/engine/format.js';
 import { rank, loadRecent, pushRecent, normalize } from '../commands/search.js';
 import { draftMatches } from '../commands/providers.js';
 import { paletteKey, keyHint } from '../commands/keys.js';
 import { createNote, snippetCode } from '../notes/note.js';
 import { recoverUnsaved, shortTime, cleanError } from '../notes/client.js';
 import { QuickNote } from './QuickNote.jsx';
+import { emit } from '../lib/events.js';
 
 const { Icon, Kbd, Spinner } = DS;
 
@@ -21,7 +23,7 @@ const isNotesScope = (s) => !!s && s.startsWith('notes');
 const readPrefs = () => { try { return JSON.parse(localStorage.getItem('tk.prefs')) || {}; } catch { return {}; } };
 
 /** Seções de resultados para o estado atual (comandos + notas vindas do processo principal). */
-function buildSections(scope, query, recent, nd) {
+function buildSections(scope, query, recent, nd, extra = []) {
   const q = query.trim();
   const opts = { recent, categoryName };
   const cmdItem = (r, arg) => ({ key: r.cmd.id, kind: 'command', cmd: r.cmd, idx: r.idx || [], arg });
@@ -47,7 +49,7 @@ function buildSections(scope, query, recent, nd) {
         rec.length && { title: 'Recentes', items: rec.map((cmd) => cmdItem({ cmd })) },
       ].filter(Boolean);
     }
-    const ranked = rank(APP_CMDS, q, opts);
+    const ranked = rank([...APP_CMDS, ...extra], q, opts);
     const found = ranked.map((r) => cmdItem(r));
     const drafts = draftMatches(q, localStorage).map((cmd) => cmdItem({ cmd }));
     if (!found.length && !hits.length && !drafts.length) {
@@ -156,6 +158,7 @@ export function Palette() {
   const [quick, setQuick] = React.useState(null);   // nota da Quick Note em edição
   const [nd, setNd] = React.useState(EMPTY_NOTES);  // dados de notas para o estado atual
   const [notesTick, setNotesTick] = React.useState(0);
+  const [abilities, setAbilities] = React.useState([]); // habilidades dos DevPets (dinâmicas)
   const inputRef = React.useRef(null);
   const panelRef = React.useRef(null);
   const listRef = React.useRef(null);
@@ -168,7 +171,8 @@ export function Palette() {
   const ctx = React.useMemo(() => {
     const d = window.devkit;
     return {
-      openApp: (route) => d.app.open(route),
+      openApp: (route, params) => d.app.open(route, params),
+      devcore: d.devcore,
       appCommand: (cmd) => {
         if (cmd.type === 'theme') {
           // Grava já, para a palette (e a janela principal, se ainda não existir) usarem o tema novo.
@@ -184,7 +188,7 @@ export function Palette() {
       quit: () => d.app.quit(),
       notes: d.notes,
       openNote: (payload) => d.notes.open(payload),
-      palette: { quickNote: startQuick, enter: enterScope },
+      palette: { quickNote: startQuick, enter: enterScope, search: (text) => { setScope(null); setQuery(text); setHi(0); } },
     };
   }, []);
 
@@ -211,13 +215,16 @@ export function Palette() {
   }, [ndKey]);
   React.useEffect(() => window.devkit.notes.onChanged(() => setNotesTick((t) => t + 1)), []);
 
-  const sections = React.useMemo(() => buildSections(scope, query, recent, nd), [scope, query, recent, nd]);
+  const abilityCmds = React.useMemo(() => abilityCommands(abilities, formatDuration), [abilities]);
+  const sections = React.useMemo(() => buildSections(scope, query, recent, nd, abilityCmds), [scope, query, recent, nd, abilityCmds]);
   const flat = React.useMemo(() => sections.flatMap((s) => s.items), [sections]);
   const cur = Math.min(hi, flat.length - 1);
   const curItem = flat[cur];
 
   // Cada abertura começa do zero: campo vazio, tela inicial, tema atual, foco no campo.
   React.useEffect(() => window.devkit.palette.onOpened(() => {
+    emit('palette.opened');
+    window.devkit.devcore.abilities().then(setAbilities, () => setAbilities([]));
     setScope(null); setQuery(''); setHi(0); setBusy(null); setError(null); setDone(null); setQuick(null);
     setRecent(loadRecent(localStorage));
     document.documentElement.dataset.theme = resolveTheme(readPrefs().theme || 'dark');
@@ -271,7 +278,11 @@ export function Palette() {
     setError(null); setDone(null); setBusy(cmd.id);
     try {
       const msg = await cmd.run(ctx, item.arg);
-      if (!cmd.dynamic) setRecent(pushRecent(localStorage, cmd.id));
+      if (!cmd.dynamic) {
+        setRecent(pushRecent(localStorage, cmd.id));
+        emit('command.executed', { id: cmd.id });
+        if (cmd.id.startsWith('clipboard:')) emit('clipboard.formatted', { tool: cmd.id.slice(10) });
+      }
       setBusy(null);
       if (typeof msg === 'string' && msg) { setDone(msg); setTimeout(close, 700); } else if (!cmd.keepOpen) close();
     } catch (e) { fail(cmd.id, cmd.name, e); }

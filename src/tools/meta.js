@@ -39,6 +39,15 @@ const TOOL_META = [
     shortcutKey: '4',
     keywords: ['anotações', 'notas', 'snippets', 'conhecimento', 'markdown', 'wiki'],
   },
+  {
+    id: 'devcore',
+    name: 'DevCore',
+    icon: 'cpu',
+    group: 'DevCore',
+    desc: 'Infraestrutura idle com DevPets — cresce sozinha enquanto você trabalha',
+    shortcutKey: '5',
+    keywords: ['idle', 'devpets', 'pets', 'jogo', 'incremental', 'compute', 'infraestrutura'],
+  },
 ];
 
 module.exports = { TOOL_META };
