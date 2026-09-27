@@ -1,21 +1,11 @@
 import { DS, mod, isMod } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
+import { DEFAULT_SQL_OPTIONS } from './defaults.js';
 
 const {
   PageHeader, SplitView, CodeEditor, SegmentedControl, Select, Toggle, Button,
   Badge, Alert, EmptyState, Spinner,
 } = DS;
-
-/** Padrões idênticos ao sqlformat.org (keywords em UPPER, identificadores inalterados, 2 espaços). */
-export const DEFAULT_SQL_OPTIONS = {
-  keywordCase: 'upper',
-  identifierCase: 'unchanged',
-  indent: 2,
-  stripComments: false,
-  compact: false,
-  outputFormat: 'sql',
-  autoFormat: true,
-};
 
 const CASE_OPTIONS = [
   { value: 'upper', label: 'UPPER' },

@@ -1,4 +1,5 @@
-// Compila src/**/*.jsx → renderer/dist/app.js e copia React UMD para renderer/vendor.
+// Compila src/**/*.jsx → renderer/dist/app.js (janela principal) e renderer/dist/palette.js (command palette)
+// e copia React UMD para renderer/vendor.
 // React/ReactDOM e o DS são globais (window.React, window.ReactDOM, window.ToniDevkitDesignSystem_*).
 import * as esbuild from 'esbuild';
 import { copyFileSync, mkdirSync } from 'node:fs';
@@ -15,8 +16,11 @@ copyFileSync(path.join(pkgDir('react'), 'umd', 'react.production.min.js'), path.
 copyFileSync(path.join(pkgDir('react-dom'), 'umd', 'react-dom.production.min.js'), path.join(vendor, 'react-dom.production.min.js'));
 
 const opts = {
-  entryPoints: [path.join(root, 'src', 'main.jsx')],
-  outfile: path.join(root, 'renderer', 'dist', 'app.js'),
+  entryPoints: {
+    app: path.join(root, 'src', 'main.jsx'),
+    palette: path.join(root, 'src', 'palette.jsx'),
+  },
+  outdir: path.join(root, 'renderer', 'dist'),
   bundle: true,
   format: 'iife',
   target: 'chrome130',

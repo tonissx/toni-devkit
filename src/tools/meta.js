@@ -1,0 +1,44 @@
+'use strict';
+// Metadados das ferramentas (sem componentes). Compartilhado pela janela principal
+// (src/tools/registry.js, que associa cada id ao componente) e pela command palette,
+// que assim não precisa empacotar as telas das ferramentas.
+const TOOL_META = [
+  {
+    id: 'sql',
+    name: 'SQL Formatter',
+    icon: 'database',
+    group: 'Texto & código',
+    desc: 'Formata e indenta SQL no padrão do sqlformat.org',
+    shortcutKey: '1',
+    keywords: ['query', 'consulta', 'sqlformat', 'sqlparse', 'indentar', 'beautify'],
+  },
+  {
+    id: 'xml',
+    name: 'XML Formatter',
+    icon: 'code-xml',
+    group: 'Texto & código',
+    desc: 'Formata e indenta XML nos moldes do vscode-xml (LemMinX)',
+    shortcutKey: '2',
+    keywords: ['lemminx', 'soap', 'wsdl', 'xsd', 'indentar', 'beautify', 'pretty'],
+  },
+  {
+    id: 'diff',
+    name: 'Diff Checker',
+    icon: 'git-compare',
+    group: 'Texto & código',
+    desc: 'Compara dois textos lado a lado, com destaque por caractere e merge',
+    shortcutKey: '3',
+    keywords: ['comparar', 'compare', 'diferença', 'diffchecker', 'merge', 'mesclar'],
+  },
+  {
+    id: 'notes',
+    name: 'Notes',
+    icon: 'notebook-pen',
+    group: 'Conhecimento',
+    desc: 'Memória técnica: notas em Markdown, snippets e busca',
+    shortcutKey: '4',
+    keywords: ['anotações', 'notas', 'snippets', 'conhecimento', 'markdown', 'wiki'],
+  },
+];
+
+module.exports = { TOOL_META };

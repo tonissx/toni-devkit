@@ -1,28 +1,14 @@
 // Registro de ferramentas do Toni Devkit.
-// Para adicionar uma ferramenta: crie src/tools/<id>/<Nome>.jsx e inclua uma entrada aqui.
-// Ela aparece automaticamente na sidebar, no Início e na command palette.
+// Para adicionar uma ferramenta: crie src/tools/<id>/<Nome>.jsx, descreva-a em src/tools/meta.js
+// e associe o componente em COMPONENTS. Ela aparece na sidebar, no Início e na command palette.
+import { TOOL_META } from './meta.js';
 import { SqlFormatter } from './sql-formatter/SqlFormatter.jsx';
 import { XmlFormatter } from './xml-formatter/XmlFormatter.jsx';
+import { DiffChecker } from './diff-checker/DiffChecker.jsx';
+import { NotesScreen } from './notes/NotesScreen.jsx';
 
-export const TOOLS = [
-  {
-    id: 'sql',
-    name: 'SQL Formatter',
-    icon: 'database',
-    group: 'Texto & código',
-    desc: 'Formata e indenta SQL no padrão do sqlformat.org',
-    shortcutKey: '1',
-    component: SqlFormatter,
-  },
-  {
-    id: 'xml',
-    name: 'XML Formatter',
-    icon: 'code-xml',
-    group: 'Texto & código',
-    desc: 'Formata e indenta XML nos moldes do vscode-xml (LemMinX)',
-    shortcutKey: '2',
-    component: XmlFormatter,
-  },
-];
+const COMPONENTS = { sql: SqlFormatter, xml: XmlFormatter, diff: DiffChecker, notes: NotesScreen };
+
+export const TOOLS = TOOL_META.map((t) => ({ ...t, component: COMPONENTS[t.id] }));
 
 export const findTool = (id) => TOOLS.find((t) => t.id === id);

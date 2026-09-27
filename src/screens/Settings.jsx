@@ -1,16 +1,7 @@
 import { DS, mod } from '../lib/ds.js';
+import { THEMES } from '../lib/themes.js';
 
 const { PageHeader, Card, Select, Kbd, Badge, Toggle } = DS;
-
-const THEME_OPTIONS = [
-  { value: 'system', label: 'Sistema' },
-  { value: 'light', label: 'Claro' },
-  { value: 'dark', label: 'Hacking (padrão)' },
-  { value: 'min-dark', label: 'Min Dark' },
-  { value: 'dracula', label: 'Dracula' },
-  { value: 'tokyo-nightstorm', label: 'Tokyo Night Storm' },
-  { value: 'night-owl', label: 'Night Owl' },
-];
 
 const Row = ({ label, hint, children }) => (
   <div className="set-row">
@@ -19,9 +10,43 @@ const Row = ({ label, hint, children }) => (
   </div>
 );
 
+/** Atalho global, bandeja e iniciar com o sistema. */
+function PaletteCard() {
+  const [status, setStatus] = React.useState(null);
+  const [login, setLogin] = React.useState(null);
+  React.useEffect(() => {
+    window.devkit.palette.status().then(setStatus);
+    window.devkit.app.loginItem().then(setLogin);
+  }, []);
+  const setOpenAtLogin = (v) => window.devkit.app.loginItem(v).then(setLogin);
+  return (
+    <Card padding={24}>
+      <div className="tk-card__title">Command Palette</div>
+      <Row label="Atalho global" hint="Abre a palette de qualquer lugar, mesmo com o Devkit minimizado ou na bandeja">
+        <Kbd size="sm">Ctrl+Alt+Space</Kbd>
+        {status && (status.registered
+          ? <Badge size="sm" variant="ok" dot>ativo</Badge>
+          : <Badge size="sm" variant="warn" dot>em uso por outro app</Badge>)}
+      </Row>
+      <Row label="Dentro da palette" hint="Digite para buscar em tudo · Alt+T/A/N categorias · Alt+Q Quick Note · Backspace volta · Esc fecha">
+        <Kbd size="sm">Alt+T</Kbd><Kbd size="sm">Alt+A</Kbd><Kbd size="sm">Alt+N</Kbd><Kbd size="sm">Alt+Q</Kbd>
+      </Row>
+      <Row label="Iniciar com o Windows" hint="Sobe em segundo plano (só a bandeja), para o atalho funcionar desde o login">
+        {login && login.supported
+          ? <Toggle checked={login.openAtLogin} onChange={setOpenAtLogin} />
+          : <Badge size="sm">indisponível</Badge>}
+      </Row>
+      <Row label="Fechar a janela" hint="O Devkit continua na bandeja do sistema; use Sair (bandeja ou palette) para encerrar">
+        <Badge size="sm">vai para a bandeja</Badge>
+      </Row>
+    </Card>
+  );
+}
+
 export function Settings({ prefs, setPrefs, info, sqlVersion }) {
   const shortcuts = [
-    ['Command palette', mod('K')],
+    ['Command palette (global)', 'Ctrl+Alt+Space'],
+    ['Command palette (no app)', mod('K')],
     ['Formatar SQL', mod('↵')],
     ['Copiar saída', mod('C', true)],
     ['Abrir arquivo .sql', mod('O')],
@@ -36,12 +61,13 @@ export function Settings({ prefs, setPrefs, info, sqlVersion }) {
         <Card padding={24}>
           <div className="tk-card__title">Aparência</div>
           <Row label="Tema" hint="Hacking é o padrão do Toni Devkit">
-            <Select options={THEME_OPTIONS} value={prefs.theme} onChange={(theme) => setPrefs((p) => ({ ...p, theme }))} style={{ width: 200 }} />
+            <Select options={THEMES} value={prefs.theme} onChange={(theme) => setPrefs((p) => ({ ...p, theme }))} style={{ width: 200 }} />
           </Row>
           <Row label="Sidebar recolhida" hint="Mostra só os ícones das ferramentas">
             <Toggle checked={prefs.collapsed} onChange={(collapsed) => setPrefs((p) => ({ ...p, collapsed }))} />
           </Row>
         </Card>
+        <PaletteCard />
         <Card padding={24}>
           <div className="tk-card__title">Atalhos</div>
           {shortcuts.map(([a, k]) => <Row key={a} label={a}><Kbd size="sm">{k}</Kbd></Row>)}

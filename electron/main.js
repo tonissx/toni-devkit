@@ -1,11 +1,16 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, globalShortcut, Tray, Menu, nativeImage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { Worker } = require('node:worker_threads');
+const palette = require('./palette');
+const { createNotesService } = require('./notes/service');
 
 const isDev = process.argv.includes('--dev');
 const isMac = process.platform === 'darwin';
+// Iniciado com o sistema (login item): só a palette e o tray sobem; a janela principal nasce sob demanda.
+const startHidden = process.argv.includes('--hidden');
+let quitting = false;
 
 /* ─────────────── Motor SQL (worker thread com Pyodide + sqlparse) ─────────────── */
 let sqlWorker = null;
@@ -47,8 +52,14 @@ function callSql(op, payload) {
   }));
 }
 
-/* ─────────────── Janela ─────────────── */
-function createWindow() {
+/* ─────────────── Janela principal ─────────────── */
+let mainWin = null;
+let mainLoaded = false;
+let mainQueue = []; // comandos para a janela principal enviados antes de ela terminar de carregar
+
+function createMainWindow() {
+  startSqlWorker(); // aquece o Pyodide em segundo plano enquanto a UI carrega
+  mainLoaded = false;
   const win = new BrowserWindow({
     width: 1320,
     height: 840,
@@ -69,10 +80,24 @@ function createWindow() {
       spellcheck: false,
     },
   });
+  mainWin = win;
 
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => { win.show(); win.focus(); });
   win.on('maximize', () => win.webContents.send('win:state', { maximized: true }));
   win.on('unmaximize', () => win.webContents.send('win:state', { maximized: false }));
+  // Fechar esconde na bandeja: o processo continua vivo para o atalho global funcionar.
+  win.on('close', (e) => {
+    if (quitting) return;
+    e.preventDefault();
+    win.hide();
+    trayHintOnce();
+  });
+  win.on('closed', () => { if (mainWin === win) { mainWin = null; mainLoaded = false; } });
+  win.webContents.on('did-finish-load', () => {
+    mainLoaded = true;
+    for (const cmd of mainQueue) win.webContents.send('app:command', cmd);
+    mainQueue = [];
+  });
 
   // Links externos abrem no navegador, nunca dentro do app.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -84,6 +109,53 @@ function createWindow() {
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   if (isDev) win.webContents.openDevTools({ mode: 'detach' });
   return win;
+}
+
+/** Envia um comando (navegar, tema, sidebar) para a janela principal — ou enfileira até ela carregar. */
+function sendToMain(cmd) {
+  if (mainWin && mainLoaded) mainWin.webContents.send('app:command', cmd);
+  else mainQueue = [...mainQueue.slice(-19), cmd];
+}
+
+/** Traz a janela principal para frente (criando se preciso) e, opcionalmente, navega. */
+function showMain(route) {
+  if (route) sendToMain({ type: 'go', route });
+  if (!mainWin) { createMainWindow(); return; } // aparece sozinha no ready-to-show
+  if (mainWin.isMinimized()) mainWin.restore();
+  mainWin.show();
+  mainWin.focus();
+}
+
+/* ─────────────── Bandeja ─────────────── */
+let tray = null;
+
+function createTray() {
+  const icon = nativeImage.createFromPath(path.join(__dirname, '..', 'renderer', 'assets', 'icon.png')).resize({ width: 16, height: 16 });
+  tray = new Tray(icon);
+  tray.setToolTip(palette.getStatus().registered
+    ? 'Toni Devkit — Ctrl+Alt+Space abre a command palette'
+    : 'Toni Devkit — atalho Ctrl+Alt+Space em uso por outro app');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Abrir Devkit', click: () => showMain() },
+    { label: 'Command Palette', accelerator: 'Ctrl+Alt+Space', registerAccelerator: false, click: () => palette.show('tray') },
+    { type: 'separator' },
+    { label: 'Sair', click: () => { quitting = true; app.quit(); } },
+  ]));
+  tray.on('click', () => showMain());
+}
+
+/** Na primeira vez que a janela vai para a bandeja, avisa que o app continua rodando. */
+async function trayHintOnce() {
+  const marker = path.join(app.getPath('userData'), 'tray-hint-shown');
+  try { await fs.access(marker); return; } catch { /* ainda não mostrado */ }
+  if (tray && process.platform === 'win32') {
+    tray.displayBalloon({
+      iconType: 'info',
+      title: 'O Devkit continua rodando',
+      content: 'Ctrl+Alt+Space abre a command palette. Para sair, use o ícone na bandeja.',
+    });
+  }
+  fs.writeFile(marker, '1').catch(() => {});
 }
 
 /* ─────────────── IPC ─────────────── */
@@ -163,23 +235,103 @@ ipcMain.handle('file:save-xml', async (e, content, suggestedName) => {
   return { path: r.filePath, name: path.basename(r.filePath) };
 });
 
+const TEXT_FILTERS = [
+  { name: 'Todos os arquivos', extensions: ['*'] },
+  { name: 'Texto e código', extensions: ['txt', 'json', 'xml', 'sql', 'js', 'ts', 'csv', 'log', 'md', 'yml', 'yaml', 'ini', 'properties', 'html', 'css'] },
+];
+
+ipcMain.handle('file:open-text', async (e) => {
+  const r = await dialog.showOpenDialog(fromEvent(e), { properties: ['openFile'], filters: TEXT_FILTERS });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const file = r.filePaths[0];
+  const stat = await fs.stat(file);
+  if (stat.size > 20 * 1024 * 1024) throw new Error('Arquivo maior que 20 MB');
+  return { path: file, name: path.basename(file), content: await fs.readFile(file, 'utf8') };
+});
+
+/* ─────────────── Command palette, janela principal e sistema ─────────────── */
+ipcMain.on('palette:toggle', () => palette.toggle('app'));
+ipcMain.on('palette:hide', () => palette.hide());
+ipcMain.on('palette:resize', (_e, height) => palette.resize(height));
+ipcMain.handle('palette:status', () => palette.getStatus());
+
+ipcMain.on('app:open', (_e, route) => { palette.hide(); showMain(typeof route === 'string' ? route : undefined); });
+ipcMain.on('app:command', (_e, cmd) => { if (cmd && typeof cmd.type === 'string') sendToMain(cmd); });
+ipcMain.on('app:quit', () => { quitting = true; app.quit(); });
+
+/* ─────────────── Notes ─────────────── */
+// Um .md por nota em Documentos\Devkit Notes (DEVKIT_NOTES_DIR sobrescreve — usado nos testes).
+let notes = null;
+let notesReady = null;
+const broadcastNotes = (evt) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:changed', evt); };
+
+function initNotes() {
+  const dir = process.env.DEVKIT_NOTES_DIR || path.join(app.getPath('documents'), 'Devkit Notes');
+  notes = createNotesService({ dir, broadcast: broadcastNotes });
+  notesReady = notes.init().catch((e) => { console.error('[notes]', e); throw e; });
+}
+
+const NOTES_API = ['info', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags'];
+for (const fn of NOTES_API) {
+  ipcMain.handle('notes:' + fn, async (_e, ...args) => { await notesReady; return notes[fn](...args); });
+}
+ipcMain.handle('notes:open-folder', async () => { await notesReady; return shell.openPath(notes.dir); });
+
+// Abrir uma nota (ou uma nova) na janela principal — usado pela palette.
+ipcMain.on('app:open-note', (_e, payload) => {
+  palette.hide();
+  if (payload && (typeof payload.id === 'string' || payload.new)) sendToMain({ type: 'open-note', ...payload });
+  showMain('notes');
+});
+
+ipcMain.handle('shell:open-url', (_e, url) => {
+  const u = new URL(String(url));
+  if (u.protocol !== 'https:') throw new Error('Só links https são permitidos');
+  palette.hide();
+  return shell.openExternal(u.toString());
+});
+
+// Iniciar com o sistema já em segundo plano (--hidden). Em dev o executável é o electron.exe,
+// então o caminho do app precisa ir junto nos argumentos.
+const loginArgs = () => (app.isPackaged ? ['--hidden'] : [app.getAppPath(), '--hidden']);
+ipcMain.handle('app:login-item', (_e, enable) => {
+  const supported = process.platform !== 'linux';
+  if (supported && typeof enable === 'boolean') app.setLoginItemSettings({ openAtLogin: enable, args: loginArgs() });
+  return { supported, openAtLogin: supported && app.getLoginItemSettings({ args: loginArgs() }).openAtLogin };
+});
+
 /* ─────────────── Ciclo de vida ─────────────── */
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
-    const w = BrowserWindow.getAllWindows()[0];
-    if (w) { if (w.isMinimized()) w.restore(); w.focus(); }
-  });
+  app.on('second-instance', () => showMain());
 
   app.whenReady().then(() => {
-    startSqlWorker(); // aquece o Pyodide em segundo plano enquanto a UI carrega
-    createWindow();
-    app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+    initNotes();
+    palette.create();
+    palette.registerShortcut();
+    createTray();
+    if (!startHidden) createMainWindow();
+    app.on('activate', () => showMain());
   });
 
-  app.on('window-all-closed', () => {
+  // Antes de sair: pede às janelas que gravem o que estiver pendente no auto-save e espera a fila de gravação.
+  let notesFlushed = false;
+  app.on('before-quit', (e) => {
+    quitting = true;
+    if (notesFlushed || !notes) return;
+    e.preventDefault();
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:flush');
+    setTimeout(async () => {
+      await notes.flush().catch(() => {});
+      notesFlushed = true;
+      app.quit();
+    }, 300);
+  });
+  // Sem janelas visíveis o app continua na bandeja (a janela da palette nunca fecha).
+  app.on('window-all-closed', () => {});
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
     if (sqlWorker) sqlWorker.terminate();
-    if (!isMac) app.quit();
   });
 }
