@@ -232,6 +232,29 @@ Features (ferramentas, palette, Notes) ── emit ──► Event Bus (electron
 - **Testes**: `npm run test:devcore` (economia, modificadores, integral por trechos, teto offline, descobertas
   anti-spam, estado, bus, serviço com relógio falso, ritmo)
 
+### Próximos passos: Batalhas (roadmap)
+
+Ideia registrada para depois; **ainda não implementada**. Pré-requisito: usar o DevCore alguns dias e ajustar o ritmo
+atual, porque a batalha depende desse balanceamento.
+
+- **Conceito**: inimigos são problemas de infraestrutura (Bugs, Memory Leaks, Race Conditions, Flaky Tests), em ondas
+  cada vez mais fortes, com **chefes** a cada N ondas (*Legacy Monolith*, *Production Outage*, *The Merge Conflict*).
+  Os DevPets formam o esquadrão e o papel vem da especialização: Byte ataca, Query defende/resiste, Noxi dá
+  velocidade e combos, Memo cura e dá suporte
+- **Princípios** (os mesmos do DevCore): combate automático/idle, sem reflexo nem atenção constante; ondas comuns
+  avançam sozinhas (inclusive offline); chefes são tentativas opcionais disparadas pelo jogador; derrota nunca tira
+  progresso; a economia de Compute não depende de batalhas; o uso do DevKit só desbloqueia conteúdo, nunca vira
+  força de combate
+- **Arquitetura prevista (reuso)**:
+  - resultado por fórmula determinística (DPS do esquadrão × vida do inimigo), igual ao cálculo offline por Δt; a
+    cena só anima um resultado já calculado (reaproveitando o `director.js`)
+  - atributos dos pets (ataque, defesa, vida) derivados do sistema de efeitos/modificadores: nível, estágio,
+    especialização; sinergias viram combinações de esquadrão
+  - `content/enemies.js` e `content/bosses.js` como dados; ritmo validado pelo `devcore:sim`
+  - nova seção de estado `battle` (decidir se fica fora de `run` ou é resetada por um futuro *Rebuild*)
+- **Recompensas**: um recurso novo (ex.: *Patches*) pela arquitetura de múltiplos recursos, gasto em melhorias de
+  combate e visuais exclusivos; pode virar a porta de entrada para o *Rebuild* (prestige)
+
 ## Estrutura
 
 ```
