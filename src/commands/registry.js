@@ -5,15 +5,19 @@
  * Um comando é um objeto simples:
  *   { id, name, description, category, icon, shortcut?, keywords?, run(ctx, query), takesQuery?, url? }
  *
- * - category: 'search' | 'tools' | 'actions' (ver CATEGORIES).
+ * - category: 'web' | 'tools' | 'actions' | 'notes' (ver CATEGORIES; 'web' não é navegável, aparece na busca).
  * - run roda na janela da palette e recebe ctx (ver src/palette/Palette.jsx → makeCtx):
  *     ctx.openApp(route?)   mostra a janela principal (e navega)
  *     ctx.appCommand(cmd)   muda o estado da janela principal: { type: 'theme'|'sidebar', ... }
  *     ctx.openUrl(url)      abre no navegador (só https)
  *     ctx.clipboard / ctx.sql / ctx.storage / ctx.quit()
+ *     ctx.notes (API de Notes) · ctx.openNote({ id } | { new: true, title? })
+ *     ctx.palette.quickNote(texto?) / ctx.palette.enter(escopo)   (comandos keepOpen: a palette continua aberta)
  *   Pode ser async. Se devolver uma string, ela aparece como confirmação antes da palette fechar.
  *   Se lançar erro, a palette mostra o erro e continua aberta.
  * - takesQuery: o texto digitado vira argumento (ex.: buscas na web).
+ * - key: letra do atalho Alt+letra (ver src/commands/keys.js), só para exibição no Kbd.
+ * - keepOpen: o comando muda o estado da palette em vez de fechá-la.
  *
  * Para adicionar um comando: inclua um objeto numa das listas abaixo. Ferramentas novas
  * entram sozinhas a partir de src/tools/meta.js.
@@ -25,9 +29,9 @@ const { DEFAULT_XML_OPTIONS } = require('../tools/xml-formatter/defaults.js');
 const { formatXml } = require('../tools/xml-formatter/engine.js');
 
 const CATEGORIES = [
-  { id: 'search', name: 'Search', key: 's', icon: 'search', description: 'Buscar na web e dentro do app' },
   { id: 'tools', name: 'Tools', key: 't', icon: 'wrench', description: 'Abrir uma ferramenta do Devkit' },
   { id: 'actions', name: 'Actions', key: 'a', icon: 'zap', description: 'Tema, janela, área de transferência…' },
+  { id: 'notes', name: 'Notes', key: 'n', icon: 'notebook-pen', description: 'Quick Note, busca, pinned e recentes' },
 ];
 
 /* ─────────────── Search: buscas na web ─────────────── */
@@ -46,7 +50,7 @@ const searchCommands = WEB.map((w) => ({
   id: 'web:' + w.id,
   name: w.name,
   description: 'Buscar no ' + w.name,
-  category: 'search',
+  category: 'web',
   icon: w.icon,
   keywords: w.keywords,
   takesQuery: true,
@@ -163,8 +167,48 @@ const actionCommands = [
   },
 ].map((c) => ({ ...c, category: 'actions' }));
 
-const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands];
+/* ─────────────── Notes ─────────────── */
+const noteCommands = [
+  {
+    id: 'notes:quick', key: 'q', name: 'Quick Note', icon: 'sticky-note', keepOpen: true,
+    description: 'Capturar agora — sem título, salva sozinha',
+    keywords: ['nota rapida', 'anotar', 'capturar', 'note', 'scratch'],
+    run: (ctx) => ctx.palette.quickNote(),
+  },
+  {
+    id: 'notes:new', key: 'n', name: 'New Note', icon: 'file-plus',
+    description: 'Nova nota no editor do Devkit',
+    keywords: ['nova nota', 'criar nota', 'note'],
+    run: (ctx) => ctx.openNote({ new: true }),
+  },
+  {
+    id: 'notes:search', name: 'Search Notes', icon: 'search', keepOpen: true,
+    description: 'Buscar só nas notas e snippets',
+    keywords: ['buscar notas', 'procurar', 'note', 'snippets'],
+    run: (ctx) => ctx.palette.enter('notes'), // dentro de Notes, digitar já busca
+  },
+  {
+    id: 'notes:pinned', key: 'p', name: 'Pinned Notes', icon: 'pin', keepOpen: true,
+    description: 'Notas fixadas',
+    keywords: ['fixadas', 'note'],
+    run: (ctx) => ctx.palette.enter('notes:pinned'),
+  },
+  {
+    id: 'notes:recent', key: 'r', name: 'Recent Notes', icon: 'history', keepOpen: true,
+    description: 'Editadas e vistas recentemente',
+    keywords: ['recentes', 'note', 'historico'],
+    run: (ctx) => ctx.palette.enter('notes:recent'),
+  },
+  {
+    id: 'notes:folder', name: 'Abrir pasta das notas', icon: 'folder-open',
+    description: 'Os arquivos .md das notas no Explorer',
+    keywords: ['notes', 'arquivos', 'backup', 'note', 'documentos'],
+    run: (ctx) => { ctx.notes.openFolder(); },
+  },
+].map((c) => ({ ...c, category: 'notes' }));
 
-const categoryName = (id) => (CATEGORIES.find((c) => c.id === id) || {}).name || '';
+const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands];
+
+const categoryName = (id) => (id === 'web' ? 'Web' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
 
 module.exports = { CATEGORIES, COMMANDS, WEB, categoryName };

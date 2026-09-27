@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 const { rank, scoreCommand, matchText, normalize, loadRecent, pushRecent } = require('../src/commands/search.js');
 const { COMMANDS, CATEGORIES, WEB, categoryName } = require('../src/commands/registry.js');
 const { draftMatches } = require('../src/commands/providers.js');
+const { paletteKey, keyHint } = require('../src/commands/keys.js');
 
 const memStorage = (init = {}) => {
   const m = new Map(Object.entries(init));
@@ -84,12 +85,14 @@ test('recent list keeps the last 8 unique ids, newest first', () => {
 test('registry: unique ids, valid categories, required fields', () => {
   const ids = COMMANDS.map((c) => c.id);
   assert.equal(new Set(ids).size, ids.length);
-  const cats = CATEGORIES.map((c) => c.id);
+  const cats = [...CATEGORIES.map((c) => c.id), 'web'];
   for (const c of COMMANDS) {
     assert.ok(cats.includes(c.category), c.id);
     assert.ok(c.name && c.icon && typeof c.run === 'function', c.id);
   }
-  assert.deepEqual(CATEGORIES.map((c) => c.key), ['s', 't', 'a']);
+  assert.deepEqual(CATEGORIES.map((c) => c.key), ['t', 'a', 'n']);
+  const noteKeys = COMMANDS.filter((c) => c.category === 'notes' && c.key).map((c) => c.key);
+  assert.deepEqual(noteKeys, ['q', 'n', 'p', 'r']);
 });
 
 test('web search commands encode the query, or open the home page', () => {
@@ -123,4 +126,25 @@ test('draftMatches finds lines in saved drafts, capped at 5', () => {
   assert.deepEqual(draftMatches('p', s), []);
   const many = memStorage({ 'tk.sql.draft': JSON.stringify({ text: 'ab\n'.repeat(50) }) });
   assert.ok(draftMatches('ab', many).length <= 5);
+});
+
+test('paletteKey: letters are text; Alt+letter navigates; Ctrl stays with the input', () => {
+  const k = (code, mods = {}, scope = null) => paletteKey({ code, altKey: true, ...mods }, scope);
+  assert.equal(paletteKey({ code: 'KeyS', key: 's' }, null), null); // "sql" é texto
+  assert.equal(paletteKey({ code: 'KeyT', key: 't' }, null), null);
+  assert.deepEqual(k('KeyT'), { type: 'scope', scope: 'tools' });
+  assert.deepEqual(k('KeyA', {}, 'tools'), { type: 'scope', scope: 'actions' });
+  assert.deepEqual(k('KeyN'), { type: 'scope', scope: 'notes' });
+  assert.deepEqual(k('KeyQ'), { type: 'command', id: 'notes:quick' });
+  assert.deepEqual(k('KeyQ', {}, 'actions'), { type: 'command', id: 'notes:quick' });
+  assert.deepEqual(k('KeyN', {}, 'notes'), { type: 'command', id: 'notes:new' });
+  assert.deepEqual(k('KeyP', {}, 'notes'), { type: 'command', id: 'notes:pinned' });
+  assert.deepEqual(k('KeyR', {}, 'notes:pinned'), { type: 'command', id: 'notes:recent' });
+  assert.equal(k('KeyP'), null); // Pinned só dentro de Notes
+  assert.equal(k('KeyS'), null); // não existe mais Search como categoria
+  assert.equal(paletteKey({ code: 'KeyA', ctrlKey: true }, null), null); // Ctrl+A = selecionar tudo
+  assert.equal(k('KeyT', { ctrlKey: true }), null); // Ctrl+Alt (AltGr) não é atalho
+  assert.equal(k('KeyT', { shiftKey: true }), null);
+  assert.equal(k('Digit1'), null);
+  assert.equal(keyHint('t'), 'Alt+T');
 });

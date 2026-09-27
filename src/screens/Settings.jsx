@@ -28,8 +28,8 @@ function PaletteCard() {
           ? <Badge size="sm" variant="ok" dot>ativo</Badge>
           : <Badge size="sm" variant="warn" dot>em uso por outro app</Badge>)}
       </Row>
-      <Row label="Dentro da palette" hint="S / T / A com o campo vazio abrem Search, Tools e Actions · Backspace volta · Esc fecha">
-        <Kbd size="sm">S</Kbd><Kbd size="sm">T</Kbd><Kbd size="sm">A</Kbd>
+      <Row label="Dentro da palette" hint="Digite para buscar em tudo · Alt+T/A/N categorias · Alt+Q Quick Note · Backspace volta · Esc fecha">
+        <Kbd size="sm">Alt+T</Kbd><Kbd size="sm">Alt+A</Kbd><Kbd size="sm">Alt+N</Kbd><Kbd size="sm">Alt+Q</Kbd>
       </Row>
       <Row label="Iniciar com o Windows" hint="Sobe em segundo plano (só a bandeja), para o atalho funcionar desde o login">
         {login && login.supported

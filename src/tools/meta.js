@@ -30,6 +30,15 @@ const TOOL_META = [
     shortcutKey: '3',
     keywords: ['comparar', 'compare', 'diferença', 'diffchecker', 'merge', 'mesclar'],
   },
+  {
+    id: 'notes',
+    name: 'Notes',
+    icon: 'notebook-pen',
+    group: 'Conhecimento',
+    desc: 'Memória técnica: notas em Markdown, snippets e busca',
+    shortcutKey: '4',
+    keywords: ['anotações', 'notas', 'snippets', 'conhecimento', 'markdown', 'wiki'],
+  },
 ];
 
 module.exports = { TOOL_META };

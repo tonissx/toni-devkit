@@ -4,6 +4,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { Worker } = require('node:worker_threads');
 const palette = require('./palette');
+const { createNotesService } = require('./notes/service');
 
 const isDev = process.argv.includes('--dev');
 const isMac = process.platform === 'darwin';
@@ -258,6 +259,31 @@ ipcMain.on('app:open', (_e, route) => { palette.hide(); showMain(typeof route ==
 ipcMain.on('app:command', (_e, cmd) => { if (cmd && typeof cmd.type === 'string') sendToMain(cmd); });
 ipcMain.on('app:quit', () => { quitting = true; app.quit(); });
 
+/* ─────────────── Notes ─────────────── */
+// Um .md por nota em Documentos\Devkit Notes (DEVKIT_NOTES_DIR sobrescreve — usado nos testes).
+let notes = null;
+let notesReady = null;
+const broadcastNotes = (evt) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:changed', evt); };
+
+function initNotes() {
+  const dir = process.env.DEVKIT_NOTES_DIR || path.join(app.getPath('documents'), 'Devkit Notes');
+  notes = createNotesService({ dir, broadcast: broadcastNotes });
+  notesReady = notes.init().catch((e) => { console.error('[notes]', e); throw e; });
+}
+
+const NOTES_API = ['info', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags'];
+for (const fn of NOTES_API) {
+  ipcMain.handle('notes:' + fn, async (_e, ...args) => { await notesReady; return notes[fn](...args); });
+}
+ipcMain.handle('notes:open-folder', async () => { await notesReady; return shell.openPath(notes.dir); });
+
+// Abrir uma nota (ou uma nova) na janela principal — usado pela palette.
+ipcMain.on('app:open-note', (_e, payload) => {
+  palette.hide();
+  if (payload && (typeof payload.id === 'string' || payload.new)) sendToMain({ type: 'open-note', ...payload });
+  showMain('notes');
+});
+
 ipcMain.handle('shell:open-url', (_e, url) => {
   const u = new URL(String(url));
   if (u.protocol !== 'https:') throw new Error('Só links https são permitidos');
@@ -281,6 +307,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', () => showMain());
 
   app.whenReady().then(() => {
+    initNotes();
     palette.create();
     palette.registerShortcut();
     createTray();
@@ -288,7 +315,19 @@ if (!app.requestSingleInstanceLock()) {
     app.on('activate', () => showMain());
   });
 
-  app.on('before-quit', () => { quitting = true; });
+  // Antes de sair: pede às janelas que gravem o que estiver pendente no auto-save e espera a fila de gravação.
+  let notesFlushed = false;
+  app.on('before-quit', (e) => {
+    quitting = true;
+    if (notesFlushed || !notes) return;
+    e.preventDefault();
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:flush');
+    setTimeout(async () => {
+      await notes.flush().catch(() => {});
+      notesFlushed = true;
+      app.quit();
+    }, 300);
+  });
   // Sem janelas visíveis o app continua na bandeja (a janela da palette nunca fecha).
   app.on('window-all-closed', () => {});
   app.on('will-quit', () => {

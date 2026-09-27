@@ -58,4 +58,33 @@ contextBridge.exposeInMainWorld('devkit', {
   shell: {
     openUrl: (url) => ipcRenderer.invoke('shell:open-url', url),
   },
+  /** Notes — camada de conhecimento do DevKit (ver electron/notes/service.js). */
+  notes: {
+    info: () => ipcRenderer.invoke('notes:info'),
+    list: (filter) => ipcRenderer.invoke('notes:list', filter),
+    get: (id) => ipcRenderer.invoke('notes:get', id),
+    save: (note) => ipcRenderer.invoke('notes:save', note),
+    /** Para ferramentas: cria uma nota { title, content, tags, type, source }. */
+    create: (partial) => ipcRenderer.invoke('notes:create', partial),
+    remove: (id) => ipcRenderer.invoke('notes:remove', id),
+    restore: (note) => ipcRenderer.invoke('notes:restore', note),
+    search: (query, opts) => ipcRenderer.invoke('notes:search', query, opts),
+    recent: () => ipcRenderer.invoke('notes:recent'),
+    markViewed: (id) => ipcRenderer.invoke('notes:markViewed', id),
+    resolveLink: (title) => ipcRenderer.invoke('notes:resolveLink', title),
+    tags: () => ipcRenderer.invoke('notes:tags'),
+    openFolder: () => ipcRenderer.invoke('notes:open-folder'),
+    /** Abre uma nota ({ id } ou { new: true, title? }) na janela principal. */
+    open: (payload) => ipcRenderer.send('app:open-note', payload),
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('notes:changed', h);
+      return () => ipcRenderer.removeListener('notes:changed', h);
+    },
+    onFlush: (cb) => {
+      const h = () => cb();
+      ipcRenderer.on('notes:flush', h);
+      return () => ipcRenderer.removeListener('notes:flush', h);
+    },
+  },
 });

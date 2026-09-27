@@ -47,7 +47,7 @@ function draftMatches(query, storage) {
           id: `draft:${src.tool}:${field}:${i}`,
           name: snippet(lines[i], at, q.length),
           description: `${meta.name} · ${label}${draft.file ? ' (' + draft.file + ')' : ''}, linha ${i + 1}`,
-          category: 'search',
+          category: 'tools',
           icon: meta.icon,
           keywords: [],
           dynamic: true,

@@ -12,10 +12,11 @@
     "watch": "node scripts/build-renderer.mjs --watch",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",
-    "test": "node scripts/test-sql.mjs && node --test scripts/test-xml.mjs scripts/test-diff.mjs scripts/test-palette.mjs",
+    "test": "node scripts/test-sql.mjs && node --test scripts/test-xml.mjs scripts/test-diff.mjs scripts/test-palette.mjs scripts/test-notes.mjs",
     "test:xml": "node --test scripts/test-xml.mjs",
     "test:diff": "node --test scripts/test-diff.mjs",
     "test:palette": "node --test scripts/test-palette.mjs",
+    "test:notes": "node --test scripts/test-notes.mjs",
     "dist": "npm run build && electron-builder --win --x64",
     "dist:dir": "npm run build && electron-builder --dir",
     "dist:mac": "npm run build && electron-builder --mac",
@@ -28,6 +29,7 @@
     "electron": "^44.4.5",
     "electron-builder": "^26.0.0",
     "esbuild": "^0.25.0",
+    "marked": "^16.4.2",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
@@ -39,6 +41,8 @@
       "renderer/**",
       "!renderer/dist/*.map",
       "vendor/**",
+      "src/notes/**",
+      "src/commands/search.js",
       "package.json"
     ],
     "asarUnpack": [

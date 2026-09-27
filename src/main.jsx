@@ -23,6 +23,7 @@ function App() {
   const [toasts, setToasts] = React.useState([]);
   const [info, setInfo] = React.useState(null);
   const [sqlVersion, setSqlVersion] = React.useState(null);
+  const [noteRequest, setNoteRequest] = React.useState(null); // { id } | { new, title } vindo da palette
   const route = prefs.route === 'home' || prefs.route === 'settings' || findTool(prefs.route) ? prefs.route : 'home';
 
   const go = (r) => setPrefs((p) => ({ ...p, route: r }));
@@ -58,6 +59,7 @@ function App() {
     if (cmd.type === 'go' && (cmd.route === 'home' || cmd.route === 'settings' || findTool(cmd.route))) go(cmd.route);
     else if (cmd.type === 'theme') setPrefs((p) => ({ ...p, theme: cmd.value }));
     else if (cmd.type === 'sidebar') toggleSidebar();
+    else if (cmd.type === 'open-note') { setNoteRequest({ ...cmd, nonce: Date.now() }); go('notes'); }
   }), []);
 
   // Controles de janela (Windows/Linux): os botões do TitleBar do DS → IPC.
@@ -75,7 +77,7 @@ function App() {
   const Screen = tool && tool.component;
   const screen = route === 'home' ? <Home go={go} openPalette={openPalette} />
     : route === 'settings' ? <Settings prefs={prefs} setPrefs={setPrefs} info={info} sqlVersion={sqlVersion} />
-    : <Screen toast={toast} />;
+    : <Screen toast={toast} request={route === 'notes' ? noteRequest : undefined} />;
 
   const title = (tool ? tool.name : route === 'settings' ? 'Configurações' : 'Início') + ' — Devkit';
 

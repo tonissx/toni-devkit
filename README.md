@@ -35,6 +35,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **SQL Formatter**: formata no mesmo padrão do sqlformat.org | ✅ |
 | **XML Formatter**: formata nos moldes do vscode-xml (LemMinX) | ✅ |
 | **Diff Checker**: compara dois textos nos moldes do diffchecker.com | ✅ |
+| **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
 
 ### SQL Formatter
 
@@ -97,10 +98,12 @@ O centro de interação do Devkit. **`Ctrl+Alt+Space`** é o único atalho globa
 com o app minimizado, em segundo plano ou só na bandeja — flutuando sobre o app atual, no monitor do cursor,
 sem restaurar a janela principal. Dentro do Devkit, `Ctrl+K` abre a mesma palette.
 
-- **Categorias**: com o campo vazio, `S` → **Search**, `T` → **Tools**, `A` → **Actions**. Depois do 1º caractere,
-  tudo é texto normal; `Backspace` com o campo vazio volta para o início
-- **Search**: buscas na web com o texto digitado (Google, MDN, Stack Overflow, GitHub, npm, TDN TOTVS) e busca
-  dentro do app (comandos, ferramentas, configurações e o texto dos rascunhos das ferramentas)
+- **Digitou, buscou**: letras são sempre texto. A tela inicial busca em tudo de uma vez: comandos, notas e
+  snippets, o texto dos rascunhos das ferramentas e, no fim, a web com o texto digitado (Google, MDN,
+  Stack Overflow, GitHub, npm, TDN TOTVS)
+- **Categorias com Alt**: `Alt+T` **Tools** · `Alt+A` **Actions** · `Alt+N` **Notes** · `Alt+Q` **Quick Note**
+  (em qualquer lugar da palette). `Backspace` com o campo vazio volta um nível. Como o atalho global já tem Alt,
+  `Ctrl+Alt+Space` e depois `Q` sem soltar o Alt abre direto a Quick Note
 - **Tools**: abre qualquer ferramenta. **Actions**: formatar SQL/XML da área de transferência (sem abrir a janela),
   temas, sidebar, configurações, sair
 - Busca por nome, keywords/aliases, descrição e categoria, sem acento e sem maiúsculas; comandos recentes sobem
@@ -132,12 +135,67 @@ Inclua um objeto em `src/commands/registry.js`:
 
 Ferramentas novas entram na palette sozinhas a partir de `src/tools/meta.js`.
 
+## Notes
+
+A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquisável, integrada à Command Palette.
+**Capturar leva segundos; organizar fica para depois.**
+
+- **Quick Note**: `Ctrl+Alt+Space` → `Alt+Q` (ou só `Q`, sem soltar o Alt), escreva, `Esc`. Não pede título, pasta nem tipo: o título sai da
+  1ª linha, `#tag` no texto vira tag e o auto-save grava enquanto você digita. Não abre a janela principal
+- **Recuperar**: `Ctrl+Alt+Space` e digite o que você lembra. A busca geral da palette já traz notas e snippets
+  (título, conteúdo, tags, aliases e tipo; sem acento; tolera 1 erro de digitação) com o trecho que casou
+- **Categoria Notes na palette** (`Alt+N`): digitar busca só nas notas · `Alt+Q` Quick Note · `Alt+N` New Note ·
+  `Alt+P` Pinned · `Alt+R` Recentes
+- **Snippets**: na palette, `Enter` **copia** o código e `Ctrl+Enter` abre. No editor, cartão com [Copiar] e
+  `Ctrl+Shift+C`
+- **Editor** (ferramenta Notes, `Ctrl+4`): Markdown com modos Editar / Lado a lado / Visualizar (`Ctrl+E`),
+  headings, listas, tabelas, citações, código com realce, checklists clicáveis e links internos `[[Título]]`
+  (clicar abre a nota; se ela não existe, cria). Tags, aliases, pinned e favoritas; filtros Quick · Pinned ·
+  Snippets · Favoritas · Recentes (editadas e vistas)
+- **Auto-save** em todo lugar, sem botão Salvar: grava ao digitar, ao perder o foco, ao trocar de nota, no `Esc`
+  e antes de o app sair. Se o disco falhar, o texto continua no editor e num backup local, com "Tentar de novo"
+
+### Armazenamento
+
+Um arquivo `.md` por nota em **`Documentos\Devkit Notes`**, com metadados simples no topo (front matter). Dá para
+abrir em qualquer editor, fazer backup copiando a pasta, versionar com git e sincronizar pelo OneDrive. A gravação é
+atômica (arquivo temporário + rename). Excluir move o arquivo para `.trash\`, nada é apagado de verdade. Os
+recentes vistos ficam em `.devkit\state.json`. O processo principal carrega todas as notas em memória na
+inicialização; a busca roda aí em milissegundos.
+
+```md
+---
+id: 20260926-142100-x7k2
+title: "SQL — NULL handling"
+type: "snippet"
+tags: ["sql","rm"]
+aliases: ["coalesce"]
+pinned: false
+favorite: false
+created: 2026-09-26T14:21:00.000Z
+updated: 2026-09-26T14:25:03.000Z
+---
+Use `COALESCE(a, b)` …
+```
+
+### Integração com outras ferramentas
+
+O serviço de Notes roda no processo principal e é a fonte única da verdade para todas as janelas. Qualquer tela
+cria ou consulta notas pela mesma API:
+
+```js
+await window.devkit.notes.create({ title: 'Resultado da análise', content: '...', tags: ['sql'], type: 'note', source: 'sql' });
+const hits = await window.devkit.notes.search('coalesce', { limit: 5 });
+window.devkit.notes.open({ id: hits[0].id }); // abre no editor
+```
+
 ## Estrutura
 
 ```
 electron/
   main.js            janela principal (sob demanda), bandeja, login item, IPC
   palette.js         janela da command palette + atalho global Ctrl+Alt+Space
+  notes/             store.js (arquivos .md, gravação atômica, lixeira) e service.js (cache, busca, IPC)
   preload.js         API segura exposta ao renderer: window.devkit
   sql/engine.js      Pyodide + sqlparse (mapeia opções da UI → sqlparse.format)
   sql/worker.js      worker thread que hospeda o engine
@@ -150,6 +208,9 @@ src/                 código do app (JSX → renderer/dist/app.js via esbuild)
   main.jsx           shell: TitleBar, Sidebar, toasts, roteamento
   palette.jsx        entrada da command palette → palette/Palette.jsx
   commands/          registry.js (comandos), search.js (busca), providers.js (resultados dinâmicos)
+  notes/             domínio: note.js (modelo), format.js (.md ⇄ nota), search.js, markdown.js, client.js (auto-save)
+  tools/notes/       tela Notes: NotesScreen, NoteEditor, NotePreview (+ SnippetCard)
+  palette/           Palette.jsx e QuickNote.jsx
   tools/meta.js      metadados das ferramentas (sidebar, Início, palette)
   tools/registry.js  associa cada ferramenta ao seu componente
   tools/sql-formatter/SqlFormatter.jsx
