@@ -7,6 +7,7 @@ const palette = require('./palette');
 const { createNotesService } = require('./notes/service');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
+const { createUpdaterService } = require('./updater/service');
 
 // Event Bus: as features anunciam o que aconteceu; módulos (DevCore) escutam sem acoplamento.
 const bus = createBus();
@@ -334,6 +335,31 @@ ipcMain.handle('app:login-item', (_e, enable) => {
   return { supported, openAtLogin: supported && app.getLoginItemSettings({ args: loginArgs() }).openAtLogin };
 });
 
+/* ─────────────── Atualização ─────────────── */
+// Windows instalado (NSIS) e Linux: electron-updater troca os arquivos sozinho. macOS e Windows
+// portátil (não conseguem se auto-substituir em disco): só avisam e abrem a release no navegador.
+let updater = null;
+const broadcastUpdater = (s) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('updater:changed', s); };
+
+function initUpdater() {
+  updater = createUpdaterService({
+    isPackaged: app.isPackaged,
+    platform: process.platform,
+    portableDir: process.env.PORTABLE_EXECUTABLE_DIR || null,
+    currentVersion: app.getVersion(),
+    broadcast: broadcastUpdater,
+  });
+  if (updater.get().mode === 'unsupported') return;
+  setTimeout(() => updater.check().catch(() => {}), 15_000);
+  const interval = setInterval(() => updater.check().catch(() => {}), 4 * 60 * 60 * 1000);
+  if (interval.unref) interval.unref();
+}
+
+ipcMain.handle('updater:status', () => updater.get());
+ipcMain.handle('updater:check', () => updater.check());
+ipcMain.handle('updater:download', () => updater.download());
+ipcMain.handle('updater:install', () => updater.install());
+
 /* ─────────────── Ciclo de vida ─────────────── */
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -343,6 +369,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     initNotes();
     initDevCore();
+    initUpdater();
     palette.create();
     palette.registerShortcut();
     createTray();

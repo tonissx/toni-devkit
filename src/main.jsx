@@ -78,6 +78,20 @@ function App() {
     return window.devkit.devcore.onChanged((msg) => msg.snapshot && set(msg.snapshot));
   }, []);
 
+  // Atualização automática: status + aviso quando terminar de baixar (ver electron/updater/service.js).
+  const [updater, setUpdater] = React.useState(null);
+  const prevUpdaterStatus = React.useRef(null);
+  React.useEffect(() => {
+    window.devkit.updater.status().then(setUpdater, () => {});
+    return window.devkit.updater.onChanged(setUpdater);
+  }, []);
+  React.useEffect(() => {
+    if (updater && updater.status === 'downloaded' && prevUpdaterStatus.current !== 'downloaded') {
+      toast('Atualização pronta', `Reinicie o Devkit para aplicar a versão ${updater.latestVersion || ''}`);
+    }
+    prevUpdaterStatus.current = updater && updater.status;
+  }, [updater]);
+
   // Controles de janela (Windows/Linux): os botões do TitleBar do DS → IPC.
   const onTitleClick = (e) => {
     const b = e.target.closest('.tk-winctl button');
@@ -92,7 +106,7 @@ function App() {
   const tool = findTool(route);
   const Screen = tool && tool.component;
   const screen = route === 'home' ? <Home go={go} openPalette={openPalette} />
-    : route === 'settings' ? <Settings prefs={prefs} setPrefs={setPrefs} info={info} sqlVersion={sqlVersion} />
+    : route === 'settings' ? <Settings prefs={prefs} setPrefs={setPrefs} info={info} sqlVersion={sqlVersion} updater={updater} />
     : <Screen toast={toast} request={request && request.route === route ? request : undefined} />;
 
   const title = (tool ? tool.name : route === 'settings' ? 'Configurações' : 'Início') + ' — Devkit';

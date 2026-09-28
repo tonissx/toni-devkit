@@ -102,4 +102,16 @@ contextBridge.exposeInMainWorld('devkit', {
       return () => ipcRenderer.removeListener('notes:flush', h);
     },
   },
+  /** Atualização automática (ver electron/updater/service.js). */
+  updater: {
+    status: () => ipcRenderer.invoke('updater:status'),
+    check: () => ipcRenderer.invoke('updater:check'),
+    download: () => ipcRenderer.invoke('updater:download'),
+    install: () => ipcRenderer.invoke('updater:install'),
+    onChanged: (cb) => {
+      const h = (_e, s) => cb(s);
+      ipcRenderer.on('updater:changed', h);
+      return () => ipcRenderer.removeListener('updater:changed', h);
+    },
+  },
 });
