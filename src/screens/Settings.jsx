@@ -1,7 +1,7 @@
 import { DS, mod } from '../lib/ds.js';
 import { THEMES } from '../lib/themes.js';
 
-const { PageHeader, Card, Select, Kbd, Badge, Toggle } = DS;
+const { PageHeader, Card, Select, Kbd, Badge, Toggle, Alert, Button } = DS;
 
 const Row = ({ label, hint, children }) => (
   <div className="set-row">
@@ -43,7 +43,60 @@ function PaletteCard() {
   );
 }
 
-export function Settings({ prefs, setPrefs, info, sqlVersion }) {
+/** Verificar/baixar/instalar atualizações (ver electron/updater/service.js). */
+function UpdaterCard({ updater }) {
+  const [busy, setBusy] = React.useState(false);
+  const check = () => { setBusy(true); window.devkit.updater.check().finally(() => setBusy(false)); };
+
+  if (!updater || updater.mode === 'unsupported') {
+    return (
+      <Card padding={24}>
+        <div className="tk-card__title">Atualizações</div>
+        <Row label="Verificar atualizações" hint="Indisponível nesta build (modo de desenvolvimento)">
+          <Badge size="sm">indisponível</Badge>
+        </Row>
+      </Card>
+    );
+  }
+
+  const checkOnly = updater.mode === 'check-only';
+  return (
+    <Card padding={24}>
+      <div className="tk-card__title">Atualizações</div>
+      {checkOnly && (
+        <Row label="Modo" hint="macOS e a versão portátil não se atualizam sozinhas — só avisam quando há versão nova">
+          <Badge size="sm">somente aviso</Badge>
+        </Row>
+      )}
+      <Row label="Versão instalada"><Badge size="sm" mono>v{updater.version}</Badge></Row>
+      {updater.status === 'error' && <Alert variant="error" title="Erro ao verificar">{updater.error}</Alert>}
+      {(updater.status === 'idle' || updater.status === 'not-available' || updater.status === 'error') && (
+        <Row label="Buscar nova versão">
+          <Button variant="secondary" loading={busy || updater.status === 'checking'} onClick={check}>Verificar atualizações</Button>
+        </Row>
+      )}
+      {updater.status === 'available' && (
+        <Alert variant="info" title={`Versão ${updater.latestVersion} disponível`}
+          action={checkOnly
+            ? <Button variant="primary" onClick={() => window.devkit.shell.openUrl(updater.releaseUrl)}>Abrir página da release</Button>
+            : <Button variant="primary" onClick={() => window.devkit.updater.download()}>Baixar</Button>} />
+      )}
+      {updater.status === 'downloading' && (
+        <Alert variant="info" title="Baixando atualização…">
+          {updater.progress ? Math.round(updater.progress.percent) + '%' : ''}
+        </Alert>
+      )}
+      {updater.status === 'downloaded' && (
+        <Alert variant="ok" title="Atualização pronta"
+          action={<Button variant="primary" onClick={() => window.devkit.updater.install()}>Reiniciar e instalar</Button>}>
+          Versão {updater.latestVersion} baixada.
+        </Alert>
+      )}
+    </Card>
+  );
+}
+
+export function Settings({ prefs, setPrefs, info, sqlVersion, updater }) {
   const shortcuts = [
     ['Command palette (global)', 'Ctrl+Alt+Space'],
     ['Command palette (no app)', mod('K')],
@@ -84,6 +137,7 @@ export function Settings({ prefs, setPrefs, info, sqlVersion }) {
             <Badge size="sm" mono variant={sqlVersion ? 'ok' : 'neutral'} dot>{sqlVersion ? 'sqlparse ' + sqlVersion : 'carregando…'}</Badge>
           </Row>
         </Card>
+        <UpdaterCard updater={updater} />
       </div>
     </div>
   );

@@ -12,19 +12,21 @@
     "watch": "node scripts/build-renderer.mjs --watch",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",
-    "test": "node scripts/test-sql.mjs && node --test scripts/test-xml.mjs scripts/test-diff.mjs scripts/test-palette.mjs scripts/test-notes.mjs scripts/test-devcore.mjs",
+    "test": "node scripts/test-sql.mjs && node --test scripts/test-xml.mjs scripts/test-diff.mjs scripts/test-palette.mjs scripts/test-notes.mjs scripts/test-devcore.mjs scripts/test-compute-version.mjs scripts/test-updater.mjs",
     "test:xml": "node --test scripts/test-xml.mjs",
     "test:diff": "node --test scripts/test-diff.mjs",
     "test:palette": "node --test scripts/test-palette.mjs",
     "test:notes": "node --test scripts/test-notes.mjs",
     "test:devcore": "node --test scripts/test-devcore.mjs",
     "devcore:sim": "node scripts/devcore-sim.mjs",
-    "dist": "npm run build && electron-builder --win --x64",
+    "version:compute": "node scripts/compute-version.mjs",
+    "dist": "npm run build && electron-builder --win --x64 --publish never",
     "dist:dir": "npm run build && electron-builder --dir",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --publish never"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "pyodide": "314.0.7"
   },
   "devDependencies": {
@@ -38,6 +40,12 @@
   "build": {
     "appId": "br.com.navship.tonidevkit",
     "productName": "Toni Devkit",
+    "publish": {
+      "provider": "github",
+      "owner": "tonissx",
+      "repo": "toni-devkit",
+      "releaseType": "release"
+    },
     "files": [
       "electron/**",
       "renderer/**",
