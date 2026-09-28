@@ -31,6 +31,13 @@ contextBridge.exposeInMainWorld('devkit', {
     status: () => ipcRenderer.invoke('sql:status'),
     format: (sql, options) => ipcRenderer.invoke('sql:format', sql, options),
   },
+  /** Git Pulse — status local do repositório (ver electron/git/service.js). Sem GitHub, sem IA. */
+  git: {
+    pickRepo: () => ipcRenderer.invoke('git:pick-repo'),
+    detect: (repoPath) => ipcRenderer.invoke('git:detect', repoPath),
+    status: (repoRoot) => ipcRenderer.invoke('git:status', repoRoot),
+    fileDiff: (repoRoot, filePath) => ipcRenderer.invoke('git:file-diff', repoRoot, filePath),
+  },
   palette: {
     toggle: () => ipcRenderer.send('palette:toggle'),
     hide: () => ipcRenderer.send('palette:hide'),

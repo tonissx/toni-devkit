@@ -8,6 +8,7 @@ const { createNotesService } = require('./notes/service');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
 const { createUpdaterService } = require('./updater/service');
+const gitPulse = require('./git/service');
 
 // Event Bus: as features anunciam o que aconteceu; módulos (DevCore) escutam sem acoplamento.
 const bus = createBus();
@@ -254,6 +255,17 @@ ipcMain.handle('file:open-text', async (e) => {
   if (stat.size > 20 * 1024 * 1024) throw new Error('Arquivo maior que 20 MB');
   return { path: file, name: path.basename(file), content: await fs.readFile(file, 'utf8') };
 });
+
+/* ─────────────── Git Pulse (local) ─────────────── */
+// Stateless: o renderer manda o path do repo em cada chamada (guardado por ele via localStorage).
+ipcMain.handle('git:pick-repo', async (e) => {
+  const r = await dialog.showOpenDialog(fromEvent(e), { properties: ['openDirectory'] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  return { path: r.filePaths[0] };
+});
+ipcMain.handle('git:detect', (_e, repoPath) => gitPulse.detectRepo(repoPath));
+ipcMain.handle('git:status', (_e, repoRoot) => gitPulse.getStatus(repoRoot));
+ipcMain.handle('git:file-diff', (_e, repoRoot, filePath) => gitPulse.getFileDiff(repoRoot, filePath));
 
 /* ─────────────── Command palette, janela principal e sistema ─────────────── */
 ipcMain.on('palette:toggle', () => palette.toggle('app'));

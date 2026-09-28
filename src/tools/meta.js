@@ -48,6 +48,15 @@ const TOOL_META = [
     shortcutKey: '5',
     keywords: ['idle', 'devpets', 'pets', 'jogo', 'incremental', 'compute', 'infraestrutura'],
   },
+  {
+    id: 'git-pulse',
+    name: 'Git Pulse',
+    icon: 'git-branch',
+    group: 'Git',
+    desc: 'Status local do repositório: branch, mudanças e commits recentes — 100% local',
+    shortcutKey: '6',
+    keywords: ['git', 'repositorio', 'repo', 'status', 'branch', 'commits', 'diff', 'working tree', 'ahead', 'behind'],
+  },
 ];
 
 module.exports = { TOOL_META };

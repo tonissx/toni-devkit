@@ -118,6 +118,24 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 }
 .dfc-fold:hover { color: var(--tk-accent-text); background: var(--tk-surface-2); }
 
+/* ─── Git Pulse ─── */
+.gtp__body { overflow-y: auto; }
+.gtp__center { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 240px; }
+.gtp__stats { padding: 4px 0 4px; }
+.gtp__grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; align-items: start; }
+@media (max-width: 920px) { .gtp__grid { grid-template-columns: 1fr; } }
+.gtp__commits { display: flex; flex-direction: column; gap: 2px; }
+.gtp__commit {
+  display: grid; grid-template-columns: 64px minmax(0, 1fr); column-gap: 10px; row-gap: 2px;
+  padding: 8px 0; border-bottom: 1px solid var(--tk-border);
+}
+.gtp__commit:last-child { border-bottom: 0; }
+.gtp__commit-hash { color: var(--tk-text-3); }
+.gtp__commit-subject { grid-column: 2; font: 500 13px var(--tk-font-sans); overflow-wrap: anywhere; }
+.gtp__commit-meta { grid-column: 2; color: var(--tk-text-3); font-size: 12px; }
+.gtp__empty-hint { color: var(--tk-text-3); font-size: 13px; padding: 8px 0; }
+.gtp__diff { margin-top: 12px; }
+
 /* ─── Notes ─── */
 .nts-screen { height: 100%; display: flex; flex-direction: column; }
 .nts { flex: 1; min-height: 0; display: flex; gap: 16px; padding: 0 24px 20px; }
