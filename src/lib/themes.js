@@ -8,6 +8,7 @@ const THEMES = [
   { value: 'dracula', label: 'Dracula' },
   { value: 'tokyo-nightstorm', label: 'Tokyo Night Storm' },
   { value: 'night-owl', label: 'Night Owl' },
+  { value: 'one-dark', label: 'Atom One Dark' },
 ];
 
 /** Tema efetivo para data-theme ('system' segue o SO). */

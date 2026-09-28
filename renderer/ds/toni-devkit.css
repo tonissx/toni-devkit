@@ -334,6 +334,37 @@
   --tk-syn-fn:#82AAFF;
 }
 
+/* Atom One Dark — paleta do port oficial pra VS Code (github.com/akamud/vscode-theme-onedark) */
+[data-theme="one-dark"]{
+  --tk-bg:#282C34;
+  --tk-surface-1:#2C313C;
+  --tk-surface-2:#313640;
+  --tk-surface-3:#363B46;
+  --tk-surface-4:#3E4451;
+  --tk-border:#3B414D;
+  --tk-border-strong:#4B5263;
+  --tk-highlight:rgba(255,255,255,.05);
+  --tk-overlay:rgba(15,17,20,.72);
+  --tk-text:#ABB2BF;
+  --tk-text-2:#828997;
+  --tk-text-3:#5C6370;
+  --tk-text-inv:#282C34;
+  --tk-accent:#61AFEF;
+  --tk-accent-hover:#529FDE;
+  --tk-accent-text:#79B8F3;
+  --tk-on-accent:#282C34;
+  --tk-green-900:#24352B;
+  --tk-dot-off:rgba(255,255,255,.10);
+  --tk-syn-key:#98C379;
+  --tk-syn-string:#E5C07B;
+  --tk-syn-number:#D19A66;
+  --tk-syn-keyword:#C678DD;
+  --tk-syn-bool:#56B6C2;
+  --tk-syn-comment:#5C6370;
+  --tk-syn-punct:#828997;
+  --tk-syn-fn:#61AFEF;
+}
+
 :root{
   --tk-font-sans:"Geist","Inter",system-ui,sans-serif;
   --tk-font-mono:"Geist Mono","JetBrains Mono",ui-monospace,monospace;
