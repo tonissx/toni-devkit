@@ -2,6 +2,7 @@ import { DS, mod, isMod } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { formatXml } from './engine.js';
 import { DEFAULT_XML_OPTIONS } from './defaults.js';
+import { emit } from '../../lib/events.js';
 
 const {
   PageHeader, SplitView, CodeEditor, SegmentedControl, Select, Toggle, Button,
@@ -69,6 +70,7 @@ export function XmlFormatter({ toast }) {
     try {
       const r = formatXml(text, o);
       setOut({ text: r.result, ms: r.ms, error: null });
+      emit('tool.used', { tool: 'xml' });
       return r.result;
     } catch (e) {
       setOut((p) => ({ ...p, error: String(e.message || e) }));

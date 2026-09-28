@@ -3,6 +3,7 @@ import { usePersisted } from '../../lib/store.js';
 import { diffLines, applyHunk } from './engine.js';
 import { detectLanguage } from './syntax.js';
 import { DiffView } from './DiffView.jsx';
+import { emit } from '../../lib/events.js';
 
 const {
   PageHeader, SplitView, CodeEditor, SegmentedControl, Select, Toggle, Button, IconButton,
@@ -118,6 +119,7 @@ export function DiffChecker({ toast }) {
     try { return { result: diffLines(cmp.left, cmp.right, cmpOpts), error: null }; }
     catch (e) { return { result: null, error: String(e.message || e) }; }
   }, [cmp, cmpOpts]);
+  React.useEffect(() => { if (result && result.hunks.length) emit('tool.used', { tool: 'diff' }); }, [result]);
 
   const hunks = result ? result.hunks.length : 0;
   const [current, setCurrent] = React.useState(0);

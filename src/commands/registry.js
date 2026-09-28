@@ -11,7 +11,8 @@
  *     ctx.appCommand(cmd)   muda o estado da janela principal: { type: 'theme'|'sidebar', ... }
  *     ctx.openUrl(url)      abre no navegador (só https)
  *     ctx.clipboard / ctx.sql / ctx.storage / ctx.quit()
- *     ctx.notes (API de Notes) · ctx.openNote({ id } | { new: true, title? })
+ *     ctx.notes (API de Notes) · ctx.openNote({ id } | { new: true, title? }) · ctx.devcore (API do DevCore)
+ *     ctx.openApp(route, params?) — params chega à ferramenta (ex.: { tab: 'pets' })
  *     ctx.palette.quickNote(texto?) / ctx.palette.enter(escopo)   (comandos keepOpen: a palette continua aberta)
  *   Pode ser async. Se devolver uma string, ela aparece como confirmação antes da palette fechar.
  *   Se lançar erro, a palette mostra o erro e continua aberta.
@@ -207,8 +208,56 @@ const noteCommands = [
   },
 ].map((c) => ({ ...c, category: 'notes' }));
 
-const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands];
+/* ─────────────── DevCore ─────────────── */
+const devcoreTab = (id, name, tab, icon, description, keywords) => ({
+  id: 'devcore:' + id, name, description, icon, keywords: ['devcore', 'idle', ...keywords],
+  run: (ctx) => ctx.openApp('devcore', tab ? { tab } : undefined),
+});
+const devcoreCommands = [
+  devcoreTab('open', 'Open DevCore', null, 'cpu', 'Sua infraestrutura idle e os DevPets', ['jogo', 'infraestrutura', 'compute']),
+  devcoreTab('generators', 'View Generators', 'generators', 'server', 'Produtores de Compute do DevCore', ['geradores', 'workers']),
+  devcoreTab('pets', 'View DevPets', 'pets', 'paw-print', 'Níveis, estações e habilidades dos DevPets', ['pets', 'mascotes']),
+  devcoreTab('upgrades', 'View Upgrades', 'upgrades', 'arrow-up-circle', 'Upgrades disponíveis no DevCore', ['melhorias']),
+  devcoreTab('looks', 'Customize DevPets', 'pets', 'palette', 'Visual e evolução dos DevPets', ['visual', 'skin', 'aparência', 'cores', 'pets']),
+  devcoreTab('discoveries', 'View Discoveries', 'tech', 'radar', 'Tiers, sinergias e descobertas', ['descobertas', 'tech', 'sinergias']),
+  {
+    id: 'devcore:collect', name: 'Collect Offline Progress', icon: 'download',
+    description: 'Mostra o resumo do que o DevCore produziu enquanto você esteve fora',
+    keywords: ['devcore', 'offline', 'coletar', 'welcome'],
+    run: async (ctx) => {
+      const s = await ctx.devcore.get();
+      if (!s.welcome) return 'Nada pendente: o DevCore está em dia';
+      ctx.openApp('devcore');
+      return undefined;
+    },
+  },
+  {
+    id: 'devcore:abilities', name: 'Activate Pet Ability', icon: 'zap', keepOpen: true,
+    description: 'Lista as habilidades dos DevPets para ativar daqui',
+    keywords: ['devcore', 'habilidade', 'ability', 'pets', 'burst'],
+    run: (ctx) => ctx.palette.search('ativar'),
+  },
+].map((c) => ({ ...c, category: 'devcore' }));
 
-const categoryName = (id) => (id === 'web' ? 'Web' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
+/**
+ * Habilidades dos DevPets como comandos (dinâmicos: vêm do DevCore quando a palette abre).
+ * Executam sem abrir a janela; em recarga, mostram o tempo restante como erro na própria palette.
+ */
+function abilityCommands(list, formatWait) {
+  return list.map((a) => ({
+    id: 'devcore:ability:' + a.id, name: `Ativar ${a.name} (${a.pet})`, category: 'devcore', icon: 'zap', dynamic: true,
+    description: a.active ? 'Ativa agora' : a.ready ? a.description : 'Em recarga · ' + formatWait(a.readyInMs),
+    keywords: ['devcore', 'habilidade', 'ability', 'ativar', a.pet.toLowerCase()],
+    run: async (ctx) => {
+      const r = await ctx.devcore.act({ type: 'ability', id: a.id });
+      if (!r.ok) throw new Error(r.error);
+      return `${a.name} ativado · ${a.description}`;
+    },
+  }));
+}
 
-module.exports = { CATEGORIES, COMMANDS, WEB, categoryName };
+const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands];
+
+const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
+
+module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands };

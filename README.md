@@ -36,6 +36,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **XML Formatter**: formata nos moldes do vscode-xml (LemMinX) | ✅ |
 | **Diff Checker**: compara dois textos nos moldes do diffchecker.com | ✅ |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
+| **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
 
 ### SQL Formatter
 
@@ -189,6 +190,71 @@ const hits = await window.devkit.notes.search('coalesce', { limit: 5 });
 window.devkit.notes.open({ id: hits[0].id }); // abre no editor
 ```
 
+## DevCore
+
+Uma camada idle opcional: uma pequena infraestrutura de desenvolvimento que cresce sozinha, inclusive com o app
+fechado, com **DevPets** trabalhando nela. O DevKit continua sendo o produto; quem não quiser jogar ignora. Fora da
+tela do DevCore aparece, no máximo, um ponto discreto no item da sidebar quando há descoberta ou upgrade novo.
+
+- **Compute** é produzido por geradores (Terminal Worker → Local Cluster) em 3 tiers. Cada tier traz uma mecânica
+  nova: **T1** produção e upgrades · **T2** sinergias e habilidades dos pets · **T3** estações (pet na própria
+  especialidade rende ×2) e agentes que orquestram as outras categorias
+- **DevPets** (criaturas SVG originais): Byte, Noxi, Query e Memo, cada um com especialização, nível (treino),
+  bônus e uma habilidade com cooldown (Compile Burst, Parallelize, Index, Recall)
+- **Aparência dos DevPets**: evoluem sozinhos com o nível (**Veterano** no 5 ganha um acessório da espécie;
+  **Mestre** no 10 ganha outro e uma aura) e têm **visuais** (Monokai, Neon, Midnight, Solarized, Gold) que você
+  desbloqueia por marcos e descobertas — nunca por compra — e escolhe no card do pet. Visuais ficam desbloqueados
+  para sempre (`src/devcore/content/appearance.js`)
+- **Descobertas**: o uso real do DevKit *desbloqueia* conteúdo (pets, tiers, bônus pequenos com teto), nunca vira
+  moeda. Contam **dias distintos** e **ferramentas distintas**: 100 notas num dia valem o mesmo que 1
+- **Offline**: sem ticks; o ganho é calculado pelo tempo (taxa × Δt, em trechos quando uma habilidade acaba), com
+  teto de 8 h (12 h com upgrade). Ao voltar, o resumo "Welcome back" aparece só ao abrir o DevCore
+- **Palette**: "devcore" lista Open DevCore / View Generators / DevPets / Upgrades / Discoveries / Collect Offline
+  Progress, e as habilidades prontas ("Ativar Compile Burst (Byte)") executam sem abrir a janela
+
+### Arquitetura
+
+```
+Features (ferramentas, palette, Notes) ── emit ──► Event Bus (electron/events.js: whitelist + throttle)
+                                                          │
+                                                          ▼
+      UI (src/tools/devcore) ◄── IPC ──► DevCore service (electron/devcore/service.js: estado, heartbeat, devcore.json)
+                                                          │  dispatch(state, action, now) — puro
+                                                          ▼
+                                          engine (src/devcore/engine) ◄── content (src/devcore/content: só dados)
+```
+
+- **Balanceamento**: todos os números estão em `src/devcore/content/*.js`. `npm run devcore:sim` simula um
+  jogador em perfis de uso e imprime a linha do tempo; um teste garante as faixas de ritmo (T2 em 15–60 min de
+  sessão ativa, T3 em 1–3 dias de uso casual)
+- **Estado** em `%APPDATA%/Toni Devkit/devcore.json` (escrita atômica, versão + migração), separado em `run`
+  (o que um futuro *Rebuild* zeraria), `meta` (prestige), `usage`, `discoveries` e `pending`
+- **Testes**: `npm run test:devcore` (economia, modificadores, integral por trechos, teto offline, descobertas
+  anti-spam, estado, bus, serviço com relógio falso, ritmo)
+
+### Próximos passos: Batalhas (roadmap)
+
+Ideia registrada para depois; **ainda não implementada**. Pré-requisito: usar o DevCore alguns dias e ajustar o ritmo
+atual, porque a batalha depende desse balanceamento.
+
+- **Conceito**: inimigos são problemas de infraestrutura (Bugs, Memory Leaks, Race Conditions, Flaky Tests), em ondas
+  cada vez mais fortes, com **chefes** a cada N ondas (*Legacy Monolith*, *Production Outage*, *The Merge Conflict*).
+  Os DevPets formam o esquadrão e o papel vem da especialização: Byte ataca, Query defende/resiste, Noxi dá
+  velocidade e combos, Memo cura e dá suporte
+- **Princípios** (os mesmos do DevCore): combate automático/idle, sem reflexo nem atenção constante; ondas comuns
+  avançam sozinhas (inclusive offline); chefes são tentativas opcionais disparadas pelo jogador; derrota nunca tira
+  progresso; a economia de Compute não depende de batalhas; o uso do DevKit só desbloqueia conteúdo, nunca vira
+  força de combate
+- **Arquitetura prevista (reuso)**:
+  - resultado por fórmula determinística (DPS do esquadrão × vida do inimigo), igual ao cálculo offline por Δt; a
+    cena só anima um resultado já calculado (reaproveitando o `director.js`)
+  - atributos dos pets (ataque, defesa, vida) derivados do sistema de efeitos/modificadores: nível, estágio,
+    especialização; sinergias viram combinações de esquadrão
+  - `content/enemies.js` e `content/bosses.js` como dados; ritmo validado pelo `devcore:sim`
+  - nova seção de estado `battle` (decidir se fica fora de `run` ou é resetada por um futuro *Rebuild*)
+- **Recompensas**: um recurso novo (ex.: *Patches*) pela arquitetura de múltiplos recursos, gasto em melhorias de
+  combate e visuais exclusivos; pode virar a porta de entrada para o *Rebuild* (prestige)
+
 ## Estrutura
 
 ```
@@ -196,6 +262,9 @@ electron/
   main.js            janela principal (sob demanda), bandeja, login item, IPC
   palette.js         janela da command palette + atalho global Ctrl+Alt+Space
   notes/             store.js (arquivos .md, gravação atômica, lixeira) e service.js (cache, busca, IPC)
+  events.js          Event Bus (features → módulos, sem acoplamento)
+  devcore/service.js estado do DevCore, heartbeat, IPC
+  lib/fsx.js         escrita atômica e fila por arquivo (Notes e DevCore)
   preload.js         API segura exposta ao renderer: window.devkit
   sql/engine.js      Pyodide + sqlparse (mapeia opções da UI → sqlparse.format)
   sql/worker.js      worker thread que hospeda o engine
@@ -210,6 +279,8 @@ src/                 código do app (JSX → renderer/dist/app.js via esbuild)
   commands/          registry.js (comandos), search.js (busca), providers.js (resultados dinâmicos)
   notes/             domínio: note.js (modelo), format.js (.md ⇄ nota), search.js, markdown.js, client.js (auto-save)
   tools/notes/       tela Notes: NotesScreen, NoteEditor, NotePreview (+ SnippetCard)
+  devcore/           content/ (dados e balanceamento), engine/ (regras puras), director.js (cena), sim.js
+  tools/devcore/     tela DevCore: DevCoreScreen, Scene, PetSprite (SVG), Panels
   palette/           Palette.jsx e QuickNote.jsx
   tools/meta.js      metadados das ferramentas (sidebar, Início, palette)
   tools/registry.js  associa cada ferramenta ao seu componente

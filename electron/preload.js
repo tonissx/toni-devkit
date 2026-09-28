@@ -44,7 +44,7 @@ contextBridge.exposeInMainWorld('devkit', {
   },
   app: {
     /** Mostra a janela principal (e navega para a rota, se houver). */
-    open: (route) => ipcRenderer.send('app:open', route),
+    open: (route, params) => ipcRenderer.send('app:open', route, params),
     /** Comando para a janela principal: { type: 'go'|'theme'|'sidebar', ... }. */
     command: (cmd) => ipcRenderer.send('app:command', cmd),
     onCommand: (cb) => {
@@ -57,6 +57,21 @@ contextBridge.exposeInMainWorld('devkit', {
   },
   shell: {
     openUrl: (url) => ipcRenderer.invoke('shell:open-url', url),
+  },
+  /** Event Bus: anuncia uso de features (nomes da whitelist em electron/events.js). */
+  events: {
+    emit: (name, data) => ipcRenderer.send('events:emit', name, data),
+  },
+  /** DevCore — sistema idle (ver electron/devcore/service.js). */
+  devcore: {
+    get: () => ipcRenderer.invoke('devcore:get'),
+    act: (action) => ipcRenderer.invoke('devcore:act', action),
+    abilities: () => ipcRenderer.invoke('devcore:abilities'),
+    onChanged: (cb) => {
+      const h = (_e, msg) => cb(msg);
+      ipcRenderer.on('devcore:changed', h);
+      return () => ipcRenderer.removeListener('devcore:changed', h);
+    },
   },
   /** Notes — camada de conhecimento do DevKit (ver electron/notes/service.js). */
   notes: {

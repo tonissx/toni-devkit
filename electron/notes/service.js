@@ -27,7 +27,7 @@ function summary(n) {
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-function createNotesService({ dir, broadcast = () => {} }) {
+function createNotesService({ dir, broadcast = () => {}, events = null }) {
   const store = createStore(dir);
   const notes = new Map();
   let viewed = []; // [{ id, at }]
@@ -90,6 +90,9 @@ function createNotesService({ dir, broadcast = () => {} }) {
       await store.write(next); // falhou → erro para o renderer (que mantém o texto e tenta de novo)
       notes.set(next.id, next);
       changed('saved', next.id);
+      // Anuncia criações no Event Bus (o DevCore escuta; o Notes não sabe disso).
+      if (!prev && events) events.emit(next.type === 'snippet' ? 'snippet.created' : 'note.created');
+      else if (prev && events && prev.type !== 'snippet' && next.type === 'snippet') events.emit('snippet.created');
       return this.get(next.id);
     },
 

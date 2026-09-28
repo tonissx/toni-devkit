@@ -5,6 +5,7 @@ import { resolveTheme } from './lib/themes.js';
 import { AppSidebar } from './shell/AppSidebar.jsx';
 import { Home } from './screens/Home.jsx';
 import { Settings } from './screens/Settings.jsx';
+import { emit } from './lib/events.js';
 
 const { TitleBar, Toast, Kbd } = DS;
 
@@ -23,7 +24,9 @@ function App() {
   const [toasts, setToasts] = React.useState([]);
   const [info, setInfo] = React.useState(null);
   const [sqlVersion, setSqlVersion] = React.useState(null);
-  const [noteRequest, setNoteRequest] = React.useState(null); // { id } | { new, title } vindo da palette
+  // Pedido para a ferramenta aberta, vindo da palette: { route, …params, nonce } (ex.: abrir nota, aba do DevCore).
+  const [request, setRequest] = React.useState(null);
+  const [dots, setDots] = React.useState({}); // pontos discretos na sidebar: { devcore: true }
   const route = prefs.route === 'home' || prefs.route === 'settings' || findTool(prefs.route) ? prefs.route : 'home';
 
   const go = (r) => setPrefs((p) => ({ ...p, route: r }));
@@ -56,11 +59,24 @@ function App() {
 
   // Comandos vindos da command palette (via processo principal).
   React.useEffect(() => window.devkit.app.onCommand((cmd) => {
-    if (cmd.type === 'go' && (cmd.route === 'home' || cmd.route === 'settings' || findTool(cmd.route))) go(cmd.route);
+    if (cmd.type === 'go' && (cmd.route === 'home' || cmd.route === 'settings' || findTool(cmd.route))) {
+      if (cmd.params) setRequest({ route: cmd.route, ...cmd.params, nonce: Date.now() });
+      go(cmd.route);
+    }
     else if (cmd.type === 'theme') setPrefs((p) => ({ ...p, theme: cmd.value }));
     else if (cmd.type === 'sidebar') toggleSidebar();
-    else if (cmd.type === 'open-note') { setNoteRequest({ ...cmd, nonce: Date.now() }); go('notes'); }
+    else if (cmd.type === 'open-note') { setRequest({ ...cmd, route: 'notes', nonce: Date.now() }); go('notes'); }
   }), []);
+
+  // Uso de ferramentas vai para o Event Bus (o DevCore escuta; nada aqui depende dele).
+  React.useEffect(() => { if (findTool(route)) emit('tool.opened', { tool: route }); }, [route]);
+
+  // Ponto discreto na sidebar quando o DevCore tem novidade (descoberta ou upgrade novo).
+  React.useEffect(() => {
+    const set = (v) => setDots((d) => (d.devcore === !!v.hasNews ? d : { ...d, devcore: !!v.hasNews }));
+    window.devkit.devcore.get().then(set, () => {});
+    return window.devkit.devcore.onChanged((msg) => msg.snapshot && set(msg.snapshot));
+  }, []);
 
   // Controles de janela (Windows/Linux): os botões do TitleBar do DS → IPC.
   const onTitleClick = (e) => {
@@ -77,7 +93,7 @@ function App() {
   const Screen = tool && tool.component;
   const screen = route === 'home' ? <Home go={go} openPalette={openPalette} />
     : route === 'settings' ? <Settings prefs={prefs} setPrefs={setPrefs} info={info} sqlVersion={sqlVersion} />
-    : <Screen toast={toast} request={route === 'notes' ? noteRequest : undefined} />;
+    : <Screen toast={toast} request={request && request.route === route ? request : undefined} />;
 
   const title = (tool ? tool.name : route === 'settings' ? 'Configurações' : 'Início') + ' — Devkit';
 
@@ -88,7 +104,7 @@ function App() {
           right={<span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--tk-text-3)', cursor: 'pointer' }} onClick={openPalette}><Kbd size="sm">{mod('K')}</Kbd> buscar</span>} />
       </div>
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <AppSidebar route={route} go={go} collapsed={prefs.collapsed} onCollapse={toggleSidebar} />
+        <AppSidebar route={route} go={go} collapsed={prefs.collapsed} onCollapse={toggleSidebar} dots={dots} />
         <main className="tk-scroll" style={{ flex: 1, minWidth: 0, overflow: 'auto', background: 'var(--tk-surface-1)' }}>{screen}</main>
       </div>
       <div className="toasts">

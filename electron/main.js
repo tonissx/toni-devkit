@@ -5,6 +5,11 @@ const fs = require('node:fs/promises');
 const { Worker } = require('node:worker_threads');
 const palette = require('./palette');
 const { createNotesService } = require('./notes/service');
+const { createBus } = require('./events');
+const { createDevCoreService } = require('./devcore/service');
+
+// Event Bus: as features anunciam o que aconteceu; módulos (DevCore) escutam sem acoplamento.
+const bus = createBus();
 
 const isDev = process.argv.includes('--dev');
 const isMac = process.platform === 'darwin';
@@ -118,8 +123,8 @@ function sendToMain(cmd) {
 }
 
 /** Traz a janela principal para frente (criando se preciso) e, opcionalmente, navega. */
-function showMain(route) {
-  if (route) sendToMain({ type: 'go', route });
+function showMain(route, params) {
+  if (route) sendToMain({ type: 'go', route, params });
   if (!mainWin) { createMainWindow(); return; } // aparece sozinha no ready-to-show
   if (mainWin.isMinimized()) mainWin.restore();
   mainWin.show();
@@ -255,9 +260,38 @@ ipcMain.on('palette:hide', () => palette.hide());
 ipcMain.on('palette:resize', (_e, height) => palette.resize(height));
 ipcMain.handle('palette:status', () => palette.getStatus());
 
-ipcMain.on('app:open', (_e, route) => { palette.hide(); showMain(typeof route === 'string' ? route : undefined); });
+ipcMain.on('app:open', (_e, route, params) => {
+  palette.hide();
+  showMain(typeof route === 'string' ? route : undefined, params && typeof params === 'object' ? params : undefined);
+});
 ipcMain.on('app:command', (_e, cmd) => { if (cmd && typeof cmd.type === 'string') sendToMain(cmd); });
 ipcMain.on('app:quit', () => { quitting = true; app.quit(); });
+
+/* ─────────────── Event Bus (renderer → processo principal) ─────────────── */
+ipcMain.on('events:emit', (_e, name, data) => { bus.emit(String(name), data); });
+
+/* ─────────────── DevCore ─────────────── */
+// Estado do jogo em %APPDATA%/Toni Devkit/devcore.json. DEVKIT_DEVCORE_NOW_OFFSET (ms) desloca o relógio — só para testes.
+let devcore = null;
+let devcoreReady = null;
+const clockOffset = Number(process.env.DEVKIT_DEVCORE_NOW_OFFSET) || 0;
+const broadcastDevCore = (msg) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('devcore:changed', msg); };
+
+function initDevCore() {
+  devcore = createDevCoreService({
+    file: path.join(app.getPath('userData'), 'devcore.json'),
+    now: () => Date.now() + clockOffset,
+    broadcast: broadcastDevCore,
+  });
+  devcoreReady = devcore.init().then(() => {
+    devcore.start();
+    bus.on('*', (name, data) => devcore.onEvent(name, data));
+  }).catch((e) => { console.error('[devcore]', e); throw e; });
+}
+
+ipcMain.handle('devcore:get', async () => { await devcoreReady; return devcore.get(); });
+ipcMain.handle('devcore:act', async (_e, action) => { await devcoreReady; return devcore.act(action); });
+ipcMain.handle('devcore:abilities', async () => { await devcoreReady; return devcore.abilities(); });
 
 /* ─────────────── Notes ─────────────── */
 // Um .md por nota em Documentos\Devkit Notes (DEVKIT_NOTES_DIR sobrescreve — usado nos testes).
@@ -267,7 +301,7 @@ const broadcastNotes = (evt) => { for (const w of BrowserWindow.getAllWindows())
 
 function initNotes() {
   const dir = process.env.DEVKIT_NOTES_DIR || path.join(app.getPath('documents'), 'Devkit Notes');
-  notes = createNotesService({ dir, broadcast: broadcastNotes });
+  notes = createNotesService({ dir, broadcast: broadcastNotes, events: bus });
   notesReady = notes.init().catch((e) => { console.error('[notes]', e); throw e; });
 }
 
@@ -308,6 +342,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     initNotes();
+    initDevCore();
     palette.create();
     palette.registerShortcut();
     createTray();
@@ -324,6 +359,7 @@ if (!app.requestSingleInstanceLock()) {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:flush');
     setTimeout(async () => {
       await notes.flush().catch(() => {});
+      if (devcore) await devcore.flush().catch(() => {});
       notesFlushed = true;
       app.quit();
     }, 300);

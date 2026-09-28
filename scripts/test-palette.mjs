@@ -85,7 +85,7 @@ test('recent list keeps the last 8 unique ids, newest first', () => {
 test('registry: unique ids, valid categories, required fields', () => {
   const ids = COMMANDS.map((c) => c.id);
   assert.equal(new Set(ids).size, ids.length);
-  const cats = [...CATEGORIES.map((c) => c.id), 'web'];
+  const cats = [...CATEGORIES.map((c) => c.id), 'web', 'devcore'];
   for (const c of COMMANDS) {
     assert.ok(cats.includes(c.category), c.id);
     assert.ok(c.name && c.icon && typeof c.run === 'function', c.id);

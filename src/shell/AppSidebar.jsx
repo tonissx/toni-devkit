@@ -3,7 +3,7 @@ import { TOOLS } from '../tools/registry.js';
 
 const { Sidebar, SidebarGroup, SidebarItem, IconButton } = DS;
 
-export function AppSidebar({ route, go, collapsed, onCollapse }) {
+export function AppSidebar({ route, go, collapsed, onCollapse, dots = {} }) {
   const groups = [];
   TOOLS.forEach((t) => {
     let g = groups.find((x) => x.name === t.group);
@@ -45,7 +45,7 @@ export function AppSidebar({ route, go, collapsed, onCollapse }) {
       {groups.map((g) => (
         <SidebarGroup key={g.name} label={collapsed ? null : g.name}>
           {g.items.map((t) => (
-            <SidebarItem key={t.id} icon={t.icon} label={t.name} active={route === t.id}
+            <SidebarItem key={t.id} icon={t.icon} label={t.name} active={route === t.id} dot={!!dots[t.id] && route !== t.id}
               shortcut={collapsed || !t.shortcutKey ? undefined : mod(t.shortcutKey)} onClick={() => go(t.id)} />
           ))}
         </SidebarGroup>
