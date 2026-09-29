@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
@@ -241,6 +241,63 @@ test('store: atomic write, load, concurrent writes keep the last, trash', async 
     assert.ok(existsSync(path.join(dir, '.trash', n.id + '.md')));
     await st.writeState({ viewed: [{ id: 'x' }] });
     assert.deepEqual(await st.readState(), { viewed: [{ id: 'x' }] });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('store: loadAll recurses, lists empty folders, skips dot-dirs, and same file name in two folders is fine', async () => {
+  const dir = tmp();
+  try {
+    const st = createStore(dir);
+    const mk = (rel, text) => { mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); writeFileSync(path.join(dir, rel), text); };
+    mk('a.md', 'raiz');
+    mk('Trabalho/a.md', 'em pasta');
+    mk('Trabalho/Fluig/b.md', 'funda');
+    mk('.trash/lixo.md', 'não carrega');
+    mk('.git/x.md', 'não carrega');
+    mk('Trabalho/leia.txt', 'não é nota');
+    mkdirSync(path.join(dir, 'Vazia'));
+    const { notes, errors, folders } = await st.loadAll();
+    assert.deepEqual(errors, []);
+    assert.deepEqual(folders, ['Trabalho', 'Trabalho/Fluig', 'Vazia']);
+    assert.deepEqual(notes.map((n) => n.file).sort(), ['Trabalho/Fluig/b.md', 'Trabalho/a.md', 'a.md']);
+    assert.equal(new Set(notes.map((n) => n.id)).size, 3); // ids derivados do caminho não colidem
+    // write cria a subpasta; caminho fora da pasta das notas é recusado
+    const n = N.createNote({ title: 'X', content: 'x' });
+    await st.write({ ...n, file: 'Nova/Sub/' + n.id + '.md' });
+    assert.ok(existsSync(path.join(dir, 'Nova', 'Sub', n.id + '.md')));
+    assert.throws(() => st.write({ ...n, file: '../fora.md' }), /inválido|fora/);
+    assert.throws(() => st.write({ ...n, file: 'a/../../fora.md' }), /inválido|fora/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('store: move never overwrites, trash keeps the subfolder, folders can be created/renamed/removed', async () => {
+  const dir = tmp();
+  try {
+    const st = createStore(dir);
+    const a = N.createNote({ title: 'A', content: 'a' }), b = N.createNote({ title: 'B', content: 'b' });
+    await st.write({ ...a, file: 'a.md' });
+    await st.write({ ...b, file: 'P/a.md' });
+    // mover a.md (raiz) para P/a.md que já existe → P/a (2).md
+    assert.equal(await st.move({ ...a, file: 'a.md' }, 'P/a.md'), 'P/a (2).md');
+    assert.equal(readFileSync(path.join(dir, 'P', 'a (2).md'), 'utf8').includes('title: "A"'), true);
+    assert.ok(!existsSync(path.join(dir, 'a.md')));
+    assert.equal(await st.move({ ...a, file: 'P/a (2).md' }, 'P/a (2).md'), 'P/a (2).md'); // mesmo lugar: nada a fazer
+    await assert.rejects(st.move({ ...a, file: 'sumiu.md' }, 'Q/sumiu.md'), /não foi encontrado/);
+    // trash mantém a subpasta
+    await st.trash({ ...b, file: 'P/a.md' });
+    assert.ok(existsSync(path.join(dir, '.trash', 'P', 'a.md')));
+    // pastas
+    await st.mkdir('P/Sub');
+    await assert.rejects(st.mkdir('p/SUB'), /Já existe/); // sem diferenciar maiúsculas
+    await st.renameDir('P/Sub', 'P/Outra');
+    assert.ok(existsSync(path.join(dir, 'P', 'Outra')));
+    await st.mkdir('P/Dois');
+    await assert.rejects(st.renameDir('P/Outra', 'P/dois'), /Já existe/);
+    await st.renameDir('P/Outra', 'P/OUTRA'); // só maiúsculas: permitido
+    assert.ok(readdirSync(path.join(dir, 'P')).includes('OUTRA'));
+    assert.equal(await st.rmdir('P'), false); // ainda tem nota
+    assert.equal(await st.rmdir('P/OUTRA'), true);
+    assert.equal(await st.rmdir('naoexiste'), true);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
