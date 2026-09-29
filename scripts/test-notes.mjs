@@ -95,6 +95,9 @@ test('templates: variables, {{cursor}}, unknown kept, trailing empty vars trimme
   const vars = T.templateVars(new Date(2026, 8, 29, 9, 5), { titulo: 'X' });
   assert.equal(vars.hoje, '2026-09-29');
   assert.equal(vars.data, '29/09/2026');
+  assert.equal(vars.dia_anterior, '28/09/2026');
+  assert.equal(T.templateVars(new Date(2026, 0, 1)).dia_anterior, '31/12/2025'); // virada de ano
+  assert.equal(T.templateVars(new Date(2026, 2, 1)).dia_anterior, '28/02/2026'); // virada de mês
   assert.equal(vars.hora, '09:05');
   assert.equal(vars.dia_semana, 'terça-feira');
   assert.equal(vars.data_extenso, 'terça-feira, 29 de setembro de 2026');
