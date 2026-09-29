@@ -296,6 +296,14 @@ atual, porque a batalha depende desse balanceamento.
 - **Recompensas**: um recurso novo (ex.: *Patches*) pela arquitetura de múltiplos recursos, gasto em melhorias de
   combate e visuais exclusivos; pode virar a porta de entrada para o *Rebuild* (prestige)
 
+## Atualizações
+
+Cada merge na `main` publica uma release. O app instalado (Windows NSIS e Linux AppImage) confere o GitHub 15 s após
+abrir, a cada 4 h e quando a janela é aberta/focada (no máximo a cada 10 min); em **Configurações** dá para
+verificar na hora. **Baixar** e **Reiniciar e instalar** sempre conferem de novo antes de agir: se saiu uma versão
+mais nova que a última verificação, é ela que é baixada/instalada — atualiza uma vez só, direto na última. No macOS e
+no Windows portátil o app só avisa e abre a página da última release.
+
 ## Estrutura
 
 ```

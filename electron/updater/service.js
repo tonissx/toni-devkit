@@ -41,6 +41,7 @@ function createUpdaterService({
   owner = 'tonissx',
   repo = 'toni-devkit',
   broadcast = () => {},
+  autoUpdater: injected = null, // só para testes: um electron-updater falso
 }) {
   const mode = detectMode({ isPackaged, platform, portableDir });
   let state = { mode, status: 'idle', version: currentVersion, latestVersion: null, releaseUrl: null, progress: null, error: null };
@@ -48,17 +49,23 @@ function createUpdaterService({
   const setState = (patch) => { state = { ...state, ...patch }; broadcast(state); return state; };
 
   let autoUpdater = null;
+  let quiet = false;      // checagem em segundo plano: não mexe no status (um download pronto continua pronto)
+  let installing = false; // "Reiniciar e instalar" já em andamento
   if (mode === 'full') {
-    ({ autoUpdater } = require('electron-updater'));
+    autoUpdater = injected || require('electron-updater').autoUpdater;
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
-    autoUpdater.on('checking-for-update', () => setState({ status: 'checking', error: null }));
-    autoUpdater.on('update-available', (info) => setState({ status: 'available', latestVersion: info.version }));
-    autoUpdater.on('update-not-available', () => setState({ status: 'not-available' }));
+    const live = (fn) => (...args) => { if (!quiet) fn(...args); };
+    autoUpdater.on('checking-for-update', live(() => setState({ status: 'checking', error: null })));
+    autoUpdater.on('update-available', live((info) => setState({ status: 'available', latestVersion: info.version })));
+    autoUpdater.on('update-not-available', live(() => setState({ status: 'not-available' })));
     autoUpdater.on('download-progress', (p) => setState({ status: 'downloading', progress: p }));
     autoUpdater.on('update-downloaded', (info) => setState({ status: 'downloaded', latestVersion: info.version }));
-    autoUpdater.on('error', (err) => setState({ status: 'error', error: String((err && err.message) || err) }));
+    autoUpdater.on('error', live((err) => setState({ status: 'error', error: String((err && err.message) || err) })));
   }
+
+  // Sempre a última release, mesmo que outra tenha saído depois da verificação.
+  const latestReleaseUrl = `https://github.com/${owner}/${repo}/releases/latest`;
 
   async function checkOnly() {
     setState({ status: 'checking', error: null });
@@ -67,7 +74,7 @@ function createUpdaterService({
       if (!res.ok) throw new Error(`GitHub API ${res.status}`);
       const data = await res.json();
       const latest = String(data.tag_name || '').replace(/^v/, '');
-      if (isNewer(latest, currentVersion)) setState({ status: 'available', latestVersion: latest, releaseUrl: data.html_url });
+      if (isNewer(latest, currentVersion)) setState({ status: 'available', latestVersion: latest, releaseUrl: latestReleaseUrl });
       else setState({ status: 'not-available' });
     } catch (e) {
       setState({ status: 'error', error: String((e && e.message) || e) });
@@ -75,22 +82,50 @@ function createUpdaterService({
     return state;
   }
 
+  /**
+   * Checagem silenciosa (com uma atualização já baixada): só troca o estado se saiu uma versão
+   * MAIS NOVA que a baixada. Sem rede ou sem novidade, o download pronto continua valendo.
+   */
+  async function refresh() {
+    quiet = true;
+    try {
+      const r = await autoUpdater.checkForUpdates();
+      const v = r && r.updateInfo && r.updateInfo.version;
+      if (v && isNewer(v, state.latestVersion || state.version)) setState({ status: 'available', latestVersion: v, progress: null });
+    } catch { /* sem rede: mantém o que já está baixado */ } finally { quiet = false; }
+    return state;
+  }
+
+  const downloadNow = () => autoUpdater.downloadUpdate().then(() => state, () => state);
+
   return {
     get: () => state,
 
     check() {
       if (mode === 'unsupported') return Promise.resolve(state);
       if (mode === 'check-only') return checkOnly();
+      if (state.status === 'checking' || state.status === 'downloading') return Promise.resolve(state);
+      if (state.status === 'downloaded') return refresh(); // não apaga o "Reiniciar e instalar"
       return autoUpdater.checkForUpdates().then(() => state, () => state);
     },
 
-    download() {
-      if (mode !== 'full' || state.status !== 'available') return Promise.resolve(state);
-      return autoUpdater.downloadUpdate().then(() => state, () => state);
+    /** Baixa a versão MAIS NOVA no momento do clique (o `available` guardado pode ser de horas atrás). */
+    async download() {
+      if (mode !== 'full' || state.status !== 'available') return state;
+      try { await autoUpdater.checkForUpdates(); } catch { return state; } // renova o que será baixado
+      if (state.status !== 'available') return state; // a release sumiu / já está em dia
+      return downloadNow();
     },
 
-    install() {
-      if (mode === 'full' && state.status === 'downloaded') autoUpdater.quitAndInstall();
+    /** Instala a versão mais nova: se saiu outra depois do download, baixa essa e instala só ela. */
+    async install() {
+      if (mode !== 'full' || state.status !== 'downloaded' || installing) return state;
+      installing = true;
+      try {
+        await refresh();
+        if (state.status === 'available') await downloadNow();
+        if (state.status === 'downloaded') autoUpdater.quitAndInstall();
+      } finally { installing = false; }
       return state;
     },
   };

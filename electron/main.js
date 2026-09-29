@@ -351,9 +351,18 @@ function initUpdater() {
     broadcast: broadcastUpdater,
   });
   if (updater.get().mode === 'unsupported') return;
-  setTimeout(() => updater.check().catch(() => {}), 15_000);
-  const interval = setInterval(() => updater.check().catch(() => {}), 4 * 60 * 60 * 1000);
+  let lastCheck = 0;
+  const checkIfStale = (minMs) => {
+    if (Date.now() - lastCheck < minMs) return;
+    lastCheck = Date.now();
+    updater.check().catch(() => {});
+  };
+  setTimeout(() => checkIfStale(0), 15_000);
+  const interval = setInterval(() => checkIfStale(0), 4 * 60 * 60 * 1000);
   if (interval.unref) interval.unref();
+  // O app vive na bandeja: quando o usuário abre a janela é que ele vai atualizar, então confere de novo
+  // (no máximo a cada 10 min) para não oferecer uma versão que já ficou velha.
+  app.on('browser-window-focus', (_e, win) => { if (win === mainWin) checkIfStale(10 * 60 * 1000); });
 }
 
 ipcMain.handle('updater:status', () => updater.get());
