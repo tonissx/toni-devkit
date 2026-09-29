@@ -69,7 +69,7 @@ export function TemplateModal({ folder, onCreated, onEditTemplate, onClose, toas
         ) : !list.length ? (
           <div className="nts-tpl__empty">
             <p><b>Nenhum template ainda.</b> Qualquer nota dentro da pasta <b>Templates</b> vira um template.</p>
-            <p>Variáveis trocadas ao criar: <code>{VARS}</code>. Um template chamado <b>Diário</b> vira o modelo da nota do dia.</p>
+            <p>Variáveis trocadas ao criar: <code>{VARS}</code>.</p>
             <Button variant="primary" icon="sparkles" onClick={() => newTemplate(true)}>Criar template de exemplo</Button>
           </div>
         ) : (
@@ -77,7 +77,7 @@ export function TemplateModal({ folder, onCreated, onEditTemplate, onClose, toas
             {list.map((t, i) => (
               <button key={t.id} type="button" role="option" aria-selected={i === hi}
                 className={'nts-tpl__item' + (i === hi ? ' is-hi' : '')} onMouseEnter={() => setHi(i)} onClick={() => pick(t)}>
-                <Icon name={t.title.toLowerCase().startsWith('diário') ? 'calendar-days' : 'layout-template'} size={15} />
+                <Icon name="layout-template" size={15} />
                 <span className="nts-tpl__main">
                   <span className="nts-tpl__title">{t.title}</span>
                   {t.preview && <span className="nts-tpl__preview">{t.preview}</span>}

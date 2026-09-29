@@ -106,8 +106,6 @@ contextBridge.exposeInMainWorld('devkit', {
     /** Templates (notas da pasta Templates) e nova nota a partir de um → { note, cursor }. */
     templates: () => ipcRenderer.invoke('notes:templates'),
     fromTemplate: (id, opts) => ipcRenderer.invoke('notes:fromTemplate', id, opts),
-    /** Nota do dia (abre ou cria em "Diário") → { note, created, cursor }. */
-    daily: (date) => ipcRenderer.invoke('notes:daily', date),
     /** Pasta na raiz com esse nome (a existente, mesmo com outra grafia; senão cria) → caminho. */
     ensureRootFolder: (name) => ipcRenderer.invoke('notes:ensureRootFolder', name),
     tags: () => ipcRenderer.invoke('notes:tags'),

@@ -12,7 +12,7 @@ const { createNote, displayTitle, allTags, plainLine, tasksOf, taskStats, toggle
 const { searchNotes } = require('../../src/notes/search.js');
 const { validFolderPath, validFolderName, normFolder, folderOf, baseName, parentOf, joinPath, isDescendant } = require('../../src/notes/folders.js');
 const { normalize } = require('../../src/commands/search.js');
-const { DAILY_FOLDER, TEMPLATES_FOLDER, DAILY_TEMPLATE, DEFAULT_DAILY, templateVars, applyTemplate, dailyTitle, isDailyTitle, pendingList } = require('../../src/notes/templates.js');
+const { TEMPLATES_FOLDER, templateVars, applyTemplate } = require('../../src/notes/templates.js');
 
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
 const VIEWED_MAX = 20;
@@ -79,15 +79,13 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
   }
   const trashed = new Map(); // id → arquivo em .trash da última exclusão (desfazer apaga a cópia)
 
-  /** Pasta existente com esse nome na raiz, sem diferenciar maiúsculas/acentos ("diario" serve para "Diário"). */
+  /** Pasta existente com esse nome na raiz, sem diferenciar maiúsculas/acentos ("templates" serve para "Templates"). */
   const rootFolderLike = (name) => [...folderSet].find((f) => !f.includes('/') && normalize(f) === normalize(name)) || null;
   /** A nota está na pasta Templates (ou numa subpasta dela)? */
   const isTemplate = (n) => {
     const top = folderOf(n.file).split('/')[0];
     return !!top && normalize(top) === normalize(TEMPLATES_FOLDER);
   };
-  const dailyInFlight = new Map(); // data → promessa (dois cliques seguidos não criam duas notas do dia)
-
   /** Valida uma pasta de destino existente ('' = raiz); devolve o caminho normalizado. */
   function existingFolder(p) {
     const f = normFolder(p);
@@ -183,7 +181,7 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
       return this.save(createNote(fields));
     },
 
-    /* ─────────────── Templates e nota diária ─────────────── */
+    /* ─────────────── Templates ─────────────── */
 
     /** Pasta na raiz com esse nome (a existente, mesmo com outra grafia; senão cria). Devolve o caminho. */
     async ensureRootFolder(name) {
@@ -215,46 +213,6 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
       });
       if (!note) err('O template está vazio.');
       return { note, cursor };
-    },
-
-    /**
-     * Nota do dia (AAAA-MM-DD, pasta Diário): abre a existente ou cria a partir do template "Diário"
-     * (ou do padrão), com as tarefas vencidas/de hoje e o link para a nota diária anterior.
-     * date = 'AAAA-MM-DD' (padrão: hoje). → { note, created, cursor }
-     */
-    daily(date) {
-      const now = new Date();
-      const day = isDailyTitle(date) ? date : dailyTitle(now);
-      if (!dailyInFlight.has(day)) {
-        const run = this._daily(day, now).finally(() => dailyInFlight.delete(day));
-        dailyInFlight.set(day, run);
-      }
-      return dailyInFlight.get(day);
-    },
-
-    async _daily(day, now) {
-      const inDaily = (n) => normalize(folderOf(n.file).split('/')[0] || '') === normalize(DAILY_FOLDER);
-      const same = (n) => String(n.title || '').trim() === day;
-      const found = [...notes.values()].find((n) => same(n) && inDaily(n)) || [...notes.values()].find(same);
-      if (found) return { note: this.get(found.id), created: false, cursor: null };
-
-      const folder = await this.ensureRootFolder(DAILY_FOLDER);
-      const tmpl = this.templates().find((t) => normalize(t.title) === normalize(DAILY_TEMPLATE));
-      const source = tmpl ? notes.get(tmpl.id) : null;
-      const prev = [...notes.values()].filter((n) => inDaily(n) && isDailyTitle(n.title) && n.title.trim() < day)
-        .map((n) => n.title.trim()).sort().pop();
-      const [y, m, d] = day.split('-').map(Number);
-      const when = new Date(y, m - 1, d, now.getHours(), now.getMinutes());
-      const { text, cursor } = applyTemplate(source ? source.content : DEFAULT_DAILY, templateVars(when, {
-        titulo: day,
-        pendencias: pendingList(this.tasks({ status: 'open' }), day),
-        anterior: prev ? `← [[${prev}]]` : '',
-      }));
-      const note = await this.create({
-        title: day, content: text, folder,
-        tags: source ? (source.tags || []).filter((x) => normalize(x) !== 'template') : [],
-      });
-      return { note, created: true, cursor };
     },
 
     remove(id) {

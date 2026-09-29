@@ -11,7 +11,7 @@
  *     ctx.appCommand(cmd)   muda o estado da janela principal: { type: 'theme'|'sidebar', ... }
  *     ctx.openUrl(url)      abre no navegador (só https)
  *     ctx.clipboard / ctx.sql / ctx.storage / ctx.quit()
- *     ctx.notes (API de Notes) · ctx.openNote({ id, cursor? } | { new: true, title? }) · ctx.devcore (API do DevCore)
+ *     ctx.notes (API de Notes) · ctx.openNote({ id } | { new: true, title? }) · ctx.devcore (API do DevCore)
  *     ctx.openApp(route, params?) — params chega à ferramenta (ex.: { tab: 'pets' })
  *     ctx.palette.quickNote(texto?) / ctx.palette.enter(escopo)   (comandos keepOpen: a palette continua aberta)
  *   Pode ser async. Se devolver uma string, ela aparece como confirmação antes da palette fechar.
@@ -181,12 +181,6 @@ const noteCommands = [
     description: 'Nova nota no editor do Devkit',
     keywords: ['nova nota', 'criar nota', 'note'],
     run: (ctx) => ctx.openNote({ new: true }),
-  },
-  {
-    id: 'notes:daily', name: 'Nota do dia', icon: 'calendar-days',
-    description: 'Abre (ou cria em “Diário”) a nota de hoje, com as tarefas vencidas e de hoje',
-    keywords: ['diario', 'daily', 'hoje', 'journal', 'dia', 'note'],
-    run: async (ctx) => { const r = await ctx.notes.daily(); ctx.openNote({ id: r.note.id, cursor: r.cursor }); },
   },
   {
     id: 'notes:template', name: 'Nova nota a partir de template', icon: 'layout-template',

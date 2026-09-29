@@ -102,18 +102,6 @@ test('templates: variables, {{cursor}}, unknown kept, trailing empty vars trimme
   assert.equal(r.text, '# X — 29/09/2026\n- [ ] \n{{naoexiste}}\n');
   assert.equal(r.cursor, '# X — 29/09/2026\n- [ ] '.length);
   assert.equal(T.applyTemplate('sem cursor', vars).cursor, null);
-  assert.ok(T.isDailyTitle('2026-09-29') && !T.isDailyTitle('29/09/2026'));
-});
-
-test('templates: pendingList shows overdue and today (not future/done), with links, capped', () => {
-  const t = (text, due, extra = {}) => ({ text, due, checked: false, priority: null, noteTitle: 'RM', ...extra });
-  assert.equal(T.pendingList([t('pagar', '2026-09-27', { priority: 1 }), t('hoje', '2026-09-29'), t('depois', '2026-10-01'), t('feita', '2026-09-01', { checked: true }), t('sem data', null)], '2026-09-29'),
-    '- pagar !1 — [[RM]] (🔴 venceu 27/09)\n- hoje — [[RM]] (📅 hoje)');
-  assert.equal(T.pendingList([], '2026-09-29'), '_Nada vencido nem para hoje._');
-  const many = Array.from({ length: 23 }, (_, i) => t('t' + i, '2026-09-01'));
-  const out = T.pendingList(many, '2026-09-29').split('\n');
-  assert.equal(out.length, 21);
-  assert.equal(out[20], '- …e mais 3 (veja o painel Tarefas)');
 });
 
 test('service: templates — list, create from template (vars, cursor, folder), template tasks stay out of Tarefas', async () => {
@@ -140,37 +128,6 @@ test('service: templates — list, create from template (vars, cursor, folder), 
     const plain = await svc.create({ title: 'Reunião', content: 'Pauta:', folder: 'templates' });
     assert.equal((await svc.fromTemplate(plain.id)).note.title, '');   // título fixo não é copiado
     await assert.rejects(svc.fromTemplate(note.id), /não encontrado/);
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('service: daily note — created once in Diário with pending tasks and link to the previous day, template "Diário" wins', async () => {
-  const dir = tmp();
-  try {
-    const svc = createNotesService({ dir });
-    await svc.init();
-    await svc.create({ title: 'RM', content: '- [ ] pagar @2026-09-28 !1\n- [ ] hoje @2026-09-29\n- [ ] futuro @2026-10-05' });
-    const first = await svc.daily('2026-09-28');
-    assert.equal(first.created, true);
-    assert.equal(first.note.folder, 'Diário');
-
-    const [a, b] = await Promise.all([svc.daily('2026-09-29'), svc.daily('2026-09-29')]); // dois cliques
-    assert.equal(a.note.id, b.note.id);
-    const c = a.note.content;
-    assert.match(c, /^# terça-feira, 29 de setembro de 2026\n/);
-    assert.match(c, /- pagar !1 — \[\[RM\]\] \(🔴 venceu 28\/09\)\n- hoje — \[\[RM\]\] \(📅 hoje\)/);
-    assert.ok(!c.includes('futuro'));
-    assert.match(c, /← \[\[2026-09-28\]\]\n$/);
-    assert.equal(c.slice(0, a.cursor).endsWith('## Hoje\n- [ ] '), true);
-    assert.equal((await svc.daily('2026-09-29')).created, false);
-    assert.equal(svc.list().filter((n) => n.title === '2026-09-29').length, 1);
-    // As linhas de pendências são lista simples: a única tarefa da nota é o "- [ ] " de "Hoje".
-    assert.equal(svc.tasks().filter((t) => t.noteTitle === '2026-09-29').length, 1);
-
-    await svc.ensureRootFolder('Templates');
-    await svc.create({ title: 'Diário', content: 'Dia {{data}}\n{{pendencias}}', folder: 'Templates', tags: ['template', 'diario'] });
-    const d = await svc.daily('2026-09-30');
-    assert.equal(d.note.content.split('\n')[0], 'Dia 30/09/2026');
-    assert.deepEqual(d.note.tags, ['diario']);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
