@@ -75,6 +75,18 @@ export function useAutosave(initial, { isNew = false, delay = 400, onSaved } = {
     s.timer = setTimeout(flush, delay);
   }, [flush, delay]);
 
+  // Alteração externa (palette "task: …", painel Tarefas): se não há nada pendente aqui, adota o
+  // conteúdo novo — senão o próximo auto-save sobrescreveria a tarefa recém-adicionada.
+  React.useEffect(() => notesApi().onChanged((evt) => {
+    const s = r.current;
+    if (!evt || evt.type !== 'saved' || evt.id !== s.note.id || s.dirty || s.inflight) return;
+    notesApi().get(evt.id).then((fresh) => {
+      if (!fresh || s.dirty || s.inflight || fresh.content === s.note.content) return;
+      s.note = { ...s.note, content: fresh.content, updated: fresh.updated };
+      setNote(s.note);
+    }).catch(() => {});
+  }), []);
+
   React.useEffect(() => {
     const now = () => { flush(); };
     window.addEventListener('blur', now);

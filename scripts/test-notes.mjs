@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
 const N = require('../src/notes/note.js');
+const E = require('../src/notes/edit.js');
 const { serialize, parse } = require('../src/notes/format.js');
 const { searchNotes, withinOne } = require('../src/notes/search.js');
 const { createStore } = require('../electron/notes/store.js');
@@ -45,6 +46,67 @@ test('excerpt centers on the match and reports highlight ranges', () => {
   const [s, e] = ex.ranges[0];
   assert.equal(ex.text.slice(s, e), 'COALESCE');
   assert.equal(N.excerpt('início', ['zzz']).text, 'início');
+});
+
+test('tasksOf: order, nesting, metadata, code blocks ignored; indexes match toggleTaskAt', () => {
+  const md = '```\n- [ ] no código\n```\n- [ ] a @2026-10-02 !1 #x\n  - [x] b\n1. [ ] c\n- [ ]\n* texto normal';
+  const t = N.tasksOf(md);
+  assert.deepEqual(t.map((x) => [x.index, x.line, x.checked, x.text]), [
+    [0, 3, false, 'a #x'], [1, 4, true, 'b'], [2, 5, false, 'c'], [3, 6, false, ''],
+  ]);
+  assert.equal(t[0].due, '2026-10-02');
+  assert.equal(t[0].priority, 1);
+  assert.equal(t[1].indent, 2);
+  assert.equal(t[2].due, null);
+  assert.deepEqual(N.taskStats(md), { open: 3, done: 1 });
+  assert.equal(N.toggleTaskAt(md, 1), md.replace('- [x] b', '- [ ] b'));
+  assert.deepEqual(N.tasksOf(''), []);
+});
+
+test('edit: Enter continues a task list, exits on an empty task, ignores code and plain lines', () => {
+  const { continueList } = E;
+  let r = continueList('- [ ] a', 7);
+  assert.deepEqual(r, { value: '- [ ] a\n- [ ] ', start: 14, end: 14 });
+  r = continueList('  - [x] feito', 13);
+  assert.equal(r.value, '  - [x] feito\n  - [ ] ');
+  r = continueList('1. [ ] um', 9);
+  assert.equal(r.value, '1. [ ] um\n2. [ ] ');
+  r = continueList('- [ ] ab', 7); // no meio do texto: quebra a linha
+  assert.equal(r.value, '- [ ] a\n- [ ] b');
+  r = continueList('x\n- [ ] ', 8);
+  assert.deepEqual(r, { value: 'x\n', start: 2, end: 2 });
+  assert.equal(continueList('texto', 5), null);
+  assert.equal(continueList('- item', 6), null);
+  assert.equal(continueList('```\n- [ ] a\n```', 11), null);
+  assert.equal(continueList('- [ ] a', 3), null); // cursor dentro do prefixo
+});
+
+test('edit: toggleTaskLines cycles text → open → done → text, also for selections', () => {
+  const { toggleTaskLines: tg } = E;
+  let r = tg('comprar leite', 3, 3);
+  assert.deepEqual(r, { value: '- [ ] comprar leite', start: 9, end: 9 });
+  r = tg('- [ ] comprar', 8, 8);
+  assert.equal(r.value, '- [x] comprar');
+  r = tg('- [x] comprar', 9, 9);
+  assert.equal(r.value, 'comprar');
+  assert.equal(r.start, 3);
+  assert.equal(tg('- item', 4, 4).value, '- [ ] item');
+  assert.equal(tg('1. item', 4, 4).value, '1. [ ] item');
+  assert.equal(tg('', 0, 0).value, '- [ ] ');
+  const md = 'a\n\nb\n- [x] c';
+  assert.equal(tg(md, 0, md.length).value, '- [ ] a\n\n- [ ] b\n- [x] c');
+  assert.equal(tg('```\nx\n```', 5, 5), null);
+});
+
+test('edit: "[] "/"todo " become a task and @hoje/@amanha become dates', () => {
+  const { expandOnSpace: ex } = E;
+  assert.deepEqual(ex('[]', 2), { value: '- [ ] ', start: 6, end: 6 });
+  assert.equal(ex('  todo', 6).value, '  - [ ] ');
+  assert.equal(ex('a todo', 6), null);
+  const now = new Date(2026, 9, 31, 12); // 31/10/2026
+  assert.equal(ex('- [ ] pagar @hoje', 17, now).value, '- [ ] pagar @2026-10-31 ');
+  assert.equal(ex('- [ ] pagar @amanha', 19, now).value, '- [ ] pagar @2026-11-01 ');
+  assert.equal(ex('a@hoje', 6, now), null);
 });
 
 test('newId is sortable and file-safe', () => {
@@ -234,6 +296,37 @@ test('service: write failure surfaces an error and keeps memory unchanged', asyn
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('service: tasks aggregate (order, filters), toggleTask and appendTask to the Inbox', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const a = await svc.create({ title: 'A', content: '- [ ] sem data\n- [ ] urgente @2026-10-01 !1 #x\n- [x] feita', tags: ['proj'] });
+    const b = await svc.create({ title: 'B', content: '- [ ] depois @2026-12-01\n```\n- [ ] código\n```' });
+    await svc.create({ title: 'Snip', type: 'snippet', content: '- [ ] ignorada' });
+
+    let open = svc.tasks();
+    assert.deepEqual(open.map((t) => t.text), ['urgente #x', 'depois', 'sem data']); // vencimento, depois sem data
+    assert.equal(open[0].noteId, a.id);
+    assert.equal(svc.tasks({ status: 'done' }).length, 1);
+    assert.equal(svc.tasks({ status: 'all' }).length, 4);
+    assert.deepEqual(svc.tasks({ tag: 'proj' }).map((t) => t.text), ['urgente #x', 'sem data']);
+    assert.deepEqual(svc.list().find((n) => n.id === a.id).tasksOpen, 2);
+
+    await svc.toggleTask(a.id, 0);
+    assert.match(svc.get(a.id).content, /^- \[x\] sem data/);
+    assert.equal(svc.tasks().length, 2);
+    await assert.rejects(svc.toggleTask('nope', 0), /não encontrada/);
+
+    await svc.appendTask('revisar PR #42');
+    await svc.appendTask('segunda');
+    const inbox = svc.get(svc.resolveLink('Inbox'));
+    assert.equal(inbox.content, '- [ ] revisar PR #42\n- [ ] segunda\n');
+    assert.equal(svc.list().filter((n) => n.title === 'Inbox').length, 1);
+    await assert.rejects(svc.appendTask('  '), /vazia/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 /* ─────────────── markdown (bundled with esbuild, as in the app) ─────────────── */
 async function loadMarkdown() {
   const esbuild = await import('esbuild');
@@ -257,6 +350,15 @@ test('markdown: code highlight, tasks, tables, wikilinks; raw HTML and js: links
   assert.ok(!/<img/.test(html) && html.includes('&lt;img'));
   assert.ok(!/javascript:/.test(html));
   assert.match(html, /<a href="https:\/\/a.com" target="_blank" rel="noreferrer">ok<\/a>/);
+});
+
+test('markdown: @date and !1..!3 become chips; lookalikes stay text', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const { html } = renderMarkdown('- [ ] pagar @2020-01-05 !1 ok\n- [ ] email a@2020-01-05 e wow!1');
+  assert.match(html, /<span class="md-due is-late" title="Prazo">📅 05\/01<\/span>/);
+  assert.match(html, /<span class="md-pri is-p1" title="Prioridade 1">!1<\/span>/);
+  assert.equal((html.match(/md-due/g) || []).length, 1);
+  assert.equal((html.match(/md-pri/g) || []).length, 1);
 });
 
 test('markdown: toggleTask flips the n-th task, skipping code blocks', async () => {

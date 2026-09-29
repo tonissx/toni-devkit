@@ -89,6 +89,11 @@ contextBridge.exposeInMainWorld('devkit', {
     markViewed: (id) => ipcRenderer.invoke('notes:markViewed', id),
     resolveLink: (title) => ipcRenderer.invoke('notes:resolveLink', title),
     tags: () => ipcRenderer.invoke('notes:tags'),
+    /** Tarefas ("- [ ]") de todas as notas: { status: 'open'|'done'|'all', tag }. */
+    tasks: (filter) => ipcRenderer.invoke('notes:tasks', filter),
+    toggleTask: (id, index) => ipcRenderer.invoke('notes:toggleTask', id, index),
+    /** Captura rápida: acrescenta "- [ ] texto" à nota Inbox. */
+    appendTask: (text) => ipcRenderer.invoke('notes:appendTask', text),
     openFolder: () => ipcRenderer.invoke('notes:open-folder'),
     /** Abre uma nota ({ id } ou { new: true, title? }) na janela principal. */
     open: (payload) => ipcRenderer.send('app:open-note', payload),

@@ -16,6 +16,9 @@ const WEB_CMDS = COMMANDS.filter((c) => c.takesQuery);
 const APP_CMDS = COMMANDS.filter((c) => !c.takesQuery);
 const NOTE_KEYS = APP_CMDS.filter((c) => c.category === 'notes' && c.key);
 const QUICK = APP_CMDS.find((c) => c.id === 'notes:quick');
+const TASKS = APP_CMDS.find((c) => c.id === 'notes:tasks');
+// "task: revisar PR" / "tarefa: …" / "t: …" → captura uma tarefa na nota Inbox.
+const TASK_RE = /^(?:task|tarefa|t)\s*:\s*(.*)$/i;
 const FALLBACK = ['web:google', 'web:github'].map((id) => COMMANDS.find((c) => c.id === id));
 const catOf = (id) => CATEGORIES.find((c) => c.id === (id && id.startsWith('notes') ? 'notes' : id));
 const SUB = { 'notes:pinned': 'Pinned', 'notes:recent': 'Recentes' };
@@ -41,6 +44,21 @@ function buildSections(scope, query, recent, nd, extra = []) {
 
   // Tela inicial: digitar = buscar em tudo (comandos, notas, rascunhos e web).
   if (!scope) {
+    const task = TASK_RE.exec(q);
+    if (task) {
+      const text = task[1].trim();
+      if (!text) return [{ title: 'Nova tarefa', hint: 'Digite a tarefa — ela entra na nota Inbox', items: [cmdItem({ cmd: TASKS })] }];
+      return [{
+        title: 'Nova tarefa',
+        items: [cmdItem({
+          cmd: {
+            id: 'notes:task-add', name: `Adicionar tarefa: ${text}`, description: 'Acrescenta “- [ ] …” à nota Inbox',
+            icon: 'list-plus', category: 'notes', dynamic: true,
+            run: async (ctx) => { await ctx.notes.appendTask(text); return 'Tarefa adicionada ao Inbox'; },
+          },
+        })],
+      }];
+    }
     if (!q) {
       const rec = recent.filter((id) => id !== QUICK.id) // Quick Note já está fixa em Categorias
         .map((id) => APP_CMDS.find((c) => c.id === id) || WEB_CMDS.find((c) => c.id === id)).filter(Boolean).slice(0, 5);
@@ -72,7 +90,7 @@ function buildSections(scope, query, recent, nd, extra = []) {
     if (!q) {
       const recentNotes = nd.recent ? mergeRecent(nd.recent).slice(0, 5) : [];
       return [
-        { title: 'Notes', items: NOTE_KEYS.map((cmd) => cmdItem({ cmd })) },
+        { title: 'Notes', items: [...NOTE_KEYS, TASKS].map((cmd) => cmdItem({ cmd })) },
         nd.pinned.length && { title: '📌 Pinned', items: nd.pinned.slice(0, 5).map((n) => noteItem(n)) },
         recentNotes.length && { title: 'Recentes', items: recentNotes.map((n) => noteItem(n, n.time)) },
       ].filter(Boolean);

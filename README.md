@@ -153,6 +153,16 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   headings, listas, tabelas, citações, código com realce, checklists clicáveis e links internos `[[Título]]`
   (clicar abre a nota; se ela não existe, cria). Tags, aliases, pinned e favoritas; filtros Quick · Pinned ·
   Snippets · Favoritas · Recentes (editadas e vistas)
+- **Tarefas** (`- [ ] texto`), sem digitar a sintaxe à mão:
+  - No editor, `Enter` numa tarefa continua a lista (em tarefa vazia, sai dela) · `Ctrl+L` alterna a linha (ou as
+    linhas selecionadas) entre texto → `- [ ]` → `- [x]` → texto · `[]` ou `todo` + espaço no começo da linha vira `- [ ] `
+  - Prazo e prioridade no texto: `@2026-10-02` (ou `@hoje` / `@amanha` + espaço, que viram a data) e `!1` `!2` `!3`;
+    aparecem como chips no preview (prazo vencido em vermelho)
+  - Filtro **Tarefas** na ferramenta: todas as tarefas de todas as notas, agrupadas em Vencidas · Hoje · Próximas ·
+    Sem data (aba Concluídas à parte); marcar ali grava na nota de origem, clicar no texto abre a nota. A lista
+    de notas mostra o progresso (`☑ 3/7`)
+  - Na palette: `task: revisar PR #42` (também `tarefa:` e `t:`) acrescenta `- [ ] revisar PR #42` à nota **Inbox**
+    (criada se não existir) · comando **Tarefas** abre o filtro
 - **Auto-save** em todo lugar, sem botão Salvar: grava ao digitar, ao perder o foco, ao trocar de nota, no `Esc`
   e antes de o app sair. Se o disco falhar, o texto continua no editor e num backup local, com "Tentar de novo"
 

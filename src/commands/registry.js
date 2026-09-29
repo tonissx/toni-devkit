@@ -201,6 +201,12 @@ const noteCommands = [
     run: (ctx) => ctx.palette.enter('notes:recent'),
   },
   {
+    id: 'notes:tasks', name: 'Tarefas', icon: 'list-checks',
+    description: 'Todas as tarefas “- [ ]” das notas — capture uma com “task: texto”',
+    keywords: ['tasks', 'todo', 'tarefas', 'checklist', 'pendencias', 'afazeres'],
+    run: (ctx) => ctx.openApp('notes', { view: 'tasks' }),
+  },
+  {
     id: 'notes:folder', name: 'Abrir pasta das notas', icon: 'folder-open',
     description: 'Os arquivos .md das notas no Explorer',
     keywords: ['notes', 'arquivos', 'backup', 'note', 'documentos'],
