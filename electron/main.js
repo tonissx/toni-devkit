@@ -1,6 +1,7 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, globalShortcut, Tray, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, globalShortcut, Tray, Menu, nativeImage, protocol, net } = require('electron');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const fs = require('node:fs/promises');
 const { Worker } = require('node:worker_threads');
 const palette = require('./palette');
@@ -307,11 +308,28 @@ function initNotes() {
   notesReady = notes.init().catch((e) => { console.error('[notes]', e); throw e; });
 }
 
-const NOTES_API = ['info', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder'];
+const NOTES_API = ['info', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage'];
 for (const fn of NOTES_API) {
   ipcMain.handle('notes:' + fn, async (_e, ...args) => { await notesReady; return notes[fn](...args); });
 }
 ipcMain.handle('notes:open-folder', async () => { await notesReady; return shell.openPath(notes.dir); });
+// Clique numa imagem do preview: abre no visualizador do sistema.
+ipcMain.handle('notes:open-asset', async (_e, ref) => { await notesReady; return shell.openPath(notes.assetFile(ref)); });
+
+// Imagens das notas (.assets\) chegam ao renderer por devkit-note://asset/<nome> (a CSP libera só este esquema).
+protocol.registerSchemesAsPrivileged([{ scheme: 'devkit-note', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+function registerNotesProtocol() {
+  protocol.handle('devkit-note', async (req) => {
+    try {
+      const u = new URL(req.url);
+      if (u.host !== 'asset') return new Response('Not found', { status: 404 });
+      await notesReady;
+      return net.fetch(pathToFileURL(notes.assetFile(decodeURIComponent(u.pathname.slice(1)))).toString());
+    } catch {
+      return new Response('Not found', { status: 404 });
+    }
+  });
+}
 
 // Abrir uma nota (ou uma nova) na janela principal — usado pela palette.
 ipcMain.on('app:open-note', (_e, payload) => {
@@ -378,6 +396,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     initNotes();
+    registerNotesProtocol();
     initDevCore();
     initUpdater();
     palette.create();

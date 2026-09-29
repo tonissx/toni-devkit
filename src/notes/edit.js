@@ -134,4 +134,17 @@ function expandOnSpace(value, pos, now = new Date()) {
   return null;
 }
 
-module.exports = { continueList, toggleTaskLines, expandOnSpace, isoDate };
+/**
+ * Insere um bloco (ex.: "![imagem](.assets/x.png)") no lugar da seleção, em linha própria:
+ * acrescenta quebra de linha antes/depois quando o cursor está no meio de uma linha.
+ */
+function insertBlock(value, start, end, text) {
+  const before = value.slice(0, start), after = value.slice(end);
+  const pre = before && !before.endsWith('\n') ? '\n' : '';
+  const post = after.startsWith('\n') ? '' : '\n';
+  const ins = pre + text + post;
+  const pos = start + ins.length;
+  return { value: before + ins + after, start: pos, end: pos };
+}
+
+module.exports = { continueList, toggleTaskLines, expandOnSpace, isoDate, insertBlock };
