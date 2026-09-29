@@ -110,6 +110,8 @@ contextBridge.exposeInMainWorld('devkit', {
     ensureRootFolder: (name) => ipcRenderer.invoke('notes:ensureRootFolder', name),
     /** Grafo das notas: { nodes: [{ id, title, folder, type, tags, degree, ghost }], links: [{ source, target }] }. */
     graph: () => ipcRenderer.invoke('notes:graph'),
+    /** Quantas notas há na lixeira. */
+    trashCount: () => ipcRenderer.invoke('notes:trashCount'),
     tags: () => ipcRenderer.invoke('notes:tags'),
     /** Tarefas ("- [ ]") de todas as notas: { status: 'open'|'done'|'all', tag }. */
     tasks: (filter) => ipcRenderer.invoke('notes:tasks', filter),

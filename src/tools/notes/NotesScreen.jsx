@@ -15,6 +15,8 @@ import { emit } from '../../lib/events.js';
 
 const { PageHeader, Button, IconButton, EmptyState, Icon, Kbd, Spinner, ContextMenu } = DS;
 
+// Filtros refinam a LISTA da lateral; visões trocam a ÁREA PRINCIPAL (editor ↔ painéis). São coisas diferentes
+// e ficam em lugares diferentes: filtros em chips na lateral, visões em abas no topo da área principal.
 const FILTERS = [
   { id: 'all', label: 'Todas', filter: null },
   { id: 'quick', label: 'Quick', filter: { quick: true } },
@@ -22,10 +24,14 @@ const FILTERS = [
   { id: 'snippet', label: 'Snippets', filter: { type: 'snippet' } },
   { id: 'favorite', label: 'Favoritas', filter: { favorite: true } },
   { id: 'recent', label: 'Recentes', filter: null },
-  { id: 'tasks', label: 'Tarefas', filter: null }, // painel próprio (TasksPanel) no lugar do editor
-  { id: 'trash', label: 'Lixeira', filter: null }, // painel próprio (TrashPanel) no lugar do editor
-  { id: 'graph', label: 'Grafo', filter: null }, // painel próprio (GraphPanel) no lugar do editor
 ];
+const VIEWS = [
+  { id: 'note', label: 'Nota', icon: 'file-text' },
+  { id: 'tasks', label: 'Tarefas', icon: 'list-checks' },
+  { id: 'graph', label: 'Grafo', icon: 'waypoints' },
+];
+// A Lixeira também é uma visão, mas de uso raro: abre pelo rodapé da lateral, não pelas abas.
+const PANEL_VIEWS = ['tasks', 'graph', 'trash'];
 
 /** Caminho de pasta depois de `from` virar `to` (a própria pasta ou qualquer subpasta). */
 const remapFolder = (p, from, to) => (p === from ? to : p != null && isDescendant(p, from) ? to + p.slice(from.length) : p);
@@ -55,7 +61,8 @@ function Excerpt({ ex, fallback }) {
 }
 
 export function NotesScreen({ toast, request }) {
-  const [ui, setUi] = usePersisted('notes.ui', { selectedId: null, mode: 'edit', filter: 'all', tag: null });
+  const [ui, setUi] = usePersisted('notes.ui', { selectedId: null, mode: 'edit', filter: 'all', tag: null, view: 'note' });
+  const [trashCount, setTrashCount] = React.useState(0);
   const [query, setQuery] = React.useState('');
   const [rows, setRows] = React.useState(null);        // null = carregando
   const [recent, setRecent] = React.useState(null);
@@ -72,6 +79,13 @@ export function NotesScreen({ toast, request }) {
   const searchRef = React.useRef(null);
   const listRef = React.useRef(null);
 
+  // Versões antigas guardavam Tarefas/Lixeira/Grafo como "filtro": vira a visão correspondente.
+  React.useEffect(() => {
+    if (PANEL_VIEWS.includes(ui.filter)) setUi((u) => ({ ...u, view: u.filter, filter: 'all' }));
+  }, []);
+  const view = PANEL_VIEWS.includes(ui.view) ? ui.view : PANEL_VIEWS.includes(ui.filter) ? ui.filter : 'note';
+  const setView = (v) => setUi((u) => ({ ...u, view: v }));
+
   const filterDef = FILTERS.find((f) => f.id === ui.filter) || FILTERS[0];
   // Pasta ativa: onde nascem as notas novas (a última pasta clicada ou a pasta da nota aberta). Não filtra a lista.
   const folderSel = typeof ui.folder === 'string' && ui.folder ? ui.folder : null;
@@ -82,15 +96,16 @@ export function NotesScreen({ toast, request }) {
     try {
       const api = notesApi();
       const flt = Object.keys(filter).length ? filter : undefined;
-      const [list, all, tg, inf, rec, fld] = await Promise.all([
+      const [list, all, tg, inf, rec, fld, trash] = await Promise.all([
         q ? api.search(q, { filter: flt, limit: 200 }) : api.list(flt),
         api.list(),
         api.tags(),
         api.info(),
         ui.filter === 'recent' ? api.recent() : null,
         api.folders(),
+        api.trashCount().catch(() => 0),
       ]);
-      setRows(list); setAllRows(all); setTags(tg); setInfo(inf); setRecent(rec); setFolders(fld); setLoadError(null);
+      setRows(list); setAllRows(all); setTags(tg); setInfo(inf); setRecent(rec); setFolders(fld); setTrashCount(trash); setLoadError(null);
       // A pasta ativa deixou de existir (apagada ou renomeada): novas notas voltam para a raiz.
       setUi((u) => (typeof u.folder === 'string' && u.folder && !fld.some((f) => f.path === u.folder) ? { ...u, folder: null } : u));
     } catch (e) {
@@ -109,8 +124,8 @@ export function NotesScreen({ toast, request }) {
   const titleMap = React.useMemo(() => new Map(allRows.map((r) => [normalize(r.title), r.id])), [allRows]);
   const resolve = React.useCallback((title) => titleMap.get(normalize(title).trim()) || null, [titleMap]);
 
-  // Abrir/criar uma nota sai do painel Tarefas (que ocupa o lugar do editor).
-  const leaveTasks = (u) => (['tasks', 'trash', 'graph'].includes(u.filter) ? { ...u, filter: 'all' } : u);
+  // Abrir/criar uma nota volta para a visão "Nota" (os painéis ocupam o lugar do editor).
+  const toNoteView = (u) => (u.view && u.view !== 'note' ? { ...u, view: 'note' } : u);
 
   // cursor: posição inicial no corpo (template com {{cursor}}) — força um modo com o editor visível.
   const openNote = React.useCallback(async (id, focus, cursor) => {
@@ -119,14 +134,14 @@ export function NotesScreen({ toast, request }) {
     setCurrent({ note, isNew: false, focus, cursor: typeof cursor === 'number' ? cursor : undefined });
     // A árvore mostra onde a nota está: abre as pastas dela e passa a ser a pasta ativa.
     if (note.folder) setFoldersUi((f) => ({ ...f, open: { ...f.open, ...Object.fromEntries(ancestors(note.folder).map((p) => [p, true])) } }));
-    setUi((u) => ({ ...leaveTasks(u), selectedId: id, folder: note.folder || null, ...(typeof cursor === 'number' && u.mode === 'preview' ? { mode: 'split' } : {}) }));
+    setUi((u) => ({ ...toNoteView(u), selectedId: id, folder: note.folder || null, ...(typeof cursor === 'number' && u.mode === 'preview' ? { mode: 'split' } : {}) }));
   }, []);
 
   const newNote = React.useCallback((title = '') => {
     // Dentro da pasta selecionada (a nota só vai para o disco quando tiver conteúdo).
     const note = createNote({ title, ...(folderSel ? { folder: folderSel } : {}) });
     setCurrent({ note, isNew: true, focus: title ? 'body' : 'title' });
-    setUi((u) => ({ ...leaveTasks(u), selectedId: note.id }));
+    setUi((u) => ({ ...toNoteView(u), selectedId: note.id }));
   }, [folderSel]);
 
   // Abertura: recupera alterações que ficaram só no backup local e reabre a última nota.
@@ -140,9 +155,8 @@ export function NotesScreen({ toast, request }) {
     if (!request) return;
     if (request.new) newNote(request.title || '');
     else if (request.id) openNote(request.id);
-    else if (request.view === 'tasks') setUi((u) => ({ ...u, filter: 'tasks' }));
+    else if (PANEL_VIEWS.includes(request.view)) setView(request.view);
     else if (request.view === 'template') setDialog({ kind: 'template' });
-    else if (request.view === 'graph') setUi((u) => ({ ...u, filter: 'graph' }));
   }, [request && request.nonce]);
 
   const openLink = async (title) => {
@@ -174,7 +188,7 @@ export function NotesScreen({ toast, request }) {
 
   /* ─────────────── Pastas ─────────────── */
   const guard = async (fn) => { try { await fn(); } catch (e) { toast('Não foi possível concluir', cleanError(e), 'error'); } };
-  const selectFolder = (path) => setUi((u) => ({ ...leaveTasks(u), folder: path }));
+  const selectFolder = (path) => setUi((u) => ({ ...u, folder: path })); // ação da lista: não troca a visão
   const expand = (path) => path && setFoldersUi((f) => ({ ...f, open: { ...f.open, [path]: true } }));
   const toggleOpen = (path) => setFoldersUi((f) => ({ ...f, open: { ...f.open, [path]: !(f.open || {})[path] } }));
   // Clicar na pasta expande/recolhe as notas dela em cascata e a marca como destino das notas novas.
@@ -443,15 +457,30 @@ export function NotesScreen({ toast, request }) {
                 <Icon name="triangle-alert" size={12} /> {info.errors.length} arquivo(s) não lidos
               </span>
             )}
+            <button type="button" className={'nts-side__trash' + (view === 'trash' ? ' is-on' : '')} aria-pressed={view === 'trash'}
+              title="Notas excluídas — restaurar ou excluir de vez" onClick={() => setView(view === 'trash' ? 'note' : 'trash')}>
+              <Icon name="trash-2" size={12} /> Lixeira{trashCount > 0 && <span className="nts-side__trash-n">{trashCount}</span>}
+            </button>
           </div>
         </aside>
 
         <section className="nts__main">
-          {ui.filter === 'tasks' ? (
+          <div className="nts-views" role="tablist" aria-label="Visão">
+            {VIEWS.map((v) => (
+              <button key={v.id} type="button" role="tab" aria-selected={view === v.id}
+                className={'nts-views__tab' + (view === v.id ? ' is-on' : '')} onClick={() => setView(v.id)}>
+                <Icon name={v.icon} size={13} /> {v.label}
+              </button>
+            ))}
+            {view === 'trash' && (
+              <span className="nts-views__tab is-on is-extra" role="tab" aria-selected="true"><Icon name="trash-2" size={13} /> Lixeira</span>
+            )}
+          </div>
+          {view === 'tasks' ? (
             <TasksPanel tag={ui.tag} onOpen={(id) => openNote(id)} toast={toast} />
-          ) : ui.filter === 'trash' ? (
+          ) : view === 'trash' ? (
             <TrashPanel onOpen={(id) => openNote(id)} toast={toast} />
-          ) : ui.filter === 'graph' ? (
+          ) : view === 'graph' ? (
             <GraphPanel currentId={current ? current.note.id : ui.selectedId} onOpen={(id) => openNote(id)} onOpenLink={openLink} toast={toast} />
           ) : current ? (
             <NoteEditor
