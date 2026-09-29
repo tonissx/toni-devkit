@@ -70,7 +70,9 @@ function smartPaste(value, start, end, text) {
   if (table) return insertBlock(value, start, end, table, { blankLines: true });
   const sel = value.slice(start, end);
   const url = String(text || '').trim();
-  if (sel && !sel.includes('\n') && sel.trim() && URL_RE.test(url) && !URL_RE.test(sel.trim())) {
+  // Seleção já é o destino de um link ("[texto](url)" do Ctrl+K): colar só substitui, sem aninhar.
+  const inLinkTarget = value.slice(start - 2, start) === '](' && value[end] === ')';
+  if (sel && !sel.includes('\n') && sel.trim() && URL_RE.test(url) && !URL_RE.test(sel.trim()) && !inLinkTarget) {
     const ins = `[${sel}](${url})`;
     return { value: value.slice(0, start) + ins + value.slice(end), start: start + ins.length, end: start + ins.length };
   }

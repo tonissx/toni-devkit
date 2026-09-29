@@ -118,6 +118,9 @@ test('markup: smartPaste inserts tables on their own block and links selected te
   assert.equal(M.smartPaste('https://a.com', 0, 13, 'https://b.com'), null); // seleção já é URL
   assert.equal(M.smartPaste('a\nb', 0, 3, 'https://a.com'), null);        // várias linhas
   assert.equal(M.smartPaste('x', 0, 1, 'texto comum'), null);
+  // Depois do Ctrl+K ("[doc](url)" com "url" selecionado), colar a URL só substitui — sem link aninhado.
+  const k = M.makeLink('ver doc', 4, 7);
+  assert.equal(M.smartPaste(k.value, k.start, k.end, 'https://a.com'), null);
 });
 
 test('markup: toggleWrap bolds/italicizes/codes, unwraps, trims the selection and handles empty selections', () => {
