@@ -88,6 +88,61 @@ test('edit: insertBlock puts the text on its own line and moves the cursor after
   assert.deepEqual(E.insertBlock('a SEL b', 2, 5, 'X'), { value: 'a \nX\n b', start: 5, end: 5 });
 });
 
+test('edit: linkQueryAt opens after [[ and closes on ]], |, newline or inside code', () => {
+  const at = (s) => E.linkQueryAt(s.replace('|^', ''), s.indexOf('|^'));
+  assert.deepEqual(at('ver [[|^'), { start: 6, query: '' });
+  assert.deepEqual(at('ver [[SQL Pag|^'), { start: 6, query: 'SQL Pag' });
+  assert.deepEqual(at('a [[x]] e [[fl|^ fim'), { start: 12, query: 'fl' });
+  assert.equal(at('ver [[SQL]] |^'), null);
+  assert.equal(at('ver [[SQL|rót|^'), null);
+  assert.equal(at('ver [[\nx|^'), null);
+  assert.equal(at('ver [x|^'), null);
+  assert.equal(at('```\n[[x|^\n```'), null);
+  assert.equal(at('usar `[[x|^'), null);
+  assert.deepEqual(at('`a` [[x|^'), { start: 6, query: 'x' });
+});
+
+test('edit: completeLink writes "title]]" and reuses an existing "]]"', () => {
+  assert.deepEqual(E.completeLink('ver [[sq', 6, 8, 'SQL - Paginação'), { value: 'ver [[SQL - Paginação]]', start: 23, end: 23 });
+  assert.deepEqual(E.completeLink('ver [[sq]] fim', 6, 8, 'SQL'), { value: 'ver [[SQL]] fim', start: 11, end: 11 });
+  assert.deepEqual(E.completeLink('[[a', 2, 3, 'B'), { value: '[[B]]', start: 5, end: 5 });
+});
+
+test('note: replaceLinks renames links outside code, keeps labels, ignores other links', () => {
+  const md = 'ver [[SQL Paginação]] e [[sql paginacao|aqui]] e [[Outra]]\n`[[SQL Paginação]]`\n```\n[[SQL Paginação]]\n```\nfim [[SQL Paginação]]';
+  assert.equal(N.replaceLinks(md, 'SQL Paginação', 'SQL — Paginar'),
+    'ver [[SQL — Paginar]] e [[SQL — Paginar|aqui]] e [[Outra]]\n`[[SQL Paginação]]`\n```\n[[SQL Paginação]]\n```\nfim [[SQL — Paginar]]');
+  assert.equal(N.replaceLinks('[[a]]', 'a', ''), '[[a]]');
+  assert.equal(N.replaceLinks('nada', 'a', 'b'), 'nada');
+});
+
+test('service: backlinks, linkRefs and renameLinks keep [[links]] connected', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const target = await svc.create({ title: 'SQL Paginação', aliases: ['paginar'], content: 'OFFSET/FETCH' });
+    const a = await svc.create({ title: 'A', content: 'intro\n- usar [[sql paginacao|a paginação]] no RM' });
+    const b = await svc.create({ title: 'B', content: 'ver [[Paginar]]' });
+    await svc.create({ title: 'C', content: '`[[SQL Paginação]]` em código não conta\n[[Outra]]' });
+    await svc.save({ id: target.id, content: 'OFFSET/FETCH, ver [[SQL Paginação]]' }); // link para si mesma não conta
+    const bl = svc.backlinks(target.id);
+    assert.deepEqual(bl.map((x) => x.id).sort(), [a.id, b.id].sort());
+    assert.equal(bl.find((x) => x.id === a.id).line, 'usar sql paginacao no RM');
+    assert.deepEqual(svc.backlinks('nao-existe'), []);
+
+    assert.equal(svc.linkRefs('SQL Paginação', target.id), 1);
+    await svc.save({ id: target.id, title: 'SQL — Paginar' });
+    assert.equal(await svc.renameLinks('SQL Paginação', 'SQL — Paginar', target.id), 1);
+    assert.equal(svc.get(a.id).content, 'intro\n- usar [[SQL — Paginar|a paginação]] no RM');
+    assert.equal(svc.get(target.id).content, 'OFFSET/FETCH, ver [[SQL Paginação]]'); // exceptId intacta
+    assert.equal(svc.backlinks(target.id).length, 2);
+    // "from" ainda resolve (é alias) → não mexe em nada.
+    assert.equal(await svc.renameLinks('paginar', 'x', target.id), 0);
+    assert.equal(svc.get(b.id).content, 'ver [[Paginar]]');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('service: saveImage writes to .assets (hidden from folders), validates type/size, resolves asset paths', async () => {
   const dir = tmp();
   try {

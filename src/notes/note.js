@@ -137,6 +137,29 @@ function wikiLinks(content) {
   return uniq([...stripCode(content).matchAll(LINK_RE)].map((m) => m[1].trim()).filter(Boolean));
 }
 
+/** Como maskFences, mas também mascara `código inline` — mesmas posições do original. */
+const maskCode = (md) => maskFences(md).replace(/`[^`\n]*`/g, (m) => ' '.repeat(m.length));
+
+/**
+ * Troca os links para `from` por links para `to` (fora de código), preservando o rótulo:
+ * [[from]] → [[to]] · [[from|texto]] → [[to|texto]]. Compara sem acento/maiúscula.
+ */
+function replaceLinks(content, from, to) {
+  const src = String(content || '');
+  const want = normalize(from).trim();
+  if (!want || !String(to || '').trim()) return src;
+  let out = '', last = 0;
+  for (const m of maskCode(src).matchAll(LINK_RE)) {
+    if (normalize(m[1]).trim() !== want) continue;
+    const end = m.index + m[0].length;
+    // O rótulo vem do texto original (o mascarado tem as mesmas posições): termina logo antes do "]]".
+    const label = m[2] !== undefined ? '|' + src.slice(end - 2 - m[2].length, end - 2) : '';
+    out += src.slice(last, m.index) + '[[' + String(to).trim() + label + ']]';
+    last = end;
+  }
+  return out + src.slice(last);
+}
+
 /* ─────────────── Título e trecho ─────────────── */
 
 /** Remove a marcação de markdown de uma linha (para títulos derivados e trechos). */
@@ -190,4 +213,5 @@ function excerpt(content, terms = [], max = 120) {
 module.exports = {
   TYPES, newId, createNote, normTag, codeBlocks, snippetCode, inlineTags, allTags, wikiLinks,
   plainLine, displayTitle, excerpt, stripCode, removeFences, tasksOf, taskStats, toggleTaskAt, maskFences,
+  maskCode, replaceLinks,
 };

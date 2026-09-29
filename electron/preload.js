@@ -88,6 +88,12 @@ contextBridge.exposeInMainWorld('devkit', {
     recent: () => ipcRenderer.invoke('notes:recent'),
     markViewed: (id) => ipcRenderer.invoke('notes:markViewed', id),
     resolveLink: (title) => ipcRenderer.invoke('notes:resolveLink', title),
+    /** Notas que apontam para `id` com [[link]]: [{ id, title, folder, updated, line }]. */
+    backlinks: (id) => ipcRenderer.invoke('notes:backlinks', id),
+    /** Quantas notas (fora exceptId) têm [[title]]. */
+    linkRefs: (title, exceptId) => ipcRenderer.invoke('notes:linkRefs', title, exceptId),
+    /** [[from]] → [[to]] nas outras notas (depois de renomear) → número de notas alteradas. */
+    renameLinks: (from, to, exceptId) => ipcRenderer.invoke('notes:renameLinks', from, to, exceptId),
     tags: () => ipcRenderer.invoke('notes:tags'),
     /** Tarefas ("- [ ]") de todas as notas: { status: 'open'|'done'|'all', tag }. */
     tasks: (filter) => ipcRenderer.invoke('notes:tasks', filter),

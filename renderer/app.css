@@ -249,6 +249,23 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   background: var(--tk-bg); color: var(--tk-text); font: 400 13px/1.6 var(--tk-font-mono); tab-size: 2;
 }
 .nts-body::placeholder { color: var(--tk-text-3); }
+/* Contêiner do textarea: âncora do autocomplete de [[link]]. */
+.nts-body-wrap { position: relative; min-height: 0; min-width: 0; }
+.nts-suggest { position: absolute; z-index: 20; width: 300px; max-height: 280px; overflow-y: auto; }
+.nts-suggest .tk-menu__item { min-width: 0; }
+.nts-suggest__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nts-suggest__folder { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--tk-text-3); }
+/* "Mencionada em": notas que apontam para a nota aberta. */
+.nts-backlinks { border-top: 1px solid var(--tk-border); background: var(--tk-surface-1); }
+.nts-backlinks__head { display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 12px; border: 0; background: none; color: var(--tk-text-2); font-size: 11.5px; font-weight: 500; cursor: pointer; text-align: left; }
+.nts-backlinks__head:hover { color: var(--tk-text); }
+.nts-backlinks__count { padding: 0 6px; border-radius: 8px; background: var(--tk-surface-3); font: 500 10.5px/16px var(--tk-font-mono); }
+.nts-backlinks__list { max-height: 160px; overflow-y: auto; padding: 0 6px 6px; }
+.nts-backlinks__item { display: flex; flex-direction: column; gap: 1px; width: 100%; padding: 5px 8px; border: 0; border-radius: var(--tk-radius-sm); background: none; text-align: left; cursor: pointer; }
+.nts-backlinks__item:hover { background: var(--tk-surface-3); }
+.nts-backlinks__title { display: flex; align-items: center; gap: 8px; color: var(--tk-text); font-size: 12.5px; font-weight: 500; }
+.nts-backlinks__folder { display: inline-flex; align-items: center; gap: 3px; color: var(--tk-text-3); font-size: 10.5px; font-weight: 400; }
+.nts-backlinks__line { color: var(--tk-text-3); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nts-preview { min-height: 0; overflow-y: auto; padding: 14px 20px; }
 .nts-editor__foot { display: flex; align-items: center; gap: 14px; height: 30px; padding: 0 12px; border-top: 1px solid var(--tk-border); background: var(--tk-surface-1); font-size: 11px; color: var(--tk-text-3); }
 
