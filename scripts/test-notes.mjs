@@ -109,6 +109,28 @@ test('edit: "[] "/"todo " become a task and @hoje/@amanha become dates', () => {
   assert.equal(ex('a@hoje', 6, now), null);
 });
 
+test('folders: name validation (Windows-safe), path helpers and tree', () => {
+  const F = require('../src/notes/folders.js');
+  for (const ok of ['Trabalho', 'Fluig 2026', 'ação_1', 'a.b']) assert.equal(F.validFolderName(ok), null, ok);
+  for (const bad of ['', '  ', ' x', 'x ', 'a/b', 'a\\b', 'a:b', 'a*', 'a?', 'a<b', '.oculta', '.trash', 'x.', 'CON', 'nul.txt', 'com1', 'a'.repeat(81)]) {
+    assert.ok(F.validFolderName(bad), JSON.stringify(bad));
+  }
+  assert.equal(F.validFolderPath('a/b/c'), null);
+  assert.ok(F.validFolderPath('a/../b'));
+  assert.ok(F.validFolderPath('a/.trash'));
+  assert.equal(F.normFolder('\\a//b\\c/'), 'a/b/c');
+  assert.equal(F.folderOf('a/b/x.md'), 'a/b');
+  assert.equal(F.folderOf('x.md'), '');
+  assert.equal(F.baseName('a/b/x.md'), 'x.md');
+  assert.equal(F.parentOf('a'), '');
+  assert.equal(F.joinPath('a', '', 'b/c'), 'a/b/c');
+  assert.ok(F.isDescendant('a/b', 'a') && !F.isDescendant('a', 'a') && !F.isDescendant('ab', 'a') && F.isDescendant('a', ''));
+  const tree = F.buildTree([{ path: 'b/x', count: 2 }, { path: 'a', count: 1 }, { path: 'b', count: 0 }]);
+  assert.deepEqual(tree.map((n) => [n.path, n.count, n.total]), [['a', 1, 1], ['b', 0, 2]]);
+  assert.deepEqual(F.flattenTree(tree).map((n) => [n.path, n.depth]), [['a', 0], ['b', 0], ['b/x', 1]]);
+  assert.deepEqual(F.buildTree([{ path: 'p/q', count: 1 }]).map((n) => [n.path, n.children[0].path]), [['p', 'p/q']]); // pai implícito
+});
+
 test('newId is sortable and file-safe', () => {
   const id = N.newId(new Date(2026, 8, 26, 14, 21, 0));
   assert.match(id, /^20260926-142100-[a-z0-9]{4}$/);
