@@ -156,6 +156,11 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
 - **Links entre notas**: digitar `[[` abre sugestões de notas (↑/↓, `Enter`/`Tab` completa, `Esc` fecha; "Nova nota: …"
   quando nada casa). Abaixo do editor, **Mencionada em (N)** lista as notas que apontam para a aberta (por título ou
   alias), com a linha do link. Ao trocar o título, o Devkit oferece atualizar os `[[links]]` que usavam o nome antigo
+- **Grafo** (filtro na lateral ou "Grafo de notas" na palette): as notas como pontos e os `[[links]]` como linhas,
+  coloridas pela pasta. Arrastar o fundo move, a roda aproxima, clique abre a nota, passar o mouse destaca os
+  vizinhos, arrastar um ponto o prende no lugar (duplo clique solta). **Global** ou **Nota atual** (vizinhança da nota
+  aberta, 1 ou 2 saltos), busca que destaca (`Enter` centraliza), mostrar/esconder **Órfãs** (sem links) e
+  **Inexistentes** (`[[links]]` para notas que ainda não existem — clique cria). Templates ficam de fora
 - **Templates**: qualquer nota na pasta **Templates** vira modelo. `Ctrl+Shift+N` (ou o ícone ao lado de "Nova
   nota", ou a palette) lista os templates; escolher cria a nota na pasta ativa com as variáveis trocadas — `{{data}}`
   `{{hoje}}` `{{ontem}}` `{{amanha}}` `{{hora}}` `{{dia_semana}}` `{{data_extenso}}` e `{{cursor}}` (onde o cursor começa). O título só é copiado

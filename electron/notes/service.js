@@ -13,6 +13,7 @@ const { searchNotes } = require('../../src/notes/search.js');
 const { validFolderPath, validFolderName, normFolder, folderOf, baseName, parentOf, joinPath, isDescendant } = require('../../src/notes/folders.js');
 const { normalize } = require('../../src/commands/search.js');
 const { templateVars, applyTemplate, isTemplateFolder } = require('../../src/notes/templates.js');
+const { buildGraph } = require('../../src/notes/graph.js');
 
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
 const VIEWED_MAX = 20;
@@ -365,6 +366,17 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     },
 
     /* ─────────────── Links entre notas ─────────────── */
+
+    /**
+     * Grafo das notas para o painel Grafo: { nodes, links } (ver src/notes/graph.js).
+     * Templates ficam de fora; [[links]] para notas inexistentes viram nós "fantasma".
+     */
+    graph() {
+      const list = [...notes.values()].map((n) => ({
+        id: n.id, title: displayTitle(n), folder: folderOf(n.file), type: n.type, tags: allTags(n), content: n.content,
+      }));
+      return buildGraph(list, titleIndex(), (n) => isTemplateFolder(n.folder));
+    },
 
     /**
      * Notas que apontam para `id` com [[link]] (por título exibido ou alias):

@@ -183,6 +183,12 @@ const noteCommands = [
     run: (ctx) => ctx.openNote({ new: true }),
   },
   {
+    id: 'notes:graph', name: 'Grafo de notas', icon: 'waypoints',
+    description: 'Mapa das notas e dos [[links]] entre elas',
+    keywords: ['grafo', 'graph', 'mapa mental', 'mapa', 'links', 'conexões', 'note'],
+    run: (ctx) => ctx.openApp('notes', { view: 'graph' }),
+  },
+  {
     id: 'notes:template', name: 'Nova nota a partir de template', icon: 'layout-template',
     description: 'Escolher um modelo da pasta Templates',
     keywords: ['template', 'modelo', 'nova nota', 'note'],

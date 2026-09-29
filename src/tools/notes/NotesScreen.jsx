@@ -7,6 +7,7 @@ import { NoteEditor } from './NoteEditor.jsx';
 import { TasksPanel } from './TasksPanel.jsx';
 import { TrashPanel } from './TrashPanel.jsx';
 import { TemplateModal } from './TemplateModal.jsx';
+import { GraphPanel } from './GraphPanel.jsx';
 import { FolderRow, useFolderDnD, NOTE_DRAG } from './FolderTree.jsx';
 import { NameModal, DeleteFolderModal, MoveNoteModal } from './FolderDialogs.jsx';
 import { buildTree, flattenTree, joinPath, baseName, isDescendant } from '../../notes/folders.js';
@@ -23,6 +24,7 @@ const FILTERS = [
   { id: 'recent', label: 'Recentes', filter: null },
   { id: 'tasks', label: 'Tarefas', filter: null }, // painel próprio (TasksPanel) no lugar do editor
   { id: 'trash', label: 'Lixeira', filter: null }, // painel próprio (TrashPanel) no lugar do editor
+  { id: 'graph', label: 'Grafo', filter: null }, // painel próprio (GraphPanel) no lugar do editor
 ];
 
 /** Caminho de pasta depois de `from` virar `to` (a própria pasta ou qualquer subpasta). */
@@ -108,7 +110,7 @@ export function NotesScreen({ toast, request }) {
   const resolve = React.useCallback((title) => titleMap.get(normalize(title).trim()) || null, [titleMap]);
 
   // Abrir/criar uma nota sai do painel Tarefas (que ocupa o lugar do editor).
-  const leaveTasks = (u) => (u.filter === 'tasks' || u.filter === 'trash' ? { ...u, filter: 'all' } : u);
+  const leaveTasks = (u) => (['tasks', 'trash', 'graph'].includes(u.filter) ? { ...u, filter: 'all' } : u);
 
   // cursor: posição inicial no corpo (template com {{cursor}}) — força um modo com o editor visível.
   const openNote = React.useCallback(async (id, focus, cursor) => {
@@ -140,6 +142,7 @@ export function NotesScreen({ toast, request }) {
     else if (request.id) openNote(request.id);
     else if (request.view === 'tasks') setUi((u) => ({ ...u, filter: 'tasks' }));
     else if (request.view === 'template') setDialog({ kind: 'template' });
+    else if (request.view === 'graph') setUi((u) => ({ ...u, filter: 'graph' }));
   }, [request && request.nonce]);
 
   const openLink = async (title) => {
@@ -448,6 +451,8 @@ export function NotesScreen({ toast, request }) {
             <TasksPanel tag={ui.tag} onOpen={(id) => openNote(id)} toast={toast} />
           ) : ui.filter === 'trash' ? (
             <TrashPanel onOpen={(id) => openNote(id)} toast={toast} />
+          ) : ui.filter === 'graph' ? (
+            <GraphPanel currentId={current ? current.note.id : ui.selectedId} onOpen={(id) => openNote(id)} onOpenLink={openLink} toast={toast} />
           ) : current ? (
             <NoteEditor
               key={current.note.id}

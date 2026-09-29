@@ -108,6 +108,8 @@ contextBridge.exposeInMainWorld('devkit', {
     fromTemplate: (id, opts) => ipcRenderer.invoke('notes:fromTemplate', id, opts),
     /** Pasta na raiz com esse nome (a existente, mesmo com outra grafia; senão cria) → caminho. */
     ensureRootFolder: (name) => ipcRenderer.invoke('notes:ensureRootFolder', name),
+    /** Grafo das notas: { nodes: [{ id, title, folder, type, tags, degree, ghost }], links: [{ source, target }] }. */
+    graph: () => ipcRenderer.invoke('notes:graph'),
     tags: () => ipcRenderer.invoke('notes:tags'),
     /** Tarefas ("- [ ]") de todas as notas: { status: 'open'|'done'|'all', tag }. */
     tasks: (filter) => ipcRenderer.invoke('notes:tasks', filter),

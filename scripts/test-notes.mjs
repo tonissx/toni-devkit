@@ -90,6 +90,76 @@ test('edit: insertBlock puts the text on its own line and moves the cursor after
 
 const M = require('../src/notes/markup.js');
 const T = require('../src/notes/templates.js');
+const G = require('../src/notes/graph.js');
+
+test('graph: buildGraph links by title/alias, no duplicates/self-loops, ghosts for missing notes, excluded notes out', () => {
+  const notes = [
+    { id: 'a', title: 'SQL Paginação', content: 'ver [[B]] e [[paginar-b]] e [[SQL Paginação]] e [[Falta]]' },
+    { id: 'b', title: 'B', content: 'volta para [[sql paginacao]] `[[Código não conta]]`' },
+    { id: 'c', title: 'Solta', content: 'nada' },
+    { id: 't', title: 'Tpl', folder: 'Templates', content: '[[B]]' },
+  ];
+  const index = new Map([['sql paginacao', 'a'], ['b', 'b'], ['paginar-b', 'b'], ['solta', 'c'], ['tpl', 't']]);
+  const g = G.buildGraph(notes, index, (n) => n.folder === 'Templates');
+  assert.deepEqual(g.nodes.map((n) => n.id).sort(), ['a', 'b', 'c', 'ghost:falta']);
+  assert.deepEqual(g.links.map((l) => [l.source, l.target].sort().join('-')).sort(), ['a-b', 'a-ghost:falta']);
+  const deg = Object.fromEntries(g.nodes.map((n) => [n.id, n.degree]));
+  assert.deepEqual(deg, { a: 2, b: 1, c: 0, 'ghost:falta': 1 });
+  assert.equal(g.nodes.find((n) => n.ghost).title, 'Falta');
+
+  const noOrph = G.filterGraph(g, { orphans: false });
+  assert.ok(!noOrph.nodes.some((n) => n.id === 'c'));
+  const noGhost = G.filterGraph(g, { ghosts: false });
+  assert.ok(!noGhost.nodes.some((n) => n.ghost));
+  assert.equal(noGhost.nodes.find((n) => n.id === 'a').degree, 1);   // grau recalculado
+  assert.deepEqual(G.neighborhood(g, 'b', 1).nodes.map((n) => n.id).sort(), ['a', 'b']);
+  assert.deepEqual(G.neighborhood(g, 'b', 2).nodes.map((n) => n.id).sort(), ['a', 'b', 'ghost:falta']);
+  assert.deepEqual(G.neighborhood(g, 'x', 1), { nodes: [], links: [] });
+});
+
+test('graph: layout settles without NaN, linked nodes end closer, pinned nodes stay, positions survive updates', () => {
+  const nodes = Array.from({ length: 30 }, (_, i) => ({ id: 'n' + i }));
+  const links = Array.from({ length: 10 }, (_, i) => ({ source: 'n' + i, target: 'n' + (i + 1) }));
+  const L = G.createLayout({ nodes, links });
+  L.nodes[29].fixed = true; L.nodes[29].x = 500; L.nodes[29].y = 500;
+  let steps = 0;
+  while (G.step(L) && steps < 2000) steps++;
+  assert.ok(steps < 2000, 'o layout tem que esfriar e parar');
+  assert.ok(L.nodes.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y)));
+  assert.deepEqual([L.nodes[29].x, L.nodes[29].y], [500, 500]);
+  const dist = (a, b) => Math.hypot(L.nodes[a].x - L.nodes[b].x, L.nodes[a].y - L.nodes[b].y);
+  const linked = links.reduce((s, _, i) => s + dist(i, i + 1), 0) / links.length;
+  const loose = [[12, 20], [15, 25], [18, 27], [13, 22]].reduce((s, [a, b]) => s + dist(a, b), 0) / 4;
+  assert.ok(linked < loose, `ligados ${linked.toFixed(0)} < soltos ${loose.toFixed(0)}`);
+
+  // Novo nó: quem já existia não se mexe; o novo nasce perto do vizinho; o layout reaquece.
+  const L2 = G.createLayout({ nodes: [...nodes, { id: 'novo' }], links: [...links, { source: 'n0', target: 'novo' }] }, L);
+  assert.deepEqual([L2.nodes[3].x, L2.nodes[3].y], [L.nodes[3].x, L.nodes[3].y]);
+  const nv = L2.nodes[L2.at.get('novo')];
+  assert.ok(Math.hypot(nv.x - L.nodes[0].x, nv.y - L.nodes[0].y) <= G.LINK_LEN + 1);
+  assert.ok(L2.alpha >= 0.5);
+  assert.equal(G.createLayout({ nodes, links }, L).alpha, L.alpha); // nada mudou: continua parado
+});
+
+test('service: graph() reflects notes and [[links]], skips templates', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const a = await svc.create({ title: 'A', content: 'ver [[B]]' });
+    const b = await svc.create({ title: 'B', content: 'x' });
+    await svc.createFolder('Templates');
+    await svc.create({ title: 'T', content: '[[A]]', folder: 'Templates' });
+    let g = svc.graph();
+    assert.deepEqual(g.nodes.map((n) => n.title).sort(), ['A', 'B']);
+    assert.deepEqual(g.links, [{ source: a.id, target: b.id }]);
+    await svc.save({ id: b.id, title: 'B2' });                    // link agora aponta para "B", que não existe
+    g = svc.graph();
+    assert.ok(g.nodes.some((n) => n.ghost && n.title === 'B'));
+    await svc.remove(a.id);
+    assert.deepEqual(svc.graph().nodes.map((n) => n.title), ['B2']);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('templates: variables, {{cursor}}, unknown kept, trailing empty vars trimmed', () => {
   const vars = T.templateVars(new Date(2026, 8, 29, 9, 5), { titulo: 'X' });

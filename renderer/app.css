@@ -660,3 +660,15 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-tpl code { font: 400 11px var(--tk-font-mono); color: var(--tk-text-2); }
 .nts-tpl__empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 4px 2px; }
 .nts-tpl__empty p { margin: 0; line-height: 1.55; }
+
+/* Grafo de notas (painel no lugar do editor). */
+.nts-graph { background: var(--tk-bg); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); overflow: hidden; }
+.nts-graph__head { flex-wrap: wrap; row-gap: 8px; }
+.nts-graph__search { width: 150px; }
+.nts-graph__wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.nts-graph__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.nts-graph__canvas:active { cursor: grabbing; }
+.nts-graph__msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 24px; text-align: center; color: var(--tk-text-3); font-size: 13px; pointer-events: none; }
+.nts-graph__tip { position: absolute; top: 10px; left: 10px; display: flex; flex-direction: column; gap: 2px; max-width: 320px; padding: 7px 10px; border: 1px solid var(--tk-border-strong); border-radius: var(--tk-radius-sm); background: var(--tk-surface-3); box-shadow: var(--tk-shadow-pop); font-size: 12px; color: var(--tk-text-2); pointer-events: none; }
+.nts-graph__tip b { color: var(--tk-text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nts-graph__help { position: absolute; right: 10px; bottom: 8px; font-size: 11px; color: var(--tk-text-3); pointer-events: none; }
