@@ -40,7 +40,7 @@ export const varSource = {
   load: (q) => {
     const now = templateVars(new Date());
     const want = varKey(q.query);
-    const starts = (v) => varKey(v.name).startsWith(want); // "amanha" acha "amanhã"
+    const starts = (v) => varKey(v.name).startsWith(want); // sem acento: "{amanhã" também acha {{amanha}}
     return TEMPLATE_VARS
       .filter((v) => !want || starts(v) || normalize(v.desc).includes(want))
       .sort((a, b) => Number(!starts(a)) - Number(!starts(b)))

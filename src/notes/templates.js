@@ -3,9 +3,9 @@
  * Templates — funções puras.
  *
  * Template = qualquer nota dentro da pasta "Templates". Ao criar uma nota a partir dele, as variáveis
- * {{nome}} são trocadas: {{data}} 29/09/2026 · {{hoje}} 2026-09-29 · {{ontem}} 28/09/2026 · {{amanhã}} 30/09/2026 ·
+ * {{nome}} são trocadas: {{data}} 29/09/2026 · {{hoje}} 2026-09-29 · {{ontem}} 28/09/2026 · {{amanha}} 30/09/2026 ·
  * {{hora}} 14:21 · {{dia_semana}} terça-feira · {{data_extenso}} terça-feira, 29 de setembro de 2026 · {{titulo}} ·
- * {{cursor}} (onde o cursor começa). Nomes sem diferenciar maiúsculas nem acentos ({{amanha}} = {{amanhã}}).
+ * {{cursor}} (onde o cursor começa). Nomes sem diferenciar maiúsculas nem acentos ({{amanhã}} também vale {{amanha}}).
  * Variável desconhecida fica como está.
  */
 const TEMPLATES_FOLDER = 'Templates';
@@ -15,7 +15,7 @@ const TEMPLATE_VARS = [
   { name: 'data', desc: 'Data de hoje (dd/mm/aaaa)' },
   { name: 'hoje', desc: 'Data de hoje em aaaa-mm-dd — boa para ordenar e buscar' },
   { name: 'ontem', desc: 'Data de ontem (dd/mm/aaaa)' },
-  { name: 'amanhã', desc: 'Data de amanhã (dd/mm/aaaa)' },
+  { name: 'amanha', desc: 'Data de amanhã (dd/mm/aaaa)' },
   { name: 'hora', desc: 'Hora em que a nota foi criada (hh:mm)' },
   { name: 'dia_semana', desc: 'Dia da semana por extenso' },
   { name: 'data_extenso', desc: 'Data completa por extenso' },
