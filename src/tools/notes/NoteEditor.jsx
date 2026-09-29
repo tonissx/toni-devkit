@@ -8,6 +8,7 @@ import { applyToTextarea } from '../../notes/textarea.js';
 import { NotePreview, SnippetCard } from './NotePreview.jsx';
 import { useLinkSuggest } from './LinkSuggest.jsx';
 import { Backlinks } from './Backlinks.jsx';
+import { HistoryModal } from './HistoryModal.jsx';
 import { normalize } from '../../commands/search.js';
 
 const { SegmentedControl, IconButton, Button, Alert, Kbd, Select } = DS;
@@ -63,6 +64,7 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
   const bodyRef = React.useRef(null);
   const titleBefore = React.useRef(null);                  // título exibido quando o campo ganhou foco
   const [renameOffer, setRenameOffer] = React.useState(null); // { from, to, count }
+  const [showHistory, setShowHistory] = React.useState(false);
   const title = displayTitle(note);
 
   React.useEffect(() => {
@@ -218,6 +220,7 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
           <span className={'nts-status is-' + status} role="status">{statusLabel(status)}</span>
           <IconButton size="sm" className="nts-pin" icon="pin" label={note.pinned ? 'Desafixar' : 'Fixar (Pinned)'} active={note.pinned} onClick={() => update({ pinned: !note.pinned })} />
           <IconButton size="sm" className="nts-fav" icon="star" label={note.favorite ? 'Remover dos favoritos' : 'Favoritar'} active={note.favorite} onClick={() => update({ favorite: !note.favorite })} />
+          <IconButton size="sm" icon="history" label="Versões anteriores" onClick={() => setShowHistory(true)} disabled={isNew && status === 'idle'} />
           <IconButton size="sm" icon="trash-2" label="Excluir (vai para a lixeira)" onClick={async () => { await flush(); onDelete(note); }} disabled={isNew && status === 'idle'} />
         </div>
       </div>
@@ -263,6 +266,7 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
         {mode !== 'edit' && preview}
       </div>
       {onOpenNote && <Backlinks noteId={note.id} onOpen={onOpenNote} />}
+      {showHistory && <HistoryModal note={note} flush={flush} onClose={() => setShowHistory(false)} toast={toast} />}
       <div className="nts-editor__foot">
         <span>Markdown</span>
         <span><Kbd size="sm">{mod('E')}</Kbd> editar/visualizar</span>

@@ -34,7 +34,7 @@ function summary(n) {
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-function createNotesService({ dir, broadcast = () => {}, events = null }) {
+function createNotesService({ dir, broadcast = () => {}, events = null, historyGapMs = 10 * 60 * 1000 }) {
   const store = createStore(dir);
   const notes = new Map();
   const folderSet = new Set(); // pastas existentes (diretórios reais, inclusive vazias): 'a', 'a/b'
@@ -60,6 +60,23 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
   };
   const inFolder = (n, p) => folderOf(n.file) === p || isDescendant(folderOf(n.file), p);
   const err = (msg) => { throw new Error(msg); };
+
+  // Histórico: ao salvar uma mudança, guarda a versão anterior — no máximo uma a cada historyGapMs por nota
+  // (digitar 30 min seguidos gera ~3 versões, não uma por tecla).
+  const lastSnap = new Map(); // id → ms da última versão guardada
+  async function snapshotPrev(prev, force = false) {
+    if (!prev || !String(prev.content || '').trim() && !String(prev.title || '').trim()) return;
+    try {
+      if (!lastSnap.has(prev.id)) {
+        const [last] = await store.listHistory(prev.id);
+        lastSnap.set(prev.id, last ? Date.parse(last.at) : 0);
+      }
+      if (!force && Date.now() - lastSnap.get(prev.id) < historyGapMs) return;
+      await store.snapshot(prev);
+      lastSnap.set(prev.id, Date.now());
+    } catch (e) { console.error('[notes] histórico', e); } // falhar aqui nunca impede de salvar a nota
+  }
+  const trashed = new Map(); // id → arquivo em .trash da última exclusão (desfazer apaga a cópia)
 
   /** Valida uma pasta de destino existente ('' = raiz); devolve o caminho normalizado. */
   function existingFolder(p) {
@@ -140,6 +157,7 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
       if (prev && EDITABLE.every((k) => same(prev[k], next[k]))) return this.get(prev.id);
       next.updated = new Date().toISOString();
       if (!next.file) next.file = next.id + '.md';
+      if (prev && (prev.content !== next.content || prev.title !== next.title)) await snapshotPrev(prev);
       await store.write(next); // falhou → erro para o renderer (que mantém o texto e tenta de novo)
       notes.set(next.id, next);
       changed('saved', next.id);
@@ -159,7 +177,8 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
       return serial(async () => {
         const n = notes.get(id);
         if (!n) return false;
-        await store.trash(n);
+        const t = await store.trash(n);
+        if (t) trashed.set(id, t);
         notes.delete(id);
         viewed = viewed.filter((v) => v.id !== id);
         changed('removed', id);
@@ -167,7 +186,7 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
       });
     },
 
-    /** Desfazer exclusão: grava de novo a nota (o arquivo da lixeira fica como cópia). */
+    /** Desfazer exclusão: grava de novo a nota e tira da lixeira a cópia daquela exclusão. */
     restore(note) { return serial(() => this._restore(note)); },
 
     async _restore(note) {
@@ -178,8 +197,100 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
       await store.write(n); // recria a subpasta se ela não existir mais
       notes.set(n.id, n);
       addFolder(folderOf(n.file));
+      if (trashed.has(n.id)) { await store.removeTrash(trashed.get(n.id)).catch(() => {}); trashed.delete(n.id); }
       changed('saved', n.id);
       return this.get(n.id);
+    },
+
+    /* ─────────────── Histórico de versões ─────────────── */
+
+    /** Versões anteriores da nota, mais recentes primeiro: [{ stamp, at, title, chars }]. */
+    async history(id) {
+      const list = await store.listHistory(id);
+      return Promise.all(list.map(async (v) => {
+        try {
+          const n = await store.readVersion(id, v.stamp);
+          return { ...v, title: displayTitle(n), chars: String(n.content || '').length };
+        } catch { return { ...v, title: '(versão ilegível)', chars: 0 }; }
+      }));
+    },
+
+    /** Uma versão: { stamp, at, title, rawTitle, content }. */
+    async version(id, stamp) {
+      const n = await store.readVersion(id, stamp);
+      const [meta] = (await store.listHistory(id)).filter((v) => v.stamp === stamp);
+      return { stamp, at: meta ? meta.at : null, title: displayTitle(n), rawTitle: n.title, content: n.content };
+    },
+
+    /**
+     * Volta a nota para uma versão (título e conteúdo). Antes guarda o estado atual como versão —
+     * restaurar também dá para desfazer pelo histórico.
+     */
+    restoreVersion(id, stamp) {
+      return serial(async () => {
+        const cur = notes.get(id);
+        if (!cur) err('Nota não encontrada.');
+        const v = await store.readVersion(id, stamp);
+        await snapshotPrev(cur, true);
+        return this._save({ id, content: v.content, title: v.title });
+      });
+    },
+
+    /* ─────────────── Lixeira ─────────────── */
+
+    /** Notas excluídas: [{ file, id, title, folder, deletedAt, content, preview, exists }], mais recentes primeiro. */
+    async trashList() {
+      return (await store.listTrash()).map((t) => {
+        const s = summary({ ...t.note, file: t.file });
+        return { file: t.file, id: t.note.id, title: s.title, folder: t.folder, deletedAt: t.deletedAt, content: t.note.content, preview: s.preview, type: t.note.type, exists: notes.has(t.note.id) };
+      });
+    },
+
+    /**
+     * Restaura um item da lixeira para a pasta onde estava (recriada se preciso). Se já existe uma nota
+     * com o mesmo id (ex.: foi restaurada antes), volta como cópia com id novo. Devolve a nota.
+     */
+    restoreFromTrash(file) {
+      return serial(async () => {
+        const t = await store.readTrash(file);
+        const { id, ...fields } = t.note;
+        const dup = notes.has(id);
+        const n = dup ? createNote({ ...fields, title: displayTitle(t.note) + ' (restaurada)' }) : createNote({ ...t.note });
+        const name = dup ? n.id + '.md' : baseName(t.file).replace(/\.\d{13}\.md$/i, '.md');
+        let rel = joinPath(t.folder, name);
+        if ([...notes.values()].some((x) => (x.file || '').toLowerCase() === rel.toLowerCase())) rel = joinPath(t.folder, n.id + '.md');
+        n.file = rel;
+        await store.write(n);
+        notes.set(n.id, n);
+        addFolder(t.folder);
+        await store.removeTrash(t.file);
+        changed('saved', n.id);
+        changed('folders');
+        return this.get(n.id);
+      });
+    },
+
+    /** Apaga de vez um item da lixeira (e o histórico da nota, se ela não existe mais). */
+    deleteFromTrash(file) {
+      return serial(async () => {
+        const t = await store.readTrash(file);
+        await store.removeTrash(t.file);
+        if (!notes.has(t.note.id)) { await store.removeHistory(t.note.id).catch(() => {}); lastSnap.delete(t.note.id); }
+        changed('trash');
+        return true;
+      });
+    },
+
+    /** Esvazia a lixeira (e o histórico das notas que só existiam nela). Devolve quantas notas apagou. */
+    emptyTrash() {
+      return serial(async () => {
+        const items = await store.listTrash();
+        await store.emptyTrash();
+        for (const t of items) if (!notes.has(t.note.id)) { await store.removeHistory(t.note.id).catch(() => {}); lastSnap.delete(t.note.id); }
+        trashed.clear();
+        changed('trash');
+        return items.length;
+      });
     },
 
     search(query, opts = {}) {
@@ -339,7 +450,8 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
         const doomed = [...notes.values()].filter((n) => inFolder(n, p));
         const snapshots = doomed.map((n) => this.get(n.id));
         for (const n of doomed) {
-          await store.trash(n);
+          const t = await store.trash(n);
+          if (t) trashed.set(n.id, t);
           notes.delete(n.id);
         }
         viewed = viewed.filter((v) => notes.has(v.id));
