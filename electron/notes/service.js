@@ -12,7 +12,7 @@ const { createNote, displayTitle, allTags, plainLine, tasksOf, taskStats, toggle
 const { searchNotes } = require('../../src/notes/search.js');
 const { validFolderPath, validFolderName, normFolder, folderOf, baseName, parentOf, joinPath, isDescendant } = require('../../src/notes/folders.js');
 const { normalize } = require('../../src/commands/search.js');
-const { TEMPLATES_FOLDER, templateVars, applyTemplate } = require('../../src/notes/templates.js');
+const { templateVars, applyTemplate, isTemplateFolder } = require('../../src/notes/templates.js');
 
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
 const VIEWED_MAX = 20;
@@ -82,10 +82,7 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
   /** Pasta existente com esse nome na raiz, sem diferenciar maiúsculas/acentos ("templates" serve para "Templates"). */
   const rootFolderLike = (name) => [...folderSet].find((f) => !f.includes('/') && normalize(f) === normalize(name)) || null;
   /** A nota está na pasta Templates (ou numa subpasta dela)? */
-  const isTemplate = (n) => {
-    const top = folderOf(n.file).split('/')[0];
-    return !!top && normalize(top) === normalize(TEMPLATES_FOLDER);
-  };
+  const isTemplate = (n) => isTemplateFolder(folderOf(n.file));
   /** Valida uma pasta de destino existente ('' = raiz); devolve o caminho normalizado. */
   function existingFolder(p) {
     const f = normFolder(p);

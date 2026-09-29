@@ -1,5 +1,6 @@
 import { DS } from '../../lib/ds.js';
 import { notesApi, cleanError } from '../../notes/client.js';
+import { TEMPLATE_VARS } from '../../notes/templates.js';
 
 const { Modal, Button, Icon, Spinner } = DS;
 
@@ -17,7 +18,7 @@ const EXAMPLE = [
   '- [ ] ',
 ].join('\n');
 
-const VARS = '{{data}} · {{hoje}} · {{hora}} · {{dia_semana}} · {{data_extenso}} · {{cursor}}';
+const VARS = TEMPLATE_VARS.map((v) => '{{' + v.name + '}}').join(' · ');
 
 /**
  * "Nova nota a partir de template": lista as notas da pasta Templates. Escolher cria a nota
@@ -43,7 +44,7 @@ export function TemplateModal({ folder, onCreated, onEditTemplate, onClose, toas
   const newTemplate = async (example) => {
     try {
       const dir = await notesApi().ensureRootFolder('Templates');
-      const n = await notesApi().create({ title: example ? 'Reunião' : 'Novo template', content: example ? EXAMPLE : 'Escreva o modelo aqui. Variáveis: ' + VARS, folder: dir });
+      const n = await notesApi().create({ title: example ? 'Reunião' : 'Novo template', content: example ? EXAMPLE : 'Escreva o modelo aqui — digite { para ver as variáveis.', folder: dir });
       onClose();
       onEditTemplate(n);
     } catch (e) { toast('Não foi possível criar o template', cleanError(e), 'error'); }

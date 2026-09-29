@@ -6,7 +6,8 @@ import { pasteProps } from '../../notes/paste.js';
 import { toggleWrap, makeLink, codeToggle } from '../../notes/markup.js';
 import { applyToTextarea } from '../../notes/textarea.js';
 import { NotePreview, SnippetCard } from './NotePreview.jsx';
-import { useLinkSuggest } from './LinkSuggest.jsx';
+import { useSuggest, linkSource, varSource } from './Suggest.jsx';
+import { isTemplateFolder } from '../../notes/templates.js';
 import { Backlinks } from './Backlinks.jsx';
 import { HistoryModal } from './HistoryModal.jsx';
 import { normalize } from '../../commands/search.js';
@@ -96,8 +97,10 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
   // Aplica o resultado de uma função de edit.js/markup.js no textarea (texto + seleção), mantendo o Ctrl+Z.
   const applyEdit = (t, r) => applyToTextarea(t, r, (content) => update({ content }));
 
-  // Autocomplete de [[link]] no corpo.
-  const suggest = useLinkSuggest({ taRef: bodyRef, noteId: note.id, apply: applyEdit });
+  // Autocomplete: [[link]] sempre; em templates (pasta Templates) também {{variáveis}} ao digitar "{".
+  const isTemplate = isTemplateFolder(note.folder);
+  const sources = React.useMemo(() => (isTemplate ? [varSource, linkSource(note.id)] : [linkSource(note.id)]), [isTemplate, note.id]);
+  const suggest = useSuggest({ taRef: bodyRef, apply: applyEdit, sources });
 
   // Renomear: se outras notas apontavam para o título antigo, oferece atualizar os [[links]] delas.
   const onTitleBlur = async () => {
@@ -274,7 +277,9 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
         <span><Kbd size="sm">{mod('E')}</Kbd> editar/visualizar</span>
         <span><Kbd size="sm">{mod('L')}</Kbd> tarefa</span>
         <span title="Negrito · itálico · link (com seleção) · Ctrl+Shift+K código"><Kbd size="sm">{mod('B / I / K')}</Kbd> formatar</span>
-        <span><Kbd size="sm">[[</Kbd> link para nota</span>
+        {isTemplate
+          ? <span title="Variáveis trocadas quando uma nota é criada a partir deste template"><Kbd size="sm">{'{'}</Kbd> variáveis</span>
+          : <span><Kbd size="sm">[[</Kbd> link para nota</span>}
         {note.type === 'snippet' && <span><Kbd size="sm">{mod('C', true)}</Kbd> copiar snippet</span>}
         <span className="nts-editor__spacer" />
         <span>{note.content.length} caracteres</span>

@@ -102,6 +102,23 @@ test('templates: variables, {{cursor}}, unknown kept, trailing empty vars trimme
   assert.equal(r.text, '# X — 29/09/2026\n- [ ] \n{{naoexiste}}\n');
   assert.equal(r.cursor, '# X — 29/09/2026\n- [ ] '.length);
   assert.equal(T.applyTemplate('sem cursor', vars).cursor, null);
+  // Toda variável sugerida existe de verdade (ou é o {{cursor}}).
+  for (const v of T.TEMPLATE_VARS) assert.ok(v.name === 'cursor' || v.name in vars, v.name);
+  assert.ok(T.isTemplateFolder('Templates') && T.isTemplateFolder('templates/Suporte') && !T.isTemplateFolder('Trabalho/Templates') && !T.isTemplateFolder(''));
+});
+
+test('edit: varQueryAt opens after "{" / "{{", not inside code with a single "{"; completeVar closes the braces', () => {
+  const at = (s) => E.varQueryAt(s.replace('|^', ''), s.indexOf('|^'));
+  assert.deepEqual(at('Aberto em {|^'), { start: 10, query: '', braces: 1 });
+  assert.deepEqual(at('Aberto em {{da|^'), { start: 10, query: 'da', braces: 2 });
+  assert.equal(at('{{data}} |^'), null);
+  assert.equal(at('{{{|^'), null);
+  assert.equal(at('```json\n{|^\n```'), null);                       // "{" em código: não sugere
+  assert.deepEqual(at('```\n{{h|^\n```'), { start: 4, query: 'h', braces: 2 }); // "{{" em código: sugere
+  assert.deepEqual(E.completeVar('em {da', 3, 6, 'data'), { value: 'em {{data}}', start: 11, end: 11 });
+  assert.deepEqual(E.completeVar('em {{da}} x', 3, 7, 'data'), { value: 'em {{data}} x', start: 11, end: 11 });
+  assert.deepEqual(E.completeVar('em {{da|ta}}'.replace('|', ''), 3, 7, 'hora'), { value: 'em {{hora}}', start: 11, end: 11 });
+  assert.deepEqual(E.completeVar('{ x', 0, 1, 'cursor'), { value: '{{cursor}} x', start: 10, end: 10 });
 });
 
 test('service: templates — list, create from template (vars, cursor, folder), template tasks stay out of Tarefas', async () => {

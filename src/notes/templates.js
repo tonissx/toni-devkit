@@ -9,6 +9,16 @@
  */
 const TEMPLATES_FOLDER = 'Templates';
 
+/** Variáveis sugeridas no autocomplete (ao digitar "{" num template) e listadas na ajuda. */
+const TEMPLATE_VARS = [
+  { name: 'data', desc: 'Data de hoje (dd/mm/aaaa)' },
+  { name: 'hoje', desc: 'Data de hoje em aaaa-mm-dd — boa para ordenar e buscar' },
+  { name: 'hora', desc: 'Hora em que a nota foi criada (hh:mm)' },
+  { name: 'dia_semana', desc: 'Dia da semana por extenso' },
+  { name: 'data_extenso', desc: 'Data completa por extenso' },
+  { name: 'cursor', desc: 'Onde o cursor começa na nota criada (some do texto)' },
+];
+
 const pad = (n) => String(n).padStart(2, '0');
 
 /** Variáveis de data/hora de `now` (hora local) + extras ({ titulo }). */
@@ -47,4 +57,10 @@ function applyTemplate(text, vars = {}) {
   return { text: trimmed, cursor: cursor === null ? null : Math.min(cursor, trimmed.length) };
 }
 
-module.exports = { TEMPLATES_FOLDER, templateVars, applyTemplate };
+/** A pasta (caminho com "/") é a Templates ou está dentro dela? */
+const isTemplateFolder = (folder) => {
+  const top = String(folder || '').split('/')[0];
+  return !!top && top.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() === TEMPLATES_FOLDER.toLowerCase();
+};
+
+module.exports = { TEMPLATES_FOLDER, TEMPLATE_VARS, templateVars, applyTemplate, isTemplateFolder };

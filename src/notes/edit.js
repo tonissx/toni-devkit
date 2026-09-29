@@ -171,4 +171,30 @@ function completeLink(value, start, pos, title) {
   return { value: value.slice(0, start) + ins + rest, start: start + ins.length, end: start + ins.length };
 }
 
-module.exports = { continueList, toggleTaskLines, expandOnSpace, isoDate, insertBlock, linkQueryAt, completeLink, inFence };
+/**
+ * Autocomplete de {{variável}} (em templates): o cursor está logo depois de "{" ou "{{" + letras?
+ * Dentro de bloco de código só com "{{" (lá "{" costuma ser JSON/código). → { start, query, braces } | null
+ * start = posição do primeiro "{"; braces = 1 ou 2.
+ */
+function varQueryAt(value, pos) {
+  const [ls] = lineBounds(value, pos);
+  const m = /(^|[^{])(\{\{?)(\w*)$/.exec(value.slice(ls, pos));
+  if (!m) return null;
+  const braces = m[2].length;
+  if (braces === 1 && inFence(value, pos)) return null;
+  return { start: pos - m[3].length - braces, query: m[3], braces };
+}
+
+/**
+ * Completa a variável: troca value[start, pos) por "{{nome}}", aproveitando o "}}"/"}" logo depois
+ * (e o resto da palavra, se o cursor estava no meio de uma variável: "{{da|ta}}").
+ */
+function completeVar(value, start, pos, name) {
+  const after = value.slice(pos);
+  const tail = /^\w*\}\}?/.exec(after);
+  const rest = tail ? after.slice(tail[0].length) : after;
+  const ins = '{{' + name + '}}';
+  return { value: value.slice(0, start) + ins + rest, start: start + ins.length, end: start + ins.length };
+}
+
+module.exports = { continueList, toggleTaskLines, expandOnSpace, isoDate, insertBlock, linkQueryAt, completeLink, inFence, varQueryAt, completeVar };

@@ -160,7 +160,9 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   nota", ou a palette) lista os templates; escolher cria a nota na pasta ativa com as variáveis trocadas — `{{data}}`
   `{{hoje}}` `{{hora}}` `{{dia_semana}}` `{{data_extenso}}` e `{{cursor}}` (onde o cursor começa). O título só é copiado
   se usar variáveis (`Chamado {{data}}`); tags vão junto (menos `template`). Tarefas dentro de templates não aparecem
-  no painel Tarefas
+  no painel Tarefas. Editando um template, digitar `{` sugere as variáveis com o que cada uma faz e o valor de agora
+  (`Tab` ou clique insere; `Enter` insere depois de `{{` ou de uma letra — sozinho, `{` + `Enter` continua sendo quebra
+  de linha; em blocos de código só abre com `{{`)
 - **Versões anteriores** (ícone de relógio no editor): ao editar, o Devkit guarda a versão de antes — no máximo uma a
   cada 10 min por nota, as 50 mais recentes, em `Devkit Notes\.devkit\history\`. O painel mostra a lista e o diff
   da versão para a atual (mesmo motor do Diff Checker); **Restaurar** volta título e conteúdo, e o estado atual vira

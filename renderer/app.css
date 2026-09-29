@@ -252,8 +252,14 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 /* Contêiner do textarea: âncora do autocomplete de [[link]]. */
 .nts-body-wrap { position: relative; min-height: 0; min-width: 0; }
 .nts-suggest { position: absolute; z-index: 20; width: 300px; max-height: 280px; overflow-y: auto; }
+.nts-suggest.is-var { width: 320px; max-height: 340px; }
 .nts-suggest .tk-menu__item { min-width: 0; }
-.nts-suggest__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nts-suggest .tk-menu__item.has-desc { height: auto; min-height: 30px; padding-top: 5px; padding-bottom: 5px; align-items: flex-start; }
+.nts-suggest .tk-menu__item.has-desc .tk-icon { margin-top: 2px; }
+.nts-suggest__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.nts-suggest__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nts-suggest__title code { font: 500 12px var(--tk-font-mono); color: var(--tk-accent-text); }
+.nts-suggest__desc { font-size: 11.5px; line-height: 1.35; color: var(--tk-text-3); white-space: normal; }
 .nts-suggest__folder { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--tk-text-3); }
 /* "Mencionada em": notas que apontam para a nota aberta. */
 .nts-backlinks { border-top: 1px solid var(--tk-border); background: var(--tk-surface-1); }
