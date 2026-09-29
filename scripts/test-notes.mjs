@@ -88,6 +88,62 @@ test('edit: insertBlock puts the text on its own line and moves the cursor after
   assert.deepEqual(E.insertBlock('a SEL b', 2, 5, 'X'), { value: 'a \nX\n b', start: 5, end: 5 });
 });
 
+const M = require('../src/notes/markup.js');
+
+test('markup: tab-separated paste (Excel/SSMS) becomes an aligned Markdown table', () => {
+  const tsv = 'CODCOLIGADA\tNOME\tSALARIO\r\n1\tAna | RH\t1.234,50\r\n12\t"linha\ncom quebra"\tNULL\r\n';
+  assert.equal(M.tableFromText(tsv), [
+    '| CODCOLIGADA | NOME             |  SALARIO |',
+    '| ----------: | ---------------- | -------: |',
+    '|           1 | Ana \\| RH        | 1.234,50 |',
+    '|          12 | linha com quebra |     NULL |',
+  ].join('\n'));
+  assert.equal(M.tableFromText('a\tb\nc\td'), '| a   | b   |\n| --- | --- |\n| c   | d   |');
+});
+
+test('markup: non-tables are left alone (single line, ragged rows, tab-indented code)', () => {
+  assert.equal(M.tableFromText('a\tb'), null);
+  assert.equal(M.tableFromText('a\tb\nc'), null);
+  assert.equal(M.tableFromText('a\tb\tc\nd\te'), null);
+  assert.equal(M.tableFromText('\tif (x)\n\treturn 1'), null);
+  assert.equal(M.tableFromText('sem tab\nnenhum'), null);
+});
+
+test('markup: smartPaste inserts tables on their own block and links selected text to a pasted URL', () => {
+  const r = M.smartPaste('antes\ndepois', 5, 5, 'a\tb\n1\t2');
+  assert.equal(r.value, 'antes\n\n|   a |   b |\n| --: | --: |\n|   1 |   2 |\n\ndepois');
+  const l = M.smartPaste('ver a doc aqui', 6, 9, ' https://tdn.totvs.com/x ');
+  assert.deepEqual(l, { value: 'ver a [doc](https://tdn.totvs.com/x) aqui', start: 36, end: 36 });
+  assert.equal(M.smartPaste('ver', 3, 3, 'https://a.com'), null);          // sem seleção → cola normal
+  assert.equal(M.smartPaste('https://a.com', 0, 13, 'https://b.com'), null); // seleção já é URL
+  assert.equal(M.smartPaste('a\nb', 0, 3, 'https://a.com'), null);        // várias linhas
+  assert.equal(M.smartPaste('x', 0, 1, 'texto comum'), null);
+});
+
+test('markup: toggleWrap bolds/italicizes/codes, unwraps, trims the selection and handles empty selections', () => {
+  assert.deepEqual(M.toggleWrap('um texto aqui', 3, 9, '**'), { value: 'um **texto** aqui', start: 3, end: 12 }); // "texto " → sem o espaço
+  assert.deepEqual(M.toggleWrap('um **texto** aqui', 3, 12, '**'), { value: 'um texto aqui', start: 3, end: 8 });
+  assert.deepEqual(M.toggleWrap('um **texto** aqui', 5, 10, '**'), { value: 'um texto aqui', start: 3, end: 8 });
+  assert.deepEqual(M.toggleWrap('a **b** c', 4, 5, '*'), { value: 'a ***b*** c', start: 4, end: 7 }); // itálico dentro do negrito
+  assert.deepEqual(M.toggleWrap('a *b* c', 3, 4, '*'), { value: 'a b c', start: 2, end: 3 });
+  assert.deepEqual(M.toggleWrap('ab', 1, 1, '`'), { value: 'a``b', start: 2, end: 2 });
+  assert.deepEqual(M.toggleWrap('a``b', 2, 2, '`'), { value: 'ab', start: 1, end: 1 });
+  assert.deepEqual(M.toggleWrap('- um\n\n- [ ] dois', 0, 16, '**'), { value: '- **um**\n\n- [ ] **dois**', start: 0, end: 24 });
+});
+
+test('markup: makeLink and codeBlock', () => {
+  assert.deepEqual(M.makeLink('ver doc', 4, 7), { value: 'ver [doc](url)', start: 10, end: 13 });
+  assert.deepEqual(M.makeLink('ir https://a.com', 3, 16), { value: 'ir [](https://a.com)', start: 4, end: 4 });
+  assert.equal(M.makeLink('abc', 1, 1), null);
+  assert.deepEqual(M.codeBlock('x\nSELECT 1\nFROM t\ny', 4, 14), { value: 'x\n```\nSELECT 1\nFROM t\n```\ny', start: 5, end: 5 });
+  assert.deepEqual(M.codeBlock('a\n\nb', 2, 2), { value: 'a\n```\n\n```\nb', start: 6, end: 6 });
+  // Ctrl+Shift+K: trecho de uma linha → `inline`; sem seleção → bloco.
+  assert.deepEqual(M.codeToggle('usar COALESCE aqui', 5, 13), { value: 'usar `COALESCE` aqui', start: 5, end: 15 });
+  assert.deepEqual(M.codeToggle('a\n\nb', 2, 2).value, 'a\n```\n\n```\nb');
+  // Dentro de bloco de código, colar tabela fica como veio.
+  assert.equal(M.smartPaste('```\nx\n```', 4, 4, 'a\tb\n1\t2'), null);
+});
+
 test('edit: linkQueryAt opens after [[ and closes on ]], |, newline or inside code', () => {
   const at = (s) => E.linkQueryAt(s.replace('|^', ''), s.indexOf('|^'));
   assert.deepEqual(at('ver [[|^'), { start: 6, query: '' });
