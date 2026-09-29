@@ -12,6 +12,7 @@ const { createNote, displayTitle, allTags, plainLine, tasksOf, taskStats, toggle
 const { searchNotes } = require('../../src/notes/search.js');
 const { validFolderPath, validFolderName, normFolder, folderOf, baseName, parentOf, joinPath, isDescendant } = require('../../src/notes/folders.js');
 const { normalize } = require('../../src/commands/search.js');
+const { templateVars, applyTemplate, isTemplateFolder } = require('../../src/notes/templates.js');
 
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
 const VIEWED_MAX = 20;
@@ -78,6 +79,10 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
   }
   const trashed = new Map(); // id → arquivo em .trash da última exclusão (desfazer apaga a cópia)
 
+  /** Pasta existente com esse nome na raiz, sem diferenciar maiúsculas/acentos ("templates" serve para "Templates"). */
+  const rootFolderLike = (name) => [...folderSet].find((f) => !f.includes('/') && normalize(f) === normalize(name)) || null;
+  /** A nota está na pasta Templates (ou numa subpasta dela)? */
+  const isTemplate = (n) => isTemplateFolder(folderOf(n.file));
   /** Valida uma pasta de destino existente ('' = raiz); devolve o caminho normalizado. */
   function existingFolder(p) {
     const f = normFolder(p);
@@ -171,6 +176,40 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     create(partial = {}) {
       const { id, ...fields } = partial; // sempre um id novo
       return this.save(createNote(fields));
+    },
+
+    /* ─────────────── Templates ─────────────── */
+
+    /** Pasta na raiz com esse nome (a existente, mesmo com outra grafia; senão cria). Devolve o caminho. */
+    async ensureRootFolder(name) {
+      return rootFolderLike(name) || this.createFolder(name);
+    },
+
+    /** Templates (notas da pasta Templates): [{ id, title, folder, preview, tags }], por título. */
+    templates() {
+      return [...notes.values()].filter(isTemplate).map(summary)
+        .sort((a, b) => a.title.localeCompare(b.title, 'pt-BR'));
+    },
+
+    /**
+     * Cria uma nota a partir do template `id` (variáveis trocadas) na pasta `folder` ('' = raiz; dentro
+     * de Templates cai na raiz). O título só vem do template se ele usar variáveis ("Chamado {{data}}").
+     * → { note, cursor } — cursor = posição de {{cursor}} no conteúdo (ou null).
+     */
+    async fromTemplate(id, { folder = '' } = {}) {
+      const t = notes.get(id);
+      if (!t || !isTemplate(t)) err('Template não encontrado.');
+      const vars = templateVars(new Date());
+      const title = /\{\{/.test(t.title || '') ? applyTemplate(t.title, vars).text.trim() : '';
+      const { text, cursor } = applyTemplate(t.content, { ...vars, titulo: title });
+      let dest = normFolder(folder);
+      if (dest && (!folderSet.has(dest) || isTemplate({ file: dest + '/x.md' }))) dest = '';
+      const note = await this.create({
+        title, content: text, type: t.type, folder: dest,
+        tags: (t.tags || []).filter((x) => normalize(x) !== 'template'),
+      });
+      if (!note) err('O template está vazio.');
+      return { note, cursor };
     },
 
     remove(id) {
@@ -485,7 +524,7 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     tasks({ status = 'open', tag } = {}) {
       const out = [];
       for (const n of notes.values()) {
-        if (n.type === 'snippet') continue;
+        if (n.type === 'snippet' || isTemplate(n)) continue; // "- [ ]" de um template é modelo, não tarefa
         const tags = allTags(n);
         if (tag && !tags.includes(tag)) continue;
         for (const t of tasksOf(n.content)) {

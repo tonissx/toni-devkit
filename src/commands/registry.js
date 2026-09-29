@@ -183,6 +183,12 @@ const noteCommands = [
     run: (ctx) => ctx.openNote({ new: true }),
   },
   {
+    id: 'notes:template', name: 'Nova nota a partir de template', icon: 'layout-template',
+    description: 'Escolher um modelo da pasta Templates',
+    keywords: ['template', 'modelo', 'nova nota', 'note'],
+    run: (ctx) => ctx.openApp('notes', { view: 'template' }),
+  },
+  {
     id: 'notes:search', name: 'Search Notes', icon: 'search', keepOpen: true,
     description: 'Buscar só nas notas e snippets',
     keywords: ['buscar notas', 'procurar', 'note', 'snippets'],

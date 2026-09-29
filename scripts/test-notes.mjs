@@ -89,6 +89,73 @@ test('edit: insertBlock puts the text on its own line and moves the cursor after
 });
 
 const M = require('../src/notes/markup.js');
+const T = require('../src/notes/templates.js');
+
+test('templates: variables, {{cursor}}, unknown kept, trailing empty vars trimmed', () => {
+  const vars = T.templateVars(new Date(2026, 8, 29, 9, 5), { titulo: 'X' });
+  assert.equal(vars.hoje, '2026-09-29');
+  assert.equal(vars.data, '29/09/2026');
+  assert.equal(vars.ontem, '28/09/2026');
+  assert.equal(vars.amanha, '30/09/2026');
+  assert.equal(T.templateVars(new Date(2026, 0, 1)).ontem, '31/12/2025');   // virada de ano
+  assert.equal(T.templateVars(new Date(2026, 2, 1)).ontem, '28/02/2026');   // virada de mês
+  assert.equal(T.templateVars(new Date(2026, 11, 31)).amanha, '01/01/2027');
+  // Nome com ou sem acento, maiúsculas à vontade.
+  assert.equal(T.applyTemplate('{{amanhã}} {{AMANHA}} {{ontem}}', vars).text, '30/09/2026 30/09/2026 28/09/2026\n');
+  assert.equal(vars.hora, '09:05');
+  assert.equal(vars.dia_semana, 'terça-feira');
+  assert.equal(vars.data_extenso, 'terça-feira, 29 de setembro de 2026');
+  const r = T.applyTemplate('# {{ Titulo }} — {{data}}\n- [ ] {{cursor}}\n{{naoexiste}}\n{{vazio}}\n\n', { ...vars, vazio: '' });
+  assert.equal(r.text, '# X — 29/09/2026\n- [ ] \n{{naoexiste}}\n');
+  assert.equal(r.cursor, '# X — 29/09/2026\n- [ ] '.length);
+  assert.equal(T.applyTemplate('sem cursor', vars).cursor, null);
+  // Toda variável sugerida existe de verdade (ou é o {{cursor}}).
+  for (const v of T.TEMPLATE_VARS) assert.ok(v.name === 'cursor' || T.varKey(v.name) in vars, v.name);
+  assert.ok(T.isTemplateFolder('Templates') && T.isTemplateFolder('templates/Suporte') && !T.isTemplateFolder('Trabalho/Templates') && !T.isTemplateFolder(''));
+});
+
+test('edit: varQueryAt opens after "{" / "{{", not inside code with a single "{"; completeVar closes the braces', () => {
+  const at = (s) => E.varQueryAt(s.replace('|^', ''), s.indexOf('|^'));
+  assert.deepEqual(at('Aberto em {|^'), { start: 10, query: '', braces: 1 });
+  assert.deepEqual(at('Aberto em {{da|^'), { start: 10, query: 'da', braces: 2 });
+  assert.equal(at('{{data}} |^'), null);
+  assert.equal(at('{{{|^'), null);
+  assert.equal(at('```json\n{|^\n```'), null);                       // "{" em código: não sugere
+  assert.deepEqual(at('```\n{{h|^\n```'), { start: 4, query: 'h', braces: 2 }); // "{{" em código: sugere
+  assert.deepEqual(E.completeVar('em {da', 3, 6, 'data'), { value: 'em {{data}}', start: 11, end: 11 });
+  assert.deepEqual(E.completeVar('em {{da}} x', 3, 7, 'data'), { value: 'em {{data}} x', start: 11, end: 11 });
+  assert.deepEqual(E.completeVar('em {{da|ta}}'.replace('|', ''), 3, 7, 'hora'), { value: 'em {{hora}}', start: 11, end: 11 });
+  assert.deepEqual(E.completeVar('{ x', 0, 1, 'cursor'), { value: '{{cursor}} x', start: 10, end: 10 });
+  assert.deepEqual(at('até {amanh|^'), { start: 4, query: 'amanh', braces: 1 });   // letra com acento no nome
+  assert.equal(E.completeVar('{{amanhã}}', 0, 7, 'amanhã').value, '{{amanhã}}');     // cursor em "{{amanh|ã}}": sem sobra
+});
+
+test('service: templates — list, create from template (vars, cursor, folder), template tasks stay out of Tarefas', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    await svc.createFolder('templates');                          // grafia diferente: é reaproveitada
+    await svc.createFolder('Trabalho');
+    const tpl = await svc.create({ title: 'Chamado {{data}}', content: '# Chamado\n- [ ] {{cursor}}\nAberto em {{hoje}}', tags: ['template', 'suporte'], folder: 'templates' });
+    await svc.create({ title: 'Outra', content: 'fora' });
+    assert.deepEqual(svc.templates().map((x) => x.id), [tpl.id]);
+    assert.deepEqual(svc.tasks().filter((x) => x.noteId === tpl.id), []);
+    assert.equal(await svc.ensureRootFolder('Templates'), 'templates');
+
+    const { note, cursor } = await svc.fromTemplate(tpl.id, { folder: 'Trabalho' });
+    const today = T.templateVars().hoje;
+    assert.match(note.title, /^Chamado \d{2}\/\d{2}\/\d{4}$/);
+    assert.equal(note.content, `# Chamado\n- [ ] \nAberto em ${today}\n`);
+    assert.equal(cursor, '# Chamado\n- [ ] '.length);
+    assert.equal(note.folder, 'Trabalho');
+    assert.deepEqual(note.tags, ['suporte']);
+    assert.equal((await svc.fromTemplate(tpl.id, { folder: 'templates' })).note.folder, ''); // nunca dentro de Templates
+    const plain = await svc.create({ title: 'Reunião', content: 'Pauta:', folder: 'templates' });
+    assert.equal((await svc.fromTemplate(plain.id)).note.title, '');   // título fixo não é copiado
+    await assert.rejects(svc.fromTemplate(note.id), /não encontrado/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('markup: tab-separated paste (Excel/SSMS) becomes an aligned Markdown table', () => {
   const tsv = 'CODCOLIGADA\tNOME\tSALARIO\r\n1\tAna | RH\t1.234,50\r\n12\t"linha\ncom quebra"\tNULL\r\n';

@@ -156,6 +156,12 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
 - **Links entre notas**: digitar `[[` abre sugestões de notas (↑/↓, `Enter`/`Tab` completa, `Esc` fecha; "Nova nota: …"
   quando nada casa). Abaixo do editor, **Mencionada em (N)** lista as notas que apontam para a aberta (por título ou
   alias), com a linha do link. Ao trocar o título, o Devkit oferece atualizar os `[[links]]` que usavam o nome antigo
+- **Templates**: qualquer nota na pasta **Templates** vira modelo. `Ctrl+Shift+N` (ou o ícone ao lado de "Nova
+  nota", ou a palette) lista os templates; escolher cria a nota na pasta ativa com as variáveis trocadas — `{{data}}`
+  `{{hoje}}` `{{ontem}}` `{{amanha}}` `{{hora}}` `{{dia_semana}}` `{{data_extenso}}` e `{{cursor}}` (onde o cursor começa). O título só é copiado
+  se usar variáveis (`Chamado {{data}}`); tags vão junto (menos `template`). Tarefas dentro de templates não aparecem
+  no painel Tarefas. Editando um template, digitar `{` sugere as variáveis com o que cada uma faz e o valor de agora
+  (`Enter`, `Tab` ou clique insere, `Esc` fecha; em blocos de código só abre com `{{`)
 - **Versões anteriores** (ícone de relógio no editor): ao editar, o Devkit guarda a versão de antes — no máximo uma a
   cada 10 min por nota, as 50 mais recentes, em `Devkit Notes\.devkit\history\`. O painel mostra a lista e o diff
   da versão para a atual (mesmo motor do Diff Checker); **Restaurar** volta título e conteúdo, e o estado atual vira
