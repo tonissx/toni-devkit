@@ -153,8 +153,8 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
         />
         <div className="nts-editor__tools">
           <span className={'nts-status is-' + status} role="status">{statusLabel(status)}</span>
-          <IconButton size="sm" icon={note.pinned ? 'pin-off' : 'pin'} label={note.pinned ? 'Desafixar' : 'Fixar (Pinned)'} active={note.pinned} onClick={() => update({ pinned: !note.pinned })} />
-          <IconButton size="sm" icon="star" label={note.favorite ? 'Remover dos favoritos' : 'Favoritar'} active={note.favorite} onClick={() => update({ favorite: !note.favorite })} />
+          <IconButton size="sm" className="nts-pin" icon="pin" label={note.pinned ? 'Desafixar' : 'Fixar (Pinned)'} active={note.pinned} onClick={() => update({ pinned: !note.pinned })} />
+          <IconButton size="sm" className="nts-fav" icon="star" label={note.favorite ? 'Remover dos favoritos' : 'Favoritar'} active={note.favorite} onClick={() => update({ favorite: !note.favorite })} />
           <IconButton size="sm" icon="trash-2" label="Excluir (vai para a lixeira)" onClick={async () => { await flush(); onDelete(note); }} disabled={isNew && status === 'idle'} />
         </div>
       </div>
