@@ -11,8 +11,7 @@ const { Icon } = DS;
  * Fonte de sugestões: { id, label,
  *   detect(value, pos) → { start, query, … } | null   — o cursor está num ponto que pede sugestão?
  *   load(q) → itens | Promise<itens>                   — itens: { key, icon, title, aside?, desc?, … }
- *   complete(value, start, pos, item) → { value, start, end }
- *   enterAccepts?(q) → boolean                          — Enter aceita? (padrão: sim; Tab e clique sempre aceitam) }
+ *   complete(value, start, pos, item) → { value, start, end } }
  */
 
 /** [[link]]: notas pela busca (vazio = recentes) + "Nova nota: …" quando nada tem o título digitado. */
@@ -47,8 +46,6 @@ export const varSource = {
       .map((v) => ({ key: v.name, icon: v.name === 'cursor' ? 'text-cursor' : 'braces', title: <code>{'{{' + v.name + '}}'}</code>, desc: v.desc, aside: now[v.name], value: v.name }));
   },
   complete: (value, start, pos, item) => completeVar(value, start, pos, item.value),
-  // "{" + Enter é quebra de linha (JSON, código…): Enter só aceita depois de "{{" ou de alguma letra.
-  enterAccepts: (q) => q.braces === 2 || q.query.length > 0,
 };
 
 /**
@@ -98,13 +95,11 @@ export function useSuggest({ taRef, apply, sources }) {
       setSt({ ...st, hi: (st.hi + d + st.items.length) % st.items.length });
       return true;
     }
-    const plain = !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey;
-    if (plain && (e.key === 'Tab' || (e.key === 'Enter' && (!st.src.enterAccepts || st.src.enterAccepts(st.q))))) {
+    if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       accept(st.items[st.hi]);
       return true;
     }
-    if (e.key === 'Enter') { close(); return false; } // segue como quebra de linha
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return true; }
     return false;
   };
