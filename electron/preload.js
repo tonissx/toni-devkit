@@ -41,6 +41,19 @@ contextBridge.exposeInMainWorld('devkit', {
       ipcRenderer.on('palette:opened', h);
       return () => ipcRenderer.removeListener('palette:opened', h);
     },
+    /** Smart Binds: o processo principal pede para rodar um comando sem mostrar a palette. */
+    onRun: (cb) => {
+      const h = (_e, id) => cb(id);
+      ipcRenderer.on('palette:run', h);
+      return () => ipcRenderer.removeListener('palette:run', h);
+    },
+  },
+  /** Smart Binds — atalhos globais para comandos (ver electron/binds.js). */
+  binds: {
+    get: () => ipcRenderer.invoke('binds:get'),
+    set: (next) => ipcRenderer.invoke('binds:set', next),
+    suspend: (on) => ipcRenderer.invoke('binds:suspend', on),
+    result: (r) => ipcRenderer.send('binds:result', r),
   },
   app: {
     /** Mostra a janela principal (e navega para a rota, se houver). */
