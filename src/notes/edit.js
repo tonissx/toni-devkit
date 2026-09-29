@@ -178,7 +178,7 @@ function completeLink(value, start, pos, title) {
  */
 function varQueryAt(value, pos) {
   const [ls] = lineBounds(value, pos);
-  const m = /(^|[^{])(\{\{?)(\w*)$/.exec(value.slice(ls, pos));
+  const m = /(^|[^{])(\{\{?)([\p{L}\p{N}_]*)$/u.exec(value.slice(ls, pos)); // letras com acento: {amanh…
   if (!m) return null;
   const braces = m[2].length;
   if (braces === 1 && inFence(value, pos)) return null;
@@ -191,7 +191,7 @@ function varQueryAt(value, pos) {
  */
 function completeVar(value, start, pos, name) {
   const after = value.slice(pos);
-  const tail = /^\w*\}\}?/.exec(after);
+  const tail = /^[\p{L}\p{N}_]*\}\}?/u.exec(after);
   const rest = tail ? after.slice(tail[0].length) : after;
   const ins = '{{' + name + '}}';
   return { value: value.slice(0, start) + ins + rest, start: start + ins.length, end: start + ins.length };

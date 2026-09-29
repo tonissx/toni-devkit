@@ -95,9 +95,13 @@ test('templates: variables, {{cursor}}, unknown kept, trailing empty vars trimme
   const vars = T.templateVars(new Date(2026, 8, 29, 9, 5), { titulo: 'X' });
   assert.equal(vars.hoje, '2026-09-29');
   assert.equal(vars.data, '29/09/2026');
-  assert.equal(vars.dia_anterior, '28/09/2026');
-  assert.equal(T.templateVars(new Date(2026, 0, 1)).dia_anterior, '31/12/2025'); // virada de ano
-  assert.equal(T.templateVars(new Date(2026, 2, 1)).dia_anterior, '28/02/2026'); // virada de mês
+  assert.equal(vars.ontem, '28/09/2026');
+  assert.equal(vars.amanha, '30/09/2026');
+  assert.equal(T.templateVars(new Date(2026, 0, 1)).ontem, '31/12/2025');   // virada de ano
+  assert.equal(T.templateVars(new Date(2026, 2, 1)).ontem, '28/02/2026');   // virada de mês
+  assert.equal(T.templateVars(new Date(2026, 11, 31)).amanha, '01/01/2027');
+  // Nome com ou sem acento, maiúsculas à vontade.
+  assert.equal(T.applyTemplate('{{amanhã}} {{AMANHA}} {{ontem}}', vars).text, '30/09/2026 30/09/2026 28/09/2026\n');
   assert.equal(vars.hora, '09:05');
   assert.equal(vars.dia_semana, 'terça-feira');
   assert.equal(vars.data_extenso, 'terça-feira, 29 de setembro de 2026');
@@ -106,7 +110,7 @@ test('templates: variables, {{cursor}}, unknown kept, trailing empty vars trimme
   assert.equal(r.cursor, '# X — 29/09/2026\n- [ ] '.length);
   assert.equal(T.applyTemplate('sem cursor', vars).cursor, null);
   // Toda variável sugerida existe de verdade (ou é o {{cursor}}).
-  for (const v of T.TEMPLATE_VARS) assert.ok(v.name === 'cursor' || v.name in vars, v.name);
+  for (const v of T.TEMPLATE_VARS) assert.ok(v.name === 'cursor' || T.varKey(v.name) in vars, v.name);
   assert.ok(T.isTemplateFolder('Templates') && T.isTemplateFolder('templates/Suporte') && !T.isTemplateFolder('Trabalho/Templates') && !T.isTemplateFolder(''));
 });
 
@@ -122,6 +126,8 @@ test('edit: varQueryAt opens after "{" / "{{", not inside code with a single "{"
   assert.deepEqual(E.completeVar('em {{da}} x', 3, 7, 'data'), { value: 'em {{data}} x', start: 11, end: 11 });
   assert.deepEqual(E.completeVar('em {{da|ta}}'.replace('|', ''), 3, 7, 'hora'), { value: 'em {{hora}}', start: 11, end: 11 });
   assert.deepEqual(E.completeVar('{ x', 0, 1, 'cursor'), { value: '{{cursor}} x', start: 10, end: 10 });
+  assert.deepEqual(at('até {amanh|^'), { start: 4, query: 'amanh', braces: 1 });   // letra com acento no nome
+  assert.equal(E.completeVar('{{amanhã}}', 0, 7, 'amanhã').value, '{{amanhã}}');     // cursor em "{{amanh|ã}}": sem sobra
 });
 
 test('service: templates — list, create from template (vars, cursor, folder), template tasks stay out of Tarefas', async () => {

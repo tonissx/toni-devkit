@@ -1,7 +1,7 @@
 import { DS } from '../../lib/ds.js';
 import { notesApi } from '../../notes/client.js';
 import { linkQueryAt, completeLink, varQueryAt, completeVar } from '../../notes/edit.js';
-import { TEMPLATE_VARS, templateVars } from '../../notes/templates.js';
+import { TEMPLATE_VARS, templateVars, varKey } from '../../notes/templates.js';
 import { caretRect } from '../../notes/caret.js';
 import { normalize } from '../../commands/search.js';
 
@@ -39,11 +39,12 @@ export const varSource = {
   detect: varQueryAt,
   load: (q) => {
     const now = templateVars(new Date());
-    const want = normalize(q.query);
+    const want = varKey(q.query);
+    const starts = (v) => varKey(v.name).startsWith(want); // "amanha" acha "amanhã"
     return TEMPLATE_VARS
-      .filter((v) => !want || v.name.startsWith(want) || normalize(v.desc).includes(want))
-      .sort((a, b) => Number(!a.name.startsWith(want)) - Number(!b.name.startsWith(want)))
-      .map((v) => ({ key: v.name, icon: v.name === 'cursor' ? 'text-cursor' : 'braces', title: <code>{'{{' + v.name + '}}'}</code>, desc: v.desc, aside: now[v.name], value: v.name }));
+      .filter((v) => !want || starts(v) || normalize(v.desc).includes(want))
+      .sort((a, b) => Number(!starts(a)) - Number(!starts(b)))
+      .map((v) => ({ key: v.name, icon: v.name === 'cursor' ? 'text-cursor' : 'braces', title: <code>{'{{' + v.name + '}}'}</code>, desc: v.desc, aside: now[varKey(v.name)], value: v.name }));
   },
   complete: (value, start, pos, item) => completeVar(value, start, pos, item.value),
 };
