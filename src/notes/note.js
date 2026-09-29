@@ -62,6 +62,61 @@ function snippetCode(note) {
   return blocks.length ? blocks.map((b) => b.code).join('\n\n') : String(note.content || '').trim();
 }
 
+/* ─────────────── Tarefas ("- [ ] texto @2026-10-02 !1") ─────────────── */
+const TASK_LINE_RE = /^([ \t]*(?:[-*+]|\d+[.)])[ \t]+)\[( |x|X)\]/;
+const DUE_RE = /(^|\s)@(\d{4}-\d{2}-\d{2})(?=\s|$)/;
+const PRIORITY_RE = /(^|\s)!([123])(?=\s|$)/;
+
+/** Mascara blocos de código com espaços (mesmo comprimento) para "- [ ]" dentro deles não contar. */
+const maskFences = (md) => String(md || '').replace(FENCE_RE, (m) => m.replace(/[^\n]/g, ' '));
+
+/**
+ * Tarefas do markdown, na ordem do documento: [{ index, line, indent, checked, text, due, priority }].
+ * `index` é o mesmo da checkbox do preview (data-task) e de toggleTaskAt; `line` é 0-based.
+ * `due` = 'AAAA-MM-DD' | null (marca @data) · `priority` = 1..3 | null (marca !1..!3) · `text` sem as marcas.
+ */
+function tasksOf(content) {
+  const src = String(content || '');
+  const lines = src.split('\n');
+  const masked = maskFences(src).split('\n');
+  const out = [];
+  masked.forEach((ml, line) => {
+    const m = TASK_LINE_RE.exec(ml);
+    if (!m) return;
+    let text = lines[line].slice(m[0].length).trim();
+    const due = DUE_RE.exec(text);
+    const pri = PRIORITY_RE.exec(text);
+    text = text.replace(DUE_RE, '$1').replace(PRIORITY_RE, '$1').replace(/\s{2,}/g, ' ').trim();
+    out.push({
+      index: out.length, line, indent: m[1].match(/^[ \t]*/)[0].length, checked: m[2] !== ' ', text,
+      due: due ? due[2] : null, priority: pri ? Number(pri[2]) : null,
+    });
+  });
+  return out;
+}
+
+/** { open, done } — contagem de tarefas do markdown. */
+function taskStats(content) {
+  const all = tasksOf(content);
+  const done = all.filter((t) => t.checked).length;
+  return { open: all.length - done, done };
+}
+
+/** Marca/desmarca a n-ésima tarefa (índice de tasksOf), ignorando blocos de código. */
+function toggleTaskAt(md, index) {
+  const src = String(md || '');
+  const re = /^([ \t]*(?:[-*+]|\d+[.)])[ \t]+)\[( |x|X)\]/gm;
+  const masked = maskFences(src);
+  let m, n = 0;
+  while ((m = re.exec(masked))) {
+    if (n++ === index) {
+      const pos = m.index + m[1].length + 1;
+      return src.slice(0, pos) + (m[2] === ' ' ? 'x' : ' ') + src.slice(pos + 1);
+    }
+  }
+  return src;
+}
+
 /* ─────────────── Tags e links ─────────────── */
 const TAG_RE = /(^|[\s(,;])#(\p{L}[\p{L}\p{N}_\-./]*)/gu;
 
@@ -134,5 +189,5 @@ function excerpt(content, terms = [], max = 120) {
 
 module.exports = {
   TYPES, newId, createNote, normTag, codeBlocks, snippetCode, inlineTags, allTags, wikiLinks,
-  plainLine, displayTitle, excerpt, stripCode, removeFences,
+  plainLine, displayTitle, excerpt, stripCode, removeFences, tasksOf, taskStats, toggleTaskAt, maskFences,
 };

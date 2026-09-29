@@ -1,6 +1,7 @@
 import { DS, mod, isMod } from '../../lib/ds.js';
 import { useAutosave, statusLabel, notesApi } from '../../notes/client.js';
 import { displayTitle, inlineTags, normTag, snippetCode } from '../../notes/note.js';
+import { continueList, toggleTaskLines, expandOnSpace } from '../../notes/edit.js';
 import { NotePreview, SnippetCard } from './NotePreview.jsx';
 
 const { SegmentedControl, IconButton, Button, Alert, Kbd } = DS;
@@ -69,7 +70,22 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
     toast('Copiado', note.type === 'snippet' ? 'Snippet na área de transferência' : 'Código na área de transferência');
   };
 
+  // Aplica o resultado de uma função de src/notes/edit.js no textarea (texto + seleção).
+  const applyEdit = (t, r) => {
+    update({ content: r.value });
+    requestAnimationFrame(() => { t.selectionStart = r.start; t.selectionEnd = r.end; });
+  };
+
   const onBodyKey = (e) => {
+    const t = e.target;
+    if (e.nativeEvent.isComposing) return;
+    // Tarefas: Enter continua "- [ ]" · Ctrl/⌘+L alterna texto/tarefa/feita · "[]␣"/"todo␣"/"@hoje␣" expandem.
+    let r = null;
+    if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !isMod(e) && t.selectionStart === t.selectionEnd) r = continueList(t.value, t.selectionStart);
+    else if (isMod(e) && !e.shiftKey && e.key.toLowerCase() === 'l') r = toggleTaskLines(t.value, t.selectionStart, t.selectionEnd);
+    else if (e.key === ' ' && !isMod(e) && !e.altKey && t.selectionStart === t.selectionEnd) r = expandOnSpace(t.value, t.selectionStart);
+    if (isMod(e) && !e.shiftKey && e.key.toLowerCase() === 'l') e.preventDefault();
+    if (r) { e.preventDefault(); applyEdit(t, r); return; }
     if (e.key === 'Tab' && !e.shiftKey) {
       // Tab indenta (2 espaços) em vez de sair do editor.
       e.preventDefault();
@@ -170,6 +186,7 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
       <div className="nts-editor__foot">
         <span>Markdown</span>
         <span><Kbd size="sm">{mod('E')}</Kbd> editar/visualizar</span>
+        <span><Kbd size="sm">{mod('L')}</Kbd> tarefa</span>
         {note.type === 'snippet' && <span><Kbd size="sm">{mod('C', true)}</Kbd> copiar snippet</span>}
         <span className="nts-editor__spacer" />
         <span>{note.content.length} caracteres</span>

@@ -4,6 +4,8 @@
 // botão "Copiar" em cada bloco de código.
 import { Marked } from 'marked';
 import { tokenize } from '../tools/diff-checker/syntax.js';
+import { toggleTaskAt } from './note.js';
+import { isoDate } from './edit.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -20,6 +22,8 @@ export const highlight = (code, lang) => code.split('\n')
   .join('\n');
 
 const WIKI_RE = /^\[\[([^[\]\n|]+)(?:\|([^\]\n]+))?\]\]/;
+const META_START_RE = /(^|\s)(?:@\d{4}-\d{2}-\d{2}|![123])(?=\s|$)/;
+const META_RE = /^(?:(@\d{4}-\d{2}-\d{2})|!([123]))(?=\s|$)/;
 
 /**
  * Renderiza markdown. resolve(título) → id | null decide o estilo dos [[links]].
@@ -40,6 +44,21 @@ export function renderMarkdown(md, { resolve = () => null } = {}) {
         return undefined;
       },
       renderer: (t) => `<a href="#" class="md-wikilink${resolve(t.target) ? '' : ' is-missing'}" data-note="${esc(t.target)}" title="${resolve(t.target) ? 'Abrir nota' : 'Criar nota'}">${esc(t.label)}</a>`,
+    }, {
+      // Marcas de tarefa soltas no texto: "@2026-10-02" (prazo) e "!1".."!3" (prioridade) viram chips.
+      name: 'taskmeta',
+      level: 'inline',
+      start: (src) => { const m = META_START_RE.exec(src); return m ? m.index + m[1].length : undefined; },
+      tokenizer(src, tokens) {
+        // Só depois de espaço/início (o texto anterior já foi separado: "a@2020-…" e "wow!1" ficam texto).
+        const prev = tokens && tokens[tokens.length - 1];
+        if (prev && !/\s$/.test(prev.raw)) return undefined;
+        const m = META_RE.exec(src);
+        return m ? { type: 'taskmeta', raw: m[0], due: m[1] ? m[0].slice(1) : null, pri: m[2] ? m[2] : null } : undefined;
+      },
+      renderer: (t) => (t.due
+        ? `<span class="md-due${t.due < isoDate() ? ' is-late' : ''}" title="Prazo">📅 ${esc(t.due.slice(8, 10) + '/' + t.due.slice(5, 7))}</span>`
+        : `<span class="md-pri is-p${t.pri}" title="Prioridade ${t.pri}">!${t.pri}</span>`),
     }],
     renderer: {
       html: ({ text }) => esc(text),
@@ -63,17 +82,4 @@ export function renderMarkdown(md, { resolve = () => null } = {}) {
 }
 
 /** Marca/desmarca a n-ésima tarefa "- [ ]" do markdown (ignorando blocos de código). */
-export function toggleTask(md, index) {
-  const src = String(md || '');
-  // Mascara blocos de código com o mesmo comprimento para não contar "- [ ]" dentro deles.
-  const masked = src.replace(/^(```|~~~)[^\n]*\n[\s\S]*?^\1[ \t]*$/gm, (m) => m.replace(/[^\n]/g, ' '));
-  const re = /^([ \t]*(?:[-*+]|\d+[.)])[ \t]+)\[( |x|X)\]/gm;
-  let m, n = 0;
-  while ((m = re.exec(masked))) {
-    if (n++ === index) {
-      const pos = m.index + m[1].length + 1;
-      return src.slice(0, pos) + (m[2] === ' ' ? 'x' : ' ') + src.slice(pos + 1);
-    }
-  }
-  return src;
-}
+export const toggleTask = toggleTaskAt;

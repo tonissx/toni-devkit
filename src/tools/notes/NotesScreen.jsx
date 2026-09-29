@@ -4,6 +4,7 @@ import { notesApi, recoverUnsaved, shortTime, cleanError } from '../../notes/cli
 import { createNote } from '../../notes/note.js';
 import { normalize } from '../../commands/search.js';
 import { NoteEditor } from './NoteEditor.jsx';
+import { TasksPanel } from './TasksPanel.jsx';
 import { emit } from '../../lib/events.js';
 
 const { PageHeader, Button, EmptyState, Icon, Kbd, Spinner } = DS;
@@ -15,6 +16,7 @@ const FILTERS = [
   { id: 'snippet', label: 'Snippets', filter: { type: 'snippet' } },
   { id: 'favorite', label: 'Favoritas', filter: { favorite: true } },
   { id: 'recent', label: 'Recentes', filter: null },
+  { id: 'tasks', label: 'Tarefas', filter: null }, // painel próprio (TasksPanel) no lugar do editor
 ];
 
 const rowIcon = (n) => (n.type === 'snippet' ? 'braces' : n.quick ? 'sticky-note' : 'file-text');
@@ -84,17 +86,20 @@ export function NotesScreen({ toast, request }) {
   const titleMap = React.useMemo(() => new Map(allRows.map((r) => [normalize(r.title), r.id])), [allRows]);
   const resolve = React.useCallback((title) => titleMap.get(normalize(title).trim()) || null, [titleMap]);
 
+  // Abrir/criar uma nota sai do painel Tarefas (que ocupa o lugar do editor).
+  const leaveTasks = (u) => (u.filter === 'tasks' ? { ...u, filter: 'all' } : u);
+
   const openNote = React.useCallback(async (id, focus) => {
     const note = await notesApi().get(id);
     if (!note) { toast('Nota não encontrada', 'Ela pode ter sido excluída', 'error'); return; }
     setCurrent({ note, isNew: false, focus });
-    setUi((u) => ({ ...u, selectedId: id }));
+    setUi((u) => ({ ...leaveTasks(u), selectedId: id }));
   }, []);
 
   const newNote = React.useCallback((title = '') => {
     const note = createNote({ title });
     setCurrent({ note, isNew: true, focus: title ? 'body' : 'title' });
-    setUi((u) => ({ ...u, selectedId: note.id }));
+    setUi((u) => ({ ...leaveTasks(u), selectedId: note.id }));
   }, []);
 
   // Abertura: recupera alterações que ficaram só no backup local e reabre a última nota.
@@ -108,6 +113,7 @@ export function NotesScreen({ toast, request }) {
     if (!request) return;
     if (request.new) newNote(request.title || '');
     else if (request.id) openNote(request.id);
+    else if (request.view === 'tasks') setUi((u) => ({ ...u, filter: 'tasks' }));
   }, [request && request.nonce]);
 
   const openLink = async (title) => {
@@ -235,7 +241,7 @@ export function NotesScreen({ toast, request }) {
                     onClick={() => openNote(r.id)}>
                     <Icon name={rowIcon(r)} size={14} className="nts-row__icon" />
                     <div className="nts-row__main">
-                      <div className="nts-row__title"><Hl text={r.title} idx={r.titleIdx} /></div>
+                      <div className="nts-row__title"><Hl text={r.title} idx={r.titleIdx} />{r.tasksOpen + r.tasksDone > 0 && <span className="nts-row__tasks" title="Tarefas concluídas / total">☑ {r.tasksDone}/{r.tasksOpen + r.tasksDone}</span>}</div>
                       <div className="nts-row__sub"><Excerpt ex={q ? r.excerpt : null} fallback={r.preview} /></div>
                       {r.tags.length > 0 && <div className="nts-row__tags">{r.tags.slice(0, 4).map((t) => <span key={t}>#{t}</span>)}</div>}
                     </div>
@@ -263,7 +269,9 @@ export function NotesScreen({ toast, request }) {
         </aside>
 
         <section className="nts__main">
-          {current ? (
+          {ui.filter === 'tasks' ? (
+            <TasksPanel tag={ui.tag} onOpen={(id) => openNote(id)} toast={toast} />
+          ) : current ? (
             <NoteEditor
               key={current.note.id}
               initial={current.note}

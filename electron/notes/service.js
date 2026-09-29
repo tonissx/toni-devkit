@@ -8,19 +8,22 @@
  * aqui (IPC notes:create / notes:search). Import/export, sync e templates entrariam neste nível.
  */
 const { createStore } = require('./store.js');
-const { createNote, displayTitle, allTags, plainLine } = require('../../src/notes/note.js');
+const { createNote, displayTitle, allTags, plainLine, tasksOf, taskStats, toggleTaskAt } = require('../../src/notes/note.js');
 const { searchNotes } = require('../../src/notes/search.js');
 const { normalize } = require('../../src/commands/search.js');
 
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
 const VIEWED_MAX = 20;
+const INBOX_TITLE = 'Inbox'; // nota que recebe as tarefas capturadas pela palette (task: …)
 
 /** Resumo leve para listas (sem o conteúdo inteiro). */
 function summary(n) {
+  const { open, done } = taskStats(n.content);
   const preview = String(n.content || '').replace(/^(```|~~~).*$/gm, '').split('\n').map(plainLine).filter(Boolean).join(' · ');
   return {
     id: n.id, title: displayTitle(n), rawTitle: n.title, type: n.type, tags: allTags(n),
     pinned: n.pinned, favorite: n.favorite, quick: n.quick, created: n.created, updated: n.updated,
+    tasksOpen: open, tasksDone: done,
     preview: preview.length > 160 ? preview.slice(0, 159) + '…' : preview,
   };
 }
@@ -153,6 +156,50 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
       const count = new Map();
       for (const n of notes.values()) for (const t of allTags(n)) count.set(t, (count.get(t) || 0) + 1);
       return [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([tag, n]) => ({ tag, count: n }));
+    },
+
+    /**
+     * Tarefas de todas as notas (fora de código): [{ noteId, noteTitle, index, line, text, checked, due, priority, tags }].
+     * filter: { status: 'open' (padrão) | 'done' | 'all', tag }. Ordem: vencimento, prioridade, nota mais recente.
+     */
+    tasks({ status = 'open', tag } = {}) {
+      const out = [];
+      for (const n of notes.values()) {
+        if (n.type === 'snippet') continue;
+        const tags = allTags(n);
+        if (tag && !tags.includes(tag)) continue;
+        for (const t of tasksOf(n.content)) {
+          if (status === 'open' && t.checked) continue;
+          if (status === 'done' && !t.checked) continue;
+          out.push({ noteId: n.id, noteTitle: displayTitle(n), noteUpdated: n.updated, tags, ...t });
+        }
+      }
+      const rank = (v) => (v == null ? Infinity : v);
+      const due = (v) => v || '9999-99-99';
+      return out.sort((a, b) => due(a.due).localeCompare(due(b.due)) || rank(a.priority) - rank(b.priority)
+        || String(b.noteUpdated).localeCompare(String(a.noteUpdated)) || a.noteId.localeCompare(b.noteId) || a.index - b.index);
+    },
+
+    /** Marca/desmarca a n-ésima tarefa (índice de tasks()) da nota. */
+    async toggleTask(id, index) {
+      const n = notes.get(id);
+      if (!n) throw new Error('Nota não encontrada');
+      const content = toggleTaskAt(n.content, index);
+      if (content === n.content) return this.get(id);
+      return this.save({ id, content });
+    },
+
+    /** Captura rápida: acrescenta "- [ ] texto" à nota "Inbox" (criada se não existir). */
+    async appendTask(text) {
+      const line = String(text || '').replace(/\s*\n\s*/g, ' ').trim();
+      if (!line) throw new Error('Tarefa vazia');
+      const id = this.resolveLink(INBOX_TITLE);
+      const prev = id && notes.get(id);
+      const item = '- [ ] ' + line;
+      if (!prev) return this.create({ title: INBOX_TITLE, content: item + '\n' });
+      const body = String(prev.content || '');
+      const sep = !body || body.endsWith('\n') ? '' : '\n';
+      return this.save({ id: prev.id, content: body + sep + item + '\n' });
     },
 
     flush: () => store.flush(),
