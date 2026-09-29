@@ -5,6 +5,7 @@ import { createNote } from '../../notes/note.js';
 import { normalize } from '../../commands/search.js';
 import { NoteEditor } from './NoteEditor.jsx';
 import { TasksPanel } from './TasksPanel.jsx';
+import { TrashPanel } from './TrashPanel.jsx';
 import { FolderRow, useFolderDnD, NOTE_DRAG } from './FolderTree.jsx';
 import { NameModal, DeleteFolderModal, MoveNoteModal } from './FolderDialogs.jsx';
 import { buildTree, flattenTree, joinPath, baseName, isDescendant } from '../../notes/folders.js';
@@ -20,6 +21,7 @@ const FILTERS = [
   { id: 'favorite', label: 'Favoritas', filter: { favorite: true } },
   { id: 'recent', label: 'Recentes', filter: null },
   { id: 'tasks', label: 'Tarefas', filter: null }, // painel próprio (TasksPanel) no lugar do editor
+  { id: 'trash', label: 'Lixeira', filter: null }, // painel próprio (TrashPanel) no lugar do editor
 ];
 
 /** Caminho de pasta depois de `from` virar `to` (a própria pasta ou qualquer subpasta). */
@@ -105,7 +107,7 @@ export function NotesScreen({ toast, request }) {
   const resolve = React.useCallback((title) => titleMap.get(normalize(title).trim()) || null, [titleMap]);
 
   // Abrir/criar uma nota sai do painel Tarefas (que ocupa o lugar do editor).
-  const leaveTasks = (u) => (u.filter === 'tasks' ? { ...u, filter: 'all' } : u);
+  const leaveTasks = (u) => (u.filter === 'tasks' || u.filter === 'trash' ? { ...u, filter: 'all' } : u);
 
   const openNote = React.useCallback(async (id, focus) => {
     const note = await notesApi().get(id);
@@ -149,7 +151,7 @@ export function NotesScreen({ toast, request }) {
     try {
       const snap = await notesApi().get(note.id);
       await notesApi().remove(note.id);
-      armUndo({ kind: 'note', snap, label: 'Nota excluída (movida para .trash)' });
+      armUndo({ kind: 'note', snap, label: 'Nota movida para a Lixeira' });
       setCurrent(null);
       setUi((u) => ({ ...u, selectedId: null }));
     } catch (e) { toast('Erro ao excluir', cleanError(e), 'error'); }
@@ -191,7 +193,7 @@ export function NotesScreen({ toast, request }) {
   };
   const deleteFolder = (path) => guard(async () => {
     const snap = await notesApi().removeFolder(path);
-    armUndo({ kind: 'folder', snap, label: `Pasta “${baseName(path)}” excluída (${snap.notes.length} ${snap.notes.length === 1 ? 'nota' : 'notas'} em .trash)` });
+    armUndo({ kind: 'folder', snap, label: `Pasta “${baseName(path)}” excluída (${snap.notes.length} ${snap.notes.length === 1 ? 'nota' : 'notas'} na Lixeira)` });
     if (current && snap.notes.some((n) => n.id === current.note.id)) { setCurrent(null); setUi((u) => ({ ...u, selectedId: null })); }
     setUi((u) => (typeof u.folder === 'string' && (u.folder === path || isDescendant(u.folder, path)) ? { ...u, folder: null } : u));
   });
@@ -439,6 +441,8 @@ export function NotesScreen({ toast, request }) {
         <section className="nts__main">
           {ui.filter === 'tasks' ? (
             <TasksPanel tag={ui.tag} onOpen={(id) => openNote(id)} toast={toast} />
+          ) : ui.filter === 'trash' ? (
+            <TrashPanel onOpen={(id) => openNote(id)} toast={toast} />
           ) : current ? (
             <NoteEditor
               key={current.note.id}

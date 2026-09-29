@@ -156,6 +156,13 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
 - **Links entre notas**: digitar `[[` abre sugestões de notas (↑/↓, `Enter`/`Tab` completa, `Esc` fecha; "Nova nota: …"
   quando nada casa). Abaixo do editor, **Mencionada em (N)** lista as notas que apontam para a aberta (por título ou
   alias), com a linha do link. Ao trocar o título, o Devkit oferece atualizar os `[[links]]` que usavam o nome antigo
+- **Versões anteriores** (ícone de relógio no editor): ao editar, o Devkit guarda a versão de antes — no máximo uma a
+  cada 10 min por nota, as 50 mais recentes, em `Devkit Notes\.devkit\history\`. O painel mostra a lista e o diff
+  da versão para a atual (mesmo motor do Diff Checker); **Restaurar** volta título e conteúdo, e o estado atual vira
+  uma versão (dá para voltar atrás)
+- **Lixeira** (filtro na lateral): notas excluídas, mais recentes primeiro, com a pasta de origem e o conteúdo.
+  **Restaurar** (ou duplo clique) volta para a pasta onde estava, recriada se preciso · **Excluir de vez** e
+  **Esvaziar lixeira** pedem confirmação e apagam também o histórico da nota. Continua sendo a pasta `.trash\`
 - **Colar e formatar**, no editor e na Quick Note:
   - Imagem (print com `Win+Shift+S`, "Copiar imagem" do navegador) ou arquivo de imagem arrastado → gravada em
     `Devkit Notes\.assets\` e inserida como `![imagem](.assets/…)`; o preview mostra a imagem e o clique abre no

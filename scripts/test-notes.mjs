@@ -202,6 +202,107 @@ test('service: backlinks, linkRefs and renameLinks keep [[links]] connected', as
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('service: history keeps the previous version at most once per gap, restoreVersion is itself undoable', async () => {
+  const dir = tmp();
+  try {
+    let svc = createNotesService({ dir, historyGapMs: 60 * 60 * 1000 });
+    await svc.init();
+    const n = await svc.create({ title: 'SQL', content: 'v1' });
+    assert.deepEqual(await svc.history(n.id), []);                  // nota nova: nada a guardar
+    await svc.save({ id: n.id, content: 'v2' });                    // guarda v1
+    await svc.save({ id: n.id, content: 'v3' });                    // dentro do intervalo: não guarda v2
+    await svc.save({ id: n.id, pinned: true });                     // só metadado: não guarda
+    let h = await svc.history(n.id);
+    assert.equal(h.length, 1);
+    assert.equal((await svc.version(n.id, h[0].stamp)).content, 'v1');
+    assert.equal(h[0].title, 'SQL');
+    assert.equal(h[0].chars, 2);
+
+    // Intervalo zero: toda mudança guarda a anterior.
+    svc = createNotesService({ dir, historyGapMs: 0 });
+    await svc.init();
+    await new Promise((r) => setTimeout(r, 5));
+    await svc.save({ id: n.id, title: 'SQL 2', content: 'v4' });    // guarda v3
+    h = await svc.history(n.id);
+    assert.deepEqual(await Promise.all(h.map(async (v) => (await svc.version(n.id, v.stamp)).content)), ['v3', 'v1']);
+
+    await new Promise((r) => setTimeout(r, 5));
+    const back = await svc.restoreVersion(n.id, h[1].stamp);        // volta para v1 (título "SQL")
+    assert.equal(back.content, 'v1');
+    assert.equal(back.title, 'SQL');
+    h = await svc.history(n.id);
+    assert.equal((await svc.version(n.id, h[0].stamp)).content, 'v4'); // o estado de antes virou versão
+    await assert.rejects(svc.version(n.id, '../../x'), /inválida/);
+    assert.ok(!existsSync(path.join(dir, '.devkit', 'history', n.id, '..', '..', 'x.md')));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('service: trash lists deleted notes, restores to the original folder, deletes forever and empties', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir, historyGapMs: 0 });
+    await svc.init();
+    await svc.createFolder('Trabalho');
+    await svc.createFolder('Trabalho/Fluig');
+    const a = await svc.create({ title: 'Dataset', content: 'usar DatasetFactory', folder: 'Trabalho/Fluig' });
+    const b = await svc.create({ title: 'Solta', content: 'raiz' });
+    await svc.save({ id: b.id, content: 'raiz 2' });               // gera histórico para b
+    const c = await svc.create({ title: 'Desfeita', content: 'x' });
+
+    await svc.remove(a.id);
+    await svc.remove(b.id);
+    const snapC = svc.get(c.id);
+    await svc.remove(c.id);
+    await svc.restore(snapC);                                       // desfazer tira a cópia da lixeira
+    let t = await svc.trashList();
+    assert.deepEqual(t.map((x) => x.title).sort(), ['Dataset', 'Solta']);
+    const itemA = t.find((x) => x.title === 'Dataset');
+    assert.equal(itemA.folder, 'Trabalho/Fluig');
+    assert.equal(itemA.content, 'usar DatasetFactory');
+    assert.equal(itemA.exists, false);
+    assert.ok(Date.now() - Date.parse(itemA.deletedAt) < 60000);   // mtime = hora da exclusão
+
+    // Restaurar com a pasta apagada no meio do caminho: ela é recriada.
+    await svc.removeFolder('Trabalho');
+    const restored = await svc.restoreFromTrash(itemA.file);
+    assert.equal(restored.id, a.id);
+    assert.equal(restored.folder, 'Trabalho/Fluig');
+    assert.ok(existsSync(path.join(dir, 'Trabalho', 'Fluig', a.id + '.md')));
+    assert.ok(svc.folders().some((f) => f.path === 'Trabalho/Fluig'));
+
+    // Cópia antiga na lixeira com o id de uma nota que existe → volta como cópia com id novo.
+    const stale = (await svc.trashList()).length;
+    const file = trashCopyOf(dir, restored);
+    const staleItem = (await svc.trashList()).find((x) => x.file === file);
+    assert.equal(staleItem.exists, true);
+    assert.equal((await svc.trashList()).length, stale + 1);
+    const dup = await svc.restoreFromTrash(file);
+    assert.notEqual(dup.id, a.id);
+    assert.equal(dup.title, 'Dataset (restaurada)');
+    assert.equal(svc.get(a.id).title, 'Dataset');                   // a original não foi tocada
+
+    // Excluir de vez apaga também o histórico de quem só existia na lixeira.
+    const itemB = (await svc.trashList()).find((x) => x.id === b.id);
+    assert.ok(existsSync(path.join(dir, '.devkit', 'history', b.id)));
+    await svc.deleteFromTrash(itemB.file);
+    assert.ok(!existsSync(path.join(dir, '.devkit', 'history', b.id)));
+    await assert.rejects(svc.restoreFromTrash('../x.md'), /inválido/);
+
+    await svc.remove(c.id);
+    assert.ok((await svc.trashList()).length >= 1);
+    assert.ok((await svc.emptyTrash()) >= 1);
+    assert.deepEqual(await svc.trashList(), []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+/** Coloca em .trash uma cópia (mesmo id) de uma nota que continua existindo — como sobrava antes do "desfazer" limpar. */
+function trashCopyOf(dir, note) {
+  const { folder, tagsAll, ...clean } = note;
+  mkdirSync(path.join(dir, '.trash'), { recursive: true });
+  writeFileSync(path.join(dir, '.trash', 'copia-antiga.md'), serialize(N.createNote(clean)));
+  return 'copia-antiga.md';
+}
+
 test('service: saveImage writes to .assets (hidden from folders), validates type/size, resolves asset paths', async () => {
   const dir = tmp();
   try {

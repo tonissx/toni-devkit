@@ -94,6 +94,15 @@ contextBridge.exposeInMainWorld('devkit', {
     linkRefs: (title, exceptId) => ipcRenderer.invoke('notes:linkRefs', title, exceptId),
     /** [[from]] → [[to]] nas outras notas (depois de renomear) → número de notas alteradas. */
     renameLinks: (from, to, exceptId) => ipcRenderer.invoke('notes:renameLinks', from, to, exceptId),
+    /** Histórico: versões anteriores [{ stamp, at, title, chars }] · uma versão · voltar para ela. */
+    history: (id) => ipcRenderer.invoke('notes:history', id),
+    version: (id, stamp) => ipcRenderer.invoke('notes:version', id, stamp),
+    restoreVersion: (id, stamp) => ipcRenderer.invoke('notes:restoreVersion', id, stamp),
+    /** Lixeira: itens [{ file, id, title, folder, deletedAt, content, preview, exists }] e operações. */
+    trashList: () => ipcRenderer.invoke('notes:trashList'),
+    restoreFromTrash: (file) => ipcRenderer.invoke('notes:restoreFromTrash', file),
+    deleteFromTrash: (file) => ipcRenderer.invoke('notes:deleteFromTrash', file),
+    emptyTrash: () => ipcRenderer.invoke('notes:emptyTrash'),
     tags: () => ipcRenderer.invoke('notes:tags'),
     /** Tarefas ("- [ ]") de todas as notas: { status: 'open'|'done'|'all', tag }. */
     tasks: (filter) => ipcRenderer.invoke('notes:tasks', filter),

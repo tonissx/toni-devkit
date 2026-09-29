@@ -84,8 +84,9 @@ export function useAutosave(initial, { isNew = false, delay = 400, onSaved } = {
     notesApi().get(s.note.id).then((fresh) => {
       if (!fresh || s.dirty || s.inflight) return;
       const folder = fresh.folder || '';
-      if (fresh.content === s.note.content && folder === (s.note.folder || '')) return;
-      s.note = { ...s.note, content: fresh.content, updated: fresh.updated, folder };
+      if (fresh.content === s.note.content && fresh.title === s.note.title && folder === (s.note.folder || '')) return;
+      // Título também (restaurar uma versão pode trocá-lo).
+      s.note = { ...s.note, content: fresh.content, title: fresh.title, updated: fresh.updated, folder };
       setNote(s.note);
     }).catch(() => {});
   }), []);
