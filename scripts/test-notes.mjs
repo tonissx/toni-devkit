@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
@@ -107,6 +107,28 @@ test('edit: "[] "/"todo " become a task and @hoje/@amanha become dates', () => {
   assert.equal(ex('- [ ] pagar @hoje', 17, now).value, '- [ ] pagar @2026-10-31 ');
   assert.equal(ex('- [ ] pagar @amanha', 19, now).value, '- [ ] pagar @2026-11-01 ');
   assert.equal(ex('a@hoje', 6, now), null);
+});
+
+test('folders: name validation (Windows-safe), path helpers and tree', () => {
+  const F = require('../src/notes/folders.js');
+  for (const ok of ['Trabalho', 'Fluig 2026', 'ação_1', 'a.b']) assert.equal(F.validFolderName(ok), null, ok);
+  for (const bad of ['', '  ', ' x', 'x ', 'a/b', 'a\\b', 'a:b', 'a*', 'a?', 'a<b', '.oculta', '.trash', 'x.', 'CON', 'nul.txt', 'com1', 'a'.repeat(81)]) {
+    assert.ok(F.validFolderName(bad), JSON.stringify(bad));
+  }
+  assert.equal(F.validFolderPath('a/b/c'), null);
+  assert.ok(F.validFolderPath('a/../b'));
+  assert.ok(F.validFolderPath('a/.trash'));
+  assert.equal(F.normFolder('\\a//b\\c/'), 'a/b/c');
+  assert.equal(F.folderOf('a/b/x.md'), 'a/b');
+  assert.equal(F.folderOf('x.md'), '');
+  assert.equal(F.baseName('a/b/x.md'), 'x.md');
+  assert.equal(F.parentOf('a'), '');
+  assert.equal(F.joinPath('a', '', 'b/c'), 'a/b/c');
+  assert.ok(F.isDescendant('a/b', 'a') && !F.isDescendant('a', 'a') && !F.isDescendant('ab', 'a') && F.isDescendant('a', ''));
+  const tree = F.buildTree([{ path: 'b/x', count: 2 }, { path: 'a', count: 1 }, { path: 'b', count: 0 }]);
+  assert.deepEqual(tree.map((n) => [n.path, n.count, n.total]), [['a', 1, 1], ['b', 0, 2]]);
+  assert.deepEqual(F.flattenTree(tree).map((n) => [n.path, n.depth]), [['a', 0], ['b', 0], ['b/x', 1]]);
+  assert.deepEqual(F.buildTree([{ path: 'p/q', count: 1 }]).map((n) => [n.path, n.children[0].path]), [['p', 'p/q']]); // pai implícito
 });
 
 test('newId is sortable and file-safe', () => {
@@ -222,6 +244,63 @@ test('store: atomic write, load, concurrent writes keep the last, trash', async 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('store: loadAll recurses, lists empty folders, skips dot-dirs, and same file name in two folders is fine', async () => {
+  const dir = tmp();
+  try {
+    const st = createStore(dir);
+    const mk = (rel, text) => { mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true }); writeFileSync(path.join(dir, rel), text); };
+    mk('a.md', 'raiz');
+    mk('Trabalho/a.md', 'em pasta');
+    mk('Trabalho/Fluig/b.md', 'funda');
+    mk('.trash/lixo.md', 'não carrega');
+    mk('.git/x.md', 'não carrega');
+    mk('Trabalho/leia.txt', 'não é nota');
+    mkdirSync(path.join(dir, 'Vazia'));
+    const { notes, errors, folders } = await st.loadAll();
+    assert.deepEqual(errors, []);
+    assert.deepEqual(folders, ['Trabalho', 'Trabalho/Fluig', 'Vazia']);
+    assert.deepEqual(notes.map((n) => n.file).sort(), ['Trabalho/Fluig/b.md', 'Trabalho/a.md', 'a.md']);
+    assert.equal(new Set(notes.map((n) => n.id)).size, 3); // ids derivados do caminho não colidem
+    // write cria a subpasta; caminho fora da pasta das notas é recusado
+    const n = N.createNote({ title: 'X', content: 'x' });
+    await st.write({ ...n, file: 'Nova/Sub/' + n.id + '.md' });
+    assert.ok(existsSync(path.join(dir, 'Nova', 'Sub', n.id + '.md')));
+    assert.throws(() => st.write({ ...n, file: '../fora.md' }), /inválido|fora/);
+    assert.throws(() => st.write({ ...n, file: 'a/../../fora.md' }), /inválido|fora/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('store: move never overwrites, trash keeps the subfolder, folders can be created/renamed/removed', async () => {
+  const dir = tmp();
+  try {
+    const st = createStore(dir);
+    const a = N.createNote({ title: 'A', content: 'a' }), b = N.createNote({ title: 'B', content: 'b' });
+    await st.write({ ...a, file: 'a.md' });
+    await st.write({ ...b, file: 'P/a.md' });
+    // mover a.md (raiz) para P/a.md que já existe → P/a (2).md
+    assert.equal(await st.move({ ...a, file: 'a.md' }, 'P/a.md'), 'P/a (2).md');
+    assert.equal(readFileSync(path.join(dir, 'P', 'a (2).md'), 'utf8').includes('title: "A"'), true);
+    assert.ok(!existsSync(path.join(dir, 'a.md')));
+    assert.equal(await st.move({ ...a, file: 'P/a (2).md' }, 'P/a (2).md'), 'P/a (2).md'); // mesmo lugar: nada a fazer
+    await assert.rejects(st.move({ ...a, file: 'sumiu.md' }, 'Q/sumiu.md'), /não foi encontrado/);
+    // trash mantém a subpasta
+    await st.trash({ ...b, file: 'P/a.md' });
+    assert.ok(existsSync(path.join(dir, '.trash', 'P', 'a.md')));
+    // pastas
+    await st.mkdir('P/Sub');
+    await assert.rejects(st.mkdir('p/SUB'), /Já existe/); // sem diferenciar maiúsculas
+    await st.renameDir('P/Sub', 'P/Outra');
+    assert.ok(existsSync(path.join(dir, 'P', 'Outra')));
+    await st.mkdir('P/Dois');
+    await assert.rejects(st.renameDir('P/Outra', 'P/dois'), /Já existe/);
+    await st.renameDir('P/Outra', 'P/OUTRA'); // só maiúsculas: permitido
+    assert.ok(readdirSync(path.join(dir, 'P')).includes('OUTRA'));
+    assert.equal(await st.rmdir('P'), false); // ainda tem nota
+    assert.equal(await st.rmdir('P/OUTRA'), true);
+    assert.equal(await st.rmdir('naoexiste'), true);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('store: unreadable .md is skipped and reported, the rest loads', async () => {
   const dir = tmp();
   const fsp = require('node:fs/promises');
@@ -324,6 +403,84 @@ test('service: tasks aggregate (order, filters), toggleTask and appendTask to th
     assert.equal(inbox.content, '- [ ] revisar PR #42\n- [ ] segunda\n');
     assert.equal(svc.list().filter((n) => n.title === 'Inbox').length, 1);
     await assert.rejects(svc.appendTask('  '), /vazia/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('service: folders — create, new note in folder, move, rename/move folder, remove + undo, filter', async () => {
+  const dir = tmp();
+  try {
+    const events = [];
+    const svc = createNotesService({ dir, broadcast: (e) => events.push(e.type) });
+    await svc.init();
+    assert.deepEqual(svc.folders(), []);
+
+    await svc.createFolder('Trabalho');
+    await svc.createFolder('Trabalho/Fluig');
+    await assert.rejects(svc.createFolder('trabalho'), /Já existe/);       // sem diferenciar maiúsculas
+    await assert.rejects(svc.createFolder('Nada/Sub'), /não existe/);      // pai inexistente
+    await assert.rejects(svc.createFolder('a:b'), /caracteres/);
+    await assert.rejects(svc.createFolder('../fora'), /./);
+    assert.deepEqual(svc.folders(), [{ path: 'Trabalho', count: 0 }, { path: 'Trabalho/Fluig', count: 0 }]);
+
+    // nota nova dentro de uma pasta; pasta inexistente cai na raiz; nota existente ignora `folder`
+    const a = await svc.create({ title: 'A', content: 'a', folder: 'Trabalho/Fluig' });
+    const b = await svc.create({ title: 'B', content: 'b', folder: 'Inexistente' });
+    assert.equal(a.folder, 'Trabalho/Fluig');
+    assert.equal(a.file, 'Trabalho/Fluig/' + a.id + '.md');
+    assert.equal(b.folder, '');
+    await svc.save({ id: b.id, content: 'b2', folder: 'Trabalho' });
+    assert.equal(svc.get(b.id).folder, '');
+    assert.ok(existsSync(path.join(dir, 'Trabalho', 'Fluig', a.id + '.md')));
+
+    // filtro por pasta (exato) e resumo
+    assert.deepEqual(svc.list({ folder: 'Trabalho/Fluig' }).map((n) => n.id), [a.id]);
+    assert.deepEqual(svc.list({ folder: '' }).map((n) => n.id), [b.id]);
+    assert.equal(svc.list().find((n) => n.id === a.id).folder, 'Trabalho/Fluig');
+
+    // mover nota
+    await svc.moveNote(b.id, 'Trabalho');
+    assert.equal(svc.get(b.id).folder, 'Trabalho');
+    assert.ok(existsSync(path.join(dir, 'Trabalho', b.id + '.md')) && !existsSync(path.join(dir, b.id + '.md')));
+    await assert.rejects(svc.moveNote(b.id, 'Nao/existe'), /não existe/);
+    await assert.rejects(svc.moveNote('nope', ''), /não encontrada/);
+    await svc.moveNote(b.id, '');
+    assert.equal(svc.get(b.id).folder, '');
+    // auto-save depois de mover continua no lugar novo
+    await svc.save({ id: b.id, content: 'b3' });
+    assert.ok(existsSync(path.join(dir, b.id + '.md')));
+
+    // renomear e mover pasta atualizam as notas de dentro
+    await svc.renameFolder('Trabalho', 'Work');
+    assert.equal(svc.get(a.id).file, 'Work/Fluig/' + a.id + '.md');
+    assert.deepEqual(svc.folders().map((f) => f.path), ['Work', 'Work/Fluig']);
+    await svc.createFolder('Arquivo');
+    await assert.rejects(svc.moveFolder('Work', 'Work/Fluig'), /dentro dela mesma/);
+    await assert.rejects(svc.moveFolder('Work', 'Work'), /dentro dela mesma/);
+    await svc.moveFolder('Work/Fluig', 'Arquivo');
+    assert.equal(svc.get(a.id).file, 'Arquivo/Fluig/' + a.id + '.md');
+    assert.deepEqual(svc.list({ folder: 'Arquivo/Fluig' }).map((n) => n.id), [a.id]);
+    await assert.rejects(svc.renameFolder('Work', 'a/b'), /caracteres/);
+    // salvar depois do rename grava no caminho novo, não recria o antigo
+    await svc.save({ id: a.id, content: 'a2' });
+    assert.ok(existsSync(path.join(dir, 'Arquivo', 'Fluig', a.id + '.md')) && !existsSync(path.join(dir, 'Work', 'Fluig')));
+
+    // recarregar a pasta reconstrói tudo igual (inclusive pasta vazia)
+    await svc.flush();
+    const svc2 = createNotesService({ dir });
+    await svc2.init();
+    assert.deepEqual(svc2.folders().map((f) => [f.path, f.count]), [['Arquivo', 0], ['Arquivo/Fluig', 1], ['Work', 0]]);
+
+    // excluir pasta manda as notas para .trash com a estrutura, e dá para desfazer
+    const snap = await svc.removeFolder('Arquivo');
+    assert.equal(snap.notes.length, 1);
+    assert.deepEqual(snap.folders, ['Arquivo', 'Arquivo/Fluig']);
+    assert.equal(svc.get(a.id), null);
+    assert.ok(existsSync(path.join(dir, '.trash', 'Arquivo', 'Fluig', a.id + '.md')));
+    assert.ok(!existsSync(path.join(dir, 'Arquivo')));
+    await svc.restoreFolder(snap);
+    assert.equal(svc.get(a.id).file, 'Arquivo/Fluig/' + a.id + '.md');
+    assert.ok(svc.folders().some((f) => f.path === 'Arquivo/Fluig' && f.count === 1));
+    assert.ok(events.includes('folders'));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

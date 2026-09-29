@@ -1,10 +1,10 @@
 import { DS, mod, isMod } from '../../lib/ds.js';
-import { useAutosave, statusLabel, notesApi } from '../../notes/client.js';
+import { useAutosave, statusLabel, notesApi, cleanError } from '../../notes/client.js';
 import { displayTitle, inlineTags, normTag, snippetCode } from '../../notes/note.js';
 import { continueList, toggleTaskLines, expandOnSpace } from '../../notes/edit.js';
 import { NotePreview, SnippetCard } from './NotePreview.jsx';
 
-const { SegmentedControl, IconButton, Button, Alert, Kbd } = DS;
+const { SegmentedControl, IconButton, Button, Alert, Kbd, Select } = DS;
 
 const TYPE_OPTIONS = [
   { value: 'note', label: 'Nota' },
@@ -51,7 +51,7 @@ function TagsField({ tags, content, onChange }) {
 /**
  * Editor de uma nota. Monte com key={id}: trocar de nota desmonta e o auto-save grava o pendente.
  */
-export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOpenLink, onDelete, toast }) {
+export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOpenLink, onDelete, folderOptions = [], toast }) {
   const { note, update, status, error, flush } = useAutosave(initial, { isNew });
   const titleRef = React.useRef(null);
   const bodyRef = React.useRef(null);
@@ -64,6 +64,17 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
     const el = focus === 'title' ? titleRef.current : bodyRef.current;
     if (el) el.focus();
   }, []);
+
+  // Pasta: nota nova só guarda a escolha (o arquivo nasce lá no 1º save); nota gravada é movida no disco.
+  const moveTo = async (folder) => {
+    if (folder === (note.folder || '')) return;
+    if (isNew && status === 'idle') { update({ folder }); return; }
+    try {
+      if (!(await flush())) return; // erro de gravação já aparece no aviso do editor
+      const saved = await notesApi().moveNote(note.id, folder);
+      if (saved) toast('Nota movida', folder ? 'para ' + folder : 'para “Sem pasta”');
+    } catch (e) { toast('Não foi possível mover', cleanError(e), 'error'); }
+  };
 
   const copy = async (text) => {
     await window.devkit.clipboard.write(text);
@@ -160,6 +171,15 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
       </div>
       <div className="nts-editor__meta">
         <SegmentedControl size="sm" options={TYPE_OPTIONS} value={note.type} onChange={(type) => update({ type })} />
+        {folderOptions.length > 0 && (
+          <Select
+            size="sm"
+            className="nts-folder-select"
+            options={[{ value: '', label: 'Sem pasta', icon: 'inbox' }, ...folderOptions]}
+            value={note.folder || ''}
+            onChange={moveTo}
+          />
+        )}
         <TagsField tags={note.tags} content={note.content} onChange={(tags) => update({ tags })} />
         <input
           className="nts-aliases"

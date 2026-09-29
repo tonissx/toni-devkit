@@ -77,12 +77,15 @@ export function useAutosave(initial, { isNew = false, delay = 400, onSaved } = {
 
   // Alteração externa (palette "task: …", painel Tarefas): se não há nada pendente aqui, adota o
   // conteúdo novo — senão o próximo auto-save sobrescreveria a tarefa recém-adicionada.
+  // Também acompanha a pasta da nota (mover a nota, renomear ou mover a pasta dela).
   React.useEffect(() => notesApi().onChanged((evt) => {
     const s = r.current;
-    if (!evt || evt.type !== 'saved' || evt.id !== s.note.id || s.dirty || s.inflight) return;
-    notesApi().get(evt.id).then((fresh) => {
-      if (!fresh || s.dirty || s.inflight || fresh.content === s.note.content) return;
-      s.note = { ...s.note, content: fresh.content, updated: fresh.updated };
+    if (!evt || (evt.type !== 'folders' && (evt.type !== 'saved' || evt.id !== s.note.id)) || s.dirty || s.inflight) return;
+    notesApi().get(s.note.id).then((fresh) => {
+      if (!fresh || s.dirty || s.inflight) return;
+      const folder = fresh.folder || '';
+      if (fresh.content === s.note.content && folder === (s.note.folder || '')) return;
+      s.note = { ...s.note, content: fresh.content, updated: fresh.updated, folder };
       setNote(s.note);
     }).catch(() => {});
   }), []);

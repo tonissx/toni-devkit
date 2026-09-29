@@ -370,6 +370,7 @@ export function Palette() {
             <span className="pl-item__name"><Hl text={note.title} idx={note.titleIdx} />{note.pinned && <Icon name="pin" size={11} className="pl-item__pin" />}</span>
             <span className="pl-item__desc">{noteDesc(note, q)}</span>
           </span>
+          {note.folder && <span className="pl-item__tags" title={note.folder}><Icon name="folder" size={10} /> {note.folder.split('/').pop()}</span>}
           {note.tags.length > 0 && <span className="pl-item__tags">{note.tags.slice(0, 3).map((t) => '#' + t).join(' ')}</span>}
           {it.time && <span className="pl-item__time">{shortTime(it.time)}</span>}
           {!scope && q && <span className="pl-item__cat">{note.type === 'snippet' ? 'Snippet' : 'Note'}</span>}

@@ -153,6 +153,13 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   headings, listas, tabelas, citações, código com realce, checklists clicáveis e links internos `[[Título]]`
   (clicar abre a nota; se ela não existe, cria). Tags, aliases, pinned e favoritas; filtros Quick · Pinned ·
   Snippets · Favoritas · Recentes (editadas e vistas)
+- **Pastas** (subpastas ilimitadas): árvore **Pastas** na lateral, com `+` para criar. Cada pasta é um diretório
+  de verdade dentro de `Documentos\Devkit Notes`. A lista vira um explorador em cascata: clicar numa pasta abre as
+  subpastas e as notas dela, recuadas e com uma linha-guia leve (as notas soltas ficam no fim, em "Sem pasta"). A
+  última pasta clicada — ou a da nota aberta — é onde nascem as notas novas (aparece na barra acima da lista).
+  Com busca, filtro ou tag ativos a lista volta a ser plana. Mover: campo **Pasta** no editor, arrastar a nota (ou uma
+  pasta) até a pasta de destino, ou botão direito → **Mover para…**. Botão direito na pasta: Nova subpasta ·
+  Renomear · Excluir (as notas vão para `.trash\` e dá para desfazer)
 - **Tarefas** (`- [ ] texto`), sem digitar a sintaxe à mão:
   - No editor, `Enter` numa tarefa continua a lista (em tarefa vazia, sai dela) · `Ctrl+L` alterna a linha (ou as
     linhas selecionadas) entre texto → `- [ ]` → `- [x]` → texto · `[]` ou `todo` + espaço no começo da linha vira `- [ ] `
@@ -168,11 +175,15 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
 
 ### Armazenamento
 
-Um arquivo `.md` por nota em **`Documentos\Devkit Notes`**, com metadados simples no topo (front matter). Dá para
-abrir em qualquer editor, fazer backup copiando a pasta, versionar com git e sincronizar pelo OneDrive. A gravação é
-atômica (arquivo temporário + rename). Excluir move o arquivo para `.trash\`, nada é apagado de verdade. Os
-recentes vistos ficam em `.devkit\state.json`. O processo principal carrega todas as notas em memória na
-inicialização; a busca roda aí em milissegundos.
+Um arquivo `.md` por nota em **`Documentos\Devkit Notes`** ou numa subpasta dela (as pastas do app são diretórios
+reais), com metadados simples no topo (front matter). Dá para abrir em qualquer editor, fazer backup copiando a
+pasta, versionar com git e sincronizar pelo OneDrive. A gravação é atômica (arquivo temporário + rename). Excluir
+move o arquivo para `.trash\` (mantendo a subpasta), nada é apagado de verdade. Os recentes vistos ficam em
+`.devkit\state.json`. Pastas e arquivos cujo nome começa com `.` (`.trash`, `.devkit`, `.git`…) são ignorados. O
+processo principal carrega todas as notas em memória na inicialização; a busca roda aí em milissegundos.
+
+> Não há monitoramento de arquivos: criar, mover ou renomear pastas e notas **pelo Explorer** com o app aberto só
+> aparece depois de reiniciar o Devkit. Prefira organizar pelo próprio app.
 
 ```md
 ---
