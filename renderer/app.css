@@ -164,6 +164,11 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-title { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--tk-text); font: 600 18px/1.3 var(--tk-font-sans); }
 .nts-title::placeholder { color: var(--tk-text-3); font-weight: 500; }
 .nts-editor__tools { display: flex; align-items: center; gap: 2px; }
+/* Fixada = pin vermelho preenchido · favorita = estrela amarela preenchida */
+.nts-pin.is-active, .nts-fav.is-active { background: transparent; }
+.nts-pin.is-active { color: var(--tk-red); }
+.nts-fav.is-active { color: var(--tk-amber); }
+.nts-pin.is-active svg, .nts-fav.is-active svg { fill: currentColor; }
 .nts-status { font-size: 11.5px; color: var(--tk-text-3); margin-right: 6px; min-width: 64px; text-align: right; }
 .nts-status.is-saved { color: var(--tk-accent-text); }
 .nts-status.is-error { color: var(--tk-red); font-weight: 500; }
