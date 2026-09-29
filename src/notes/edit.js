@@ -147,4 +147,24 @@ function insertBlock(value, start, end, text) {
   return { value: before + ins + after, start: pos, end: pos };
 }
 
-module.exports = { continueList, toggleTaskLines, expandOnSpace, isoDate, insertBlock };
+/**
+ * Autocomplete de [[link]]: o cursor está logo depois de "[[texto" (sem "]]", "|" ou quebra de linha)?
+ * Devolve { start, query } — start = posição logo após "[[" — ou null (inclusive dentro de código).
+ */
+function linkQueryAt(value, pos) {
+  const [ls] = lineBounds(value, pos);
+  const m = /\[\[([^[\]\n|]*)$/.exec(value.slice(ls, pos));
+  if (!m || inFence(value, pos)) return null;
+  // Dentro de `código inline` (crases ímpares antes do "[[") não sugere.
+  if ((value.slice(ls, pos - m[0].length).match(/`/g) || []).length % 2) return null;
+  return { start: pos - m[1].length, query: m[1] };
+}
+
+/** Completa o link: troca value[start, pos) por "título]]", aproveitando um "]]" que já esteja logo depois. */
+function completeLink(value, start, pos, title) {
+  const rest = value.slice(pos).startsWith(']]') ? value.slice(pos + 2) : value.slice(pos);
+  const ins = title + ']]';
+  return { value: value.slice(0, start) + ins + rest, start: start + ins.length, end: start + ins.length };
+}
+
+module.exports = { continueList, toggleTaskLines, expandOnSpace, isoDate, insertBlock, linkQueryAt, completeLink };

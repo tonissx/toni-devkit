@@ -449,6 +449,7 @@ export function NotesScreen({ toast, request }) {
               setMode={(mode) => setUi((u) => ({ ...u, mode }))}
               resolve={resolve}
               onOpenLink={openLink}
+              onOpenNote={(id) => openNote(id)}
               onDelete={remove}
               folderOptions={folderOptions}
               toast={toast}

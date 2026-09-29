@@ -4,6 +4,9 @@ import { displayTitle, inlineTags, normTag, snippetCode } from '../../notes/note
 import { continueList, toggleTaskLines, expandOnSpace } from '../../notes/edit.js';
 import { imageDropProps } from '../../notes/images.js';
 import { NotePreview, SnippetCard } from './NotePreview.jsx';
+import { useLinkSuggest } from './LinkSuggest.jsx';
+import { Backlinks } from './Backlinks.jsx';
+import { normalize } from '../../commands/search.js';
 
 const { SegmentedControl, IconButton, Button, Alert, Kbd, Select } = DS;
 
@@ -52,10 +55,12 @@ function TagsField({ tags, content, onChange }) {
 /**
  * Editor de uma nota. Monte com key={id}: trocar de nota desmonta e o auto-save grava o pendente.
  */
-export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOpenLink, onDelete, folderOptions = [], toast }) {
+export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOpenLink, onOpenNote, onDelete, folderOptions = [], toast }) {
   const { note, update, status, error, flush } = useAutosave(initial, { isNew });
   const titleRef = React.useRef(null);
   const bodyRef = React.useRef(null);
+  const titleBefore = React.useRef(null);                  // título exibido quando o campo ganhou foco
+  const [renameOffer, setRenameOffer] = React.useState(null); // { from, to, count }
   const title = displayTitle(note);
 
   React.useEffect(() => {
@@ -88,9 +93,34 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
     requestAnimationFrame(() => { t.selectionStart = r.start; t.selectionEnd = r.end; });
   };
 
+  // Autocomplete de [[link]] no corpo.
+  const suggest = useLinkSuggest({ taRef: bodyRef, noteId: note.id, apply: applyEdit });
+
+  // Renomear: se outras notas apontavam para o título antigo, oferece atualizar os [[links]] delas.
+  const onTitleBlur = async () => {
+    const from = titleBefore.current, to = displayTitle(note);
+    titleBefore.current = null;
+    if (!from || normalize(from) === normalize(to) || to === 'Sem título' || (isNew && status === 'idle')) return;
+    try {
+      if (!(await flush())) return;
+      const count = await notesApi().linkRefs(from, note.id);
+      if (count) setRenameOffer({ from, to, count });
+    } catch { /* só uma sugestão: sem ela, nada quebra */ }
+  };
+  const applyRename = async () => {
+    const r = renameOffer;
+    setRenameOffer(null);
+    try {
+      if (!(await flush())) return;
+      const n = await notesApi().renameLinks(r.from, r.to, note.id);
+      toast('Links atualizados', n ? `${n} ${n === 1 ? 'nota agora aponta' : 'notas agora apontam'} para “${r.to}”` : 'Nada a mudar — o título antigo ainda é usado por outra nota ou alias');
+    } catch (e) { toast('Não foi possível atualizar os links', cleanError(e), 'error'); }
+  };
+
   const onBodyKey = (e) => {
     const t = e.target;
     if (e.nativeEvent.isComposing) return;
+    if (suggest.onKey(e)) return;
     // Tarefas: Enter continua "- [ ]" · Ctrl/⌘+L alterna texto/tarefa/feita · "[]␣"/"todo␣"/"@hoje␣" expandem.
     let r = null;
     if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !isMod(e) && t.selectionStart === t.selectionEnd) r = continueList(t.value, t.selectionStart);
@@ -124,20 +154,26 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
   });
 
   const editor = (
-    <textarea
-      ref={bodyRef}
-      className="nts-body tk-scroll"
-      value={note.content}
-      onChange={(e) => update({ content: e.target.value })}
-      onKeyDown={onBodyKey}
-      {...imageDropProps({
-        insert: (r) => applyEdit(bodyRef.current, r),
-        onError: (msg) => toast('Não foi possível adicionar a imagem', msg, 'error'),
-      })}
-      placeholder={'Escreva em Markdown…\n\n# Título\n```sql\nSELECT 1\n```\n- [ ] tarefa   #tag   [[Outra nota]]'}
-      spellCheck={false}
-      aria-label="Conteúdo da nota (Markdown)"
-    />
+    <div className="nts-body-wrap">
+      <textarea
+        ref={bodyRef}
+        className="nts-body tk-scroll"
+        value={note.content}
+        onChange={(e) => update({ content: e.target.value })}
+        onKeyDown={onBodyKey}
+        onSelect={suggest.sync}
+        onBlur={suggest.close}
+        onScroll={suggest.close}
+        {...imageDropProps({
+          insert: (r) => applyEdit(bodyRef.current, r),
+          onError: (msg) => toast('Não foi possível adicionar a imagem', msg, 'error'),
+        })}
+        placeholder={'Escreva em Markdown…\n\n# Título\n```sql\nSELECT 1\n```\n- [ ] tarefa   #tag   [[Outra nota]]'}
+        spellCheck={false}
+        aria-label="Conteúdo da nota (Markdown)"
+      />
+      {suggest.popup}
+    </div>
   );
   const preview = (
     <div className="nts-preview tk-scroll">
@@ -163,6 +199,8 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
           value={note.title}
           placeholder={note.title ? '' : (note.content.trim() ? title + '  (título automático)' : 'Sem título')}
           onChange={(e) => update({ title: e.target.value })}
+          onFocus={() => { titleBefore.current = displayTitle(note); }}
+          onBlur={onTitleBlur}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); bodyRef.current && bodyRef.current.focus(); } }}
           aria-label="Título (opcional)"
           spellCheck={false}
@@ -204,15 +242,24 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
           <Button size="sm" variant="secondary" icon="rotate-ccw" onClick={() => { update({}); flush(); }}>Tentar de novo</Button>
         </Alert>
       )}
+      {renameOffer && (
+        <Alert variant="info" title={`${renameOffer.count} ${renameOffer.count === 1 ? 'nota aponta' : 'notas apontam'} para “${renameOffer.from}”`}>
+          <span className="nts-error">Atualizar os [[links]] para “{renameOffer.to}”?</span>
+          <Button size="sm" variant="primary" icon="link" onClick={applyRename}>Atualizar links</Button>
+          <Button size="sm" variant="ghost" onClick={() => setRenameOffer(null)}>Agora não</Button>
+        </Alert>
+      )}
       <div className={'nts-editor__body is-' + mode}>
         {mode !== 'preview' && editor}
         {mode !== 'edit' && preview}
       </div>
+      {onOpenNote && <Backlinks noteId={note.id} onOpen={onOpenNote} />}
       <div className="nts-editor__foot">
         <span>Markdown</span>
         <span><Kbd size="sm">{mod('E')}</Kbd> editar/visualizar</span>
         <span><Kbd size="sm">{mod('L')}</Kbd> tarefa</span>
         <span><Kbd size="sm">{mod('V')}</Kbd> cola imagens</span>
+        <span><Kbd size="sm">[[</Kbd> link para nota</span>
         {note.type === 'snippet' && <span><Kbd size="sm">{mod('C', true)}</Kbd> copiar snippet</span>}
         <span className="nts-editor__spacer" />
         <span>{note.content.length} caracteres</span>

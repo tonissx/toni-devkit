@@ -8,7 +8,7 @@
  * aqui (IPC notes:create / notes:search). Import/export, sync e templates entrariam neste nível.
  */
 const { createStore } = require('./store.js');
-const { createNote, displayTitle, allTags, plainLine, tasksOf, taskStats, toggleTaskAt } = require('../../src/notes/note.js');
+const { createNote, displayTitle, allTags, plainLine, tasksOf, taskStats, toggleTaskAt, wikiLinks, replaceLinks, maskCode } = require('../../src/notes/note.js');
 const { searchNotes } = require('../../src/notes/search.js');
 const { validFolderPath, validFolderName, normFolder, folderOf, baseName, parentOf, joinPath, isDescendant } = require('../../src/notes/folders.js');
 const { normalize } = require('../../src/commands/search.js');
@@ -18,6 +18,7 @@ const VIEWED_MAX = 20;
 const INBOX_TITLE = 'Inbox'; // nota que recebe as tarefas capturadas pela palette (task: …)
 const IMAGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 const IMAGE_MAX = 20 * 1024 * 1024;
+const LINK_LINE_RE = /\[\[([^[\]\n|]+)(?:\|[^\]\n]+)?\]\]/g;
 
 /** Resumo leve para listas (sem o conteúdo inteiro). */
 function summary(n) {
@@ -49,6 +50,14 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
 
   /** Registra a pasta e todos os pais dela. */
   const addFolder = (p) => { for (let f = normFolder(p); f; f = parentOf(f)) folderSet.add(f); };
+  /** normalize(título exibido | alias) → id — mesmo critério (e precedência) de resolveLink. */
+  const titleIndex = () => {
+    const m = new Map();
+    for (const n of notes.values()) {
+      for (const k of [displayTitle(n), ...(n.aliases || [])].map((s) => normalize(s).trim())) if (k && !m.has(k)) m.set(k, n.id);
+    }
+    return m;
+  };
   const inFolder = (n, p) => folderOf(n.file) === p || isDescendant(folderOf(n.file), p);
   const err = (msg) => { throw new Error(msg); };
 
@@ -203,6 +212,56 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
       const count = new Map();
       for (const n of notes.values()) for (const t of allTags(n)) count.set(t, (count.get(t) || 0) + 1);
       return [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([tag, n]) => ({ tag, count: n }));
+    },
+
+    /* ─────────────── Links entre notas ─────────────── */
+
+    /**
+     * Notas que apontam para `id` com [[link]] (por título exibido ou alias):
+     * [{ id, title, folder, updated, line }] — line = a 1ª linha com o link, sem markdown. Mais recentes primeiro.
+     */
+    backlinks(id) {
+      if (!notes.has(id)) return [];
+      const index = titleIndex();
+      const out = [];
+      for (const n of notes.values()) {
+        if (n.id === id) continue;
+        const src = String(n.content || '');
+        const lines = src.split('\n');
+        const at = maskCode(src).split('\n').findIndex((l) => [...l.matchAll(LINK_LINE_RE)].some((m) => index.get(normalize(m[1]).trim()) === id));
+        if (at === -1) continue;
+        const line = plainLine(lines[at]);
+        out.push({ id: n.id, title: displayTitle(n), folder: folderOf(n.file), updated: n.updated, line: line.length > 140 ? line.slice(0, 139) + '…' : line });
+      }
+      return out.sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
+    },
+
+    /** Quantas notas (fora `exceptId`) têm [[title]] — para oferecer a atualização ao renomear. */
+    linkRefs(title, exceptId) {
+      const t = normalize(title).trim();
+      if (!t) return 0;
+      let count = 0;
+      for (const n of notes.values()) {
+        if (n.id !== exceptId && wikiLinks(n.content).some((l) => normalize(l).trim() === t)) count++;
+      }
+      return count;
+    },
+
+    /**
+     * Depois de renomear uma nota: [[from]] → [[to]] em todas as outras (mantendo rótulos).
+     * Não mexe em nada se `from` ainda resolve para alguma nota (ex.: virou alias). Devolve quantas notas mudaram.
+     */
+    async renameLinks(from, to, exceptId) {
+      if (!String(to || '').trim() || this.resolveLink(from)) return 0;
+      let changedCount = 0;
+      for (const n of [...notes.values()]) {
+        if (n.id === exceptId) continue;
+        const content = replaceLinks(n.content, from, to);
+        if (content === n.content) continue;
+        await this.save({ id: n.id, content });
+        changedCount++;
+      }
+      return changedCount;
     },
 
     /* ─────────────── Pastas ─────────────── */
