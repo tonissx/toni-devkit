@@ -267,7 +267,7 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
         <span>Markdown</span>
         <span><Kbd size="sm">{mod('E')}</Kbd> editar/visualizar</span>
         <span><Kbd size="sm">{mod('L')}</Kbd> tarefa</span>
-        <span title="Negrito · itálico · link (com seleção) · Ctrl+Shift+K código"><Kbd size="sm">{mod('B')}</Kbd> <Kbd size="sm">{mod('I')}</Kbd> <Kbd size="sm">{mod('K')}</Kbd> formatar</span>
+        <span title="Negrito · itálico · link (com seleção) · Ctrl+Shift+K código"><Kbd size="sm">{mod('B / I / K')}</Kbd> formatar</span>
         <span><Kbd size="sm">[[</Kbd> link para nota</span>
         {note.type === 'snippet' && <span><Kbd size="sm">{mod('C', true)}</Kbd> copiar snippet</span>}
         <span className="nts-editor__spacer" />
