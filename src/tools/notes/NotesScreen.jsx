@@ -256,7 +256,7 @@ export function NotesScreen({ toast, request }) {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, []);
+  }, [newNote]); // newNote muda com a pasta selecionada (Ctrl+N cria dentro dela)
 
   const noNotesAtAll = info && info.count === 0 && !current;
 
