@@ -130,6 +130,27 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-search input { min-width: 0; }
 .nts-filters, .nts-tagcloud { display: flex; flex-wrap: wrap; gap: 4px; }
 .nts-tagcloud { max-height: 56px; overflow: hidden; }
+/* Pastas (diretórios reais): árvore na sidebar, alvo de soltar notas/pastas, seletor no editor */
+.nts-folders { flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; }
+.nts-folders__head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 0 6px; font: 600 10.5px var(--tk-font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--tk-text-3); }
+.nts-folders__tree { max-height: 190px; overflow: auto; padding: 2px 0; }
+.nts-folder { display: flex; align-items: center; gap: 4px; height: 26px; padding-right: 8px; border-radius: var(--tk-radius-sm); border: 1px solid transparent; color: var(--tk-text-2); font-size: 12.5px; cursor: pointer; user-select: none; }
+.nts-folder:hover { background: var(--tk-surface-2); color: var(--tk-text); }
+.nts-folder.is-on { color: var(--tk-accent-text); background: color-mix(in srgb, var(--tk-accent) 10%, transparent); }
+.nts-folder.is-drop { border-color: var(--tk-accent); background: color-mix(in srgb, var(--tk-accent) 18%, transparent); color: var(--tk-text); }
+.nts-folder__chev { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; border: 0; background: none; color: var(--tk-text-3); cursor: pointer; flex-shrink: 0; }
+.nts-folder__chev.is-empty { visibility: hidden; cursor: default; }
+.nts-folder__icon { flex-shrink: 0; opacity: .85; }
+.nts-folder__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nts-folder__count { font: 400 10.5px var(--tk-font-mono); color: var(--tk-text-3); }
+.nts-row__folder { display: inline-flex; align-items: center; gap: 3px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tk-text-3); }
+.nts-folder-select { width: 150px; }
+.nts-dialog__error { margin-top: 8px; font-size: 12px; color: var(--tk-red); }
+.nts-move { display: flex; flex-direction: column; gap: 1px; max-height: 320px; overflow: auto; }
+.nts-move__item { display: flex; align-items: center; gap: 8px; height: 30px; padding-right: 10px; border: 0; border-radius: var(--tk-radius-sm); background: none; color: var(--tk-text-2); font: 400 13px var(--tk-font-sans); text-align: left; cursor: pointer; }
+.nts-move__item:hover { background: var(--tk-surface-3); color: var(--tk-text); }
+.nts-move__item.is-on { color: var(--tk-accent-text); }
+.nts-move__check { margin-left: auto; }
 .nts-chip {
   height: 22px; padding: 0 8px; border: 1px solid var(--tk-border); border-radius: 999px; cursor: pointer;
   background: transparent; color: var(--tk-text-3); font: 500 11.5px/1 var(--tk-font-sans);

@@ -6,6 +6,7 @@
  */
 const { normalize } = require('../commands/search.js');
 const { displayTitle, allTags, excerpt } = require('./note.js');
+const { folderOf } = require('./folders.js');
 
 // Campos normalizados por nota. As notas são imutáveis no serviço (salvar cria outro objeto),
 // então o cache por objeto nunca fica velho.
@@ -77,9 +78,10 @@ function scoreTerm(f, t) {
   return Math.max(s, k, ty, c) + (s && c ? 1 : 0);
 }
 
-/** Filtros: { quick, pinned, favorite, type, tag }. */
+/** Filtros: { quick, pinned, favorite, type, tag, folder } — folder: '' = raiz, 'a/b' = notas diretas dessa pasta. */
 function matchesFilter(note, flt) {
   if (!flt) return true;
+  if (flt.folder != null && folderOf(note.file) !== flt.folder) return false;
   if (flt.quick && !note.quick) return false;
   if (flt.pinned && !note.pinned) return false;
   if (flt.favorite && !note.favorite) return false;

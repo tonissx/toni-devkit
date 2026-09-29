@@ -5,9 +5,12 @@ import { createNote } from '../../notes/note.js';
 import { normalize } from '../../commands/search.js';
 import { NoteEditor } from './NoteEditor.jsx';
 import { TasksPanel } from './TasksPanel.jsx';
+import { FolderTree, NOTE_DRAG } from './FolderTree.jsx';
+import { NameModal, DeleteFolderModal, MoveNoteModal } from './FolderDialogs.jsx';
+import { buildTree, flattenTree, joinPath, baseName, isDescendant } from '../../notes/folders.js';
 import { emit } from '../../lib/events.js';
 
-const { PageHeader, Button, EmptyState, Icon, Kbd, Spinner } = DS;
+const { PageHeader, Button, EmptyState, Icon, Kbd, Spinner, ContextMenu } = DS;
 
 const FILTERS = [
   { id: 'all', label: 'Todas', filter: null },
@@ -18,6 +21,9 @@ const FILTERS = [
   { id: 'recent', label: 'Recentes', filter: null },
   { id: 'tasks', label: 'Tarefas', filter: null }, // painel próprio (TasksPanel) no lugar do editor
 ];
+
+/** Caminho de pasta depois de `from` virar `to` (a própria pasta ou qualquer subpasta). */
+const remapFolder = (p, from, to) => (p === from ? to : p != null && isDescendant(p, from) ? to + p.slice(from.length) : p);
 
 const rowIcon = (n) => (n.type === 'snippet' ? 'braces' : n.quick ? 'sticky-note' : 'file-text');
 
@@ -50,31 +56,39 @@ export function NotesScreen({ toast, request }) {
   const [info, setInfo] = React.useState(null);
   const [current, setCurrent] = React.useState(null);  // { note, isNew, focus }
   const [loadError, setLoadError] = React.useState(null);
-  const [deleted, setDeleted] = React.useState(null);  // última nota excluída (para desfazer)
+  const [deleted, setDeleted] = React.useState(null);  // última exclusão para desfazer: { kind: 'note'|'folder', snap, label }
+  const [folders, setFolders] = React.useState([]);     // [{ path, count }] (diretórios reais, inclusive vazios)
+  const [foldersUi, setFoldersUi] = usePersisted('notes.folders', { open: {} });
+  const [dialog, setDialog] = React.useState(null);      // { kind: 'create'|'rename'|'delete'|'move', … }
+  const [ctxMenu, setCtxMenu] = React.useState(null);    // { x, y, kind: 'folder'|'note', path?, note? }
   const searchRef = React.useRef(null);
   const listRef = React.useRef(null);
 
   const filterDef = FILTERS.find((f) => f.id === ui.filter) || FILTERS[0];
-  const filter = { ...(filterDef.filter || {}), ...(ui.tag ? { tag: ui.tag } : {}) };
+  const folderSel = typeof ui.folder === 'string' ? ui.folder : null; // null = todas as pastas · '' = sem pasta
+  const filter = { ...(filterDef.filter || {}), ...(ui.tag ? { tag: ui.tag } : {}), ...(folderSel != null ? { folder: folderSel } : {}) };
   const q = query.trim();
 
   const refresh = React.useCallback(async () => {
     try {
       const api = notesApi();
       const flt = Object.keys(filter).length ? filter : undefined;
-      const [list, all, tg, inf, rec] = await Promise.all([
+      const [list, all, tg, inf, rec, fld] = await Promise.all([
         q ? api.search(q, { filter: flt, limit: 200 }) : api.list(flt),
         api.list(),
         api.tags(),
         api.info(),
         ui.filter === 'recent' ? api.recent() : null,
+        api.folders(),
       ]);
-      setRows(list); setAllRows(all); setTags(tg); setInfo(inf); setRecent(rec); setLoadError(null);
+      setRows(list); setAllRows(all); setTags(tg); setInfo(inf); setRecent(rec); setFolders(fld); setLoadError(null);
+      // A pasta selecionada deixou de existir (apagada ou renomeada): volta para "todas".
+      if (typeof ui.folder === 'string' && ui.folder !== '' && !fld.some((f) => f.path === ui.folder)) setUi((u) => ({ ...u, folder: null }));
     } catch (e) {
       setLoadError(cleanError(e));
       setRows([]);
     }
-  }, [q, ui.filter, ui.tag]);
+  }, [q, ui.filter, ui.tag, ui.folder]);
 
   React.useEffect(() => { refresh(); }, [refresh]);
   React.useEffect(() => {
@@ -97,10 +111,11 @@ export function NotesScreen({ toast, request }) {
   }, []);
 
   const newNote = React.useCallback((title = '') => {
-    const note = createNote({ title });
+    // Dentro da pasta selecionada (a nota só vai para o disco quando tiver conteúdo).
+    const note = createNote({ title, ...(folderSel ? { folder: folderSel } : {}) });
     setCurrent({ note, isNew: true, focus: title ? 'body' : 'title' });
     setUi((u) => ({ ...leaveTasks(u), selectedId: note.id }));
-  }, []);
+  }, [folderSel]);
 
   // Abertura: recupera alterações que ficaram só no backup local e reabre a última nota.
   React.useEffect(() => {
@@ -121,22 +136,87 @@ export function NotesScreen({ toast, request }) {
     if (id) openNote(id); else { newNote(title); emit('note.linked'); }
   };
 
+  // Barra de desfazer (8 s) para a última exclusão: nota ou pasta.
+  const armUndo = (d) => { setDeleted(d); setTimeout(() => setDeleted((x) => (x === d ? null : x)), 8000); };
+
   const remove = async (note) => {
     try {
       const snap = await notesApi().get(note.id);
       await notesApi().remove(note.id);
-      setDeleted(snap);
+      armUndo({ kind: 'note', snap, label: 'Nota excluída (movida para .trash)' });
       setCurrent(null);
       setUi((u) => ({ ...u, selectedId: null }));
-      setTimeout(() => setDeleted((d) => (d && d.id === snap.id ? null : d)), 8000);
     } catch (e) { toast('Erro ao excluir', cleanError(e), 'error'); }
   };
   const undoDelete = async () => {
-    const snap = deleted;
+    const d = deleted;
     setDeleted(null);
-    await notesApi().restore(snap);
-    openNote(snap.id);
+    if (!d) return;
+    try {
+      if (d.kind === 'folder') await notesApi().restoreFolder(d.snap);
+      else { await notesApi().restore(d.snap); openNote(d.snap.id); }
+    } catch (e) { toast('Erro ao desfazer', cleanError(e), 'error'); }
   };
+
+  /* ─────────────── Pastas ─────────────── */
+  const guard = async (fn) => { try { await fn(); } catch (e) { toast('Não foi possível concluir', cleanError(e), 'error'); } };
+  const selectFolder = (path) => setUi((u) => ({ ...leaveTasks(u), folder: path }));
+  const expand = (path) => path && setFoldersUi((f) => ({ ...f, open: { ...f.open, [path]: true } }));
+  const toggleOpen = (path) => setFoldersUi((f) => ({ ...f, open: { ...f.open, [path]: !f.open[path] } }));
+  // Depois de renomear/mover `from` → `to`: a seleção e as pastas abertas acompanham.
+  const followRename = (from, to) => {
+    setUi((u) => ({ ...u, folder: remapFolder(typeof u.folder === 'string' ? u.folder : null, from, to) }));
+    setFoldersUi((f) => ({ ...f, open: Object.fromEntries(Object.entries(f.open).map(([k, v]) => [remapFolder(k, from, to), v])) }));
+  };
+  const moveNoteTo = (id, folder) => guard(async () => {
+    await notesApi().moveNote(id, folder);
+    toast('Nota movida', folder ? 'para ' + folder : 'para “Sem pasta”');
+  });
+  const moveFolderTo = (path, parent) => guard(async () => {
+    const to = await notesApi().moveFolder(path, parent);
+    followRename(path, to);
+    expand(parent);
+  });
+  const folderStats = (path) => {
+    const inside = folders.filter((f) => f.path === path || isDescendant(f.path, path));
+    return { notes: inside.reduce((s, f) => s + f.count, 0), subfolders: inside.length - 1 };
+  };
+  const deleteFolder = (path) => guard(async () => {
+    const snap = await notesApi().removeFolder(path);
+    armUndo({ kind: 'folder', snap, label: `Pasta “${baseName(path)}” excluída (${snap.notes.length} ${snap.notes.length === 1 ? 'nota' : 'notas'} em .trash)` });
+    if (current && snap.notes.some((n) => n.id === current.note.id)) { setCurrent(null); setUi((u) => ({ ...u, selectedId: null })); }
+    setUi((u) => (typeof u.folder === 'string' && (u.folder === path || isDescendant(u.folder, path)) ? { ...u, folder: null } : u));
+  });
+
+  const folderMenu = (path) => [
+    { id: 'sub', icon: 'folder-plus', label: 'Nova subpasta' },
+    { id: 'rename', icon: 'pencil', label: 'Renomear…' },
+    { separator: true },
+    { id: 'delete', icon: 'trash-2', label: 'Excluir…', danger: true },
+  ];
+  const noteMenu = (n) => [
+    { id: 'move', icon: 'folder-input', label: 'Mover para…' },
+    { id: 'pin', icon: 'pin', label: n.pinned ? 'Desafixar' : 'Fixar (Pinned)' },
+    { separator: true },
+    { id: 'delete', icon: 'trash-2', label: 'Excluir', danger: true },
+  ];
+  const onMenuSelect = (item) => {
+    const c = ctxMenu;
+    setCtxMenu(null);
+    if (!c) return;
+    if (c.kind === 'folder') {
+      if (item.id === 'sub') setDialog({ kind: 'create', parent: c.path });
+      else if (item.id === 'rename') setDialog({ kind: 'rename', path: c.path });
+      else if (item.id === 'delete') setDialog({ kind: 'delete', path: c.path });
+    } else if (item.id === 'move') setDialog({ kind: 'move', note: c.note });
+    else if (item.id === 'pin') guard(() => notesApi().save({ id: c.note.id, pinned: !c.note.pinned }));
+    else if (item.id === 'delete') remove(c.note);
+  };
+
+  const folderOptions = React.useMemo(
+    () => flattenTree(buildTree(folders)).map((f) => ({ value: f.path, label: '  '.repeat(f.depth) + f.name, icon: 'folder' })),
+    [folders]);
+  const rootCount = allRows.filter((r) => !r.folder).length;
 
   // Lista exibida (agrupada) e a ordem plana para navegar com ↑/↓.
   const groups = React.useMemo(() => {
@@ -147,13 +227,13 @@ export function NotesScreen({ toast, request }) {
         { title: 'Recently Viewed', items: recent.viewed.map((r) => ({ ...r, time: r.viewedAt })) },
       ].filter((g) => g.items.length);
     }
-    if (q || ui.filter !== 'all' || ui.tag) return [{ title: null, items: rows.map((r) => ({ ...r, time: r.updated })) }];
+    if (q || ui.filter !== 'all' || ui.tag || folderSel != null) return [{ title: null, items: rows.map((r) => ({ ...r, time: r.updated })) }];
     const pinned = rows.filter((r) => r.pinned);
     return [
       pinned.length && { title: '📌 Pinned', items: pinned.map((r) => ({ ...r, time: r.updated })) },
       { title: pinned.length ? 'Todas' : null, items: rows.filter((r) => !r.pinned).map((r) => ({ ...r, time: r.updated })) },
     ].filter((g) => g && g.items.length);
-  }, [rows, recent, q, ui.filter, ui.tag]);
+  }, [rows, recent, q, ui.filter, ui.tag, folderSel]);
   const flat = groups.flatMap((g) => g.items);
 
   const moveSel = (dir) => {
@@ -223,6 +303,18 @@ export function NotesScreen({ toast, request }) {
               ))}
             </div>
           )}
+          <FolderTree
+            folders={folders}
+            rootCount={rootCount}
+            selected={folderSel}
+            open={foldersUi.open || {}}
+            onSelect={selectFolder}
+            onToggle={toggleOpen}
+            onCreate={(parent) => setDialog({ kind: 'create', parent })}
+            onContext={(path, x, y) => setCtxMenu({ x, y, kind: 'folder', path })}
+            onDropNote={moveNoteTo}
+            onDropFolder={moveFolderTo}
+          />
 
           <div ref={listRef} className="nts-list tk-scroll" role="listbox" aria-label="Notas">
             {rows === null && <div className="nts-list__msg"><Spinner size={14} /> Carregando…</div>}
@@ -238,12 +330,20 @@ export function NotesScreen({ toast, request }) {
                 {g.items.map((r) => (
                   <div key={g.title + r.id} role="option" aria-selected={r.id === ui.selectedId}
                     className={'nts-row' + (r.id === ui.selectedId ? ' is-sel' : '')}
+                    draggable
+                    onDragStart={(e) => { e.dataTransfer.setData(NOTE_DRAG, r.id); e.dataTransfer.effectAllowed = 'move'; }}
+                    onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'note', note: r }); }}
                     onClick={() => openNote(r.id)}>
                     <Icon name={rowIcon(r)} size={14} className="nts-row__icon" />
                     <div className="nts-row__main">
                       <div className="nts-row__title"><Hl text={r.title} idx={r.titleIdx} />{r.tasksOpen + r.tasksDone > 0 && <span className="nts-row__tasks" title="Tarefas concluídas / total">☑ {r.tasksDone}/{r.tasksOpen + r.tasksDone}</span>}</div>
                       <div className="nts-row__sub"><Excerpt ex={q ? r.excerpt : null} fallback={r.preview} /></div>
-                      {r.tags.length > 0 && <div className="nts-row__tags">{r.tags.slice(0, 4).map((t) => <span key={t}>#{t}</span>)}</div>}
+                      {(r.tags.length > 0 || (r.folder && folderSel == null)) && (
+                        <div className="nts-row__tags">
+                          {r.folder && folderSel == null && <span className="nts-row__folder" title={r.folder}><Icon name="folder" size={10} /> {r.folder}</span>}
+                          {r.tags.slice(0, 4).map((t) => <span key={t}>#{t}</span>)}
+                        </div>
+                      )}
                     </div>
                     <span className="nts-row__time">{shortTime(r.time)}</span>
                   </div>
@@ -254,7 +354,7 @@ export function NotesScreen({ toast, request }) {
 
           {deleted && (
             <div className="nts-undo" role="status">
-              Nota excluída (movida para .trash)
+              {deleted.label}
               <Button size="sm" variant="ghost" icon="undo-2" onClick={undoDelete}>Desfazer</Button>
             </div>
           )}
@@ -282,6 +382,7 @@ export function NotesScreen({ toast, request }) {
               resolve={resolve}
               onOpenLink={openLink}
               onDelete={remove}
+              folderOptions={folderOptions}
               toast={toast}
             />
           ) : (
@@ -299,6 +400,56 @@ export function NotesScreen({ toast, request }) {
           )}
         </section>
       </div>
+
+      {ctxMenu && (
+        <ContextMenu
+          x={Math.min(ctxMenu.x, window.innerWidth - 230)}
+          y={Math.min(ctxMenu.y, window.innerHeight - 190)}
+          items={ctxMenu.kind === 'folder' ? folderMenu(ctxMenu.path) : noteMenu(ctxMenu.note)}
+          onSelect={onMenuSelect}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
+      {dialog && dialog.kind === 'create' && (
+        <NameModal
+          title={dialog.parent ? `Nova subpasta em “${baseName(dialog.parent)}”` : 'Nova pasta'}
+          description={dialog.parent || undefined}
+          confirmLabel="Criar"
+          onClose={() => setDialog(null)}
+          onSubmit={async (name) => {
+            const path = joinPath(dialog.parent, name);
+            await notesApi().createFolder(path);
+            expand(dialog.parent);
+            selectFolder(path);
+          }}
+        />
+      )}
+      {dialog && dialog.kind === 'rename' && (
+        <NameModal
+          title="Renomear pasta"
+          description={dialog.path}
+          initial={baseName(dialog.path)}
+          confirmLabel="Renomear"
+          onClose={() => setDialog(null)}
+          onSubmit={async (name) => followRename(dialog.path, await notesApi().renameFolder(dialog.path, name))}
+        />
+      )}
+      {dialog && dialog.kind === 'delete' && (
+        <DeleteFolderModal
+          name={baseName(dialog.path)}
+          {...(() => { const s = folderStats(dialog.path); return { notes: s.notes, subfolders: s.subfolders }; })()}
+          onClose={() => setDialog(null)}
+          onConfirm={() => deleteFolder(dialog.path)}
+        />
+      )}
+      {dialog && dialog.kind === 'move' && (
+        <MoveNoteModal
+          folders={folders}
+          current={dialog.note.folder || ''}
+          onClose={() => setDialog(null)}
+          onPick={(f) => moveNoteTo(dialog.note.id, f)}
+        />
+      )}
     </div>
   );
 }

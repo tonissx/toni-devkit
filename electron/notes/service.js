@@ -10,6 +10,7 @@
 const { createStore } = require('./store.js');
 const { createNote, displayTitle, allTags, plainLine, tasksOf, taskStats, toggleTaskAt } = require('../../src/notes/note.js');
 const { searchNotes } = require('../../src/notes/search.js');
+const { validFolderPath, validFolderName, normFolder, folderOf, baseName, parentOf, joinPath, isDescendant } = require('../../src/notes/folders.js');
 const { normalize } = require('../../src/commands/search.js');
 
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
@@ -23,7 +24,7 @@ function summary(n) {
   return {
     id: n.id, title: displayTitle(n), rawTitle: n.title, type: n.type, tags: allTags(n),
     pinned: n.pinned, favorite: n.favorite, quick: n.quick, created: n.created, updated: n.updated,
-    tasksOpen: open, tasksDone: done,
+    tasksOpen: open, tasksDone: done, folder: folderOf(n.file),
     preview: preview.length > 160 ? preview.slice(0, 159) + '…' : preview,
   };
 }
@@ -33,19 +34,49 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function createNotesService({ dir, broadcast = () => {}, events = null }) {
   const store = createStore(dir);
   const notes = new Map();
+  const folderSet = new Set(); // pastas existentes (diretórios reais, inclusive vazias): 'a', 'a/b'
   let viewed = []; // [{ id, at }]
   let loadErrors = [];
 
   const all = () => [...notes.values()];
   const changed = (type, id) => broadcast({ type, id });
 
+  // Mutações em fila: um auto-save em voo nunca recria o caminho antigo no meio de um rename/mover.
+  let chain = Promise.resolve();
+  const serial = (fn) => { const run = chain.then(fn); chain = run.catch(() => {}); return run; };
+
+  /** Registra a pasta e todos os pais dela. */
+  const addFolder = (p) => { for (let f = normFolder(p); f; f = parentOf(f)) folderSet.add(f); };
+  const inFolder = (n, p) => folderOf(n.file) === p || isDescendant(folderOf(n.file), p);
+  const err = (msg) => { throw new Error(msg); };
+
+  /** Valida uma pasta de destino existente ('' = raiz); devolve o caminho normalizado. */
+  function existingFolder(p) {
+    const f = normFolder(p);
+    if (f) { const e = validFolderPath(f); if (e) err(e); if (!folderSet.has(f)) err('A pasta não existe.'); }
+    return f;
+  }
+
+  /** Renomeia/move o diretório `from` para `to` e ajusta pastas e notas em memória. */
+  async function relocate(from, to) {
+    if (!folderSet.has(from)) err('A pasta não existe.');
+    if (from === to) return;
+    await store.renameDir(from, to);
+    const re = (p) => to + p.slice(from.length);
+    for (const f of [...folderSet]) if (f === from || f.startsWith(from + '/')) { folderSet.delete(f); folderSet.add(re(f)); }
+    for (const n of [...notes.values()]) if (n.file && n.file.startsWith(from + '/')) notes.set(n.id, { ...n, file: re(n.file) });
+    changed('folders');
+  }
+
   return {
     dir,
     store,
 
     async init() {
-      const { notes: list, errors } = await store.loadAll();
+      const { notes: list, errors, folders } = await store.loadAll();
       loadErrors = errors;
+      folderSet.clear();
+      for (const f of folders || []) addFolder(f);
       for (const n of list) {
         const prev = notes.get(n.id);
         // Dois arquivos com o mesmo id (cópia manual): mantém o mais recente e avisa.
@@ -54,6 +85,7 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
           if (String(prev.updated) >= String(n.updated)) continue;
         }
         notes.set(n.id, n);
+        addFolder(folderOf(n.file));
       }
       const st = await store.readState();
       viewed = Array.isArray(st.viewed) ? st.viewed.filter((v) => notes.has(v.id)) : [];
@@ -68,14 +100,16 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
 
     get(id) {
       const n = notes.get(id);
-      return n ? { ...n, tagsAll: allTags(n) } : null;
+      return n ? { ...n, tagsAll: allTags(n), folder: folderOf(n.file) } : null;
     },
 
     /**
      * Cria ou atualiza. Só os campos editáveis vêm do renderer; id/created/file/extra são preservados.
      * Nota nova e vazia não é gravada (Quick Note aberta e fechada sem digitar).
      */
-    async save(input) {
+    save(input) { return serial(() => this._save(input)); },
+
+    async _save(input) {
       if (!input || !input.id) throw new Error('Nota sem id');
       const prev = notes.get(input.id);
       const patch = {};
@@ -86,6 +120,11 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
       // Dar um título promove a Quick Note a Note.
       if (String(next.title).trim()) next.quick = false;
       next.file = base.file;
+      // Nota nova pode nascer dentro de uma pasta (só existente); nota existente ignora `folder`.
+      if (!prev) {
+        const f = normFolder(input.folder);
+        if (f && folderSet.has(f)) next.file = f + '/' + next.id + '.md';
+      }
       if (base.extra) next.extra = base.extra;
       if (prev && EDITABLE.every((k) => same(prev[k], next[k]))) return this.get(prev.id);
       next.updated = new Date().toISOString();
@@ -105,23 +144,29 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
       return this.save(createNote(fields));
     },
 
-    async remove(id) {
-      const n = notes.get(id);
-      if (!n) return false;
-      await store.trash(n);
-      notes.delete(id);
-      viewed = viewed.filter((v) => v.id !== id);
-      changed('removed', id);
-      return true;
+    remove(id) {
+      return serial(async () => {
+        const n = notes.get(id);
+        if (!n) return false;
+        await store.trash(n);
+        notes.delete(id);
+        viewed = viewed.filter((v) => v.id !== id);
+        changed('removed', id);
+        return true;
+      });
     },
 
     /** Desfazer exclusão: grava de novo a nota (o arquivo da lixeira fica como cópia). */
-    async restore(note) {
+    restore(note) { return serial(() => this._restore(note)); },
+
+    async _restore(note) {
       if (!note || !note.id) return null;
-      const n = createNote({ ...note });
+      const { folder, tagsAll, ...clean } = note; // campos derivados de get()
+      const n = createNote({ ...clean });
       n.file = note.file || n.id + '.md';
-      await store.write(n);
+      await store.write(n); // recria a subpasta se ela não existir mais
       notes.set(n.id, n);
+      addFolder(folderOf(n.file));
       changed('saved', n.id);
       return this.get(n.id);
     },
@@ -156,6 +201,108 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
       const count = new Map();
       for (const n of notes.values()) for (const t of allTags(n)) count.set(t, (count.get(t) || 0) + 1);
       return [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([tag, n]) => ({ tag, count: n }));
+    },
+
+    /* ─────────────── Pastas ─────────────── */
+
+    /** Todas as pastas (inclusive vazias): [{ path, count }] — count = notas diretas. */
+    folders() {
+      const count = new Map();
+      for (const n of notes.values()) { const f = folderOf(n.file); count.set(f, (count.get(f) || 0) + 1); }
+      return [...folderSet].sort().map((path) => ({ path, count: count.get(path) || 0 }));
+    },
+
+    createFolder(path) {
+      return serial(async () => {
+        const p = normFolder(path);
+        if (!p) err('Digite um nome para a pasta.');
+        const e = validFolderPath(p);
+        if (e) err(e);
+        if (parentOf(p)) existingFolder(parentOf(p));
+        await store.mkdir(p);
+        addFolder(p);
+        changed('folders');
+        return p;
+      });
+    },
+
+    /** Renomeia a pasta (só o último segmento). Devolve o novo caminho. */
+    renameFolder(path, newName) {
+      return serial(async () => {
+        const from = existingFolder(path);
+        if (!from) err('Escolha uma pasta.');
+        const e = validFolderName(newName);
+        if (e) err(e);
+        const to = joinPath(parentOf(from), newName);
+        await relocate(from, to);
+        return to;
+      });
+    },
+
+    /** Move a pasta (com tudo dentro) para dentro de `newParent` ('' = raiz). Devolve o novo caminho. */
+    moveFolder(path, newParent) {
+      return serial(async () => {
+        const from = existingFolder(path);
+        if (!from) err('Escolha uma pasta.');
+        const parent = existingFolder(newParent);
+        if (parent === from || isDescendant(parent, from)) err('Não dá para mover uma pasta para dentro dela mesma.');
+        const to = joinPath(parent, baseName(from));
+        await relocate(from, to);
+        return to;
+      });
+    },
+
+    /** Move uma nota para a pasta `folder` ('' = raiz). */
+    moveNote(id, folder) {
+      return serial(async () => {
+        const n = notes.get(id);
+        if (!n) err('Nota não encontrada.');
+        const dest = existingFolder(folder);
+        const cur = n.file || n.id + '.md';
+        if (folderOf(cur) === dest) return this.get(id);
+        const rel = await store.move(n, joinPath(dest, baseName(cur)));
+        notes.set(id, { ...n, file: rel }); // novo objeto: o cache de busca é por objeto
+        changed('saved', id);
+        return this.get(id);
+      });
+    },
+
+    /**
+     * Exclui a pasta: as notas vão para .trash\ (mantendo a estrutura) e os diretórios vazios somem.
+     * Devolve { notes, folders } para desfazer com restoreFolder.
+     */
+    removeFolder(path) {
+      return serial(async () => {
+        const p = existingFolder(path);
+        if (!p) err('Escolha uma pasta.');
+        const doomed = [...notes.values()].filter((n) => inFolder(n, p));
+        const snapshots = doomed.map((n) => this.get(n.id));
+        for (const n of doomed) {
+          await store.trash(n);
+          notes.delete(n.id);
+        }
+        viewed = viewed.filter((v) => notes.has(v.id));
+        const dirs = [...folderSet].filter((f) => f === p || f.startsWith(p + '/')).sort((a, b) => b.length - a.length);
+        const removed = [];
+        for (const f of dirs) if (await store.rmdir(f)) { folderSet.delete(f); removed.push(f); }
+        changed('folders');
+        return { notes: snapshots, folders: removed.sort() };
+      });
+    },
+
+    /** Desfaz removeFolder: recria as pastas e regrava as notas. */
+    restoreFolder(snap) {
+      return serial(async () => {
+        if (!snap) return false;
+        for (const f of snap.folders || []) {
+          if (validFolderPath(f)) continue;
+          await store.mkdir(f).catch(() => {}); // já existir não é problema
+          addFolder(f);
+        }
+        for (const note of snap.notes || []) await this._restore(note);
+        changed('folders');
+        return true;
+      });
     },
 
     /**

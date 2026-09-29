@@ -94,6 +94,15 @@ contextBridge.exposeInMainWorld('devkit', {
     toggleTask: (id, index) => ipcRenderer.invoke('notes:toggleTask', id, index),
     /** Captura rápida: acrescenta "- [ ] texto" à nota Inbox. */
     appendTask: (text) => ipcRenderer.invoke('notes:appendTask', text),
+    /** Pastas (diretórios reais): [{ path, count }] e operações. path usa "/" ('' = raiz). */
+    folders: () => ipcRenderer.invoke('notes:folders'),
+    createFolder: (path) => ipcRenderer.invoke('notes:createFolder', path),
+    renameFolder: (path, newName) => ipcRenderer.invoke('notes:renameFolder', path, newName),
+    moveFolder: (path, newParent) => ipcRenderer.invoke('notes:moveFolder', path, newParent),
+    moveNote: (id, folder) => ipcRenderer.invoke('notes:moveNote', id, folder),
+    /** Exclui a pasta (notas vão para .trash) → { notes, folders } para restoreFolder. */
+    removeFolder: (path) => ipcRenderer.invoke('notes:removeFolder', path),
+    restoreFolder: (snapshot) => ipcRenderer.invoke('notes:restoreFolder', snapshot),
     openFolder: () => ipcRenderer.invoke('notes:open-folder'),
     /** Abre uma nota ({ id } ou { new: true, title? }) na janela principal. */
     open: (payload) => ipcRenderer.send('app:open-note', payload),

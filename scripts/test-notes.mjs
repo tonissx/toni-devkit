@@ -406,6 +406,84 @@ test('service: tasks aggregate (order, filters), toggleTask and appendTask to th
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('service: folders — create, new note in folder, move, rename/move folder, remove + undo, filter', async () => {
+  const dir = tmp();
+  try {
+    const events = [];
+    const svc = createNotesService({ dir, broadcast: (e) => events.push(e.type) });
+    await svc.init();
+    assert.deepEqual(svc.folders(), []);
+
+    await svc.createFolder('Trabalho');
+    await svc.createFolder('Trabalho/Fluig');
+    await assert.rejects(svc.createFolder('trabalho'), /Já existe/);       // sem diferenciar maiúsculas
+    await assert.rejects(svc.createFolder('Nada/Sub'), /não existe/);      // pai inexistente
+    await assert.rejects(svc.createFolder('a:b'), /caracteres/);
+    await assert.rejects(svc.createFolder('../fora'), /./);
+    assert.deepEqual(svc.folders(), [{ path: 'Trabalho', count: 0 }, { path: 'Trabalho/Fluig', count: 0 }]);
+
+    // nota nova dentro de uma pasta; pasta inexistente cai na raiz; nota existente ignora `folder`
+    const a = await svc.create({ title: 'A', content: 'a', folder: 'Trabalho/Fluig' });
+    const b = await svc.create({ title: 'B', content: 'b', folder: 'Inexistente' });
+    assert.equal(a.folder, 'Trabalho/Fluig');
+    assert.equal(a.file, 'Trabalho/Fluig/' + a.id + '.md');
+    assert.equal(b.folder, '');
+    await svc.save({ id: b.id, content: 'b2', folder: 'Trabalho' });
+    assert.equal(svc.get(b.id).folder, '');
+    assert.ok(existsSync(path.join(dir, 'Trabalho', 'Fluig', a.id + '.md')));
+
+    // filtro por pasta (exato) e resumo
+    assert.deepEqual(svc.list({ folder: 'Trabalho/Fluig' }).map((n) => n.id), [a.id]);
+    assert.deepEqual(svc.list({ folder: '' }).map((n) => n.id), [b.id]);
+    assert.equal(svc.list().find((n) => n.id === a.id).folder, 'Trabalho/Fluig');
+
+    // mover nota
+    await svc.moveNote(b.id, 'Trabalho');
+    assert.equal(svc.get(b.id).folder, 'Trabalho');
+    assert.ok(existsSync(path.join(dir, 'Trabalho', b.id + '.md')) && !existsSync(path.join(dir, b.id + '.md')));
+    await assert.rejects(svc.moveNote(b.id, 'Nao/existe'), /não existe/);
+    await assert.rejects(svc.moveNote('nope', ''), /não encontrada/);
+    await svc.moveNote(b.id, '');
+    assert.equal(svc.get(b.id).folder, '');
+    // auto-save depois de mover continua no lugar novo
+    await svc.save({ id: b.id, content: 'b3' });
+    assert.ok(existsSync(path.join(dir, b.id + '.md')));
+
+    // renomear e mover pasta atualizam as notas de dentro
+    await svc.renameFolder('Trabalho', 'Work');
+    assert.equal(svc.get(a.id).file, 'Work/Fluig/' + a.id + '.md');
+    assert.deepEqual(svc.folders().map((f) => f.path), ['Work', 'Work/Fluig']);
+    await svc.createFolder('Arquivo');
+    await assert.rejects(svc.moveFolder('Work', 'Work/Fluig'), /dentro dela mesma/);
+    await assert.rejects(svc.moveFolder('Work', 'Work'), /dentro dela mesma/);
+    await svc.moveFolder('Work/Fluig', 'Arquivo');
+    assert.equal(svc.get(a.id).file, 'Arquivo/Fluig/' + a.id + '.md');
+    assert.deepEqual(svc.list({ folder: 'Arquivo/Fluig' }).map((n) => n.id), [a.id]);
+    await assert.rejects(svc.renameFolder('Work', 'a/b'), /caracteres/);
+    // salvar depois do rename grava no caminho novo, não recria o antigo
+    await svc.save({ id: a.id, content: 'a2' });
+    assert.ok(existsSync(path.join(dir, 'Arquivo', 'Fluig', a.id + '.md')) && !existsSync(path.join(dir, 'Work', 'Fluig')));
+
+    // recarregar a pasta reconstrói tudo igual (inclusive pasta vazia)
+    await svc.flush();
+    const svc2 = createNotesService({ dir });
+    await svc2.init();
+    assert.deepEqual(svc2.folders().map((f) => [f.path, f.count]), [['Arquivo', 0], ['Arquivo/Fluig', 1], ['Work', 0]]);
+
+    // excluir pasta manda as notas para .trash com a estrutura, e dá para desfazer
+    const snap = await svc.removeFolder('Arquivo');
+    assert.equal(snap.notes.length, 1);
+    assert.deepEqual(snap.folders, ['Arquivo', 'Arquivo/Fluig']);
+    assert.equal(svc.get(a.id), null);
+    assert.ok(existsSync(path.join(dir, '.trash', 'Arquivo', 'Fluig', a.id + '.md')));
+    assert.ok(!existsSync(path.join(dir, 'Arquivo')));
+    await svc.restoreFolder(snap);
+    assert.equal(svc.get(a.id).file, 'Arquivo/Fluig/' + a.id + '.md');
+    assert.ok(svc.folders().some((f) => f.path === 'Arquivo/Fluig' && f.count === 1));
+    assert.ok(events.includes('folders'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 /* ─────────────── markdown (bundled with esbuild, as in the app) ─────────────── */
 async function loadMarkdown() {
   const esbuild = await import('esbuild');
