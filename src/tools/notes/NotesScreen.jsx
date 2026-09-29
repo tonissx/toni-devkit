@@ -5,12 +5,12 @@ import { createNote } from '../../notes/note.js';
 import { normalize } from '../../commands/search.js';
 import { NoteEditor } from './NoteEditor.jsx';
 import { TasksPanel } from './TasksPanel.jsx';
-import { FolderTree, NOTE_DRAG } from './FolderTree.jsx';
+import { FolderRow, useFolderDnD, NOTE_DRAG } from './FolderTree.jsx';
 import { NameModal, DeleteFolderModal, MoveNoteModal } from './FolderDialogs.jsx';
 import { buildTree, flattenTree, joinPath, baseName, isDescendant } from '../../notes/folders.js';
 import { emit } from '../../lib/events.js';
 
-const { PageHeader, Button, EmptyState, Icon, Kbd, Spinner, ContextMenu } = DS;
+const { PageHeader, Button, IconButton, EmptyState, Icon, Kbd, Spinner, ContextMenu } = DS;
 
 const FILTERS = [
   { id: 'all', label: 'Todas', filter: null },
@@ -24,6 +24,9 @@ const FILTERS = [
 
 /** Caminho de pasta depois de `from` virar `to` (a própria pasta ou qualquer subpasta). */
 const remapFolder = (p, from, to) => (p === from ? to : p != null && isDescendant(p, from) ? to + p.slice(from.length) : p);
+
+/** 'a/b/c' → ['a', 'a/b', 'a/b/c'] */
+const ancestors = (p) => p.split('/').map((_, i, a) => a.slice(0, i + 1).join('/'));
 
 const rowIcon = (n) => (n.type === 'snippet' ? 'braces' : n.quick ? 'sticky-note' : 'file-text');
 
@@ -65,8 +68,9 @@ export function NotesScreen({ toast, request }) {
   const listRef = React.useRef(null);
 
   const filterDef = FILTERS.find((f) => f.id === ui.filter) || FILTERS[0];
-  const folderSel = typeof ui.folder === 'string' ? ui.folder : null; // null = todas as pastas · '' = sem pasta
-  const filter = { ...(filterDef.filter || {}), ...(ui.tag ? { tag: ui.tag } : {}), ...(folderSel != null ? { folder: folderSel } : {}) };
+  // Pasta ativa: onde nascem as notas novas (a última pasta clicada ou a pasta da nota aberta). Não filtra a lista.
+  const folderSel = typeof ui.folder === 'string' && ui.folder ? ui.folder : null;
+  const filter = { ...(filterDef.filter || {}), ...(ui.tag ? { tag: ui.tag } : {}) };
   const q = query.trim();
 
   const refresh = React.useCallback(async () => {
@@ -82,13 +86,13 @@ export function NotesScreen({ toast, request }) {
         api.folders(),
       ]);
       setRows(list); setAllRows(all); setTags(tg); setInfo(inf); setRecent(rec); setFolders(fld); setLoadError(null);
-      // A pasta selecionada deixou de existir (apagada ou renomeada): volta para "todas".
-      if (typeof ui.folder === 'string' && ui.folder !== '' && !fld.some((f) => f.path === ui.folder)) setUi((u) => ({ ...u, folder: null }));
+      // A pasta ativa deixou de existir (apagada ou renomeada): novas notas voltam para a raiz.
+      setUi((u) => (typeof u.folder === 'string' && u.folder && !fld.some((f) => f.path === u.folder) ? { ...u, folder: null } : u));
     } catch (e) {
       setLoadError(cleanError(e));
       setRows([]);
     }
-  }, [q, ui.filter, ui.tag, ui.folder]);
+  }, [q, ui.filter, ui.tag]);
 
   React.useEffect(() => { refresh(); }, [refresh]);
   React.useEffect(() => {
@@ -107,7 +111,9 @@ export function NotesScreen({ toast, request }) {
     const note = await notesApi().get(id);
     if (!note) { toast('Nota não encontrada', 'Ela pode ter sido excluída', 'error'); return; }
     setCurrent({ note, isNew: false, focus });
-    setUi((u) => ({ ...leaveTasks(u), selectedId: id }));
+    // A árvore mostra onde a nota está: abre as pastas dela e passa a ser a pasta ativa.
+    if (note.folder) setFoldersUi((f) => ({ ...f, open: { ...f.open, ...Object.fromEntries(ancestors(note.folder).map((p) => [p, true])) } }));
+    setUi((u) => ({ ...leaveTasks(u), selectedId: id, folder: note.folder || null }));
   }, []);
 
   const newNote = React.useCallback((title = '') => {
@@ -162,7 +168,9 @@ export function NotesScreen({ toast, request }) {
   const guard = async (fn) => { try { await fn(); } catch (e) { toast('Não foi possível concluir', cleanError(e), 'error'); } };
   const selectFolder = (path) => setUi((u) => ({ ...leaveTasks(u), folder: path }));
   const expand = (path) => path && setFoldersUi((f) => ({ ...f, open: { ...f.open, [path]: true } }));
-  const toggleOpen = (path) => setFoldersUi((f) => ({ ...f, open: { ...f.open, [path]: !f.open[path] } }));
+  const toggleOpen = (path) => setFoldersUi((f) => ({ ...f, open: { ...f.open, [path]: !(f.open || {})[path] } }));
+  // Clicar na pasta expande/recolhe as notas dela em cascata e a marca como destino das notas novas.
+  const clickFolder = (path) => { toggleOpen(path); selectFolder(path); };
   // Depois de renomear/mover `from` → `to`: a seleção e as pastas abertas acompanham.
   const followRename = (from, to) => {
     setUi((u) => ({ ...u, folder: remapFolder(typeof u.folder === 'string' ? u.folder : null, from, to) }));
@@ -216,7 +224,14 @@ export function NotesScreen({ toast, request }) {
   const folderOptions = React.useMemo(
     () => flattenTree(buildTree(folders)).map((f) => ({ value: f.path, label: '  '.repeat(f.depth) + f.name, icon: 'folder' })),
     [folders]);
-  const rootCount = allRows.filter((r) => !r.folder).length;
+
+  const dnd = useFolderDnD({
+    onDropNote: (id, folder) => {
+      const n = allRows.find((r) => r.id === id);
+      if (n && (n.folder || '') !== folder) moveNoteTo(id, folder);
+    },
+    onDropFolder: moveFolderTo,
+  });
 
   // Lista exibida (agrupada) e a ordem plana para navegar com ↑/↓.
   const groups = React.useMemo(() => {
@@ -227,14 +242,25 @@ export function NotesScreen({ toast, request }) {
         { title: 'Recently Viewed', items: recent.viewed.map((r) => ({ ...r, time: r.viewedAt })) },
       ].filter((g) => g.items.length);
     }
-    if (q || ui.filter !== 'all' || ui.tag || folderSel != null) return [{ title: null, items: rows.map((r) => ({ ...r, time: r.updated })) }];
+    if (q || ui.filter !== 'all' || ui.tag) return [{ title: null, items: rows.map((r) => ({ ...r, time: r.updated })) }];
     const pinned = rows.filter((r) => r.pinned);
     return [
       pinned.length && { title: '📌 Pinned', items: pinned.map((r) => ({ ...r, time: r.updated })) },
       { title: pinned.length ? 'Todas' : null, items: rows.filter((r) => !r.pinned).map((r) => ({ ...r, time: r.updated })) },
     ].filter((g) => g && g.items.length);
-  }, [rows, recent, q, ui.filter, ui.tag, folderSel]);
-  const flat = groups.flatMap((g) => g.items);
+  }, [rows, recent, q, ui.filter, ui.tag]);
+
+  // Com pastas (e sem busca/filtro/tag) a lista vira uma árvore em cascata: cada pasta abre as subpastas e as notas dela.
+  const useTree = !q && ui.filter === 'all' && !ui.tag && folders.length > 0;
+  const openMap = foldersUi.open || {};
+  const tree = React.useMemo(() => buildTree(folders), [folders]);
+  const notesBy = React.useMemo(() => {
+    const m = new Map();
+    for (const r of rows || []) { const k = r.folder || ''; if (!m.has(k)) m.set(k, []); m.get(k).push({ ...r, time: r.updated }); }
+    return m;
+  }, [rows]);
+  const walk = (nodes) => nodes.flatMap((n) => (openMap[n.path] ? [...walk(n.children), ...(notesBy.get(n.path) || [])] : []));
+  const flat = useTree ? [...walk(tree), ...(notesBy.get('') || [])] : groups.flatMap((g) => g.items); // ordem visível, para ↑/↓
 
   const moveSel = (dir) => {
     if (!flat.length) return;
@@ -257,6 +283,55 @@ export function NotesScreen({ toast, request }) {
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [newNote]); // newNote muda com a pasta selecionada (Ctrl+N cria dentro dela)
+
+  /** Linha de uma nota. Na árvore (inTree) a pasta é óbvia pelo aninhamento, então não repete o caminho. */
+  const noteRow = (r, key, { inTree = false, i = 0 } = {}) => (
+    <div key={key} role={useTree ? 'treeitem' : 'option'} aria-selected={r.id === ui.selectedId}
+      className={'nts-row' + (r.id === ui.selectedId ? ' is-sel' : '') + (inTree ? ' is-cascade' : '')}
+      style={inTree ? { '--i': Math.min(i, 12) } : undefined}
+      draggable
+      onDragStart={(e) => { e.dataTransfer.setData(NOTE_DRAG, r.id); e.dataTransfer.effectAllowed = 'move'; }}
+      onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'note', note: r }); }}
+      onClick={() => openNote(r.id)}
+      {...dnd.dropProps(r.folder || '', 'n:' + key)}>
+      <Icon name={rowIcon(r)} size={14} className="nts-row__icon" />
+      <div className="nts-row__main">
+        <div className="nts-row__title"><Hl text={r.title} idx={r.titleIdx} />{r.pinned && inTree && <Icon name="pin" size={10} className="nts-row__pin" />}{r.tasksOpen + r.tasksDone > 0 && <span className="nts-row__tasks" title="Tarefas concluídas / total">☑ {r.tasksDone}/{r.tasksOpen + r.tasksDone}</span>}</div>
+        <div className="nts-row__sub"><Excerpt ex={q ? r.excerpt : null} fallback={r.preview} /></div>
+        {(r.tags.length > 0 || (r.folder && !inTree)) && (
+          <div className="nts-row__tags">
+            {r.folder && !inTree && <span className="nts-row__folder" title={r.folder}><Icon name="folder" size={10} /> {r.folder}</span>}
+            {r.tags.slice(0, 4).map((t) => <span key={t}>#{t}</span>)}
+          </div>
+        )}
+      </div>
+      <span className="nts-row__time">{shortTime(r.time)}</span>
+    </div>
+  );
+
+  /** Pasta + (se aberta) o ramo com subpastas e notas dela, recuado e com uma linha-guia leve. */
+  const renderFolder = (node) => {
+    const isOpen = !!openMap[node.path];
+    const own = notesBy.get(node.path) || [];
+    return (
+      <div key={'f:' + node.path} role="none">
+        <FolderRow
+          path={node.path} name={node.name} total={node.total} isOpen={isOpen}
+          active={folderSel === node.path} isOver={dnd.over === node.path}
+          dropProps={dnd.dropProps(node.path)}
+          onClick={() => clickFolder(node.path)} onToggle={toggleOpen}
+          onContext={(path, x, y) => setCtxMenu({ x, y, kind: 'folder', path })}
+        />
+        {isOpen && (
+          <div className="nts-branch" role="group">
+            {node.children.map((c) => renderFolder(c))}
+            {own.map((r, i) => noteRow(r, 'in:' + node.path + ':' + r.id, { inTree: true, i }))}
+            {!node.children.length && !own.length && <div className="nts-branch__empty">Pasta vazia</div>}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const noNotesAtAll = info && info.count === 0 && !current;
 
@@ -303,51 +378,44 @@ export function NotesScreen({ toast, request }) {
               ))}
             </div>
           )}
-          <FolderTree
-            folders={folders}
-            rootCount={rootCount}
-            selected={folderSel}
-            open={foldersUi.open || {}}
-            onSelect={selectFolder}
-            onToggle={toggleOpen}
-            onCreate={(parent) => setDialog({ kind: 'create', parent })}
-            onContext={(path, x, y) => setCtxMenu({ x, y, kind: 'folder', path })}
-            onDropNote={moveNoteTo}
-            onDropFolder={moveFolderTo}
-          />
+          <div className="nts-listbar">
+            <span className="nts-listbar__title">{useTree ? 'Explorador' : 'Notas'}</span>
+            {folderSel && (
+              <button type="button" className="nts-listbar__dest" title="Novas notas nascem nesta pasta — clique para limpar" onClick={() => selectFolder(null)}>
+                <Icon name="folder" size={11} /> {baseName(folderSel)} <Icon name="x" size={10} />
+              </button>
+            )}
+            <span className="nts-editor__spacer" />
+            <IconButton size="sm" icon="folder-plus" label="Nova pasta" onClick={() => setDialog({ kind: 'create', parent: '' })} />
+          </div>
 
-          <div ref={listRef} className="nts-list tk-scroll" role="listbox" aria-label="Notas">
+          <div ref={listRef} className={'nts-list tk-scroll' + (dnd.over === '' ? ' is-drop-root' : '')} role={useTree ? 'tree' : 'listbox'} aria-label="Notas" {...dnd.dropProps('')}>
             {rows === null && <div className="nts-list__msg"><Spinner size={14} /> Carregando…</div>}
             {loadError && <div className="nts-list__msg is-error">Erro ao ler as notas: {loadError}</div>}
-            {rows && !loadError && flat.length === 0 && (
+            {rows && !loadError && !useTree && flat.length === 0 && (
               q ? <div className="nts-list__msg"><b>Nenhuma nota para “{q}”.</b><br />Tente outro termo.</div>
                 : noNotesAtAll ? <div className="nts-list__msg">Nenhuma nota ainda.</div>
                 : <div className="nts-list__msg">Nada neste filtro.</div>
             )}
-            {groups.map((g, gi) => (
+
+            {useTree ? (
+              <>
+                {rows && rows.some((r) => r.pinned) && (
+                  <div role="group" aria-label="Pinned">
+                    <div className="tk-menu__heading">📌 Pinned</div>
+                    {rows.filter((r) => r.pinned).map((r) => noteRow({ ...r, time: r.updated }, 'pin:' + r.id))}
+                  </div>
+                )}
+                <div role="group" aria-label="Pastas e notas">
+                  {tree.map((n) => renderFolder(n))}
+                  {(notesBy.get('') || []).length > 0 && <div className="tk-menu__heading">Sem pasta</div>}
+                  {(notesBy.get('') || []).map((r) => noteRow(r, 'root:' + r.id, { inTree: true }))}
+                </div>
+              </>
+            ) : groups.map((g, gi) => (
               <div key={gi} role="group" aria-label={g.title || 'Notas'}>
                 {g.title && <div className="tk-menu__heading">{g.title}</div>}
-                {g.items.map((r) => (
-                  <div key={g.title + r.id} role="option" aria-selected={r.id === ui.selectedId}
-                    className={'nts-row' + (r.id === ui.selectedId ? ' is-sel' : '')}
-                    draggable
-                    onDragStart={(e) => { e.dataTransfer.setData(NOTE_DRAG, r.id); e.dataTransfer.effectAllowed = 'move'; }}
-                    onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'note', note: r }); }}
-                    onClick={() => openNote(r.id)}>
-                    <Icon name={rowIcon(r)} size={14} className="nts-row__icon" />
-                    <div className="nts-row__main">
-                      <div className="nts-row__title"><Hl text={r.title} idx={r.titleIdx} />{r.tasksOpen + r.tasksDone > 0 && <span className="nts-row__tasks" title="Tarefas concluídas / total">☑ {r.tasksDone}/{r.tasksOpen + r.tasksDone}</span>}</div>
-                      <div className="nts-row__sub"><Excerpt ex={q ? r.excerpt : null} fallback={r.preview} /></div>
-                      {(r.tags.length > 0 || (r.folder && folderSel == null)) && (
-                        <div className="nts-row__tags">
-                          {r.folder && folderSel == null && <span className="nts-row__folder" title={r.folder}><Icon name="folder" size={10} /> {r.folder}</span>}
-                          {r.tags.slice(0, 4).map((t) => <span key={t}>#{t}</span>)}
-                        </div>
-                      )}
-                    </div>
-                    <span className="nts-row__time">{shortTime(r.time)}</span>
-                  </div>
-                ))}
+                {g.items.map((r) => noteRow(r, g.title + r.id))}
               </div>
             ))}
           </div>

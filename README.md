@@ -154,8 +154,10 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   (clicar abre a nota; se ela não existe, cria). Tags, aliases, pinned e favoritas; filtros Quick · Pinned ·
   Snippets · Favoritas · Recentes (editadas e vistas)
 - **Pastas** (subpastas ilimitadas): árvore **Pastas** na lateral, com `+` para criar. Cada pasta é um diretório
-  de verdade dentro de `Documentos\Devkit Notes`. Selecionar uma pasta mostra as notas dela ("Sem pasta" = raiz) e
-  uma nota nova nasce dentro da pasta selecionada. Mover: campo **Pasta** no editor, arrastar a nota (ou uma
+  de verdade dentro de `Documentos\Devkit Notes`. A lista vira um explorador em cascata: clicar numa pasta abre as
+  subpastas e as notas dela, recuadas e com uma linha-guia leve (as notas soltas ficam no fim, em "Sem pasta"). A
+  última pasta clicada — ou a da nota aberta — é onde nascem as notas novas (aparece na barra acima da lista).
+  Com busca, filtro ou tag ativos a lista volta a ser plana. Mover: campo **Pasta** no editor, arrastar a nota (ou uma
   pasta) até a pasta de destino, ou botão direito → **Mover para…**. Botão direito na pasta: Nova subpasta ·
   Renomear · Excluir (as notas vão para `.trash\` e dá para desfazer)
 - **Tarefas** (`- [ ] texto`), sem digitar a sintaxe à mão:
