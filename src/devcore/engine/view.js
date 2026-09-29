@@ -6,7 +6,11 @@
 const { CONTENT } = require('../content/index.js');
 const { production, stationSlots, synergyActive, hasMechanic, activeCategories, generatorUnlocked } = require('./production.js');
 const { costOf, maxAffordable, trainCost } = require('./economy.js');
-const { upgradeAvailable } = require('./index.js');
+const { upgradeAvailable, craftCost, partCost } = require('./index.js');
+const { bpOf, partId, levelOf, nextMilestone, generatorMult, costDivOf } = require('./blueprints.js');
+const { abilitiesLocked, incidentsEnabled } = require('./incidents.js');
+const { check } = require('./conditions.js');
+const { stationedPets } = require('../content/index.js');
 const { offlineCapMs } = require('./advance.js');
 const { formatNum } = require('./format.js');
 const { stageOf, nextStageOf, skinOf } = require('./appearance.js');
@@ -49,12 +53,15 @@ function snapshot(s, now, c = CONTENT) {
   const generators = c.GENERATORS.filter((g) => g.tier <= s.run.tier + 1).map((g) => {
     const owned = (s.run.generators[g.id] || {}).owned || 0;
     const unlocked = generatorUnlocked(s, g);
-    const max = unlocked ? maxAffordable(g, owned, amount) : 0;
+    const div = costDivOf(s, g.id, c);
+    const max = unlocked ? maxAffordable(g, owned, amount, div) : 0;
     return {
       id: g.id, name: g.name, description: g.description, tier: g.tier, category: g.category, owned, unlocked,
       rate: prod.gens[g.id] || 0,
       each: owned ? (prod.gens[g.id] || 0) / owned : null,
-      cost1: costOf(g, owned, 1), cost10: costOf(g, owned, 10), max, costMax: costOf(g, owned, max),
+      cost1: costOf(g, owned, 1, div), cost10: costOf(g, owned, 10, div), max, costMax: costOf(g, owned, max, div),
+      costDiv: div, mk: bpOf(s, g.id).mk, mult: generatorMult(s, g.id, c), nextMilestone: nextMilestone(owned, c),
+      blueprint: blueprintView(s, g.id, now, c),
     };
   });
 
@@ -88,12 +95,13 @@ function snapshot(s, now, c = CONTENT) {
       color: skin.colors.body || p.color, eye: skin.colors.eye || null, baseColor: p.color,
       skin: skin.id, stage: { id: stage.id, name: stage.name, next: next && next.minLevel <= maxLevel ? { name: next.name, level: next.minLevel } : null },
       trainCost: st.level < maxLevel ? trainCost(p, st.level) : null,
-      bonus: p.bonus.map((e) => describeEffect({ ...e, value: e.value * (1 + p.perLevel * (st.level - 1)) }, c)),
-      station: st.station, canStation: s.run.tier >= 3 && (st.station || used < slots),
+      bonus: p.bonus.map((e) => describeEffect({ ...e, value: e.value * (1 + p.perLevel * (st.level - 1)) }, c) + (e.perActiveCategory ? ' por categoria ativa' : '')),
+      station: st.station, canStation: slots > 0 && (st.station || used < slots),
       lines: p.lines,
       ability: {
         id: ability.id, name: ability.name, description: ability.description, cooldownSec: ability.cooldownSec,
-        locked: s.run.tier < 2, activeUntil: a.activeUntil, readyAt: a.readyAt, ready: s.run.tier >= 2 && a.readyAt <= now,
+        locked: s.run.tier < 2, blocked: abilitiesLocked(s, now, c), activeUntil: a.activeUntil, readyAt: a.readyAt,
+        ready: s.run.tier >= 2 && a.readyAt <= now && !abilitiesLocked(s, now, c),
       },
     };
   });
@@ -129,18 +137,29 @@ function snapshot(s, now, c = CONTENT) {
   return {
     at: now,
     amount, lifetime: res.lifetime, rate: prod.rate,
-    nextChange: Math.min(...Object.values(s.run.abilities).map((a) => a.activeUntil).filter((t) => t > now), Infinity),
+    // Próximo instante em que a taxa/cena muda (a UI busca um snapshot novo nessa hora).
+    nextChange: Math.min(...[
+      ...Object.values(s.run.abilities).map((a) => a.activeUntil),
+      ...s.run.boosts.map((b) => b.until),
+      s.run.incidents.active ? s.run.incidents.active.end : s.run.incidents.next ? s.run.incidents.next.at : 0,
+    ].filter((t) => t > now), Infinity),
     tiers: c.TIERS.map((t) => {
       const era = c.DISCOVERIES.find((d) => d.rewards.some((r) => r.tier === t.id));
       return { id: t.id, name: t.name, mechanic: t.mechanic, at: era && era.when.lifetime != null ? era.when.lifetime : 0 };
     }),
     tier: { id: tier.id, name: tier.name, mechanic: tier.mechanic, next: nextTier ? { id: nextTier.id, name: nextTier.name, at: nextAt, mechanic: nextTier.mechanic } : null },
+    scrap: s.run.scrap,
     categories: c.CATEGORIES.map((cat) => ({
       ...cat, active: active.has(cat.id),
+      // Visual da estação: o maior Mk entre os geradores da categoria.
+      mk: Math.max(1, ...c.GENERATORS.filter((g) => g.category === cat.id).map((g) => bpOf(s, g.id).mk)),
       rate: c.GENERATORS.filter((g) => g.category === cat.id).reduce((n, g) => n + (prod.gens[g.id] || 0), 0),
     })),
     generators, upgrades, pets, synergies, discoveries, skins,
     stations: { slots, used },
+    ops: opsView(s, now, c),
+    inventory: c.CONSUMABLES.map((k) => ({ id: k.id, name: k.name, icon: k.icon, description: k.description, n: s.run.inventory[k.id] || 0, cap: k.cap, craftCost: craftCost(s, k, now, c) })),
+    bestiary: c.INCIDENTS.map((i) => ({ id: i.villain.id, incident: i.id, category: i.category, defeatedLine: i.villain.lines.defeated[0], name: i.villain.name, species: i.villain.species, color: i.villain.color, boss: !!i.villain.boss, description: i.description, counterText: i.counterText, stats: s.bestiary[i.villain.id] || null })),
     offlineCapHours: offlineCapMs(s, c) / 3600e3,
     welcome: s.pending.welcome,
     unseen: [...s.discoveries.unseen],
@@ -148,6 +167,58 @@ function snapshot(s, now, c = CONTENT) {
     freshSkins: [...s.cosmetics.fresh],
     hasNews: s.discoveries.unseen.length > 0 || newUpgrades.length > 0 || s.cosmetics.fresh.length > 0,
   };
+}
+
+/** Blueprint do próximo nível de um gerador: peças obtidas/faltantes, custos, pronto para Refactor. */
+function blueprintView(s, gen, now, c) {
+  const bp = bpOf(s, gen);
+  const next = levelOf(gen, bp.mk + 1, c);
+  if (!next) return null;
+  const parts = next.parts.map((name, i) => {
+    const id = partId(gen, next.mk, i);
+    return { id, name, owned: !!bp.parts[id] };
+  });
+  const complete = parts.every((p) => p.owned);
+  return {
+    mk: next.mk, mult: next.mult, costDiv: next.costDiv || 1, parts, complete, owned: parts.filter((p) => p.owned).length,
+    buyCost: partCost(s, next.mk, now, c), scrapCost: c.BALANCE.blueprints.scrapPerPart[next.mk],
+  };
+}
+
+/** Incidente → dados para a UI (vilão, efeito, quem contém e se isso já está armado). */
+function incidentInfo(s, id, c) {
+  const i = c.incident[id];
+  const counters = stationedPets(i.counters).map((pid) => ({
+    id: pid, name: c.pet[pid].name, owned: !!s.run.pets[pid], station: !!(s.run.pets[pid] && s.run.pets[pid].station),
+  }));
+  return {
+    id: i.id, name: i.name, description: i.description, counterText: i.counterText, category: i.category,
+    villain: { id: i.villain.id, name: i.villain.name, color: i.villain.color, boss: !!i.villain.boss, lines: i.villain.lines },
+    counters, covered: s.run.shields > 0 || (!!i.counters && check(i.counters, s)),
+  };
+}
+
+/** Aba Ops: previsão (só nas últimas horas antes), incidente ativo, histórico, escudos. */
+function opsView(s, now, c) {
+  const I = s.run.incidents;
+  const B = c.BALANCE.incidents;
+  const enabled = incidentsEnabled(s, c);
+  const next = I.next;
+  const visible = next && next.at - now <= B.forecastHours * 3600e3;
+  return {
+    enabled, quiet: s.settings.quiet, unlocked: s.run.tier >= B.minTier, shields: s.run.shields,
+    forecast: !next ? null : visible ? { ...incidentInfo(s, next.id, c), at: next.at, inMs: Math.max(0, next.at - now) } : { hidden: true, inMs: Math.max(0, next.at - now) - B.forecastHours * 3600e3 },
+    active: I.active ? { ...incidentInfo(s, I.active.id, c), start: I.active.start, end: I.active.end, remainingMs: Math.max(0, I.active.end - now), contained: I.active.contained, by: I.active.by } : null,
+    history: I.history.map((h) => ({ ...h, name: c.incident[h.id].name, villainName: c.incident[h.id].villain.name,
+      partText: h.part ? (h.part.scrap ? '+1 sucata' : `peça ${h.part.name} (${c.gen[h.part.gen].name})`) : null })),
+  };
+}
+
+/** Consumíveis em estoque (para a palette). */
+function itemsList(s, now, c = CONTENT) {
+  const a = s.run.incidents.active;
+  return c.CONSUMABLES.map((k) => ({ id: k.id, name: k.name, description: k.description, n: s.run.inventory[k.id] || 0,
+    usable: (s.run.inventory[k.id] || 0) > 0 && (k.effect.type !== 'hotfix' || !!(a && !a.contained)) })).filter((k) => k.n > 0);
 }
 
 /** Habilidades para a palette (prontas e em recarga). */
@@ -158,4 +229,4 @@ function abilitiesList(s, now, c = CONTENT) {
   }));
 }
 
-module.exports = { snapshot, abilitiesList, describeEffect, describeCondition };
+module.exports = { snapshot, abilitiesList, itemsList, describeEffect, describeCondition };

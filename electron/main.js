@@ -293,6 +293,7 @@ function initDevCore() {
 ipcMain.handle('devcore:get', async () => { await devcoreReady; return devcore.get(); });
 ipcMain.handle('devcore:act', async (_e, action) => { await devcoreReady; return devcore.act(action); });
 ipcMain.handle('devcore:abilities', async () => { await devcoreReady; return devcore.abilities(); });
+ipcMain.handle('devcore:items', async () => { await devcoreReady; return devcore.items(); });
 
 /* ─────────────── Notes ─────────────── */
 // Um .md por nota em Documentos\Devkit Notes (DEVKIT_NOTES_DIR sobrescreve — usado nos testes).

@@ -11,7 +11,7 @@ const { costOf, maxAffordable } = require('../src/devcore/engine/economy.js');
 const { produced, offlineCapMs } = require('../src/devcore/engine/advance.js');
 const { snapshot, abilitiesList } = require('../src/devcore/engine/view.js');
 const { formatNum, formatDuration } = require('../src/devcore/engine/format.js');
-const { simulate, PROFILES } = require('../src/devcore/sim.js');
+const { simulate, PROFILES, incidentLoss } = require('../src/devcore/sim.js');
 
 const T0 = Date.UTC(2026, 0, 5, 12);
 const H = 3600e3;
@@ -34,9 +34,9 @@ const run = (s, action, now = T0) => dispatch(s, action, now);
 test('content: ids unique and references valid; MVP sizes', () => {
   assert.deepEqual(validate(), []);
   assert.ok(CONTENT.GENERATORS.length >= 4 && CONTENT.GENERATORS.length <= 6);
-  assert.ok(CONTENT.PETS.length >= 3 && CONTENT.PETS.length <= 5);
+  assert.ok(CONTENT.PETS.length >= 3 && CONTENT.PETS.length <= 6);
   assert.ok(CONTENT.UPGRADES.length >= 10 && CONTENT.UPGRADES.length <= 15);
-  assert.ok(CONTENT.DISCOVERIES.length >= 5 && CONTENT.DISCOVERIES.length <= 10);
+  assert.ok(CONTENT.DISCOVERIES.length >= 5 && CONTENT.DISCOVERIES.length <= 12);
   assert.equal(CONTENT.TIERS.length, 3);
 });
 
@@ -85,17 +85,22 @@ test('production: base × owned × gen × cat × global (Byte + upgrade)', () =>
   assert.equal(production(make({ gens: { agent: 5 } }), T0).rate, 0); // tier 1: agent não produz
 });
 
-test('pets: level scales bonus; station doubles it only in tier 3 and respects slots', () => {
+test('pets: level scales bonus; station doubles it (tier 2+: 1 slot, tier 3: 2 slots)', () => {
   const base = make({ gens: { 'terminal-worker': 10 }, pets: ['byte'], tier: 3 });
   base.run.pets.byte.level = 3; // +20%
   near(production(base, T0).rate, 1 * (1 + 0.15 * 1.2) * (1 + 0.05 * 1.2));
   let r = run(base, { type: 'station', pet: 'byte', on: true });
   assert.equal(r.error, undefined);
   near(production(r.state, T0).rate, 1 * (1 + 0.15 * 1.2 * 2) * (1 + 0.05 * 1.2 * 2));
-  const two = make({ tier: 3, pets: ['byte', 'noxi'] });
-  r = run(two, { type: 'station', pet: 'byte', on: true });
+  const t2 = make({ tier: 2, pets: ['byte', 'noxi'] });
+  r = run(t2, { type: 'station', pet: 'byte', on: true });
+  assert.equal(r.error, undefined);
   assert.equal(run(r.state, { type: 'station', pet: 'noxi', on: true }).error, 'Sem estações livres');
-  assert.equal(run(make({ tier: 2, pets: ['byte'] }), { type: 'station', pet: 'byte', on: true }).error, 'Estações liberam no tier 3');
+  const t3 = make({ tier: 3, pets: ['byte', 'noxi', 'query'] });
+  r = run(run(t3, { type: 'station', pet: 'byte', on: true }).state, { type: 'station', pet: 'noxi', on: true });
+  assert.equal(r.error, undefined);
+  assert.equal(run(r.state, { type: 'station', pet: 'query', on: true }).error, 'Sem estações livres');
+  assert.equal(run(make({ tier: 1, pets: ['byte'] }), { type: 'station', pet: 'byte', on: true }).error, 'Estações liberam no tier 2');
 });
 
 test('train: costs compute, raises level, stops at max', () => {
@@ -264,7 +269,7 @@ test('balance: pacing stays inside the MVP targets', () => {
   assert.ok(e.maxCheapestSec <= 5 * 60, 'espera pela compra mais barata: ' + e.maxCheapestSec + ' s');
   const c = simulate(PROFILES.casual);
   assert.ok(c.t3 >= 1 * 86400e3 && c.t3 <= 3 * 86400e3, 'T3 casual: ' + c.t3 / 86400e3 + ' dias');
-  assert.ok(c.pets.noxi != null && c.pets.query != null && c.pets.memo != null, 'todos os pets aparecem em uma semana de uso');
+  for (const id of ['noxi', 'query', 'memo', 'relay', 'armo']) assert.ok(c.pets[id] != null, id + ' aparece em uma semana de uso');
 });
 
 /* ─────────────── Event Bus e serviço (processo principal) ─────────────── */
@@ -377,4 +382,353 @@ test('appearance: old saves gain the cosmetics section; tier 3 unlocks Solarized
   assert.deepEqual(m.cosmetics, { skins: {}, unlocked: ['default'], fresh: [] });
   const t3 = make({ tier: 3 });
   assert.ok(run(t3, { type: 'tick' }).state.cosmetics.unlocked.includes('solarized'));
+});
+
+/* ─────────────── DevPets de Agents e Infra ─────────────── */
+test('every production category has a DevPet', () => {
+  const covered = new Set(CONTENT.PETS.map((p) => p.category));
+  for (const cat of CONTENT.CATEGORIES) assert.ok(covered.has(cat.id), 'sem pet: ' + cat.id);
+});
+
+test('Relay: Command Center needs tier 3 + 5 distinct commands', () => {
+  let s = make({ tier: 2 });
+  for (const id of ['a', 'b', 'c', 'd', 'e']) s = run(s, { type: 'event', name: 'command.executed', data: { id } }).state;
+  assert.ok(!s.run.pets.relay); // tier 2 ainda
+  s.run.tier = 3;
+  const r = run(s, { type: 'tick' });
+  assert.ok(r.state.run.pets.relay);
+  assert.ok(r.log.some((e) => e.type === 'discovery' && e.id === 'command-center' && e.finder === 'noxi'));
+});
+
+test('Armo: Always On needs tier 3 + DevKit used on 5 different days (same day = 1)', () => {
+  let s = make({ tier: 3 });
+  for (let i = 0; i < 20; i++) s = run(s, { type: 'event', name: 'tool.opened', data: { tool: 'sql' } }, T0 + i * 60e3).state;
+  assert.ok(!s.run.pets.armo);
+  for (let d = 1; d <= 4; d++) s = run(s, { type: 'event', name: 'tool.opened', data: { tool: 'notes' } }, T0 + d * 24 * H).state;
+  assert.ok(s.run.pets.armo);
+});
+
+test('Armo global bonus scales with active categories; new abilities burst their category', () => {
+  const two = make({ tier: 3, gens: { 'local-cluster': 1, 'terminal-worker': 1 }, pets: ['armo'] });
+  const three = make({ tier: 3, gens: { 'local-cluster': 1, 'terminal-worker': 1, 'script-runner': 1 }, pets: ['armo'] });
+  const shell = (s) => production(s, T0).gens['terminal-worker'];
+  near(shell(two), 0.1 * (1 + 0.02 * 2));
+  near(shell(three), 0.1 * (1 + 0.02 * 3));
+  assert.ok(snapshot(two, T0).pets.find((p) => p.id === 'armo').bonus.some((b) => b.endsWith('por categoria ativa')));
+  const s = make({ tier: 3, gens: { agent: 1, 'local-cluster': 1 }, pets: ['relay', 'armo'] });
+  const base = production(s, T0).gens;
+  let r = run(s, { type: 'ability', id: 'orchestrate' });
+  near(production(r.state, T0).gens.agent, base.agent * 4);
+  near(production(r.state, T0).gens['local-cluster'], base['local-cluster']);
+  r = run(r.state, { type: 'ability', id: 'scale-out' });
+  near(production(r.state, T0).gens['local-cluster'], base['local-cluster'] * 3);
+});
+
+test('director: never more than 2 pets in the same spot while there is room', () => {
+  const { plan } = require('../src/devcore/director.js');
+  const pets = CONTENT.PETS.map((p) => ({ id: p.id, category: p.category, lines: p.lines }));
+  const stations = CONTENT.CATEGORIES.map((c) => ({ id: c.id }));
+  for (let t = 0; t < 600e3; t += 1000) {
+    const counts = {};
+    for (const d of plan(pets, stations, T0 + t)) counts[d.spot] = (counts[d.spot] || 0) + 1;
+    assert.ok(Math.max(...Object.values(counts)) <= 2, JSON.stringify(counts));
+  }
+  // Sem estações: todos descansam (não há para onde ir).
+  assert.ok(plan(pets, [], T0).every((d) => d.spot === -1));
+});
+
+/* ─────────────── Incidentes ("pets do mal") e consumíveis ─────────────── */
+const { itemsList } = require('../src/devcore/engine/view.js');
+const { craftCost } = require('../src/devcore/engine/index.js');
+
+/** Estado no tier dado com o próximo incidente forçado. */
+function withNext(opts, id, inMs = H, durMin = 60) {
+  const s = make(opts);
+  s.run.incidents.next = { id, at: T0 + inMs, durationMs: durMin * 60e3 };
+  return s;
+}
+
+test('incidents: deterministic schedule; only unlocked types; none in tier 1 or quiet mode', () => {
+  const a = run(make({ tier: 2 }), { type: 'tick' }).state.run.incidents.next;
+  const b = run(make({ tier: 2 }), { type: 'tick' }).state.run.incidents.next;
+  assert.deepEqual(a, b);
+  const h = (a.at - T0) / H;
+  assert.ok(h >= 3 && h <= 6, 'intervalo ' + h);
+  let s = make({ tier: 2 });
+  const seen = new Set();
+  for (let i = 0; i < 40; i++) { s = run(s, { type: 'tick' }, T0 + i * 7 * H).state; if (s.run.incidents.next) seen.add(s.run.incidents.next.id); }
+  assert.deepEqual([...seen].sort(), ['flaky-pipeline', 'memory-leak']); // tier 2: só esses
+  assert.equal(run(make({ tier: 1 }), { type: 'tick' }).state.run.incidents.next, null);
+  const q = run(make({ tier: 2 }), { type: 'quiet', on: true }).state;
+  assert.equal(q.run.incidents.next, null);
+  assert.equal(run(q, { type: 'tick' }, T0 + 30 * H).state.run.incidents.history.length, 0);
+});
+
+test('incidents: exact integral with an escaped incident in the middle of the interval', () => {
+  const s = withNext({ tier: 2, gens: { 'index-worker': 10, 'terminal-worker': 10 }, pets: [] }, 'memory-leak', 10 * 60e3, 30);
+  const g = production(s, T0).gens;
+  const rate = g['index-worker'] + g['terminal-worker'];
+  const hit = g['index-worker'] * 0.8 + g['terminal-worker'];
+  // 10 min normal + 30 min com Data ×0,8 + 20 min normal
+  near(produced(s, T0, T0 + H), rate * 600 + hit * 1800 + rate * 1200);
+});
+
+test('incidents: containment at start by the right station, Rollback shield, Zero-day ignores stations', () => {
+  let s = withNext({ tier: 2, pets: ['query'] }, 'memory-leak');
+  s.run.pets.query.station = true;
+  let r = run(s, { type: 'tick' }, T0 + H + 1000);
+  assert.ok(r.log.some((e) => e.type === 'contained' && e.by === 'query' && e.item));
+  assert.equal(r.state.bestiary.leaky.contained, 1);
+  // Contido: o vilão é barrado e some em ~1 min, sem efeito.
+  assert.equal(r.state.run.incidents.active.end - r.state.run.incidents.active.start, CONTENT.BALANCE.incidents.blockedSec * 1000);
+
+  s = withNext({ tier: 3, pets: ['query'] }, 'zero-day');
+  s.run.pets.query.station = true;
+  r = run(s, { type: 'tick' }, T0 + H + 1000);
+  assert.equal(r.state.run.incidents.active.contained, false); // estação não segura o Zero
+  s = withNext({ tier: 3 }, 'zero-day');
+  s.run.shields = 1;
+  r = run(s, { type: 'tick' }, T0 + H + 1000);
+  assert.equal(r.state.run.incidents.active.by, 'rollback');
+  assert.equal(r.state.run.shields, 0);
+});
+
+test('incidents: 8 h offline processes several incidents in order; production only up to the cap', () => {
+  const s = make({ tier: 2, gens: { 'terminal-worker': 10 }, pets: ['byte'] });
+  const r = run(s, { type: 'boot' }, T0 + 20 * H);
+  const starts = r.log.filter((e) => e.type === 'incidentStart').map((e) => e.at);
+  assert.ok(starts.length >= 2, 'incidentes: ' + starts.length);
+  assert.deepEqual(starts, [...starts].sort((a, b) => a - b));
+  assert.ok(starts.at(-1) > T0 + 8 * H); // incidentes continuam depois do teto de produção
+  assert.equal(r.state.pending.welcome.incidents.length, starts.length);
+  assert.equal(r.state.pending.welcome.countedMs, 8 * H);
+});
+
+test('incidents: loss never below the floor; Merge Conflict locks abilities until Hotfix', () => {
+  for (const i of CONTENT.INCIDENTS) for (const e of i.effects) assert.ok(e.value >= CONTENT.BALANCE.incidents.lossFloor);
+  let s = withNext({ tier: 3, pets: ['byte', 'relay'] }, 'merge-conflict', 1000);
+  s.run.inventory.hotfix = 1;
+  s = run(s, { type: 'tick' }, T0 + 5000).state;
+  assert.match(run(s, { type: 'ability', id: 'compile-burst' }, T0 + 6000).error, /Merge Conflict/);
+  const r = run(s, { type: 'use', item: 'hotfix' }, T0 + 6000);
+  assert.equal(r.state.run.incidents.active, null);
+  assert.equal(r.state.bestiary.forky.defeated, 1);
+  assert.equal(run(r.state, { type: 'ability', id: 'compile-burst' }, T0 + 7000).error, undefined);
+});
+
+test('consumables: use each, caps, craft cost scales with production, Cache Warmer', () => {
+  const s = make({ tier: 2, compute: 1e9, gens: { 'terminal-worker': 10 }, pets: ['byte'] });
+  const rate = production(s, T0).rate;
+  s.run.inventory = { coffee: 2, rollback: 1, 'cache-warmer': 1, hotfix: 1 };
+  let r = run(s, { type: 'use', item: 'coffee' });
+  near(production(r.state, T0).rate, rate * 1.5);
+  r = run(r.state, { type: 'use', item: 'coffee' });
+  assert.equal(r.state.run.boosts.length, 1); // estende, não empilha
+  assert.equal(r.state.run.boosts[0].until, T0 + 1200e3);
+  assert.equal(run(r.state, { type: 'use', item: 'coffee' }).error, 'Item indisponível');
+  assert.equal(run(r.state, { type: 'use', item: 'hotfix' }).error, 'Nenhum incidente para corrigir');
+  assert.equal(run(r.state, { type: 'use', item: 'cache-warmer' }).error, 'Nenhuma habilidade em recarga');
+  r = run(r.state, { type: 'ability', id: 'compile-burst' });
+  r = run(r.state, { type: 'use', item: 'cache-warmer' }, T0 + 60e3);
+  assert.equal(r.state.run.abilities['compile-burst'].readyAt, T0 + 60e3);
+  r = run(r.state, { type: 'use', item: 'rollback' }, T0 + 60e3);
+  assert.equal(r.state.run.shields, 1);
+  const k = CONTENT.consumable.coffee;
+  near(craftCost(s, k, T0), Math.max(50, k.craftMinutes * 60 * rate));
+  let c = make({ compute: 1e12, tier: 2 });
+  for (let i = 0; i < k.cap; i++) c = run(c, { type: 'craft', item: 'coffee' }).state;
+  assert.equal(run(c, { type: 'craft', item: 'coffee' }).error, 'Estoque cheio');
+  assert.deepEqual(itemsList(c, T0).map((x) => x.id), ['coffee']);
+});
+
+test('pet finds may bring consumables (seeded) and fall back to Compute when full', () => {
+  // Vários "retornos" (seeds diferentes): aparecem caches, consumíveis e peças; o mesmo seed repete o resultado.
+  const finds = [];
+  for (let k = 0; k < 12; k++) {
+    const s = make({ gens: { 'terminal-worker': 10 }, pets: ['byte', 'noxi'] });
+    s.seed = 1000 + k;
+    const w = run(s, { type: 'boot' }, T0 + 8 * H).state.pending.welcome;
+    assert.equal(w.finds.length, 4);
+    finds.push(...w.finds);
+  }
+  assert.ok(finds.some((f) => f.item) && finds.some((f) => f.amount) && finds.some((f) => f.part), 'tipos de achado');
+  const a = make({ gens: { 'terminal-worker': 10 }, pets: ['byte'] });
+  assert.deepEqual(run(a, { type: 'boot' }, T0 + 8 * H).state.pending.welcome.finds, run(a, { type: 'boot' }, T0 + 8 * H).state.pending.welcome.finds);
+  // Estoque cheio e sem peça nova possível → vira cache de Compute.
+  const full = make({ gens: { 'terminal-worker': 10 }, pets: ['byte'] });
+  for (const k of CONTENT.CONSUMABLES) full.run.inventory[k.id] = k.cap;
+  full.run.blueprints = { 'terminal-worker': { mk: 3, parts: {} }, 'script-runner': { mk: 3, parts: {} } };
+  assert.ok(run(full, { type: 'boot' }, T0 + 8 * H).state.pending.welcome.finds.every((f) => f.amount > 0));
+});
+
+test('ops view: forecast hidden until 2 h before; bestiary survives a run reset; old saves migrate', () => {
+  const s = withNext({ tier: 2, pets: ['query'] }, 'memory-leak', 3 * H);
+  assert.ok(snapshot(s, T0).ops.forecast.hidden);
+  const f = snapshot(s, T0 + 1.5 * H).ops.forecast;
+  assert.equal(f.villain.name, 'Leaky');
+  assert.deepEqual(f.counters.map((x) => [x.id, x.owned, x.station]), [['query', true, false], ['memo', false, false]]);
+  assert.equal(f.covered, false);
+  const r = run(s, { type: 'tick' }, T0 + 4 * H).state;
+  r.run = make({}).run; // "Rebuild"
+  assert.equal(r.bestiary.leaky.seen, 1);
+  const old = JSON.parse(JSON.stringify(make({})));
+  delete old.bestiary; delete old.settings; delete old.run.incidents; delete old.run.inventory;
+  const m = migrate(old, T0);
+  assert.deepEqual([m.bestiary, m.settings.quiet, m.run.incidents.history, m.run.inventory], [{}, false, [], {}]);
+});
+
+test('balance: incidents cost little, preparation pays off, 1–3 items per day', () => {
+  const passive = incidentLoss({ ...PROFILES.casual, strategy: 'passive' });
+  const prepared = incidentLoss({ ...PROFILES.casual, strategy: 'prepared' });
+  assert.ok(passive.loss <= 0.08, 'perda passiva ' + passive.loss);
+  assert.ok(prepared.loss <= 0.02, 'perda preparada ' + prepared.loss);
+  assert.ok(prepared.marks.incidents.contained > passive.marks.incidents.contained * 2, 'preparar deve conter bem mais');
+  const perDay = prepared.marks.items / PROFILES.casual.days;
+  assert.ok(perDay >= 1 && perDay <= 3, 'itens/dia ' + perDay);
+});
+
+test('director: villain takes a spot, stationed pets stay home, the container talks about it', () => {
+  const { plan, villainSpot } = require('../src/devcore/director.js');
+  const pets = CONTENT.PETS.map((p) => ({ id: p.id, category: p.category, lines: p.lines, station: p.id === 'query' }));
+  const stations = CONTENT.CATEGORIES.map((c) => ({ id: c.id }));
+  const spot = villainSpot('data', stations);
+  assert.equal(spot, 2);
+  assert.equal(villainSpot(null, stations), 2); // Zero: meio da cena
+  for (let t = 0; t < 300e3; t += 1000) {
+    const d = plan(pets, stations, T0 + t, [], { villain: { spot, name: 'Leaky', contained: true, by: 'query' } });
+    const q = d.find((x) => x.id === 'query');
+    assert.equal(q.spot, 2);
+    assert.equal(q.line, 'segurando Leaky...');
+    // No lugar do vilão: ele + no máximo 1 pet (o que está em estação ali tem prioridade).
+    assert.ok(d.filter((x) => x.spot === spot).length <= 2);
+  }
+});
+
+/* ─────────────── marcos e blueprints ─────────────── */
+const BP = require('../src/devcore/engine/blueprints.js');
+const { partCost } = require('../src/devcore/engine/index.js');
+const setOf = (gen, mk) => [0, 1, 2, 3].map((i) => BP.partId(gen, mk, i));
+const give = (s, gen, mk, n = 4) => {
+  const cur = s.run.blueprints[gen] || (s.run.blueprints[gen] = { mk: 1, parts: {} });
+  for (const id of setOf(gen, mk).slice(0, n)) cur.parts[id] = true;
+};
+
+test('milestones: multiplier exactly at 25/50/100…; nextMilestone', () => {
+  const M = CONTENT.BALANCE.milestones;
+  const mult = (n) => BP.generatorMult(make({ gens: { 'terminal-worker': n } }), 'terminal-worker');
+  assert.equal(mult(24), 1);
+  near(mult(25), M.mult[0]);
+  near(mult(49), M.mult[0]);
+  near(mult(50), M.mult[0] * M.mult[1]);
+  near(mult(100), M.mult[0] * M.mult[1] * M.mult[2]);
+  assert.deepEqual(BP.nextMilestone(85), { at: 100, from: 50, left: 15, mult: M.mult[2] });
+  assert.equal(BP.nextMilestone(300), null);
+  // A produção do gerador sobe na mesma proporção (efeito mul gen:<id>).
+  const r = (n) => production(make({ gens: { 'terminal-worker': n } }), T0).rate / n;
+  near(r(25) / r(24), M.mult[0]);
+});
+
+test('blueprints: Refactor needs the full set, consumes it, ×3 then ×15, cheaper units; Mk III only after Mk II', () => {
+  const s = make({ gens: { 'terminal-worker': 10 } });
+  const base = production(s, T0).rate;
+  give(s, 'terminal-worker', 2, 3);
+  assert.equal(run(s, { type: 'refactor', gen: 'terminal-worker' }).error, 'Conjunto incompleto');
+  assert.equal(run(s, { type: 'buyPart', part: BP.partId('terminal-worker', 3, 0) }).error, 'Faça o Mk II antes');
+  give(s, 'terminal-worker', 2);
+  let r = run(s, { type: 'refactor', gen: 'terminal-worker' });
+  assert.equal(r.error, undefined);
+  assert.deepEqual(r.state.run.blueprints['terminal-worker'], { mk: 2, parts: {} });
+  assert.ok(r.log.some((e) => e.type === 'refactor' && e.mk === 2 && e.category === 'shell'));
+  near(production(r.state, T0).rate, base * 3);
+  const g = CONTENT.gen['terminal-worker'];
+  near(snapshot(r.state, T0).generators.find((x) => x.id === g.id).cost1, costOf(g, 10) / 4);
+  give(r.state, 'terminal-worker', 3);
+  r = run(r.state, { type: 'refactor', gen: 'terminal-worker' });
+  near(production(r.state, T0).rate, base * 15);
+  assert.equal(run(r.state, { type: 'refactor', gen: 'terminal-worker' }).error, 'Nível máximo');
+  assert.equal(snapshot(r.state, T0).generators.find((x) => x.id === g.id).mk, 3);
+});
+
+test('blueprints: buy costs N hours of production and refuses owned parts; scrap trades 5 (Mk II)', () => {
+  const s = make({ compute: 1e12, gens: { 'terminal-worker': 10 } });
+  const rate = production(s, T0).rate;
+  const id = BP.partId('terminal-worker', 2, 1);
+  near(partCost(s, 2, T0), Math.max(500, CONTENT.BALANCE.blueprints.buyMinutes[2] * 60 * rate));
+  let r = run(s, { type: 'buyPart', part: id });
+  assert.equal(r.error, undefined);
+  near(r.state.run.resources.compute.amount, 1e12 - partCost(s, 2, T0));
+  assert.equal(run(r.state, { type: 'buyPart', part: id }).error, 'Peça já obtida');
+  const poor = make({ gens: { 'terminal-worker': 10 } });
+  assert.equal(run(poor, { type: 'buyPart', part: id }).error, 'Compute insuficiente');
+  const need = CONTENT.BALANCE.blueprints.scrapPerPart[2];
+  poor.run.scrap = need - 1;
+  assert.match(run(poor, { type: 'scrapPart', part: id }).error, /Sucata insuficiente/);
+  poor.run.scrap = need;
+  r = run(poor, { type: 'scrapPart', part: id });
+  assert.equal(r.state.run.scrap, 0);
+  assert.ok(r.state.run.blueprints['terminal-worker'].parts[id]);
+  assert.equal(run(poor, { type: 'buyPart', part: 'nope:mk2:0' }).error, 'Peça inexistente');
+});
+
+test('blueprints: contained villain drops a part of the attacked category; escaped drops none; Zero gives Mk III', () => {
+  for (let k = 0; k < 6; k++) {
+    const s = withNext({ tier: 2, pets: ['query'] }, 'memory-leak');
+    s.seed = 77 + k;
+    s.run.pets.query.station = true;
+    const r = run(s, { type: 'tick' }, T0 + H + 1000);
+    const p = r.log.find((e) => e.type === 'part' && e.source === 'incident');
+    assert.equal(p.gen, 'index-worker'); // único gerador de Data
+    assert.equal(p.mk, 2);
+  }
+  const esc = run(withNext({ tier: 2 }, 'memory-leak'), { type: 'tick' }, T0 + 3 * H);
+  assert.ok(!esc.log.some((e) => e.type === 'part'));
+  // Zero segurado pelo Rollback → peça Mk III de quem já tem o Mk II.
+  const z = withNext({ tier: 3 }, 'zero-day');
+  z.run.shields = 1;
+  z.run.blueprints['agent'] = { mk: 2, parts: {} };
+  const zp = run(z, { type: 'tick' }, T0 + H + 1000).log.find((e) => e.type === 'part');
+  assert.deepEqual([zp.gen, zp.mk], ['agent', 3]);
+  // Zero derrotado com Hotfix também.
+  const h = withNext({ tier: 3 }, 'zero-day', 1000);
+  h.run.inventory.hotfix = 1;
+  h.run.blueprints['local-cluster'] = { mk: 2, parts: {} };
+  const hs = run(h, { type: 'tick' }, T0 + 5000).state;
+  const hr = run(hs, { type: 'use', item: 'hotfix' }, T0 + 6000);
+  assert.ok(hr.log.some((e) => e.type === 'part' && e.mk === 3 && e.gen === 'local-cluster' && e.source === 'boss'));
+});
+
+test('blueprints: duplicates and exhausted levels become scrap; drops are seeded', () => {
+  const s = make({ gens: { 'terminal-worker': 1 } });
+  give(s, 'terminal-worker', 2); give(s, 'script-runner', 2);
+  const d = BP.dropPart(s, () => 0.1, { mk2Only: true });
+  assert.equal(d.dup, true);
+  assert.equal(s.run.scrap, 1);
+  s.run.blueprints = { 'terminal-worker': { mk: 3, parts: {} }, 'script-runner': { mk: 3, parts: {} } };
+  assert.equal(BP.dropPart(s, () => 0.5, {}).type, 'scrap');
+  assert.equal(s.run.scrap, 2);
+  const seq = (x) => { let i = 0; const r = () => (i++ * 0.37) % 1; return [0, 1, 2, 3].map(() => BP.dropPart(x, r, { category: 'automation' })); };
+  assert.deepEqual(seq(make({ tier: 2 })), seq(make({ tier: 2 })));
+  assert.ok(seq(make({ tier: 2 })).every((p) => ['script-runner', 'automation-worker'].includes(p.gen)));
+});
+
+test('blueprints: old saves migrate; view exposes Mk, milestone and the set', () => {
+  const old = JSON.parse(JSON.stringify(make({})));
+  delete old.run.blueprints; delete old.run.scrap;
+  const m = migrate(old, T0);
+  assert.deepEqual([m.run.blueprints, m.run.scrap], [{}, 0]);
+  const s = make({ gens: { 'terminal-worker': 30 } });
+  give(s, 'terminal-worker', 2, 2);
+  const v = snapshot(s, T0);
+  const g = v.generators.find((x) => x.id === 'terminal-worker');
+  assert.equal(g.mk, 1);
+  assert.equal(g.nextMilestone.at, 50);
+  assert.deepEqual([g.blueprint.mk, g.blueprint.owned, g.blueprint.complete, g.blueprint.parts.length], [2, 2, false, 4]);
+  assert.equal(v.scrap, 0);
+});
+
+test('balance: blueprints — 1st Mk II within ~2–4.5 days, Mk III reachable in 2 weeks; T3 casual 1–3 days', () => {
+  const m = simulate({ ...PROFILES.casual, days: 14, strategy: 'prepared' });
+  assert.ok(m.t3 >= 1 * 86400e3 && m.t3 <= 3 * 86400e3, 't3 ' + m.t3 / 86400e3);
+  assert.ok(m.firstMk2 && m.firstMk2 >= 2 * 86400e3 && m.firstMk2 <= 4.5 * 86400e3, 'mk2 ' + m.firstMk2 / 86400e3);
+  assert.ok(m.firstMk3 && m.firstMk3 <= 14 * 86400e3, 'mk3');
 });

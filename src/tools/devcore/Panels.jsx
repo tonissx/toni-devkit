@@ -8,19 +8,89 @@ const catIcon = (snap, id) => (snap.categories.find((c) => c.id === id) || { ico
 const KIND = { generator: 'Gerador', global: 'Global', mechanic: 'Mecânica', pet: 'DevPet' };
 
 /* ─────────────── Generators ─────────────── */
+export const MK = { 1: 'I', 2: 'II', 3: 'III' };
+const multText = (m) => '×' + (Number.isInteger(m) ? m : m.toFixed(1).replace('.', ','));
+
+/** Barrinha do próximo marco: "×2 em 100 · faltam 15". */
+function Milestone({ g }) {
+  const m = g.nextMilestone;
+  if (!m) return <div className="dc-mile is-done">Todos os marcos atingidos</div>;
+  const pct = ((g.owned - m.from) / (m.at - m.from)) * 100;
+  return (
+    <div className="dc-mile" title={`Ao chegar em ${m.at} unidades, a produção deste gerador ${multText(m.mult)}`}>
+      <ProgressBar value={pct} size="sm" />
+      <span>{multText(m.mult)} em {m.at} · faltam {m.left}</span>
+    </div>
+  );
+}
+
+/** Conjunto do próximo Mk: peças obtidas/faltantes, Comprar/Trocar e Refactor. */
+function BlueprintArea({ g, snap, amount, act }) {
+  const bp = g.blueprint;
+  if (!bp) return <div className="dc-bp"><div className="dc-bp__head">Mk III · nível máximo</div></div>;
+  return (
+    <div className="dc-bp">
+      <div className="dc-bp__head">
+        Blueprint <b>Mk {MK[bp.mk]}</b> · produção {multText(bp.mult)}{bp.costDiv > 1 ? ` · próximas unidades ÷${bp.costDiv}` : ''}
+        {bp.mk === 3 && <span className="dc-bp__hint">peças raras: Zero, vilões contidos ou compra</span>}
+      </div>
+      <div className="dc-bp__parts">
+        {bp.parts.map((p) => (
+          <div key={p.id} className={'dc-part' + (p.owned ? ' is-owned' : '')}>
+            <Icon name={p.owned ? 'check' : 'package'} size={12} />
+            <span className="dc-part__name">{p.name}</span>
+            {!p.owned && (
+              <span className="dc-part__actions">
+                <Button size="sm" variant="ghost" disabled={amount < bp.buyCost} title="Comprar com Compute" onClick={() => act({ type: 'buyPart', part: p.id })}>
+                  {formatNum(bp.buyCost)}
+                </Button>
+                <Button size="sm" variant="ghost" disabled={snap.scrap < bp.scrapCost} title={`Trocar ${bp.scrapCost} sucatas por esta peça`} onClick={() => act({ type: 'scrapPart', part: p.id })}>
+                  {bp.scrapCost} sucata
+                </Button>
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      {bp.complete && (
+        <Button size="sm" variant="primary" onClick={() => act({ type: 'refactor', gen: g.id })}>
+          <Icon name="sparkles" size={13} /> Refactor → Mk {MK[bp.mk]}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function GeneratorsPanel({ snap, amount, act }) {
+  const [open, setOpen] = React.useState(null);
+  const unlocked = snap.generators.filter((g) => g.unlocked);
+  const ready = unlocked.filter((g) => g.blueprint && g.blueprint.complete).length;
   return (
     <div className="dc-list">
+      <div className="dc-bp-bar">
+        <span><Icon name="package" size={13} /> Blueprints: junte 4 peças para dar Refactor num gerador (Mk II ×3, Mk III ×5).</span>
+        {ready > 0 && <span className="dc-chip is-ok">{ready} pronto{ready > 1 ? 's' : ''} para Refactor</span>}
+        <span className="dc-chip" title="Peças repetidas viram sucata; troque sucata por uma peça que falta">Sucata {snap.scrap}</span>
+      </div>
       {snap.generators.map((g) => (g.unlocked ? (
-        <div key={g.id} className="dc-row">
+        <div key={g.id} className={'dc-gen' + (g.mk > 1 ? ' is-mk' + g.mk : '')}>
+        <div className="dc-row">
           <span className="dc-row__icon"><Icon name={catIcon(snap, g.category)} size={16} /></span>
           <div className="dc-row__main">
-            <div className="dc-row__title">{g.name} <span className="dc-owned">{g.owned}</span></div>
+            <div className="dc-row__title">
+              {g.name} <span className="dc-owned">{g.owned}</span>
+              {g.mk > 1 && <span className={'dc-mk is-mk' + g.mk}>Mk {MK[g.mk]}</span>}
+              <button type="button" className={'dc-bp-toggle' + (g.blueprint && g.blueprint.complete ? ' is-ready' : '')} aria-expanded={open === g.id} onClick={() => setOpen(open === g.id ? null : g.id)}>
+                <Icon name="package" size={11} />{g.blueprint ? `${g.blueprint.owned}/4` : 'máx'}
+              </button>
+            </div>
             <div className="dc-row__desc">{g.description}</div>
+            <Milestone g={g} />
           </div>
           <div className="dc-row__stat">
             <b>+{formatNum(g.rate, { rate: true })}/s</b>
             <span>{g.each != null ? formatNum(g.each, { rate: true }) + '/s cada' : 'nenhum ainda'}</span>
+            {g.mult > 1 && <span className="dc-row__mult" title="Marcos × Mk">{multText(g.mult)}</span>}
           </div>
           <div className="dc-buy">
             <Button size="sm" variant={amount >= g.cost1 ? 'primary' : 'secondary'} disabled={amount < g.cost1} onClick={() => act({ type: 'buy', gen: g.id, qty: 1 })}>
@@ -33,6 +103,8 @@ export function GeneratorsPanel({ snap, amount, act }) {
               Máx{g.max ? ' (' + g.max + ')' : ''}
             </Button>
           </div>
+        </div>
+        {open === g.id && <BlueprintArea g={g} snap={snap} amount={amount} act={act} />}
         </div>
       ) : (
         <div key={g.id} className="dc-row is-locked">

@@ -1,6 +1,6 @@
 import { DS } from '../lib/ds.js';
 import { resolveTheme } from '../lib/themes.js';
-import { CATEGORIES, COMMANDS, categoryName, abilityCommands } from '../commands/registry.js';
+import { CATEGORIES, COMMANDS, categoryName, abilityCommands, itemCommands } from '../commands/registry.js';
 import { formatDuration } from '../devcore/engine/format.js';
 import { rank, loadRecent, pushRecent, normalize } from '../commands/search.js';
 import { draftMatches } from '../commands/providers.js';
@@ -159,6 +159,7 @@ export function Palette() {
   const [nd, setNd] = React.useState(EMPTY_NOTES);  // dados de notas para o estado atual
   const [notesTick, setNotesTick] = React.useState(0);
   const [abilities, setAbilities] = React.useState([]); // habilidades dos DevPets (dinâmicas)
+  const [items, setItems] = React.useState([]);         // consumíveis em estoque (dinâmicos)
   const inputRef = React.useRef(null);
   const panelRef = React.useRef(null);
   const listRef = React.useRef(null);
@@ -215,7 +216,7 @@ export function Palette() {
   }, [ndKey]);
   React.useEffect(() => window.devkit.notes.onChanged(() => setNotesTick((t) => t + 1)), []);
 
-  const abilityCmds = React.useMemo(() => abilityCommands(abilities, formatDuration), [abilities]);
+  const abilityCmds = React.useMemo(() => [...abilityCommands(abilities, formatDuration), ...itemCommands(items)], [abilities, items]);
   const sections = React.useMemo(() => buildSections(scope, query, recent, nd, abilityCmds), [scope, query, recent, nd, abilityCmds]);
   const flat = React.useMemo(() => sections.flatMap((s) => s.items), [sections]);
   const cur = Math.min(hi, flat.length - 1);
@@ -225,6 +226,7 @@ export function Palette() {
   React.useEffect(() => window.devkit.palette.onOpened(() => {
     emit('palette.opened');
     window.devkit.devcore.abilities().then(setAbilities, () => setAbilities([]));
+    window.devkit.devcore.items().then(setItems, () => setItems([]));
     setScope(null); setQuery(''); setHi(0); setBusy(null); setError(null); setDone(null); setQuick(null);
     setRecent(loadRecent(localStorage));
     document.documentElement.dataset.theme = resolveTheme(readPrefs().theme || 'dark');

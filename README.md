@@ -197,20 +197,40 @@ fechado, com **DevPets** trabalhando nela. O DevKit continua sendo o produto; qu
 tela do DevCore aparece, no máximo, um ponto discreto no item da sidebar quando há descoberta ou upgrade novo.
 
 - **Compute** é produzido por geradores (Terminal Worker → Local Cluster) em 3 tiers. Cada tier traz uma mecânica
-  nova: **T1** produção e upgrades · **T2** sinergias e habilidades dos pets · **T3** estações (pet na própria
-  especialidade rende ×2) e agentes que orquestram as outras categorias
-- **DevPets** (criaturas SVG originais): Byte, Noxi, Query e Memo, cada um com especialização, nível (treino),
-  bônus e uma habilidade com cooldown (Compile Burst, Parallelize, Index, Recall)
+  nova: **T1** produção e upgrades · **T2** sinergias, habilidades dos pets, **estações** (1 vaga: pet na própria
+  especialidade rende ×2) e **incidentes** · **T3** mais uma vaga de estação e agentes que orquestram as categorias
+- **Incidentes ("pets do mal")**: de tempos em tempos um vilão original invade uma estação — **Leaky** (Memory Leak),
+  **Flicker** (Flaky Pipeline), **Swarm** (Traffic Spike), **Forky** (Merge Conflict) e o chefe **Zero** (Zero-day).
+  A estratégia é de *preparação*: o próximo incidente aparece na previsão 2 h antes e é **contido** se o DevPet
+  certo estiver em estação quando ele começar (contido = sem efeito + 1 consumível + 1 peça de Blueprint). Se escapar, só reduz a
+  produção de uma categoria por um tempo (piso ×0,8) — **nunca tira progresso** e acaba sozinho. Com o app fechado
+  suas defesas agem por você e o resumo de retorno conta o que aconteceu. **Modo tranquilo** desliga tudo
+- **Consumíveis**: Coffee (×1,5 por 10 min), Hotfix (derrota o vilão ativo), Rollback (o próximo incidente já nasce
+  contido) e Cache Warmer (zera uma recarga). Vêm de incidentes contidos, de achados dos pets e de **fabricação**
+  com Compute (custo = minutos da produção atual); estoque com teto, nunca à venda. Aba **Ops**: previsão, incidente
+  ativo, inventário, **bestiário** dos vilões e histórico
+- **Marcos por quantidade**: ao chegar em 25/50/100/150/200/250/300 unidades, a produção daquele gerador sobe
+  (×1,5 nos dois primeiros, ×2 nos demais). Cada linha da aba Generators mostra o próximo ("×2 em 100 · faltam 15")
+- **Blueprints (Mk II / Mk III)**: cada gerador tem um conjunto de 4 peças temáticas por nível. Com o conjunto
+  completo, **Refactor** consome as peças e evolui o gerador: Mk II = produção ×3 e próximas unidades ÷4;
+  Mk III = mais ×5 (×15 no total) e custo ÷10 (÷40). A estação da categoria muda na cena (moldura e 2ª fileira de
+  LEDs no Mk II; brilho e selo "III" no Mk III). Peças vêm de vilões contidos (um gerador da categoria atacada),
+  do **Zero** (Mk III), de achados dos pets (30%) ou são **compradas** com Compute (2 h de produção por peça Mk II,
+  6 h por Mk III). Peça repetida vira **sucata**: 5 trocam por uma peça Mk II que falta, 8 por uma Mk III
+- **DevPets** (criaturas SVG originais), um para cada categoria: Byte (Shell), Noxi (Automation), Query e Memo
+  (Data), Relay (Agents) e Armo (Infra) — os dois últimos chegam no Tier 3. Cada um tem especialização, nível (treino),
+  bônus e uma habilidade com cooldown (Compile Burst, Parallelize, Index, Recall, Orchestrate, Scale Out)
 - **Aparência dos DevPets**: evoluem sozinhos com o nível (**Veterano** no 5 ganha um acessório da espécie;
   **Mestre** no 10 ganha outro e uma aura) e têm **visuais** (Monokai, Neon, Midnight, Solarized, Gold) que você
   desbloqueia por marcos e descobertas — nunca por compra — e escolhe no card do pet. Visuais ficam desbloqueados
   para sempre (`src/devcore/content/appearance.js`)
 - **Descobertas**: o uso real do DevKit *desbloqueia* conteúdo (pets, tiers, bônus pequenos com teto), nunca vira
   moeda. Contam **dias distintos** e **ferramentas distintas**: 100 notas num dia valem o mesmo que 1
-- **Offline**: sem ticks; o ganho é calculado pelo tempo (taxa × Δt, em trechos quando uma habilidade acaba), com
+- **Offline**: sem ticks; o ganho é calculado pelo tempo (taxa × Δt, em trechos a cada evento: habilidade, Coffee, incidente), com
   teto de 8 h (12 h com upgrade). Ao voltar, o resumo "Welcome back" aparece só ao abrir o DevCore
-- **Palette**: "devcore" lista Open DevCore / View Generators / DevPets / Upgrades / Discoveries / Collect Offline
-  Progress, e as habilidades prontas ("Ativar Compile Burst (Byte)") executam sem abrir a janela
+- **Palette**: "devcore" lista Open DevCore / View Generators / Blueprints / DevPets / Upgrades / Discoveries / Ops / Collect
+  Offline Progress; habilidades prontas ("Ativar Compile Burst (Byte)") e consumíveis ("Usar Coffee") executam sem
+  abrir a janela
 
 ### Arquitetura
 
@@ -226,7 +246,7 @@ Features (ferramentas, palette, Notes) ── emit ──► Event Bus (electron
 
 - **Balanceamento**: todos os números estão em `src/devcore/content/*.js`. `npm run devcore:sim` simula um
   jogador em perfis de uso e imprime a linha do tempo; um teste garante as faixas de ritmo (T2 em 15–60 min de
-  sessão ativa, T3 em 1–3 dias de uso casual)
+  sessão ativa, T3 em 1–3 dias de uso casual, 1º Mk II em ~2–4 dias e Mk III em até 2 semanas)
 - **Estado** em `%APPDATA%/Toni Devkit/devcore.json` (escrita atômica, versão + migração), separado em `run`
   (o que um futuro *Rebuild* zeraria), `meta` (prestige), `usage`, `discoveries` e `pending`
 - **Testes**: `npm run test:devcore` (economia, modificadores, integral por trechos, teto offline, descobertas

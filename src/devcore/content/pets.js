@@ -3,6 +3,7 @@
  * DevPets — criaturas originais do DevKit. Cada um tem especialização (categoria), bônus que escalam
  * com o nível, uma habilidade ativável e falas para a cena (só visual).
  * bonus: efeitos no nível 1; cada nível acima soma perLevel × o valor base (ex.: +10% do bônus).
+ *        perActiveCategory: true → o valor é multiplicado pelo nº de categorias com produção.
  */
 
 const RARITY = {
@@ -54,6 +55,28 @@ const PETS = [
     lines: {
       working: ['writing notes...', 'linking ideas...', 'cataloguing snippets...'],
       idle: ['re-reading old notes...', 'sharpening a pencil...', 'hooting softly...'],
+    },
+  },
+  {
+    id: 'relay', name: 'Relay', species: 'corvo-orquestrador', rarity: 'epic',
+    specialization: 'Agents', category: 'agents', color: '#FF8A5B',
+    bonus: [{ type: 'add', target: 'cat:agents', value: 0.2 }, { type: 'add', target: 'global', value: 0.03 }],
+    perLevel: 0.1, trainCost: 5e6, trainScaling: 2.2,
+    ability: 'orchestrate',
+    lines: {
+      working: ['delegating tasks...', 'routing messages...', 'syncing agents...', 'planning the next sprint...'],
+      idle: ['preening feathers...', 'watching the queues...', 'collecting shiny tokens...'],
+    },
+  },
+  {
+    id: 'armo', name: 'Armo', species: 'tatu-servidor', rarity: 'epic',
+    specialization: 'Infra', category: 'infra', color: '#8FA3BF',
+    bonus: [{ type: 'add', target: 'cat:infra', value: 0.15 }, { type: 'add', target: 'global', value: 0.02, perActiveCategory: true }],
+    perLevel: 0.1, trainCost: 5e7, trainScaling: 2.2,
+    ability: 'scale-out',
+    lines: {
+      working: ['scaling nodes...', 'balancing load...', 'patching kernels...', 'rotating certificates...'],
+      idle: ['curled up in the rack...', 'humming at 40°C...', 'counting uptime...'],
     },
   },
 ];

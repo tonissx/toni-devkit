@@ -12,10 +12,10 @@ const { atomicWrite, createQueue } = require('../lib/fsx.js');
 const { CONTENT } = require('../../src/devcore/content/index.js');
 const { migrate } = require('../../src/devcore/engine/state.js');
 const { dispatch } = require('../../src/devcore/engine/index.js');
-const { snapshot, abilitiesList } = require('../../src/devcore/engine/view.js');
+const { snapshot, abilitiesList, itemsList } = require('../../src/devcore/engine/view.js');
 
 // Ações que as janelas podem pedir (eventos, boot e tick são internos).
-const UI_ACTIONS = new Set(['buy', 'upgrade', 'train', 'station', 'ability', 'ackWelcome', 'seen', 'skin']);
+const UI_ACTIONS = new Set(['buy', 'upgrade', 'train', 'station', 'ability', 'ackWelcome', 'seen', 'skin', 'use', 'craft', 'quiet', 'buyPart', 'scrapPart', 'refactor']);
 
 function createDevCoreService({ file, now = () => Date.now(), broadcast = () => {} }) {
   let state = null;
@@ -54,6 +54,7 @@ function createDevCoreService({ file, now = () => Date.now(), broadcast = () => 
 
     get: () => view(),
     abilities: () => abilitiesList(state, now()),
+    items: () => itemsList(state, now()),
 
     /** Ação vinda da UI/palette. → { ok, error?, log, snapshot } */
     async act(action) {

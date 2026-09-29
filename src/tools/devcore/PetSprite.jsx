@@ -141,7 +141,79 @@ function Memo({ c, eye, stage }) {
   );
 }
 
-const SPECIES = { byte: Byte, noxi: Noxi, query: Query, memo: Memo };
+/** Relay — "corvo-orquestrador": ave coral de bico curto, asa de comando e cauda em leque. */
+function Relay({ c, eye, stage }) {
+  const BEAK = '#FFD27A';
+  return (
+    <g>
+      <path className="pet-tail" d="M40 40 L57 45 L52 38 L58 34 Z" fill={c} opacity=".8" />
+      {stage >= 2 && (
+        <g className="pet-acc pet-signal" fill="none" stroke={eye} strokeWidth="1.6" strokeLinecap="round">
+          <path d="M22 9 q5 -4 10 0" />
+          <path d="M19 5 q8 -6 16 0" opacity=".6" />
+        </g>
+      )}
+      <g className="pet-body">
+        <ellipse cx="31" cy="38" rx="15" ry="13" fill={c} />
+        <circle cx="26" cy="23" r="10" fill={c} />
+        <path d="M17 22 L8 25 L17 28 Z" fill={BEAK} />
+        <circle cx="23" cy="21" r="3.8" fill={DARK} />
+        <circle className="pet-eye" cx="23.5" cy="20.5" r="1.9" fill={eye} />
+        {stage >= 1 && (
+          <g className="pet-acc" fill="none" stroke={GEAR} strokeWidth="1.8" strokeLinecap="round">
+            <rect x="17.5" y="16.5" width="12" height="8" rx="2.5" />
+            <path d="M30 20 q6 0 6 6" strokeWidth="1.4" />
+          </g>
+        )}
+      </g>
+      <path className="pet-arm pet-arm--r" d="M28 34 q11 -5 17 6 q-9 4 -17 -6 z" fill={DARK} opacity=".25" />
+      <rect className="pet-leg pet-leg--l" x="25" y="49" width="3" height="7" rx="1.5" fill={BEAK} />
+      <rect className="pet-leg pet-leg--r" x="33" y="49" width="3" height="7" rx="1.5" fill={BEAK} />
+    </g>
+  );
+}
+
+/** Armo — "tatu-servidor": casco em cúpula com gavetas de rack e LEDs piscando. */
+function Armo({ c, eye, stage }) {
+  return (
+    <g>
+      {stage >= 1
+        ? <g className="pet-acc pet-tail" fill="none" stroke={GEAR} strokeWidth="2" strokeLinecap="round">
+            <path d="M12 42 q-7 1 -8 -7" />
+            <rect x="1.5" y="31" width="5" height="5" rx="1" fill={GEAR} stroke="none" />
+          </g>
+        : <path className="pet-tail" d="M12 42 q-6 0 -8 -6" stroke={c} strokeWidth="3" fill="none" strokeLinecap="round" />}
+      {stage >= 2 && (
+        <g className="pet-acc" fill="none" stroke={GEAR} strokeWidth="1.8" strokeLinecap="round">
+          <line x1="31" y1="24" x2="31" y2="15" />
+          <path d="M25 13 q6 7 12 0" />
+          <circle className="pet-signal" cx="31" cy="11" r="1.6" fill={eye} stroke="none" />
+        </g>
+      )}
+      <g className="pet-body">
+        <path d="M11 43 a20 19 0 0 1 40 0 z" fill={c} />
+        <g className={stage >= 2 ? 'pet-glow' : ''}>
+          <rect x="17" y="29" width="28" height="3.2" rx="1.6" fill={stage >= 2 ? eye : DARK} opacity={stage >= 2 ? 0.55 : 0.45} />
+          <rect x="15" y="35" width="32" height="3.2" rx="1.6" fill={stage >= 2 ? eye : DARK} opacity={stage >= 2 ? 0.55 : 0.45} />
+        </g>
+        <circle className="pet-led" cx="40" cy="30.6" r="1.1" fill={eye} />
+        <circle className="pet-led pet-led--b" cx="43" cy="36.6" r="1.1" fill={eye} />
+        {stage >= 1 && <circle className="pet-led pet-led--c" cx="20" cy="36.6" r="1.1" fill={eye} />}
+        <ellipse cx="52" cy="40" rx="7" ry="6" fill={c} />
+        <ellipse cx="50.5" cy="33.5" rx="2" ry="3.4" fill={c} />
+        <path d="M57.5 38.5 L63 41 L57.5 43 Z" fill={c} />
+        <circle cx="54" cy="38.5" r="1.7" fill={DARK} />
+        <circle cx="54.5" cy="38" r=".6" fill={eye} />
+      </g>
+      <rect className="pet-leg pet-leg--l" x="16" y="42" width="5" height="6" rx="2" fill={c} />
+      <rect className="pet-leg pet-leg--r" x="25" y="42" width="5" height="6" rx="2" fill={c} />
+      <rect className="pet-leg pet-leg--l" x="34" y="42" width="5" height="6" rx="2" fill={c} />
+      <rect className="pet-leg pet-leg--r" x="43" y="42" width="5" height="6" rx="2" fill={c} />
+    </g>
+  );
+}
+
+const SPECIES = { byte: Byte, noxi: Noxi, query: Query, memo: Memo, relay: Relay, armo: Armo };
 
 /**
  * Sprite de um DevPet.
