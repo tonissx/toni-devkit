@@ -1,6 +1,7 @@
 import { DS } from '../lib/ds.js';
 import { useAutosave, statusLabel } from '../notes/client.js';
-import { imageDropProps } from '../notes/images.js';
+import { pasteProps } from '../notes/paste.js';
+import { applyToTextarea } from '../notes/textarea.js';
 
 const { Icon, Kbd } = DS;
 
@@ -15,12 +16,11 @@ export function QuickNote({ initial, onClose, onOpenInApp }) {
   const [imageError, setImageError] = React.useState(null);
   const ta = React.useRef(null);
 
-  // Colar/arrastar imagem: grava em .assets\ e insere o ![imagem](…) no cursor.
-  const imageProps = imageDropProps({
+  // Colar/arrastar: imagem vai para .assets\, tabela do Excel/SSMS vira tabela Markdown, URL sobre seleção vira link.
+  const imageProps = pasteProps({
     insert: (r) => {
       setImageError(null);
-      update({ content: r.value });
-      requestAnimationFrame(() => { const t = ta.current; if (t) { t.selectionStart = r.start; t.selectionEnd = r.end; } });
+      if (ta.current) applyToTextarea(ta.current, r, (content) => update({ content }));
     },
     onError: setImageError,
   });

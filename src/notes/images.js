@@ -1,5 +1,6 @@
 // Imagens nas Notes (renderer): colar (Ctrl+V) ou arrastar uma imagem para o textarea grava o
 // arquivo em .assets\ (processo principal) e insere "![imagem](.assets/<nome>)" no cursor.
+// Quem liga isso no textarea é pasteProps (paste.js), que decide entre texto e imagem.
 import { notesApi, cleanError } from './client.js';
 import { insertBlock } from './edit.js';
 
@@ -35,13 +36,4 @@ export function handleImageTransfer(e, dt, { insert, onError }) {
     if (refs.length) insert(insertBlock(t.value, start, end, refs.join('\n')));
   })();
   return true;
-}
-
-/** Props para o <textarea>: onPaste/onDrop/onDragOver tratando imagens. */
-export function imageDropProps({ insert, onError }) {
-  return {
-    onPaste: (e) => handleImageTransfer(e, e.clipboardData, { insert, onError }),
-    onDrop: (e) => handleImageTransfer(e, e.dataTransfer, { insert, onError }),
-    onDragOver: (e) => { if ([...(e.dataTransfer.items || [])].some((i) => i.kind === 'file')) e.preventDefault(); },
-  };
 }

@@ -2,7 +2,9 @@ import { DS, mod, isMod } from '../../lib/ds.js';
 import { useAutosave, statusLabel, notesApi, cleanError } from '../../notes/client.js';
 import { displayTitle, inlineTags, normTag, snippetCode } from '../../notes/note.js';
 import { continueList, toggleTaskLines, expandOnSpace } from '../../notes/edit.js';
-import { imageDropProps } from '../../notes/images.js';
+import { pasteProps } from '../../notes/paste.js';
+import { toggleWrap, makeLink, codeToggle } from '../../notes/markup.js';
+import { applyToTextarea } from '../../notes/textarea.js';
 import { NotePreview, SnippetCard } from './NotePreview.jsx';
 import { useLinkSuggest } from './LinkSuggest.jsx';
 import { Backlinks } from './Backlinks.jsx';
@@ -87,11 +89,8 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
     toast('Copiado', note.type === 'snippet' ? 'Snippet na área de transferência' : 'Código na área de transferência');
   };
 
-  // Aplica o resultado de uma função de src/notes/edit.js no textarea (texto + seleção).
-  const applyEdit = (t, r) => {
-    update({ content: r.value });
-    requestAnimationFrame(() => { t.selectionStart = r.start; t.selectionEnd = r.end; });
-  };
+  // Aplica o resultado de uma função de edit.js/markup.js no textarea (texto + seleção), mantendo o Ctrl+Z.
+  const applyEdit = (t, r) => applyToTextarea(t, r, (content) => update({ content }));
 
   // Autocomplete de [[link]] no corpo.
   const suggest = useLinkSuggest({ taRef: bodyRef, noteId: note.id, apply: applyEdit });
@@ -128,13 +127,23 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
     else if (e.key === ' ' && !isMod(e) && !e.altKey && t.selectionStart === t.selectionEnd) r = expandOnSpace(t.value, t.selectionStart);
     if (isMod(e) && !e.shiftKey && e.key.toLowerCase() === 'l') e.preventDefault();
     if (r) { e.preventDefault(); applyEdit(t, r); return; }
+    // Formatação: Ctrl/⌘+B negrito · Ctrl/⌘+I itálico · Ctrl/⌘+K link (só com seleção; sem ela, a palette
+    // abre como sempre) · Ctrl/⌘+Shift+K `código` ou bloco ```.
+    if (isMod(e) && !e.altKey) {
+      const k = e.key.toLowerCase(), s = t.selectionStart, en = t.selectionEnd;
+      let f = null;
+      if (k === 'b' && !e.shiftKey) f = toggleWrap(t.value, s, en, '**');
+      else if (k === 'i' && !e.shiftKey) f = toggleWrap(t.value, s, en, '*');
+      else if (k === 'k' && e.shiftKey) f = codeToggle(t.value, s, en);
+      else if (k === 'k') f = makeLink(t.value, s, en);
+      if (f) { e.preventDefault(); e.stopPropagation(); applyEdit(t, f); return; }
+      if ((k === 'b' || k === 'i') && !e.shiftKey) { e.preventDefault(); return; }
+    }
     if (e.key === 'Tab' && !e.shiftKey) {
       // Tab indenta (2 espaços) em vez de sair do editor.
       e.preventDefault();
-      const t = e.target, s = t.selectionStart, en = t.selectionEnd;
-      const v = t.value.slice(0, s) + '  ' + t.value.slice(en);
-      update({ content: v });
-      requestAnimationFrame(() => { t.selectionStart = t.selectionEnd = s + 2; });
+      const s = t.selectionStart;
+      applyEdit(t, { value: t.value.slice(0, s) + '  ' + t.value.slice(t.selectionEnd), start: s + 2, end: s + 2 });
     }
   };
 
@@ -164,7 +173,7 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
         onSelect={suggest.sync}
         onBlur={suggest.close}
         onScroll={suggest.close}
-        {...imageDropProps({
+        {...pasteProps({
           insert: (r) => applyEdit(bodyRef.current, r),
           onError: (msg) => toast('Não foi possível adicionar a imagem', msg, 'error'),
         })}
@@ -258,7 +267,7 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
         <span>Markdown</span>
         <span><Kbd size="sm">{mod('E')}</Kbd> editar/visualizar</span>
         <span><Kbd size="sm">{mod('L')}</Kbd> tarefa</span>
-        <span><Kbd size="sm">{mod('V')}</Kbd> cola imagens</span>
+        <span title="Negrito · itálico · link (com seleção) · Ctrl+Shift+K código"><Kbd size="sm">{mod('B / I / K')}</Kbd> formatar</span>
         <span><Kbd size="sm">[[</Kbd> link para nota</span>
         {note.type === 'snippet' && <span><Kbd size="sm">{mod('C', true)}</Kbd> copiar snippet</span>}
         <span className="nts-editor__spacer" />
