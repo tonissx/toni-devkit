@@ -58,7 +58,7 @@ function TagsField({ tags, content, onChange }) {
 /**
  * Editor de uma nota. Monte com key={id}: trocar de nota desmonta e o auto-save grava o pendente.
  */
-export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOpenLink, onOpenNote, onDelete, folderOptions = [], toast }) {
+export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resolve, onOpenLink, onOpenNote, onDelete, folderOptions = [], toast }) {
   const { note, update, status, error, flush } = useAutosave(initial, { isNew });
   const titleRef = React.useRef(null);
   const bodyRef = React.useRef(null);
@@ -73,6 +73,8 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
     if (isNew && initial.title) update({});
     const el = focus === 'title' ? titleRef.current : bodyRef.current;
     if (el) el.focus();
+    // Veio de um template/nota do dia com {{cursor}}: começa ali.
+    if (el && el === bodyRef.current && typeof cursor === 'number') el.setSelectionRange(cursor, cursor);
   }, []);
 
   // Pasta: nota nova só guarda a escolha (o arquivo nasce lá no 1º save); nota gravada é movida no disco.

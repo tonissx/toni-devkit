@@ -6,6 +6,7 @@ import { normalize } from '../../commands/search.js';
 import { NoteEditor } from './NoteEditor.jsx';
 import { TasksPanel } from './TasksPanel.jsx';
 import { TrashPanel } from './TrashPanel.jsx';
+import { TemplateModal } from './TemplateModal.jsx';
 import { FolderRow, useFolderDnD, NOTE_DRAG } from './FolderTree.jsx';
 import { NameModal, DeleteFolderModal, MoveNoteModal } from './FolderDialogs.jsx';
 import { buildTree, flattenTree, joinPath, baseName, isDescendant } from '../../notes/folders.js';
@@ -109,14 +110,24 @@ export function NotesScreen({ toast, request }) {
   // Abrir/criar uma nota sai do painel Tarefas (que ocupa o lugar do editor).
   const leaveTasks = (u) => (u.filter === 'tasks' || u.filter === 'trash' ? { ...u, filter: 'all' } : u);
 
-  const openNote = React.useCallback(async (id, focus) => {
+  // cursor: posição inicial no corpo (template/nota do dia com {{cursor}}) — força um modo com o editor visível.
+  const openNote = React.useCallback(async (id, focus, cursor) => {
     const note = await notesApi().get(id);
     if (!note) { toast('Nota não encontrada', 'Ela pode ter sido excluída', 'error'); return; }
-    setCurrent({ note, isNew: false, focus });
+    setCurrent({ note, isNew: false, focus, cursor: typeof cursor === 'number' ? cursor : undefined });
     // A árvore mostra onde a nota está: abre as pastas dela e passa a ser a pasta ativa.
     if (note.folder) setFoldersUi((f) => ({ ...f, open: { ...f.open, ...Object.fromEntries(ancestors(note.folder).map((p) => [p, true])) } }));
-    setUi((u) => ({ ...leaveTasks(u), selectedId: id, folder: note.folder || null }));
+    setUi((u) => ({ ...leaveTasks(u), selectedId: id, folder: note.folder || null, ...(typeof cursor === 'number' && u.mode === 'preview' ? { mode: 'split' } : {}) }));
   }, []);
+
+  // Nota do dia (Ctrl+Shift+D / botão Hoje / palette): abre a de hoje ou cria em "Diário".
+  const openDaily = React.useCallback(async () => {
+    try {
+      const r = await notesApi().daily();
+      await openNote(r.note.id, 'body', r.cursor);
+      if (r.created) toast('Nota do dia criada', 'em ' + (r.note.folder || 'Sem pasta') + ' — com as tarefas vencidas e de hoje');
+    } catch (e) { toast('Não foi possível abrir a nota do dia', cleanError(e), 'error'); }
+  }, [openNote]);
 
   const newNote = React.useCallback((title = '') => {
     // Dentro da pasta selecionada (a nota só vai para o disco quando tiver conteúdo).
@@ -135,8 +146,10 @@ export function NotesScreen({ toast, request }) {
   React.useEffect(() => {
     if (!request) return;
     if (request.new) newNote(request.title || '');
-    else if (request.id) openNote(request.id);
+    else if (request.id) openNote(request.id, request.cursor != null ? 'body' : undefined, request.cursor);
     else if (request.view === 'tasks') setUi((u) => ({ ...u, filter: 'tasks' }));
+    else if (request.view === 'daily') openDaily();
+    else if (request.view === 'template') setDialog({ kind: 'template' });
   }, [request && request.nonce]);
 
   const openLink = async (title) => {
@@ -279,12 +292,14 @@ export function NotesScreen({ toast, request }) {
   React.useEffect(() => {
     const h = (e) => {
       const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
-      if (isMod(e) && e.key.toLowerCase() === 'n') { e.preventDefault(); newNote(); }
+      // Ctrl/⌘+N nova · Ctrl/⌘+Shift+N a partir de template · Ctrl/⌘+Shift+D nota do dia
+      if (isMod(e) && e.key.toLowerCase() === 'n') { e.preventDefault(); if (e.shiftKey) setDialog({ kind: 'template' }); else newNote(); }
+      else if (isMod(e) && e.shiftKey && e.key.toLowerCase() === 'd') { e.preventDefault(); openDaily(); }
       else if ((isMod(e) && e.key.toLowerCase() === 'f') || (e.key === '/' && !typing)) { e.preventDefault(); searchRef.current && searchRef.current.focus(); }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [newNote]); // newNote muda com a pasta selecionada (Ctrl+N cria dentro dela)
+  }, [newNote, openDaily]); // newNote muda com a pasta selecionada (Ctrl+N cria dentro dela)
 
   /** Linha de uma nota. Na árvore (inTree) a pasta é óbvia pelo aninhamento, então não repete o caminho. */
   const noteRow = (r, key, { inTree = false, i = 0 } = {}) => (
@@ -345,6 +360,8 @@ export function NotesScreen({ toast, request }) {
         subtitle="Sua memória técnica — Markdown, snippets e busca. Capture com Ctrl+Alt+Space → Alt+Q"
         actions={<>
           <Button variant="secondary" icon="folder-open" onClick={() => notesApi().openFolder()}>Abrir pasta</Button>
+          <Button variant="secondary" icon="calendar-days" onClick={openDaily}>Hoje</Button>
+          <IconButton icon="layout-template" label={'Nova nota a partir de template (' + mod('N', true) + ')'} onClick={() => setDialog({ kind: 'template' })} />
           <Button variant="primary" icon="plus" kbd={mod('N')} onClick={() => newNote()}>Nova nota</Button>
         </>}
       />
@@ -449,6 +466,7 @@ export function NotesScreen({ toast, request }) {
               initial={current.note}
               isNew={current.isNew}
               focus={current.focus}
+              cursor={current.cursor}
               mode={ui.mode}
               setMode={(mode) => setUi((u) => ({ ...u, mode }))}
               resolve={resolve}
@@ -513,6 +531,15 @@ export function NotesScreen({ toast, request }) {
           {...(() => { const s = folderStats(dialog.path); return { notes: s.notes, subfolders: s.subfolders }; })()}
           onClose={() => setDialog(null)}
           onConfirm={() => deleteFolder(dialog.path)}
+        />
+      )}
+      {dialog && dialog.kind === 'template' && (
+        <TemplateModal
+          folder={folderSel}
+          onClose={() => setDialog(null)}
+          onCreated={(note, cursor) => openNote(note.id, 'body', cursor)}
+          onEditTemplate={(note) => openNote(note.id, 'body')}
+          toast={toast}
         />
       )}
       {dialog && dialog.kind === 'move' && (

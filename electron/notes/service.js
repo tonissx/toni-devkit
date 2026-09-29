@@ -12,6 +12,7 @@ const { createNote, displayTitle, allTags, plainLine, tasksOf, taskStats, toggle
 const { searchNotes } = require('../../src/notes/search.js');
 const { validFolderPath, validFolderName, normFolder, folderOf, baseName, parentOf, joinPath, isDescendant } = require('../../src/notes/folders.js');
 const { normalize } = require('../../src/commands/search.js');
+const { DAILY_FOLDER, TEMPLATES_FOLDER, DAILY_TEMPLATE, DEFAULT_DAILY, templateVars, applyTemplate, dailyTitle, isDailyTitle, pendingList } = require('../../src/notes/templates.js');
 
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
 const VIEWED_MAX = 20;
@@ -77,6 +78,15 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     } catch (e) { console.error('[notes] histórico', e); } // falhar aqui nunca impede de salvar a nota
   }
   const trashed = new Map(); // id → arquivo em .trash da última exclusão (desfazer apaga a cópia)
+
+  /** Pasta existente com esse nome na raiz, sem diferenciar maiúsculas/acentos ("diario" serve para "Diário"). */
+  const rootFolderLike = (name) => [...folderSet].find((f) => !f.includes('/') && normalize(f) === normalize(name)) || null;
+  /** A nota está na pasta Templates (ou numa subpasta dela)? */
+  const isTemplate = (n) => {
+    const top = folderOf(n.file).split('/')[0];
+    return !!top && normalize(top) === normalize(TEMPLATES_FOLDER);
+  };
+  const dailyInFlight = new Map(); // data → promessa (dois cliques seguidos não criam duas notas do dia)
 
   /** Valida uma pasta de destino existente ('' = raiz); devolve o caminho normalizado. */
   function existingFolder(p) {
@@ -171,6 +181,80 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     create(partial = {}) {
       const { id, ...fields } = partial; // sempre um id novo
       return this.save(createNote(fields));
+    },
+
+    /* ─────────────── Templates e nota diária ─────────────── */
+
+    /** Pasta na raiz com esse nome (a existente, mesmo com outra grafia; senão cria). Devolve o caminho. */
+    async ensureRootFolder(name) {
+      return rootFolderLike(name) || this.createFolder(name);
+    },
+
+    /** Templates (notas da pasta Templates): [{ id, title, folder, preview, tags }], por título. */
+    templates() {
+      return [...notes.values()].filter(isTemplate).map(summary)
+        .sort((a, b) => a.title.localeCompare(b.title, 'pt-BR'));
+    },
+
+    /**
+     * Cria uma nota a partir do template `id` (variáveis trocadas) na pasta `folder` ('' = raiz; dentro
+     * de Templates cai na raiz). O título só vem do template se ele usar variáveis ("Chamado {{data}}").
+     * → { note, cursor } — cursor = posição de {{cursor}} no conteúdo (ou null).
+     */
+    async fromTemplate(id, { folder = '' } = {}) {
+      const t = notes.get(id);
+      if (!t || !isTemplate(t)) err('Template não encontrado.');
+      const vars = templateVars(new Date());
+      const title = /\{\{/.test(t.title || '') ? applyTemplate(t.title, vars).text.trim() : '';
+      const { text, cursor } = applyTemplate(t.content, { ...vars, titulo: title });
+      let dest = normFolder(folder);
+      if (dest && (!folderSet.has(dest) || isTemplate({ file: dest + '/x.md' }))) dest = '';
+      const note = await this.create({
+        title, content: text, type: t.type, folder: dest,
+        tags: (t.tags || []).filter((x) => normalize(x) !== 'template'),
+      });
+      if (!note) err('O template está vazio.');
+      return { note, cursor };
+    },
+
+    /**
+     * Nota do dia (AAAA-MM-DD, pasta Diário): abre a existente ou cria a partir do template "Diário"
+     * (ou do padrão), com as tarefas vencidas/de hoje e o link para a nota diária anterior.
+     * date = 'AAAA-MM-DD' (padrão: hoje). → { note, created, cursor }
+     */
+    daily(date) {
+      const now = new Date();
+      const day = isDailyTitle(date) ? date : dailyTitle(now);
+      if (!dailyInFlight.has(day)) {
+        const run = this._daily(day, now).finally(() => dailyInFlight.delete(day));
+        dailyInFlight.set(day, run);
+      }
+      return dailyInFlight.get(day);
+    },
+
+    async _daily(day, now) {
+      const inDaily = (n) => normalize(folderOf(n.file).split('/')[0] || '') === normalize(DAILY_FOLDER);
+      const same = (n) => String(n.title || '').trim() === day;
+      const found = [...notes.values()].find((n) => same(n) && inDaily(n)) || [...notes.values()].find(same);
+      if (found) return { note: this.get(found.id), created: false, cursor: null };
+
+      const folder = await this.ensureRootFolder(DAILY_FOLDER);
+      const tmpl = this.templates().find((t) => normalize(t.title) === normalize(DAILY_TEMPLATE));
+      const source = tmpl ? notes.get(tmpl.id) : null;
+      const prev = [...notes.values()].filter((n) => inDaily(n) && isDailyTitle(n.title) && n.title.trim() < day)
+        .map((n) => n.title.trim()).sort().pop();
+      const [y, m, d] = day.split('-').map(Number);
+      const when = new Date(y, m - 1, d, now.getHours(), now.getMinutes());
+      const { text, cursor } = applyTemplate(source ? source.content : DEFAULT_DAILY, templateVars(when, {
+        titulo: day,
+        pendencias: pendingList(this.tasks({ status: 'open' }), day),
+        anterior: prev ? `← [[${prev}]]` : '',
+      }));
+      const note = await this.create({
+        title: day, content: text, folder,
+        tags: source ? (source.tags || []).filter((x) => normalize(x) !== 'template') : [],
+      });
+      return { note, created: true, cursor };
     },
 
     remove(id) {
@@ -485,7 +569,7 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     tasks({ status = 'open', tag } = {}) {
       const out = [];
       for (const n of notes.values()) {
-        if (n.type === 'snippet') continue;
+        if (n.type === 'snippet' || isTemplate(n)) continue; // "- [ ]" de um template é modelo, não tarefa
         const tags = allTags(n);
         if (tag && !tags.includes(tag)) continue;
         for (const t of tasksOf(n.content)) {
