@@ -151,12 +151,13 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   `Ctrl+Shift+C`
 - **Editor** (ferramenta Notes, `Ctrl+4`): Markdown com modos Editar / Lado a lado / Visualizar (`Ctrl+E`),
   headings, listas, tabelas, citações, código com realce, checklists clicáveis e links internos `[[Título]]`
-  (clicar abre a nota; se ela não existe, cria). Tags, aliases, pinned e favoritas; filtros Quick · Pinned ·
-  Snippets · Favoritas · Recentes (editadas e vistas)
+  (clicar abre a nota; se ela não existe, cria). Tags, aliases, pinned e favoritas; filtros da lista (chips na
+  lateral) Quick · Pinned · Snippets · Favoritas · Recentes (editadas e vistas). A área principal tem abas de visão
+  **Nota | Tarefas | Grafo** — os filtros mudam a lista, as abas mudam o painel
 - **Links entre notas**: digitar `[[` abre sugestões de notas (↑/↓, `Enter`/`Tab` completa, `Esc` fecha; "Nova nota: …"
   quando nada casa). Abaixo do editor, **Mencionada em (N)** lista as notas que apontam para a aberta (por título ou
   alias), com a linha do link. Ao trocar o título, o Devkit oferece atualizar os `[[links]]` que usavam o nome antigo
-- **Grafo** (filtro na lateral ou "Grafo de notas" na palette): as notas como pontos e os `[[links]]` como linhas,
+- **Grafo** (aba **Grafo** no topo da área principal ou "Grafo de notas" na palette): as notas como pontos e os `[[links]]` como linhas,
   coloridas pela pasta. Arrastar o fundo move, a roda aproxima, clique abre a nota, passar o mouse destaca os
   vizinhos, arrastar um ponto o prende no lugar (duplo clique solta). **Global** ou **Nota atual** (vizinhança da nota
   aberta, 1 ou 2 saltos), busca que destaca (`Enter` centraliza), mostrar/esconder **Órfãs** (sem links) e
@@ -171,7 +172,7 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   cada 10 min por nota, as 50 mais recentes, em `Devkit Notes\.devkit\history\`. O painel mostra a lista e o diff
   da versão para a atual (mesmo motor do Diff Checker); **Restaurar** volta título e conteúdo, e o estado atual vira
   uma versão (dá para voltar atrás)
-- **Lixeira** (filtro na lateral): notas excluídas, mais recentes primeiro, com a pasta de origem e o conteúdo.
+- **Lixeira** (botão no rodapé da lateral, com contador, ou "Lixeira" na palette): notas excluídas, mais recentes primeiro, com a pasta de origem e o conteúdo.
   **Restaurar** (ou duplo clique) volta para a pasta onde estava, recriada se preciso · **Excluir de vez** e
   **Esvaziar lixeira** pedem confirmação e apagam também o histórico da nota. Continua sendo a pasta `.trash\`
 - **Colar e formatar**, no editor e na Quick Note:
@@ -195,7 +196,7 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
     linhas selecionadas) entre texto → `- [ ]` → `- [x]` → texto · `[]` ou `todo` + espaço no começo da linha vira `- [ ] `
   - Prazo e prioridade no texto: `@2026-10-02` (ou `@hoje` / `@amanha` + espaço, que viram a data) e `!1` `!2` `!3`;
     aparecem como chips no preview (prazo vencido em vermelho)
-  - Filtro **Tarefas** na ferramenta: todas as tarefas de todas as notas, agrupadas em Vencidas · Hoje · Próximas ·
+  - Aba **Tarefas** (no topo da área principal): todas as tarefas de todas as notas, agrupadas em Vencidas · Hoje · Próximas ·
     Sem data (aba Concluídas à parte); marcar ali grava na nota de origem, clicar no texto abre a nota. A lista
     de notas mostra o progresso (`☑ 3/7`)
   - Na palette: `task: revisar PR #42` (também `tarefa:` e `t:`) acrescenta `- [ ] revisar PR #42` à nota **Inbox**

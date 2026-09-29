@@ -189,6 +189,12 @@ const noteCommands = [
     run: (ctx) => ctx.openApp('notes', { view: 'graph' }),
   },
   {
+    id: 'notes:trash', name: 'Lixeira', icon: 'trash-2',
+    description: 'Notas excluídas — restaurar ou excluir de vez',
+    keywords: ['lixeira', 'trash', 'excluidas', 'apagadas', 'restaurar', 'note'],
+    run: (ctx) => ctx.openApp('notes', { view: 'trash' }),
+  },
+  {
     id: 'notes:template', name: 'Nova nota a partir de template', icon: 'layout-template',
     description: 'Escolher um modelo da pasta Templates',
     keywords: ['template', 'modelo', 'nova nota', 'note'],

@@ -126,6 +126,13 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   background: var(--tk-bg); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); padding: 10px;
 }
 .nts__main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* Abas de visão (Nota | Tarefas | Grafo): trocam a área principal — diferente dos filtros da lateral. */
+.nts-views { display: flex; align-items: flex-end; gap: 2px; margin-bottom: 8px; border-bottom: 1px solid var(--tk-border); }
+.nts-views__tab { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--tk-text-3); font: 500 12.5px var(--tk-font-sans); cursor: pointer; }
+.nts-views__tab:hover { color: var(--tk-text); }
+.nts-views__tab.is-on { color: var(--tk-text); border-bottom-color: var(--tk-accent); }
+.nts-views__tab.is-on .tk-icon { color: var(--tk-accent-text); }
+.nts-views__tab.is-extra { margin-left: auto; cursor: default; }
 .nts-search { width: 100%; }
 .nts-search input { min-width: 0; }
 .nts-filters, .nts-tagcloud { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -183,7 +190,12 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-row__tags { display: flex; gap: 6px; margin-top: 2px; font: 400 10.5px var(--tk-font-mono); color: var(--tk-accent-text); opacity: .8; }
 .nts-row__time { flex-shrink: 0; font: 400 10.5px var(--tk-font-mono); color: var(--tk-text-3); margin-top: 2px; }
 .nts-undo { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 4px 8px; font-size: 12px; color: var(--tk-text-2); background: var(--tk-surface-2); border-radius: var(--tk-radius-sm); }
-.nts-side__foot { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--tk-text-3); padding: 2px 4px 0; }
+.nts-side__foot { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--tk-text-3); padding: 2px 4px 0; }
+/* Lixeira: destino de uso raro — discreta no rodapé da lateral, com contador. */
+.nts-side__trash { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; border: 1px solid transparent; border-radius: var(--tk-radius-sm); background: none; color: var(--tk-text-3); font: 500 11px var(--tk-font-sans); cursor: pointer; }
+.nts-side__trash:hover { color: var(--tk-text); background: var(--tk-surface-hover); }
+.nts-side__trash.is-on { color: var(--tk-accent-text); border-color: var(--tk-accent); background: color-mix(in srgb, var(--tk-accent) 10%, transparent); }
+.nts-side__trash-n { padding: 0 5px; border-radius: 8px; background: var(--tk-surface-3); font: 500 10px/15px var(--tk-font-mono); color: var(--tk-text-2); }
 .nts-warn { display: inline-flex; align-items: center; gap: 4px; color: var(--tk-amber); cursor: help; }
 
 .nts-empty { flex: 1; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--tk-border); border-radius: var(--tk-radius-md); }

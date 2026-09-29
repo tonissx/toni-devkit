@@ -427,8 +427,10 @@ test('service: trash lists deleted notes, restores to the original folder, delet
 
     await svc.remove(c.id);
     assert.ok((await svc.trashList()).length >= 1);
+    assert.equal(await svc.trashCount(), (await svc.trashList()).length); // contador da lateral = itens da lixeira
     assert.ok((await svc.emptyTrash()) >= 1);
     assert.deepEqual(await svc.trashList(), []);
+    assert.equal(await svc.trashCount(), 0);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

@@ -278,6 +278,9 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
 
     /* ─────────────── Lixeira ─────────────── */
 
+    /** Quantas notas há na lixeira (contador da lateral). */
+    trashCount: () => store.countTrash(),
+
     /** Notas excluídas: [{ file, id, title, folder, deletedAt, content, preview, exists }], mais recentes primeiro. */
     async trashList() {
       return (await store.listTrash()).map((t) => {

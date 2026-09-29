@@ -162,6 +162,22 @@ function createStore(dir) {
 
     /* ─────────────── Lixeira ─────────────── */
 
+    /** Quantos .md há na lixeira (só conta, sem ler os arquivos — para o contador da lateral). */
+    async countTrash() {
+      let count = 0;
+      const walk = async (abs) => {
+        let entries;
+        try { entries = await fs.readdir(abs, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+          if (e.isSymbolicLink()) continue;
+          if (e.isDirectory()) await walk(path.join(abs, e.name));
+          else if (e.isFile() && /\.md$/i.test(e.name)) count++;
+        }
+      };
+      await walk(trashDir);
+      return count;
+    },
+
     /** Itens da lixeira: [{ file, folder, deletedAt, note }] (file relativo a .trash). Ilegíveis são pulados. */
     async listTrash() {
       const out = [];
