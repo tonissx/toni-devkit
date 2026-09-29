@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { BINDABLE_IDS, DEFAULT_BINDS, acceleratorFromEvent, acceleratorLabel, normalizeBinds } = require('../src/commands/binds.js');
-const { COMMANDS } = require('../src/commands/registry.js');
+const { COMMANDS, detectClipboardKind } = require('../src/commands/registry.js');
 
 const key = (code, mods = {}) => ({ code, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...mods });
 
@@ -45,6 +45,40 @@ test('normalizeBinds drops unknown ids, non-strings, the palette shortcut and du
 
 test('defaults are valid and survive normalization', () => {
   assert.deepEqual(normalizeBinds(DEFAULT_BINDS), DEFAULT_BINDS);
+  assert.deepEqual(DEFAULT_BINDS, { 'clipboard:auto': 'Control+Alt+Shift+F' });
+});
+
+test('clipboard kind: leading < means XML, anything else is SQL', () => {
+  assert.equal(detectClipboardKind('<a/>'), 'xml');
+  assert.equal(detectClipboardKind('﻿  \n <?xml version="1.0"?><a/>'), 'xml');
+  assert.equal(detectClipboardKind('<!-- c --><a/>'), 'xml');
+  assert.equal(detectClipboardKind('select 1'), 'sql');
+  assert.equal(detectClipboardKind("select '<a>' from t"), 'sql');
+  assert.equal(detectClipboardKind('-- <nota>\nselect 1'), 'sql');
+  assert.equal(detectClipboardKind(''), 'sql');
+});
+
+test('clipboard:auto picks the formatter from the content', async () => {
+  const cmd = COMMANDS.find((c) => c.id === 'clipboard:auto');
+  let clip = '';
+  const sqlCalls = [];
+  const ctx = {
+    clipboard: { read: async () => clip, write: async (t) => { clip = t; } },
+    sql: { format: async (text, opts) => { sqlCalls.push({ text, opts }); return { result: 'SELECT 1' }; } },
+    storage: { getItem: (k) => (k === 'tk.sql.options' ? JSON.stringify({ keyword_case: 'upper' }) : null) },
+  };
+  clip = '  <a><b>1</b></a>';
+  assert.equal(await cmd.run(ctx), 'XML formatado e copiado');
+  assert.match(clip, /\n\s+<b>1<\/b>/);
+  assert.equal(sqlCalls.length, 0);
+
+  clip = 'select 1';
+  assert.equal(await cmd.run(ctx), 'SQL formatado e copiado');
+  assert.equal(clip, 'SELECT 1');
+  assert.equal(sqlCalls[0].opts.keyword_case, 'upper', 'usa as opções salvas do SQL Formatter');
+
+  clip = ' \n ';
+  await assert.rejects(() => cmd.run(ctx), /vazia/);
 });
 
 test('bindable commands exist and run without the palette UI', () => {

@@ -158,6 +158,7 @@ function buildTrayMenu() {
     { label: 'Abrir Devkit', click: () => showMain() },
     { label: 'Command Palette', accelerator: 'Ctrl+Alt+Space', registerAccelerator: false, click: () => palette.show('tray') },
     { type: 'separator' },
+    bound('clipboard:auto', 'Formatar clipboard (SQL ou XML)'),
     bound('clipboard:sql', 'Formatar SQL do clipboard'),
     bound('clipboard:xml', 'Formatar XML do clipboard'),
     { type: 'separator' },
@@ -427,8 +428,8 @@ if (!app.requestSingleInstanceLock()) {
     createTray();
     binds.init({ run: (id) => palette.run(id), changed: buildTrayMenu })
       .then(() => {
-        // Com o atalho de SQL ativo, aquece o Pyodide em segundo plano: o primeiro Ctrl+Alt+Shift+S não espera o motor subir.
-        if (binds.accelerator('clipboard:sql')) setTimeout(() => startSqlWorker().catch(() => {}), 5000);
+        // Com um atalho que formata SQL, aquece o Pyodide em segundo plano: o primeiro uso não espera o motor subir.
+        if (binds.accelerator('clipboard:auto') || binds.accelerator('clipboard:sql')) setTimeout(() => startSqlWorker().catch(() => {}), 5000);
       })
       .catch((e) => console.error('[binds]', e));
     if (!startHidden) createMainWindow();

@@ -11,16 +11,17 @@
 
 /** Comandos que podem receber um atalho global (ids de src/commands/registry.js). */
 const BINDABLE = [
+  { id: 'clipboard:auto', name: 'Formatar clipboard (SQL ou XML)' },
   { id: 'clipboard:sql', name: 'Formatar SQL do clipboard' },
   { id: 'clipboard:xml', name: 'Formatar XML do clipboard' },
   { id: 'theme:toggle', name: 'Alternar tema claro/escuro' },
 ];
 const BINDABLE_IDS = BINDABLE.map((b) => b.id);
 
-// Shift junto evita colisão com AltGr (= Ctrl+Alt) no teclado ABNT2.
+// Um atalho só (F de "Format") que detecta SQL/XML; os específicos ficam opcionais.
+// Shift junto evita colisão com AltGr (= Ctrl+Alt) no ABNT2 e com atalhos de IDE (Ctrl+Alt+S, Ctrl+Alt+L…).
 const DEFAULT_BINDS = {
-  'clipboard:sql': 'Control+Alt+Shift+S',
-  'clipboard:xml': 'Control+Alt+Shift+X',
+  'clipboard:auto': 'Control+Alt+Shift+F',
 };
 
 // Atalho da própria palette (electron/palette.js) — não pode ser reaproveitado.
