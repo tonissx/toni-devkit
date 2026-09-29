@@ -81,6 +81,34 @@ test('edit: Enter continues a task list, exits on an empty task, ignores code an
   assert.equal(continueList('- [ ] a', 3), null); // cursor dentro do prefixo
 });
 
+test('edit: insertBlock puts the text on its own line and moves the cursor after it', () => {
+  assert.deepEqual(E.insertBlock('', 0, 0, '![i](x)'), { value: '![i](x)\n', start: 8, end: 8 });
+  assert.deepEqual(E.insertBlock('ab', 1, 1, 'X'), { value: 'a\nX\nb', start: 4, end: 4 });
+  assert.deepEqual(E.insertBlock('a\n\nb', 2, 2, 'X'), { value: 'a\nX\nb', start: 3, end: 3 });
+  assert.deepEqual(E.insertBlock('a SEL b', 2, 5, 'X'), { value: 'a \nX\n b', start: 5, end: 5 });
+});
+
+test('service: saveImage writes to .assets (hidden from folders), validates type/size, resolves asset paths', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const { path: ref } = await svc.saveImage({ bytes, mime: 'image/png' });
+    assert.match(ref, /^\.assets\/\d{4}-\d{2}-\d{2}-\d{6}-[0-9a-f]{4}\.png$/);
+    assert.deepEqual([...readFileSync(path.join(dir, ref))], [...bytes]);
+    assert.equal(svc.assetFile(ref), path.join(dir, ref));
+    const b = await svc.saveImage({ bytes, mime: 'image/png' });
+    assert.notEqual(b.path, ref);
+    await assert.rejects(svc.saveImage({ bytes, mime: 'image/svg+xml' }), /não suportado/);
+    await assert.rejects(svc.saveImage({ bytes: new Uint8Array(0), mime: 'image/png' }), /vazia/);
+    await assert.rejects(svc.saveImage({ bytes: new Uint8Array(20 * 1024 * 1024 + 1), mime: 'image/jpeg' }), /grande demais/);
+    for (const bad of ['.assets/../x.md', '../x.png', 'a/b.png', '.assets/', 'C:/x.png']) assert.throws(() => svc.assetFile(bad), /inválido/);
+    await svc.init();
+    assert.deepEqual(svc.folders(), []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('edit: toggleTaskLines cycles text → open → done → text, also for selections', () => {
   const { toggleTaskLines: tg } = E;
   let r = tg('comprar leite', 3, 3);
@@ -507,6 +535,14 @@ test('markdown: code highlight, tasks, tables, wikilinks; raw HTML and js: links
   assert.ok(!/<img/.test(html) && html.includes('&lt;img'));
   assert.ok(!/javascript:/.test(html));
   assert.match(html, /<a href="https:\/\/a.com" target="_blank" rel="noreferrer">ok<\/a>/);
+});
+
+test('markdown: pasted images (.assets/) render as <img>; other local paths do not', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const { html } = renderMarkdown('![print](.assets/2026-09-29-142100-ab12.png)\n\n![a](.assets/../x.png) ![b](C:/x.png) ![c](.assets/sub/x.png) ![d](https://a.com/x.png)');
+  assert.equal((html.match(/<img/g) || []).length, 1);
+  assert.match(html, /<img class="md-img" src="devkit-note:\/\/asset\/2026-09-29-142100-ab12\.png" alt="print" data-asset="2026-09-29-142100-ab12\.png"/);
+  assert.match(html, /<a href="https:\/\/a.com\/x.png"[^>]*>🖼 d<\/a>/);
 });
 
 test('markdown: @date and !1..!3 become chips; lookalikes stay text', async () => {

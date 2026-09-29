@@ -10,6 +10,7 @@
  * - Arquivo ilegível é pulado e reportado, sem derrubar os demais.
  * - Nomes que começam com "." (.trash, .devkit, .git…) e links simbólicos são ignorados ao carregar.
  * - Estado do app (recentes vistos) fica em .devkit\state.json.
+ * - Imagens coladas nas notas ficam em .assets\ (referenciadas como "![](.assets/nome.png)").
  */
 const fs = require('node:fs/promises');
 const path = require('node:path');
@@ -24,6 +25,7 @@ function createStore(dir) {
   const queue = createQueue(); // gravações por arquivo, em ordem
   const trashDir = path.join(root, '.trash');
   const stateFile = path.join(root, '.devkit', 'state.json');
+  const assetsDir = path.join(root, '.assets');
 
   /** Caminho absoluto de um caminho relativo — sempre dentro da pasta das notas (sem "..", sem caminho absoluto). */
   function resolveIn(rel) {
@@ -155,6 +157,20 @@ function createStore(dir) {
         if (e.code === 'ENOENT') return true;
         throw e;
       }
+    },
+
+    /** Caminho absoluto de uma imagem de .assets\ (só o nome do arquivo, sem subpastas). */
+    assetPath(name) {
+      if (!/^[\w-][\w.-]*$/.test(String(name || ''))) throw new Error('Nome de imagem inválido');
+      return path.join(assetsDir, name);
+    },
+
+    /** Grava uma imagem em .assets\ (atômico). Recusa nome já existente: devolve false. */
+    async writeAsset(name, bytes) {
+      const file = this.assetPath(name);
+      if (await exists(file)) return false;
+      await atomicWrite(file, Buffer.from(bytes));
+      return true;
     },
 
     /** Espera todas as gravações pendentes (usado antes de sair). */

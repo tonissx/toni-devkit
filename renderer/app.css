@@ -270,6 +270,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .md-preview h4 { font-size: 13.5px; }
 .md-preview p, .md-preview ul, .md-preview ol, .md-preview blockquote, .md-preview table, .md-preview .md-code { margin: 0 0 .85em; }
 .md-preview ul, .md-preview ol { padding-left: 1.4em; }
+.md-preview .md-img { display: block; max-width: 100%; height: auto; margin: 4px 0; border-radius: 6px; border: 1px solid var(--tk-border); cursor: zoom-in; }
 .md-preview li:has(> .md-task) { list-style: none; margin-left: -1.3em; }
 .md-preview .md-task { margin: 0 6px 0 0; vertical-align: -2px; accent-color: var(--tk-accent); cursor: pointer; }
 .md-preview a { color: var(--tk-accent-text); text-decoration: none; }

@@ -16,6 +16,8 @@ const { normalize } = require('../../src/commands/search.js');
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
 const VIEWED_MAX = 20;
 const INBOX_TITLE = 'Inbox'; // nota que recebe as tarefas capturadas pela palette (task: …)
+const IMAGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+const IMAGE_MAX = 20 * 1024 * 1024;
 
 /** Resumo leve para listas (sem o conteúdo inteiro). */
 function summary(n) {
@@ -347,6 +349,31 @@ function createNotesService({ dir, broadcast = () => {}, events = null }) {
       const body = String(prev.content || '');
       const sep = !body || body.endsWith('\n') ? '' : '\n';
       return this.save({ id: prev.id, content: body + sep + item + '\n' });
+    },
+
+    /**
+     * Imagem colada/arrastada no editor: grava em .assets\ e devolve { path: '.assets/<nome>' }
+     * para o markdown. Aceita PNG/JPG/GIF/WebP até 20 MB.
+     */
+    async saveImage({ bytes, mime } = {}) {
+      const ext = IMAGE_EXT[String(mime || '').toLowerCase()];
+      if (!ext) err('Formato de imagem não suportado (use PNG, JPG, GIF ou WebP).');
+      const size = bytes ? bytes.byteLength : 0;
+      if (!size) err('Imagem vazia.');
+      if (size > IMAGE_MAX) err('Imagem grande demais (máximo 20 MB).');
+      const d = new Date();
+      const p2 = (n) => String(n).padStart(2, '0');
+      const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
+      for (let i = 0; i < 8; i++) {
+        const name = `${stamp}-${Math.random().toString(16).slice(2, 6).padEnd(4, '0')}.${ext}`;
+        if (await store.writeAsset(name, bytes)) return { path: '.assets/' + name };
+      }
+      err('Não foi possível gerar um nome para a imagem.');
+    },
+
+    /** Caminho absoluto de uma imagem referenciada como ".assets/<nome>" (ou só "<nome>"). */
+    assetFile(ref) {
+      return store.assetPath(String(ref || '').replace(/^\.assets\//, ''));
     },
 
     flush: () => store.flush(),

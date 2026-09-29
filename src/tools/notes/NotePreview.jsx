@@ -6,7 +6,7 @@ const { Button, Icon } = DS;
 
 /**
  * Preview do markdown. Cliques: [[link]] → onOpenLink(título) · "Copiar" num bloco → copia ·
- * checkbox de tarefa → onChange(conteúdo com a tarefa alternada).
+ * checkbox de tarefa → onChange(conteúdo com a tarefa alternada) · imagem → abre no visualizador do sistema.
  * hideCode: não repete os blocos de código (o SnippetCard já os mostra).
  */
 export function NotePreview({ content, hideCode, resolve, onOpenLink, onChange, onCopy, onDoubleClick }) {
@@ -18,6 +18,8 @@ export function NotePreview({ content, hideCode, resolve, onOpenLink, onChange, 
     if (link) { e.preventDefault(); onOpenLink(link.dataset.note); return; }
     const copy = e.target.closest('.md-code__copy');
     if (copy) { onCopy(blocks[Number(copy.dataset.copy)]); return; }
+    const img = e.target.closest('.md-img');
+    if (img) { window.devkit.notes.openAsset(img.dataset.asset); return; }
     const task = e.target.closest('.md-task');
     if (task && onChange) onChange(toggleTask(content, Number(task.dataset.task)));
   };

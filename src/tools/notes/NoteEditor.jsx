@@ -2,6 +2,7 @@ import { DS, mod, isMod } from '../../lib/ds.js';
 import { useAutosave, statusLabel, notesApi, cleanError } from '../../notes/client.js';
 import { displayTitle, inlineTags, normTag, snippetCode } from '../../notes/note.js';
 import { continueList, toggleTaskLines, expandOnSpace } from '../../notes/edit.js';
+import { imageDropProps } from '../../notes/images.js';
 import { NotePreview, SnippetCard } from './NotePreview.jsx';
 
 const { SegmentedControl, IconButton, Button, Alert, Kbd, Select } = DS;
@@ -129,6 +130,10 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
       value={note.content}
       onChange={(e) => update({ content: e.target.value })}
       onKeyDown={onBodyKey}
+      {...imageDropProps({
+        insert: (r) => applyEdit(bodyRef.current, r),
+        onError: (msg) => toast('Não foi possível adicionar a imagem', msg, 'error'),
+      })}
       placeholder={'Escreva em Markdown…\n\n# Título\n```sql\nSELECT 1\n```\n- [ ] tarefa   #tag   [[Outra nota]]'}
       spellCheck={false}
       aria-label="Conteúdo da nota (Markdown)"
@@ -207,6 +212,7 @@ export function NoteEditor({ initial, isNew, focus, mode, setMode, resolve, onOp
         <span>Markdown</span>
         <span><Kbd size="sm">{mod('E')}</Kbd> editar/visualizar</span>
         <span><Kbd size="sm">{mod('L')}</Kbd> tarefa</span>
+        <span><Kbd size="sm">{mod('V')}</Kbd> cola imagens</span>
         {note.type === 'snippet' && <span><Kbd size="sm">{mod('C', true)}</Kbd> copiar snippet</span>}
         <span className="nts-editor__spacer" />
         <span>{note.content.length} caracteres</span>

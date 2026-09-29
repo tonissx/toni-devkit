@@ -1,5 +1,6 @@
 import { DS } from '../lib/ds.js';
 import { useAutosave, statusLabel } from '../notes/client.js';
+import { imageDropProps } from '../notes/images.js';
 
 const { Icon, Kbd } = DS;
 
@@ -11,7 +12,18 @@ const { Icon, Kbd } = DS;
 export function QuickNote({ initial, onClose, onOpenInApp }) {
   const { note, update, status, error, flush } = useAutosave(initial, { isNew: true, delay: 300 });
   const [confirmClose, setConfirmClose] = React.useState(false);
+  const [imageError, setImageError] = React.useState(null);
   const ta = React.useRef(null);
+
+  // Colar/arrastar imagem: grava em .assets\ e insere o ![imagem](…) no cursor.
+  const imageProps = imageDropProps({
+    insert: (r) => {
+      setImageError(null);
+      update({ content: r.value });
+      requestAnimationFrame(() => { const t = ta.current; if (t) { t.selectionStart = r.start; t.selectionEnd = r.end; } });
+    },
+    onError: setImageError,
+  });
 
   React.useEffect(() => {
     const t = ta.current;
@@ -58,10 +70,17 @@ export function QuickNote({ initial, onClose, onOpenInApp }) {
         value={note.content}
         onChange={(e) => { setConfirmClose(false); update({ content: e.target.value }); }}
         onKeyDown={onKeyDown}
+        {...imageProps}
         placeholder="O que você descobriu? (Markdown)"
         spellCheck={false}
         aria-label="Quick Note (Markdown)"
       />
+      {imageError && (
+        <div className="pl-status is-error" role="alert">
+          <Icon name="circle-alert" size={14} />
+          <span><b>Imagem não adicionada.</b> {imageError}</span>
+        </div>
+      )}
       {error && (
         <div className="pl-status is-error" role="alert">
           <Icon name="circle-alert" size={14} />

@@ -1,7 +1,8 @@
 // Markdown → HTML para o preview das Notes (marked + realce de sintaxe do DevKit).
 // Seguro: HTML cru é escapado, só links http(s)/mailto viram <a>, imagens externas viram link
-// (a CSP bloqueia imagens remotas). Extras: [[Título]] (link interno), checklists clicáveis,
-// botão "Copiar" em cada bloco de código.
+// (a CSP bloqueia imagens remotas). Imagens coladas (".assets/<nome>") viram <img> servidas pelo
+// protocolo devkit-note:// do processo principal. Extras: [[Título]] (link interno), checklists
+// clicáveis, botão "Copiar" em cada bloco de código.
 import { Marked } from 'marked';
 import { tokenize } from '../tools/diff-checker/syntax.js';
 import { toggleTaskAt } from './note.js';
@@ -21,7 +22,8 @@ export const highlight = (code, lang) => code.split('\n')
   .map((line) => tokenize(line, LANG[String(lang || '').toLowerCase()] || 'text').map(([c, t]) => (c ? `<span class="tk-syn-${c}">${esc(t)}</span>` : esc(t))).join(''))
   .join('\n');
 
-const WIKI_RE = /^\[\[([^[\]\n|]+)(?:\|([^\]\n]+))?\]\]/;
+const ASSET_RE = /^\.assets\/([\w-][\w.-]*)$/;
+const WIKI_RE =/^\[\[([^[\]\n|]+)(?:\|([^\]\n]+))?\]\]/;
 const META_START_RE = /(^|\s)(?:@\d{4}-\d{2}-\d{2}|![123])(?=\s|$)/;
 const META_RE = /^(?:(@\d{4}-\d{2}-\d{2})|!([123]))(?=\s|$)/;
 
@@ -75,7 +77,11 @@ export function renderMarkdown(md, { resolve = () => null } = {}) {
         if (!/^(https?:|mailto:)/i.test(href || '')) return text;
         return `<a href="${esc(href)}" target="_blank" rel="noreferrer"${title ? ` title="${esc(title)}"` : ''}>${text}</a>`;
       },
-      image: ({ href, text }) => (/^https?:/i.test(href || '') ? `<a href="${esc(href)}" target="_blank" rel="noreferrer">🖼 ${esc(text || href)}</a>` : esc(text || '')),
+      image({ href, text }) {
+        const asset = ASSET_RE.exec(href || '');
+        if (asset) return `<img class="md-img" src="devkit-note://asset/${encodeURIComponent(asset[1])}" alt="${esc(text || '')}" data-asset="${esc(asset[1])}" loading="lazy" title="Abrir imagem">`;
+        return /^https?:/i.test(href || '') ? `<a href="${esc(href)}" target="_blank" rel="noreferrer">🖼 ${esc(text || href)}</a>` : esc(text || '');
+      },
     },
   });
   return { html: marked.parse(String(md || '')), blocks };

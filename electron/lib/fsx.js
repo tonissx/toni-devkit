@@ -1,7 +1,8 @@
 'use strict';
 /**
  * Utilitários de arquivo do processo principal (usados por Notes e DevCore).
- * - atomicWrite: grava <arquivo>.<pid>.tmp e renomeia por cima — nunca deixa arquivo pela metade.
+ * - atomicWrite: grava <arquivo>.<pid>.tmp e renomeia por cima — nunca deixa arquivo pela metade
+ *   (texto em UTF-8 ou Buffer, para binários como as imagens das Notes).
  * - renameRetry: no Windows, antivírus/OneDrive seguram arquivos por instantes (EPERM/EBUSY).
  * - createQueue: serializa trabalhos por chave (gravações do mesmo arquivo nunca em paralelo).
  */
