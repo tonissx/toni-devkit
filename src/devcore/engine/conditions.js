@@ -8,6 +8,7 @@
  *   { offlineHours:h }        → o último retorno foi após ≥ h horas fechado
  *   { maxPetLevel:n }         → algum DevPet no nível ≥ n
  *   { anyPetMaxed:true }      → algum DevPet no nível máximo da raridade
+ *   { stationed:[petIds] }    → algum desses DevPets está em estação
  *   { all:[…] } · { any:[…] }
  */
 const { CONTENT } = require('../content/index.js');
@@ -25,6 +26,7 @@ function check(cond, s) {
   if (cond.first) return !!s.usage.first[cond.first];
   if (cond.offlineHours != null) return (s.clock.lastOfflineMs || 0) >= cond.offlineHours * 3600e3;
   if (cond.maxPetLevel != null) return Object.values(s.run.pets).some((p) => p.level >= cond.maxPetLevel);
+  if (cond.stationed) return cond.stationed.some((id) => s.run.pets[id] && s.run.pets[id].station);
   if (cond.anyPetMaxed) return Object.entries(s.run.pets).some(([id, p]) => CONTENT.pet[id] && p.level >= CONTENT.RARITY[CONTENT.pet[id].rarity].maxLevel);
   return false;
 }

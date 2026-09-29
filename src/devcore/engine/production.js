@@ -6,6 +6,8 @@
  * Produção de um gerador = base × owned × fator(gen) × fator(categoria) × fator(global) [× diversidade].
  */
 const { CONTENT } = require('../content/index.js');
+const { incidentEffects } = require('./incidents.js');
+const { blueprintEffects } = require('./blueprints.js');
 
 /** Agrega efeitos por alvo. */
 function aggregate(effects) {
@@ -33,10 +35,11 @@ function activeCategories(s, c) {
   return set;
 }
 
-/** Quantos DevPets podem ficar em estação (tier 3). */
+/** Quantos DevPets podem ficar em estação (1 no tier 2, 2 no tier 3; upgrades somam). */
 function stationSlots(s, c = CONTENT) {
-  if (s.run.tier < 3) return 0;
-  return c.BALANCE.stationSlots + sumAdd(aggregate(upgradeEffects(s, c)), 'stationSlots');
+  const base = c.BALANCE.stationSlots[s.run.tier] || 0;
+  if (!base) return 0;
+  return base + sumAdd(aggregate(upgradeEffects(s, c)), 'stationSlots');
 }
 
 function upgradeEffects(s, c) {
@@ -46,14 +49,15 @@ function upgradeEffects(s, c) {
 }
 
 /** Efeitos de um DevPet no nível atual (e em estação, se estiver). */
-function petEffects(s, petId, upAgg, c) {
+function petEffects(s, petId, upAgg, c, active) {
   const p = c.pet[petId];
   const st = s.run.pets[petId];
   if (!p || !st) return [];
   const lvl = 1 + p.perLevel * (st.level - 1); // +10% do bônus base por nível
   const petMul = 1 + sumAdd(upAgg, 'petBonus');
-  const station = st.station && s.run.tier >= 3 ? c.BALANCE.stationMultiplier * (1 + sumAdd(upAgg, 'petStation')) : 1;
-  return p.bonus.map((e) => ({ ...e, value: e.value * lvl * petMul * station, source: 'pet:' + petId }));
+  const station = st.station && stationSlots(s, c) > 0 ? c.BALANCE.stationMultiplier * (1 + sumAdd(upAgg, 'petStation')) : 1;
+  const perCat = (e) => (e.perActiveCategory ? active.size : 1);
+  return p.bonus.map((e) => ({ ...e, value: e.value * lvl * petMul * station * perCat(e), source: 'pet:' + petId }));
 }
 
 function synergyActive(s, syn, active, c) {
@@ -95,12 +99,12 @@ function collectEffects(s, t, c = CONTENT) {
   const upAgg = aggregate(ups);
   const active = activeCategories(s, c);
   const effects = [...ups];
-  for (const id of Object.keys(s.run.pets)) effects.push(...petEffects(s, id, upAgg, c));
+  for (const id of Object.keys(s.run.pets)) effects.push(...petEffects(s, id, upAgg, c, active));
   for (const syn of c.SYNERGIES) {
     if (!synergyActive(s, syn, active, c)) continue;
     for (const e of syn.effects) effects.push({ ...e, value: e.perActiveCategory ? e.value * active.size : e.value, source: 'synergy:' + syn.id });
   }
-  effects.push(...discoveryEffects(s, c), ...abilityEffects(s, t, c));
+  effects.push(...discoveryEffects(s, c), ...abilityEffects(s, t, c), ...incidentEffects(s, t, c), ...blueprintEffects(s, c));
   return { effects, active };
 }
 

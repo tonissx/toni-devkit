@@ -4,6 +4,7 @@ import { formatNum, formatDuration } from '../../devcore/engine/format.js';
 import { REACTION_MS } from '../../devcore/director.js';
 import { Scene } from './Scene.jsx';
 import { GeneratorsPanel, UpgradesPanel, PetsPanel, TechPanel } from './Panels.jsx';
+import { OpsPanel } from './OpsPanel.jsx';
 
 const { Tabs, Modal, Button, ProgressBar, Spinner, Icon } = DS;
 
@@ -36,14 +37,19 @@ function LiveCompute({ snap, receivedAt }) {
   return <span ref={ref} className="dc-amount__value" />;
 }
 
+const genName = (snap, id) => (snap.generators.find((g) => g.id === id) || { name: id }).name;
+
 function WelcomeBack({ snap, onClose }) {
   const w = snap.welcome;
-  // Achados agrupados por pet: "Byte encontrou 4 caches: +73 Compute".
-  const finds = Object.values(w.finds.reduce((acc, f) => {
+  // Achados agrupados por pet: "Byte encontrou 4 caches: +73 Compute" · itens listados à parte.
+  const finds = Object.values(w.finds.filter((f) => f.amount).reduce((acc, f) => {
     const a = acc[f.pet] || (acc[f.pet] = { pet: f.pet, n: 0, amount: 0 });
     a.n += 1; a.amount += f.amount;
     return acc;
   }, {}));
+  const itemName = (id) => (snap.inventory.find((k) => k.id === id) || { name: id }).name;
+  const villain = (id) => snap.bestiary.find((b) => b.id === id) || { name: id };
+  const incidents = w.incidents || [];
   return (
     <Modal open title="WELCOME BACK" icon="cpu" onClose={onClose} width={440}
       description={w.capped
@@ -56,12 +62,43 @@ function WelcomeBack({ snap, onClose }) {
         {finds.map((f) => (
           <div key={f.pet} className="dc-welcome__line"><Icon name="sparkles" size={13} /> {petName(snap, f.pet)} encontrou {f.n === 1 ? 'um cache' : f.n + ' caches'}: +{formatNum(f.amount)} Compute</div>
         ))}
+        {w.finds.filter((f) => f.item).map((f, i) => (
+          <div key={'item' + i} className="dc-welcome__line"><Icon name="package" size={13} /> {petName(snap, f.pet)} encontrou um {itemName(f.item)}</div>
+        ))}
+        {w.finds.filter((f) => f.part).map((f, i) => (
+          <div key={'part' + i} className="dc-welcome__line"><Icon name="package" size={13} /> {petName(snap, f.pet)} encontrou a peça <b>{f.partName}</b> ({genName(snap, f.gen)})</div>
+        ))}
+        {incidents.map((x, i) => (
+          <div key={'inc' + i} className={'dc-welcome__line' + (x.contained ? '' : ' is-warn')}>
+            <Icon name={x.contained ? 'shield-check' : 'triangle-alert'} size={13} />
+            {x.contained
+              ? <span><b>{villain(x.villain).name}</b> tentou atacar — {x.by === 'rollback' ? 'o Rollback segurou' : x.by === 'infra' ? 'seus Local Clusters seguraram' : petName(snap, x.by) + ' segurou'}{x.item ? ` · +1 ${itemName(x.item)}` : ''}{x.part ? (x.part.scrap ? ' · +1 sucata' : ` · peça ${x.part.name}`) : ''}</span>
+              : <span><b>{villain(x.villain).name}</b> atrapalhou por {formatDuration(x.durationMs || 0)} (nada foi perdido além da produção reduzida)</span>}
+          </div>
+        ))}
         {w.discoveries.length > 0 && (
           <div className="dc-welcome__line"><Icon name="radar" size={13} /> {w.discoveries.length === 1 ? '1 descoberta' : w.discoveries.length + ' descobertas'}: {w.discoveries.map((id) => (snap.discoveries.find((d) => d.id === id) || {}).title).join(', ')}</div>
         )}
         {snap.newUpgrades.length > 0 && <div className="dc-welcome__line"><Icon name="arrow-up-circle" size={13} /> {snap.newUpgrades.length} upgrade(s) disponível(is)</div>}
       </div>
     </Modal>
+  );
+}
+
+/** Estado no cabeçalho: ONLINE · incidente ativo (âmbar) · contido (escudo) + previsão, se houver. */
+function IncidentChip({ ops, now, onOpen }) {
+  const a = ops.active;
+  const f = ops.forecast && !ops.forecast.hidden ? ops.forecast : null;
+  const left = (ms) => formatDuration(Math.max(0, ms));
+  return (
+    <>
+      {!a && <span className="dc-online"><i /> ONLINE</span>}
+      {a && !a.contained && <button type="button" className="dc-status is-alert" onClick={onOpen}><Icon name="triangle-alert" size={12} /> {a.villain.name} · {a.name} · {left(a.end - now)}</button>}
+      {a && a.contained && <button type="button" className="dc-status is-ok" onClick={onOpen}><Icon name="shield-check" size={12} /> {a.villain.name} contido</button>}
+      {f && <button type="button" className={'dc-status' + (f.covered ? ' is-ok' : ' is-warn')} onClick={onOpen}>
+        Previsto: {f.villain.name} em {left(f.at - now)} {f.covered ? '· defesa armada' : '· sem defesa'}
+      </button>}
+    </>
   );
 }
 
@@ -85,6 +122,13 @@ export function DevCoreScreen({ toast, request }) {
       else if (e.type === 'discovery') out.push({ at: t, type: 'discovery', pet: e.finder });
       else if (e.type === 'evolve') out.push({ at: t, type: 'evolve', pet: e.pet, text: e.name });
       else if (e.type === 'skinChanged') out.push({ at: t, type: 'skin', pet: e.pet });
+      else if (e.type === 'refactor') out.push({ at: t, type: 'refactor', category: e.category, mk: e.mk });
+      else if (e.type === 'contained' && s.pets.some((p) => p.id === e.by)) out.push({ at: t, type: 'ability', pet: e.by, text: 'barrei o vilão' });
+      else if (e.type === 'incidentEnd' && e.outcome === 'hotfixed') {
+        const b = s.bestiary.find((x) => x.id === e.villain) || {};
+        out.push({ at: t, type: 'defeated', villain: e.villain, category: b.category, text: b.defeatedLine || 'derrotado!' });
+        out.push({ at: t, type: 'upgrade' }); // metade dos pets comemora
+      }
       else if (e.type === 'ability') out.push({ at: t, type: 'ability', pet: e.pet, text: (s.pets.find((p) => p.ability.id === e.id) || { ability: {} }).ability.name });
     }
     if (out.length) setReactions((r) => [...r.filter((x) => t - x.at < REACTION_MS), ...out]);
@@ -151,6 +195,7 @@ export function DevCoreScreen({ toast, request }) {
     { value: 'pets', label: 'DevPets', icon: 'paw-print', count: readyAbilities || undefined, dot: snap.freshSkins.length > 0 },
     { value: 'upgrades', label: 'Upgrades', icon: 'arrow-up-circle', count: availableUps || undefined, dot: snap.newUpgrades.length > 0 },
     { value: 'tech', label: 'Tech', icon: 'radar', dot: freshUnseen.length > 0 },
+    { value: 'ops', label: 'Ops', icon: 'shield', dot: !!(snap.ops.active && !snap.ops.active.contained) },
   ];
 
   return (
@@ -158,7 +203,7 @@ export function DevCoreScreen({ toast, request }) {
       <header className="dc-head">
         <div className="dc-head__brand">
           <span className="dc-logo">DEVCORE</span>
-          <span className="dc-online"><i /> ONLINE</span>
+          <IncidentChip ops={snap.ops} now={serverNow} onOpen={() => setUi((u) => ({ ...u, tab: 'ops' }))} />
           <span className="dc-tierchip">Tier {snap.tier.id} · {snap.tier.name}</span>
         </div>
         <div className="dc-amount">
@@ -184,6 +229,7 @@ export function DevCoreScreen({ toast, request }) {
         {ui.tab === 'pets' && <PetsPanel snap={snap} amount={liveAmount} act={act} now={serverNow} />}
         {ui.tab === 'upgrades' && <UpgradesPanel snap={snap} amount={liveAmount} act={act} />}
         {ui.tab === 'tech' && <TechPanel snap={snap} freshUnseen={freshUnseen} />}
+        {ui.tab === 'ops' && <OpsPanel snap={snap} amount={liveAmount} act={act} now={serverNow} />}
       </div>
 
       {snap.welcome && <WelcomeBack snap={snap} onClose={() => act({ type: 'ackWelcome' })} />}

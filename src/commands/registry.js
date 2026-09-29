@@ -220,6 +220,8 @@ const devcoreCommands = [
   devcoreTab('upgrades', 'View Upgrades', 'upgrades', 'arrow-up-circle', 'Upgrades disponíveis no DevCore', ['melhorias']),
   devcoreTab('looks', 'Customize DevPets', 'pets', 'palette', 'Visual e evolução dos DevPets', ['visual', 'skin', 'aparência', 'cores', 'pets']),
   devcoreTab('discoveries', 'View Discoveries', 'tech', 'radar', 'Tiers, sinergias e descobertas', ['descobertas', 'tech', 'sinergias']),
+  devcoreTab('blueprints', 'View Blueprints', 'generators', 'package', 'Peças, sucata e Refactor (Mk II/III) dos geradores', ['blueprints', 'peças', 'sucata', 'refactor', 'mk', 'marcos']),
+  devcoreTab('ops', 'View Ops', 'ops', 'shield', 'Incidentes, previsão, consumíveis e bestiário', ['incidentes', 'vilões', 'consumíveis', 'itens', 'bestiário', 'ops']),
   {
     id: 'devcore:collect', name: 'Collect Offline Progress', icon: 'download',
     description: 'Mostra o resumo do que o DevCore produziu enquanto você esteve fora',
@@ -256,8 +258,24 @@ function abilityCommands(list, formatWait) {
   }));
 }
 
+/**
+ * Consumíveis em estoque como comandos (dinâmicos). Cache Warmer vai para a habilidade com a recarga mais longa.
+ */
+function itemCommands(list) {
+  return list.map((k) => ({
+    id: 'devcore:item:' + k.id, name: `Usar ${k.name} (${k.n})`, category: 'devcore', icon: 'package', dynamic: true,
+    description: k.usable ? k.description : k.id === 'hotfix' ? 'Nenhum incidente ativo agora' : k.description,
+    keywords: ['devcore', 'item', 'consumível', 'usar', k.name.toLowerCase()],
+    run: async (ctx) => {
+      const r = await ctx.devcore.act({ type: 'use', item: k.id });
+      if (!r.ok) throw new Error(r.error);
+      return `${k.name} usado · ${k.description}`;
+    },
+  }));
+}
+
 const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands];
 
 const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
 
-module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands };
+module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands };

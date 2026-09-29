@@ -14,6 +14,10 @@ const ABILITIES = [
     effect: { type: 'instant', seconds: 600 }, cooldownSec: 10 * 60 },
   { id: 'recall', name: 'Recall', description: 'Reduz pela metade os cooldowns das outras habilidades.',
     effect: { type: 'recall', factor: 0.5 }, cooldownSec: 15 * 60 },
+  { id: 'orchestrate', name: 'Orchestrate', description: 'Agents ×4 por 40 s.',
+    effect: { type: 'burst', target: 'cat:agents', mult: 4, durationSec: 40 }, cooldownSec: 10 * 60 },
+  { id: 'scale-out', name: 'Scale Out', description: 'Infra ×3 por 60 s.',
+    effect: { type: 'burst', target: 'cat:infra', mult: 3, durationSec: 60 }, cooldownSec: 12 * 60 },
 ];
 
 module.exports = { ABILITIES };

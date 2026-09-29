@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('devkit', {
     get: () => ipcRenderer.invoke('devcore:get'),
     act: (action) => ipcRenderer.invoke('devcore:act', action),
     abilities: () => ipcRenderer.invoke('devcore:abilities'),
+    items: () => ipcRenderer.invoke('devcore:items'),
     onChanged: (cb) => {
       const h = (_e, msg) => cb(msg);
       ipcRenderer.on('devcore:changed', h);

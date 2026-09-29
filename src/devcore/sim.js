@@ -11,7 +11,7 @@ const { snapshot } = require('./engine/view.js');
 const { production } = require('./engine/production.js');
 
 /** Ganho de produção (por Compute gasto) de cada opção de compra disponível. */
-function options(s, now, c) {
+function options(s, now, c, strategy = 'prepared') {
   const base = production(s, now, c).rate;
   const out = [];
   const v = snapshot(s, now, c);
@@ -26,20 +26,79 @@ function options(s, now, c) {
   for (const g of v.generators) if (g.unlocked) tryAction({ type: 'buy', gen: g.id, qty: 1 }, g.cost1);
   for (const u of v.upgrades) if (u.status === 'available') tryAction({ type: 'upgrade', id: u.id }, u.cost);
   for (const p of v.pets) if (p.owned && p.trainCost) tryAction({ type: 'train', pet: p.id }, p.trainCost);
-  for (const p of v.pets) if (p.owned && !p.station && p.canStation) out.push({ action: { type: 'station', pet: p.id, on: true }, cost: 0, value: Infinity });
+  if (strategy !== 'passive') for (const p of v.pets) if (p.owned && !p.station && p.canStation) out.push({ action: { type: 'station', pet: p.id, on: true }, cost: 0, value: Infinity });
   return out.sort((a, b) => b.value - a.value);
 }
 
 /**
- * profile: { checkEverySec, onlineHoursPerDay, days, events(day) → [{name,data}] }
- * Retorna marcos { t2, t3, pets:{id:t}, synergies:{id:t}, finalAmount, maxGapSec }.
+ * Jogador "preparado": vê a previsão e põe na estação o pet que contém o incidente (trocando outro, se
+ * preciso); usa Hotfix quando um vilão escapou. O "passivo" não faz nada disso (nem usa estações).
+ */
+function prepare(s, now, c, step) {
+  const v = snapshot(s, now, c);
+  const f = v.ops.forecast;
+  if (f && !f.hidden && !f.covered) {
+    const pet = f.counters.find((p) => p.owned && !p.station);
+    if (pet) {
+      const other = v.pets.find((p) => p.owned && p.station && !f.counters.some((x) => x.id === p.id));
+      if (v.stations.used >= v.stations.slots && other) step({ type: 'station', pet: other.id, on: false });
+      step({ type: 'station', pet: pet.id, on: true });
+    }
+  }
+  const a = v.ops.active;
+  if (a && !a.contained && (s.run.inventory.hotfix || 0) > 0) step({ type: 'use', item: 'hotfix' });
+}
+
+/**
+ * Blueprints no simulador: Refactor assim que o conjunto fecha; sucata vira a peça faltante do gerador
+ * que mais produz; compra as 1–2 últimas peças de um gerador que pesa ≥ 10% da produção (vale o preço).
+ */
+function blueprints(s, now, c, step) {
+  let v = snapshot(s, now, c);
+  for (const g of v.generators) if (g.blueprint && g.blueprint.complete) step({ type: 'refactor', gen: g.id });
+  v = snapshot(s, now, c);
+  const byRate = [...v.generators].filter((g) => g.unlocked && g.blueprint).sort((x, y) => y.rate - x.rate);
+  for (const g of byRate) {
+    const missing = g.blueprint.parts.filter((p) => !p.owned);
+    if (missing.length && v.scrap >= g.blueprint.scrapCost) { step({ type: 'scrapPart', part: missing[0].id }); break; }
+  }
+  v = snapshot(s, now, c);
+  for (const g of v.generators) {
+    const bp = g.blueprint;
+    if (!bp || bp.owned < 2 || g.rate < 0.1 * v.rate) continue;
+    if (s.run.resources.compute.amount >= bp.buyCost) step({ type: 'buyPart', part: bp.parts.find((p) => !p.owned).id });
+  }
+  v = snapshot(s, now, c);
+  for (const g of v.generators) if (g.blueprint && g.blueprint.complete) step({ type: 'refactor', gen: g.id });
+}
+
+/**
+ * profile: { checkEverySec, onlineHoursPerDay, days, events(day) → [{name,data}], strategy?, quiet?, blueprints? }
+ * Retorna marcos { t2, t3, pets:{id:t}, synergies:{id:t}, incidents, items, finalAmount, … }.
  */
 function simulate(profile, c = CONTENT) {
   const t0 = Date.UTC(2026, 0, 5, 9); // uma segunda-feira, 9h UTC
+  const strategy = profile.strategy || 'prepared';
   let s = createState(t0, c);
   let now = t0;
-  s = dispatch(s, { type: 'boot' }, now, c).state;
-  const marks = { t2: null, t3: null, pets: {}, synergies: {}, purchases: 0, maxWaitSec: 0, maxCheapestSec: 0 };
+  const marks = { t2: null, t3: null, pets: {}, synergies: {}, purchases: 0, maxWaitSec: 0, maxCheapestSec: 0,
+    incidents: { seen: 0, contained: 0, escaped: 0, hotfixed: 0 }, items: 0, parts: 0, firstMk2: null, firstMk3: null };
+  const step = (action) => {
+    const r = dispatch(s, action, now, c);
+    s = r.state;
+    for (const e of r.log) {
+      if (e.type === 'incidentStart') marks.incidents.seen++;
+      if (e.type === 'contained') { marks.incidents.contained++; if (e.item) marks.items++; }
+      if (e.type === 'incidentEnd' && e.outcome === 'escaped') marks.incidents.escaped++;
+      if (e.type === 'incidentEnd' && e.outcome === 'hotfixed') marks.incidents.hotfixed++;
+      if (e.type === 'part' && !e.dup && e.source !== 'buy' && e.source !== 'scrap') marks.parts++;
+      if (e.type === 'refactor' && e.mk === 2 && marks.firstMk2 == null) marks.firstMk2 = now - t0;
+      if (e.type === 'refactor' && e.mk === 3 && marks.firstMk3 == null) marks.firstMk3 = now - t0;
+    }
+    return r;
+  };
+  step({ type: 'boot' });
+  if (profile.quiet) step({ type: 'quiet', on: true });
   const end = t0 + profile.days * 86400e3;
   const dayMs = 86400e3;
   let lastPurchase = now;
@@ -50,25 +109,29 @@ function simulate(profile, c = CONTENT) {
     if (!online) {
       // Fecha o app até o dia seguinte e volta (boot com teto offline).
       now = dayStart + dayMs;
-      s = dispatch(s, { type: 'boot' }, now, c).state;
-      s = dispatch(s, { type: 'ackWelcome' }, now, c).state;
-      for (const e of profile.events ? profile.events(Math.round((now - t0) / dayMs)) : []) s = dispatch(s, { type: 'event', ...e }, now, c).state;
+      step({ type: 'boot' });
+      marks.items += ((s.pending.welcome && s.pending.welcome.finds) || []).filter((f) => f.item).length;
+      marks.parts += ((s.pending.welcome && s.pending.welcome.finds) || []).filter((f) => f.part).length;
+      step({ type: 'ackWelcome' });
+      for (const e of profile.events ? profile.events(Math.round((now - t0) / dayMs)) : []) step({ type: 'event', ...e });
     } else {
       now += profile.checkEverySec * 1000;
-      s = dispatch(s, { type: 'tick' }, now, c).state;
+      step({ type: 'tick' });
     }
+    if (strategy === 'prepared') prepare(s, now, c, step);
+    if (strategy !== 'passive' && profile.blueprints !== false) blueprints(s, now, c, step);
     // Compra enquanto houver o que comprar (melhor valor primeiro), como um jogador atento.
     for (let guard = 0; guard < 200; guard++) {
-      const best = options(s, now, c)[0];
+      const best = options(s, now, c, strategy)[0];
       if (!best || best.cost > s.run.resources.compute.amount) break;
-      s = dispatch(s, best.action, now, c).state;
+      step(best.action);
       marks.purchases++;
       marks.maxWaitSec = Math.max(marks.maxWaitSec, (now - lastPurchase) / 1000);
       lastPurchase = now;
     }
     if (online) {
       // Quanto falta para a compra MAIS BARATA disponível (sempre deve haver algo perto).
-      const opts = options(s, now, c).filter((o) => o.cost > 0);
+      const opts = options(s, now, c, strategy).filter((o) => o.cost > 0);
       const rate = production(s, now, c).rate;
       const cheapest = Math.min(...opts.map((o) => o.cost));
       if (rate > 0 && Number.isFinite(cheapest)) marks.maxCheapestSec = Math.max(marks.maxCheapestSec, Math.max(0, cheapest - s.run.resources.compute.amount) / rate);
@@ -85,6 +148,15 @@ function simulate(profile, c = CONTENT) {
   return marks;
 }
 
+/** Perda de produção causada por incidentes: compara com o mesmo perfil no modo tranquilo. */
+function incidentLoss(profile, c = CONTENT) {
+  // Sem a estratégia de blueprints nas duas execuções: o modo tranquilo não tem drops de vilões,
+  // então compará-las com Refactor mediria as peças, não o custo dos incidentes.
+  const withIncidents = simulate({ ...profile, blueprints: false }, c);
+  const quiet = simulate({ ...profile, blueprints: false, quiet: true }, c);
+  return { loss: 1 - withIncidents.finalAmount / quiet.finalAmount, marks: withIncidents };
+}
+
 /** Perfis padrão. */
 const PROFILES = {
   // Sessão ativa: DevCore aberto, olhando a cada 30 s, app aberto o dia inteiro.
@@ -94,6 +166,8 @@ const PROFILES = {
     checkEverySec: 3600, onlineHoursPerDay: 9, days: 7,
     events: (day) => [
       { name: 'palette.opened' },
+      { name: 'command.executed', data: { id: ['tool:sql', 'app:settings', 'notes:quick', 'devcore:open', 'clipboard:sql', 'theme:toggle'][day % 6] } },
+      { name: 'tool.opened', data: { tool: ['sql', 'notes', 'devcore'][day % 3] } },
       { name: 'tool.used', data: { tool: ['sql', 'xml', 'diff'][day % 3] } },
       { name: 'tool.used', data: { tool: 'sql' } },
       ...(day % 2 === 0 ? [{ name: 'note.created' }] : []),
@@ -102,4 +176,4 @@ const PROFILES = {
   },
 };
 
-module.exports = { simulate, PROFILES, options };
+module.exports = { simulate, PROFILES, options, incidentLoss };

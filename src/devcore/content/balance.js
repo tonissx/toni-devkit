@@ -13,8 +13,30 @@ module.exports = {
   // Pets
   petFindEveryHours: 2,        // offline: a cada N horas um pet "encontra" algo
   petFindMinutes: [1, 3],      // cache = de 1 a 3 min de produção
-  stationSlots: 1,             // estações (tier 3) — upgrades somam
+  findConsumableChance: 0.4,   // chance de um achado ser um consumível em vez de Compute
+  stationSlots: { 2: 1, 3: 2 },// vagas de estação por tier (upgrades somam)
   stationMultiplier: 2,        // pet na estação da própria categoria: bônus ×2
+
+  // Incidentes ("pets do mal"): nunca tiram progresso — só reduzem a produção por um tempo.
+  incidents: {
+    minTier: 2,
+    everyHours: [3, 6],        // intervalo entre um incidente e o próximo
+    forecastHours: 2,          // o próximo fica visível com esta antecedência
+    blockedSec: 60,            // contido: o vilão aparece, é barrado e some
+    lossFloor: 0.8,            // nenhum alvo cai abaixo de ×0,8 por incidentes
+  },
+
+  // Marcos por quantidade: ao chegar em cada valor de `at`, a produção daquele gerador × mult.
+  // (os dois primeiros ×1,5 para não acelerar demais o começo)
+  milestones: { at: [25, 50, 100, 150, 200, 250, 300], mult: [1.5, 1.5, 2, 2, 2, 2, 2] },
+
+  // Blueprints (peças → Mk II/III). Compra = N minutos da produção atual.
+  blueprints: {
+    partChanceFind: 0.3,           // achado de pet que vira peça Mk II
+    mk3ChanceContained: 0.4,       // vilão contido com o Mk II já feito: chance de peça Mk III (senão sucata)
+    scrapPerPart: { 2: 5, 3: 8 }, // sucata para trocar por uma peça faltante
+    buyMinutes: { 2: 120, 3: 360 }, // cabe no que acumula numa noite offline (teto 8 h)
+  },
 
   // Anti-abuso: soma máxima dos bônus que vêm de uso do DevKit (descobertas)
   usageBonusCap: 0.05,

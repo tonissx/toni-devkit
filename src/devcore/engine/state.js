@@ -7,6 +7,8 @@
  *   discoveries  → descobertas feitas e ainda não vistas
  *   pending      → resumo de retorno aguardando ser mostrado
  *   cosmetics    → visuais dos DevPets (escolhidos/desbloqueados) — nunca resetam
+ *   bestiary     → vilões encontrados (visto/contido/escapou/derrotado) — nunca reseta
+ *   settings     → preferências do jogo (modo tranquilo)
  */
 const { CONTENT } = require('../content/index.js');
 
@@ -25,12 +27,20 @@ function createState(now, c = CONTENT) {
       tier: 1,
       pets: {},
       abilities: {},
+      incidents: { seq: 0, next: null, active: null, history: [] },
+      inventory: {},
+      boosts: [],
+      shields: 0,
+      blueprints: {},  // { [gen]: { mk, parts: { [partId]: true } } } — sem entrada = Mk I
+      scrap: 0,
     },
     meta: { fragments: 0, rebuilds: 0, perks: {} },
     usage: { days: {}, distinct: {}, first: {} },
     discoveries: { found: {}, unseen: [], seenUpgrades: [] },
     pending: { welcome: null },
     cosmetics: { skins: {}, unlocked: ['default'], fresh: [] },
+    bestiary: {},
+    settings: { quiet: false },
   };
   for (const [id, owned] of Object.entries(B.start.generators)) s.run.generators[id] = { owned };
   for (const id of B.start.pets) s.run.pets[id] = { level: 1, station: false };
