@@ -415,8 +415,9 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', () => showMain());
 
-  // Notificações do Windows (feedback dos Smart Binds) precisam do AppUserModelId — em dev também.
-  if (process.platform === 'win32') app.setAppUserModelId('br.com.navship.tonidevkit');
+  // Notificações do Windows (feedback dos Smart Binds) usam o AppUserModelId do atalho criado pelo instalador.
+  // Só no app empacotado: em dev o ID não tem atalho correspondente e a barra de tarefas cai no ícone do electron.exe.
+  if (process.platform === 'win32' && app.isPackaged) app.setAppUserModelId('br.com.navship.tonidevkit');
 
   app.whenReady().then(() => {
     initNotes();
