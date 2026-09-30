@@ -326,10 +326,12 @@ function toYaml(value) {
   return yamlBlock(value, 0).join('\n');
 }
 
+/** Achata objetos (a.b) e arrays ([i]) em colunas; container vazio vira "{}" / "[]". */
 function flatten(v, prefix, out) {
-  if (isContainer(v) && !Array.isArray(v) && Object.keys(v).length) {
-    for (const [k, c] of Object.entries(v)) flatten(c, prefix ? prefix + '.' + k : k, out);
-  } else out[prefix || 'value'] = v;
+  if (isContainer(v) && childrenOf(v).length) {
+    const arr = Array.isArray(v);
+    for (const [k, c] of childrenOf(v)) flatten(c, arr ? prefix + '[' + k + ']' : prefix ? prefix + '.' + k : k, out);
+  } else out[prefix || 'value'] = isContainer(v) ? (Array.isArray(v) ? '[]' : '{}') : v;
   return out;
 }
 
@@ -339,9 +341,9 @@ const csvCell = (v) => {
   return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 };
 
+/** Array na raiz → uma linha por item; qualquer outro valor → uma única linha. */
 function toCsv(value) {
-  if (!Array.isArray(value)) throw new Error('CSV exige um array (de objetos ou valores) na raiz');
-  const rows = value.map((item) => flatten(item, '', {}));
+  const rows = (Array.isArray(value) ? value : [value]).map((item) => flatten(item, '', {}));
   const cols = [];
   for (const r of rows) for (const k of Object.keys(r)) if (!cols.includes(k)) cols.push(k);
   return [cols.map(csvCell).join(','), ...rows.map((r) => cols.map((c) => csvCell(r[c])).join(','))].join('\n');

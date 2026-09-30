@@ -121,5 +121,11 @@ test('toYaml', () => {
 test('toCsv', () => {
   const csv = toCsv([{ a: 1, b: { c: 'x,y' } }, { a: 2, d: 'q"r' }]);
   assert.equal(csv, ['a,b.c,d', '1,"x,y",', '2,,"q""r"'].join('\n'));
-  assert.throws(() => toCsv({ a: 1 }));
+});
+
+test('toCsv: objeto na raiz vira uma linha, arrays viram colunas indexadas', () => {
+  const csv = toCsv({ nome: 'x', r: { tel: ['1', '2'] }, f: [{ id: 'a' }, { id: 'b' }], vazio: [], nada: null });
+  assert.equal(csv, ['nome,r.tel[0],r.tel[1],f[0].id,f[1].id,vazio,nada', 'x,1,2,a,b,[],'].join('\n'));
+  assert.equal(toCsv(42), 'value\n42');
+  assert.equal(toCsv([1, 2]), 'value\n1\n2');
 });

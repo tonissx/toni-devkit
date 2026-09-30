@@ -104,8 +104,8 @@ o documento como **grafo de nós** (esquerda → direita). Tudo em JS puro e sem
   pela chave/índice. Arraste para mover, roda do mouse para zoom, **Enquadrar**, **Expandir/Recolher tudo** e o botão
   `+`/`−` de cada nó. Clicar num nó destaca o caminho até a raiz e mostra o JSONPath, com botões para copiar o
   **caminho** ou o **valor**. Documentos com mais de 2500 nós abrem recolhidos a partir da profundidade 3.
-- **Árvore**, **YAML** e **CSV**: outras visões do mesmo documento (o CSV exige um array na raiz; objetos aninhados
-  viram colunas `a.b`).
+- **Árvore**, **YAML** e **CSV**: outras visões do mesmo documento (no CSV, um array na raiz gera uma linha por item e
+  um objeto gera uma linha única; objetos aninhados viram colunas `a.b` e arrays viram `a[0]`).
 - **Buscar / JSONPath**: texto livre destaca os nós que contêm a chave ou o valor; uma expressão começando com `$`
   é avaliada como JSONPath (`$`, `.chave`, `['chave']`, `[n]`, `[*]`, `.*`, `..chave`).
 - **Formatar** (indentação 2, 4 ou Tab, com **Ordenar chaves**) e **Minificar**.
