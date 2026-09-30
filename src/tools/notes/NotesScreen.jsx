@@ -504,6 +504,7 @@ export function NotesScreen({ toast, request }) {
               onOpenLink={openLink}
               onOpenNote={(id) => openNote(id)}
               onDelete={remove}
+              onNoteChange={(n) => setCurrent((c) => (c && c.note.id === n.id ? { ...c, note: n } : c))}
               folderOptions={folderOptions}
               toast={toast}
             />

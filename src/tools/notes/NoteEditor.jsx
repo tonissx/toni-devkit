@@ -59,8 +59,15 @@ function TagsField({ tags, content, onChange }) {
 /**
  * Editor de uma nota. Monte com key={id}: trocar de nota desmonta e o auto-save grava o pendente.
  */
-export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resolve, onOpenLink, onOpenNote, onDelete, folderOptions = [], toast }) {
+export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resolve, onOpenLink, onOpenNote, onDelete, onNoteChange, folderOptions = [], toast }) {
   const { note, update, status, error, flush } = useAutosave(initial, { isNew });
+
+  // Mantém o snapshot do pai (`current.note`) em dia: trocar de aba desmonta o editor e o remonte usa esse snapshot.
+  const firstNote = React.useRef(true);
+  React.useEffect(() => {
+    if (firstNote.current) { firstNote.current = false; return; }
+    if (onNoteChange) onNoteChange(note);
+  }, [note]);
   const titleRef = React.useRef(null);
   const bodyRef = React.useRef(null);
   const titleBefore = React.useRef(null);                  // título exibido quando o campo ganhou foco
