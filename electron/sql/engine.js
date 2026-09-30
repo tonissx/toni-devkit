@@ -20,6 +20,10 @@ const WHEEL_DIR = path.join(ROOT, 'vendor', 'python');
 const PY_BOOTSTRAP = `
 import json
 import sqlparse
+from sqlparse.engine import grouping
+
+# Ferramenta local/offline: o limite anti-DoS do sqlparse (10000 tokens) só atrapalha SQLs grandes.
+grouping.MAX_GROUPING_TOKENS = None
 
 def tk_format(sql, opts_json):
     opts = json.loads(opts_json)
