@@ -257,6 +257,33 @@ ipcMain.handle('file:save-xml', async (e, content, suggestedName) => {
   return { path: r.filePath, name: path.basename(r.filePath) };
 });
 
+const JSON_FILTERS = [
+  { name: 'JSON', extensions: ['json', 'jsonc', 'geojson', 'har'] },
+  { name: 'Todos os arquivos', extensions: ['*'] },
+];
+
+ipcMain.handle('file:open-json', async (e) => {
+  const r = await dialog.showOpenDialog(fromEvent(e), { properties: ['openFile'], filters: JSON_FILTERS });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const file = r.filePaths[0];
+  const stat = await fs.stat(file);
+  if (stat.size > 20 * 1024 * 1024) throw new Error('Arquivo maior que 20 MB');
+  return { path: file, name: path.basename(file), content: await fs.readFile(file, 'utf8') };
+});
+
+// Salva texto (json/yaml/csv/svg) ou bytes (png); o filtro do diálogo vem da extensão do nome sugerido.
+ipcMain.handle('file:save-export', async (e, content, suggestedName) => {
+  const ext = (path.extname(suggestedName || '').slice(1) || 'json').toLowerCase();
+  const r = await dialog.showSaveDialog(fromEvent(e), {
+    defaultPath: suggestedName || 'dados.json',
+    filters: [{ name: ext.toUpperCase(), extensions: [ext] }, { name: 'Todos os arquivos', extensions: ['*'] }],
+  });
+  if (r.canceled || !r.filePath) return null;
+  const data = typeof content === 'string' ? content : Buffer.from(content);
+  await fs.writeFile(r.filePath, data, typeof content === 'string' ? 'utf8' : undefined);
+  return { path: r.filePath, name: path.basename(r.filePath) };
+});
+
 const TEXT_FILTERS = [
   { name: 'Todos os arquivos', extensions: ['*'] },
   { name: 'Texto e código', extensions: ['txt', 'json', 'xml', 'sql', 'js', 'ts', 'csv', 'log', 'md', 'yml', 'yaml', 'ini', 'properties', 'html', 'css'] },

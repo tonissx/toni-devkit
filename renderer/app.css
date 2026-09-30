@@ -56,6 +56,37 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .sqlf__split { flex: 1; min-height: 0; }
 .sqlf__engine { display: inline-flex; align-items: center; gap: 6px; }
 
+/* JSON Visualizer */
+.jsv__search { display: flex; align-items: center; gap: 8px; height: 32px; }
+.jsv__pane { position: relative; height: 100%; display: flex; flex-direction: column; background: var(--tk-surface-1); }
+.jsv__graph { position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: grab; touch-action: none;
+  background-image: radial-gradient(var(--tk-border) 1px, transparent 1px); background-size: 20px 20px; }
+.jsv__graph:active { cursor: grabbing; }
+.jsv__svg { display: block; font: 12px var(--tk-font-mono); user-select: none; }
+.jsv__edge { fill: none; stroke: var(--tk-border-strong); stroke-width: 1.5; }
+.jsv__edge.is-hot { stroke: var(--tk-accent); stroke-width: 2; }
+.jsv__elabel { fill: var(--tk-text-3); font-size: 10px; pointer-events: none; }
+.jsv__box { fill: var(--tk-surface-2); stroke: var(--tk-border-strong); }
+.jsv__node { cursor: pointer; }
+.jsv__node:hover .jsv__box { stroke: var(--tk-text-3); }
+.jsv__node.is-selected .jsv__box { stroke: var(--tk-accent); stroke-width: 2; }
+.jsv__node.is-match .jsv__box { stroke: var(--tk-amber); stroke-width: 2; fill: var(--tk-surface-3); }
+.jsv__t-key { fill: var(--tk-cyan); }
+.jsv__t-string { fill: var(--tk-accent-text); }
+.jsv__t-number { fill: var(--tk-amber); }
+.jsv__t-boolean { fill: var(--tk-violet); }
+.jsv__t-null { fill: var(--tk-text-3); }
+.jsv__toggle { cursor: pointer; }
+.jsv__toggle circle { fill: var(--tk-surface-3); stroke: var(--tk-border-strong); }
+.jsv__toggle:hover circle { stroke: var(--tk-accent); }
+.jsv__toggle text { fill: var(--tk-text-2); font: 600 12px var(--tk-font-sans); pointer-events: none; }
+.jsv__tools { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 2px; padding: 3px;
+  background: var(--tk-surface-2); border: 1px solid var(--tk-border-strong); border-radius: var(--tk-radius-md); }
+.jsv__zoom { min-width: 40px; text-align: center; font: 500 11px var(--tk-font-mono); color: var(--tk-text-3); }
+.jsv__sel { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-top: 1px solid var(--tk-border); background: var(--tk-surface-2); }
+.jsv__sel-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--tk-font-mono); color: var(--tk-accent-text); }
+.jsv__scroll { height: 100%; overflow: auto; padding: 8px; background: var(--tk-surface-1); font: 12px var(--tk-font-mono); }
+
 .home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
 .home-section { padding: 8px 24px 24px; display: flex; flex-direction: column; gap: 12px; max-width: 1200px; }
 .home-section__title { font: 500 11px/1 var(--tk-font-sans); color: var(--tk-text-3); text-transform: uppercase; letter-spacing: .06em; }

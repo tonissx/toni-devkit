@@ -35,6 +35,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **SQL Formatter**: formata no mesmo padrão do sqlformat.org | ✅ |
 | **XML Formatter**: formata nos moldes do vscode-xml (LemMinX) | ✅ |
 | **Diff Checker**: compara dois textos nos moldes do diffchecker.com | ✅ |
+| **JSON Visualizer**: edita, formata e explora JSON como grafo (estilo JSON Crack), árvore, YAML ou CSV | ✅ |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
 | **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
 
@@ -92,6 +93,27 @@ Comparador de textos inspirado no [diffchecker.com](https://www.diffchecker.com/
 
 Atalhos: `Ctrl+Enter` comparar · `Alt+↓` / `Alt+↑` próxima/anterior mudança · `Ctrl+O` abrir no Original ·
 `Ctrl+Shift+O` abrir no Alterado · `Ctrl+Shift+S` trocar lados · `Ctrl+3` Diff Checker.
+
+### JSON Visualizer
+
+Editor de JSON com visualização no estilo do [JSON Crack](https://jsoncrack.com/): editor à esquerda e, à direita,
+o documento como **grafo de nós** (esquerda → direita). Tudo em JS puro e sem dependências (validador, layout em
+árvore e renderização SVG próprios), 100% local.
+
+- **Grafo**: um nó por objeto/array, com as chaves primitivas como linhas (coloridas por tipo) e as arestas rotuladas
+  pela chave/índice. Arraste para mover, roda do mouse para zoom, **Enquadrar**, **Expandir/Recolher tudo** e o botão
+  `+`/`−` de cada nó. Clicar num nó destaca o caminho até a raiz e mostra o JSONPath, com botões para copiar o
+  **caminho** ou o **valor**. Documentos com mais de 2500 nós abrem recolhidos a partir da profundidade 3.
+- **Árvore**, **YAML** e **CSV**: outras visões do mesmo documento (o CSV exige um array na raiz; objetos aninhados
+  viram colunas `a.b`).
+- **Buscar / JSONPath**: texto livre destaca os nós que contêm a chave ou o valor; uma expressão começando com `$`
+  é avaliada como JSONPath (`$`, `.chave`, `['chave']`, `[n]`, `[*]`, `.*`, `..chave`).
+- **Formatar** (indentação 2, 4 ou Tab, com **Ordenar chaves**) e **Minificar**.
+- **Erros de sintaxe** apontam linha e coluna no editor; o grafo mantém o último JSON válido enquanto você corrige.
+- **Exportar** o grafo como **PNG** ou **SVG** (segue o tema atual); **Abrir**/**Salvar** arquivos `.json` (até 20 MB).
+
+Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar a visão atual · `Ctrl+O` abrir .json · `Ctrl+S` salvar a visão atual ·
+`Ctrl+6` JSON Visualizer.
 
 ## Command Palette
 
@@ -367,6 +389,7 @@ src/                 código do app (JSX → renderer/dist/app.js via esbuild)
   tools/sql-formatter/SqlFormatter.jsx
   tools/xml-formatter/XmlFormatter.jsx, engine.js (parser/serializer XML, JS puro)
   tools/diff-checker/DiffChecker.jsx, DiffView.jsx, engine.js (Myers + diff na linha), syntax.js
+  tools/json-visualizer/JsonVisualizer.jsx, GraphView.jsx (SVG), engine.js (parse, grafo, layout, JSONPath, YAML/CSV), exportImage.js
   screens/Home.jsx, screens/Settings.jsx
 vendor/python/       wheel do sqlparse (offline)
 ```
