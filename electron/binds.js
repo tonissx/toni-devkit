@@ -4,7 +4,7 @@
  * globalShortcut e, ao disparar, pede à janela da palette (oculta) para rodar o comando.
  * O resultado volta por binds:result e vira uma notificação silenciosa — nenhuma janela rouba o foco.
  */
-const { app, globalShortcut, Notification } = require('electron');
+const { app, globalShortcut, Notification, nativeImage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { BINDABLE, DEFAULT_BINDS, normalizeBinds } = require('../src/commands/binds.js');
@@ -62,12 +62,18 @@ function suspend(on) {
 
 const get = () => ({ binds: { ...binds }, status: { ...status }, bindable: BINDABLE, defaults: DEFAULT_BINDS });
 
+// Imagem do toast. Sem ela o Windows usa o ícone do executável (o do Electron em dev). O ícone pequeno
+// do cabeçalho vem do atalho do Menu Iniciar com o mesmo AppUserModelId — correto só no app instalado.
+let toastIcon = null;
+const icon = () => toastIcon || (toastIcon = nativeImage.createFromPath(path.join(__dirname, '..', 'renderer', 'assets', 'icon.png')));
+
 /** Feedback do comando rodado pela palette oculta. */
 function notify({ ok, message } = {}) {
   if (!message || !Notification.isSupported()) return;
   new Notification({
     title: ok ? 'Toni Devkit' : 'Toni Devkit — erro',
     body: String(message),
+    icon: icon(),
     silent: true,
   }).show();
 }
