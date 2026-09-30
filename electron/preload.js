@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld('devkit', {
     openXml: () => ipcRenderer.invoke('file:open-xml'),
     saveXml: (content, name) => ipcRenderer.invoke('file:save-xml', content, name),
     openText: () => ipcRenderer.invoke('file:open-text'),
+    openJson: () => ipcRenderer.invoke('file:open-json'),
+    /** content: string (json/yaml/csv/svg) ou Uint8Array (png). */
+    saveExport: (content, name) => ipcRenderer.invoke('file:save-export', content, name),
   },
   sql: {
     status: () => ipcRenderer.invoke('sql:status'),

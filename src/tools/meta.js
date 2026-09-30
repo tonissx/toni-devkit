@@ -31,6 +31,15 @@ const TOOL_META = [
     keywords: ['comparar', 'compare', 'diferença', 'diffchecker', 'merge', 'mesclar'],
   },
   {
+    id: 'json',
+    name: 'JSON Visualizer',
+    icon: 'braces',
+    group: 'Texto & código',
+    desc: 'Edita, formata e explora JSON como grafo, árvore, YAML ou CSV (estilo JSON Crack)',
+    shortcutKey: '6',
+    keywords: ['jsoncrack', 'json crack', 'grafo', 'graph', 'árvore', 'tree', 'jsonpath', 'yaml', 'csv', 'minificar', 'beautify', 'formatar'],
+  },
+  {
     id: 'notes',
     name: 'Notes',
     icon: 'notebook-pen',
