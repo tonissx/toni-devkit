@@ -17,6 +17,7 @@ const MAX_HEIGHT = 540;
 let win = null;
 let loaded = false;
 let pendingShow = null;
+let pendingRuns = []; // comandos de Smart Binds disparados antes de a palette terminar de carregar
 let status = { accelerator: ACCELERATOR, registered: false };
 
 function create() {
@@ -54,6 +55,8 @@ function create() {
   win.webContents.on('did-finish-load', () => {
     loaded = true;
     if (pendingShow) { const s = pendingShow; pendingShow = null; show(s); }
+    for (const id of pendingRuns) win.webContents.send('palette:run', id);
+    pendingRuns = [];
   });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'palette.html'));
 }
@@ -90,7 +93,17 @@ function resize(height) {
   if (b.height !== h) win.setBounds({ ...b, height: h });
 }
 
-/** Registra o único atalho global do app. Falha (atalho em uso por outro app) não é fatal. */
+/**
+ * Roda um comando do registry na palette sem mostrá-la (Smart Binds / bandeja): o foco continua
+ * no app em que o usuário estava, e o resultado volta por binds:result.
+ */
+function run(id) {
+  if (!win) create();
+  if (!loaded) { pendingRuns = [...pendingRuns.slice(-4), id]; return; }
+  win.webContents.send('palette:run', id);
+}
+
+/** Registra o atalho global da palette. Falha (atalho em uso por outro app) não é fatal. */
 function registerShortcut() {
   let registered = false;
   try { registered = globalShortcut.register(ACCELERATOR, () => toggle('shortcut')); } catch { registered = false; }
@@ -98,4 +111,4 @@ function registerShortcut() {
   return status;
 }
 
-module.exports = { create, show, hide, toggle, resize, registerShortcut, getStatus: () => status, ACCELERATOR };
+module.exports = { create, show, hide, toggle, run, resize, registerShortcut, getStatus: () => status, ACCELERATOR };

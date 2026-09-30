@@ -74,6 +74,26 @@ const toolCommands = TOOL_META.map((t) => ({
 /* ─────────────── Actions ─────────────── */
 const readJson = (storage, key) => { try { return JSON.parse(storage.getItem(key)) || {}; } catch { return {}; } };
 
+/* Formatar a área de transferência — com as opções salvas em cada ferramenta. */
+async function readClipboard(ctx) {
+  const text = await ctx.clipboard.read();
+  if (!text.trim()) throw new Error('A área de transferência está vazia');
+  return text;
+}
+async function formatSqlClip(ctx, text) {
+  const opts = { ...DEFAULT_SQL_OPTIONS, ...readJson(ctx.storage, 'tk.sql.options') };
+  const r = await ctx.sql.format(text, opts);
+  await ctx.clipboard.write(r.result);
+  return 'SQL formatado e copiado';
+}
+async function formatXmlClip(ctx, text) {
+  const opts = { ...DEFAULT_XML_OPTIONS, ...readJson(ctx.storage, 'tk.xml.options') };
+  await ctx.clipboard.write(formatXml(text, opts).result);
+  return 'XML formatado e copiado';
+}
+/** XML começa com '<' (depois de BOM/espaços); SQL nunca começa assim. */
+const detectClipboardKind = (text) => (/^﻿?\s*</.test(String(text || '')) ? 'xml' : 'sql');
+
 const actionCommands = [
   {
     id: 'app:show',
@@ -101,19 +121,23 @@ const actionCommands = [
     run: (ctx) => ctx.openApp('settings'),
   },
   {
+    id: 'clipboard:auto',
+    name: 'Formatar área de transferência (SQL ou XML)',
+    description: 'Detecta se o texto copiado é XML ou SQL, formata e copia o resultado',
+    icon: 'wand-sparkles',
+    keywords: ['clipboard', 'copiar', 'colar', 'format', 'auto', 'sql', 'xml'],
+    run: async (ctx) => {
+      const text = await readClipboard(ctx);
+      return detectClipboardKind(text) === 'xml' ? formatXmlClip(ctx, text) : formatSqlClip(ctx, text);
+    },
+  },
+  {
     id: 'clipboard:sql',
     name: 'Formatar SQL da área de transferência',
     description: 'Formata o SQL copiado (opções do SQL Formatter) e copia o resultado',
     icon: 'database',
     keywords: ['clipboard', 'copiar', 'colar', 'format', 'query'],
-    run: async (ctx) => {
-      const text = await ctx.clipboard.read();
-      if (!text.trim()) throw new Error('A área de transferência está vazia');
-      const opts = { ...DEFAULT_SQL_OPTIONS, ...readJson(ctx.storage, 'tk.sql.options') };
-      const r = await ctx.sql.format(text, opts);
-      await ctx.clipboard.write(r.result);
-      return 'SQL formatado e copiado';
-    },
+    run: async (ctx) => formatSqlClip(ctx, await readClipboard(ctx)),
   },
   {
     id: 'clipboard:xml',
@@ -121,13 +145,7 @@ const actionCommands = [
     description: 'Formata o XML copiado (opções do XML Formatter) e copia o resultado',
     icon: 'code-xml',
     keywords: ['clipboard', 'copiar', 'colar', 'format', 'pretty'],
-    run: async (ctx) => {
-      const text = await ctx.clipboard.read();
-      if (!text.trim()) throw new Error('A área de transferência está vazia');
-      const opts = { ...DEFAULT_XML_OPTIONS, ...readJson(ctx.storage, 'tk.xml.options') };
-      await ctx.clipboard.write(formatXml(text, opts).result);
-      return 'XML formatado e copiado';
-    },
+    run: async (ctx) => formatXmlClip(ctx, await readClipboard(ctx)),
   },
   {
     id: 'theme:toggle',
@@ -302,4 +320,4 @@ const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...note
 
 const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
 
-module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands };
+module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, detectClipboardKind };

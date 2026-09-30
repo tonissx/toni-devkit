@@ -1,5 +1,6 @@
 import { DS, mod } from '../lib/ds.js';
 import { THEMES } from '../lib/themes.js';
+import { acceleratorFromEvent, acceleratorLabel } from '../commands/binds.js';
 
 const { PageHeader, Card, Select, Kbd, Badge, Toggle, Alert, Button } = DS;
 
@@ -39,6 +40,76 @@ function PaletteCard() {
       <Row label="Fechar a janela" hint="O Devkit continua na bandeja do sistema; use Sair (bandeja ou palette) para encerrar">
         <Badge size="sm">vai para a bandeja</Badge>
       </Row>
+    </Card>
+  );
+}
+
+/**
+ * Smart Binds: atalhos globais que rodam um comando sem abrir o Devkit (ver electron/binds.js).
+ * "Gravar" desliga os binds enquanto espera a tecla — senão o próprio atalho seria engolido pelo sistema.
+ */
+function BindsCard({ onChange }) {
+  const [state, setState] = React.useState(null);
+  const [recording, setRecording] = React.useState(null);
+  const [hint, setHint] = React.useState(null);
+  const api = window.devkit.binds;
+
+  const update = (s) => { setState(s); onChange && onChange(s); };
+  React.useEffect(() => { api.get().then(update); }, []);
+
+  const save = (next) => api.set(next).then(update);
+  const stopRecording = () => { setRecording(null); setHint(null); };
+
+  React.useEffect(() => {
+    if (!recording) return undefined;
+    api.suspend(true);
+    const onKey = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape' && !e.ctrlKey && !e.altKey) { stopRecording(); api.suspend(false).then(update); return; }
+      const acc = acceleratorFromEvent(e);
+      if (!acc) { if (!/^(Control|Shift|Alt|Meta)/.test(e.code)) setHint('Use Ctrl ou Alt + uma tecla'); return; }
+      if (acc.toLowerCase() === 'control+alt+space') { setHint('Ctrl+Alt+Space é o atalho da palette'); return; }
+      // O mesmo atalho em outro comando passa para este.
+      const next = {};
+      for (const [id, a] of Object.entries(state.binds)) if (a.toLowerCase() !== acc.toLowerCase()) next[id] = a;
+      next[recording] = acc;
+      stopRecording();
+      save(next);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [recording]);
+  // Saiu da tela gravando: religa os atalhos.
+  const recRef = React.useRef(null);
+  recRef.current = recording;
+  React.useEffect(() => () => { if (recRef.current) api.suspend(false); }, []);
+
+  if (!state) return null;
+  const clear = (id) => { const next = { ...state.binds }; delete next[id]; save(next); };
+  return (
+    <Card padding={24}>
+      <div className="tk-card__title">Smart Binds</div>
+      <Row label="Como usar" hint="Copie o texto, aperte o atalho e cole — o Devkit formata o clipboard sem abrir janela, com as opções salvas em cada ferramenta">
+        <Button variant="ghost" size="sm" onClick={() => save(state.defaults)}>Restaurar padrão</Button>
+      </Row>
+      {state.bindable.map(({ id, name }) => {
+        const acc = state.binds[id];
+        const st = state.status[id];
+        const isRec = recording === id;
+        return (
+          <Row key={id} label={name} hint={isRec ? (hint || 'Pressione o novo atalho · Esc cancela') : undefined}>
+            {isRec ? <Badge size="sm" variant="info" dot>gravando…</Badge>
+              : acc ? <Kbd size="sm">{acceleratorLabel(acc)}</Kbd>
+              : <Badge size="sm">sem atalho</Badge>}
+            {!isRec && acc && st && (st.registered
+              ? <Badge size="sm" variant="ok" dot>ativo</Badge>
+              : <Badge size="sm" variant="warn" dot>em uso por outro app</Badge>)}
+            {!isRec && <Button variant="secondary" size="sm" disabled={!!recording} onClick={() => { setHint(null); setRecording(id); }}>Gravar</Button>}
+            {!isRec && acc && <Button variant="ghost" size="sm" disabled={!!recording} onClick={() => clear(id)}>Limpar</Button>}
+          </Row>
+        );
+      })}
     </Card>
   );
 }
@@ -97,8 +168,10 @@ function UpdaterCard({ updater }) {
 }
 
 export function Settings({ prefs, setPrefs, info, sqlVersion, updater }) {
+  const [binds, setBinds] = React.useState(null);
   const shortcuts = [
     ['Command palette (global)', 'Ctrl+Alt+Space'],
+    ...(binds ? binds.bindable.filter((b) => binds.binds[b.id]).map((b) => [b.name + ' (global)', acceleratorLabel(binds.binds[b.id])]) : []),
     ['Command palette (no app)', mod('K')],
     ['Formatar SQL', mod('↵')],
     ['Copiar saída', mod('C', true)],
@@ -121,6 +194,7 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater }) {
           </Row>
         </Card>
         <PaletteCard />
+        <BindsCard onChange={setBinds} />
         <Card padding={24}>
           <div className="tk-card__title">Atalhos</div>
           {shortcuts.map(([a, k]) => <Row key={a} label={a}><Kbd size="sm">{k}</Kbd></Row>)}

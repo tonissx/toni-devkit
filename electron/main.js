@@ -5,6 +5,7 @@ const { pathToFileURL } = require('node:url');
 const fs = require('node:fs/promises');
 const { Worker } = require('node:worker_threads');
 const palette = require('./palette');
+const binds = require('./binds');
 const { createNotesService } = require('./notes/service');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
@@ -142,13 +143,27 @@ function createTray() {
   tray.setToolTip(palette.getStatus().registered
     ? 'Toni Devkit — Ctrl+Alt+Space abre a command palette'
     : 'Toni Devkit — atalho Ctrl+Alt+Space em uso por outro app');
+  buildTrayMenu();
+  tray.on('click', () => showMain());
+}
+
+/** Menu da bandeja — refeito quando os Smart Binds mudam, para mostrar o atalho atual. */
+function buildTrayMenu() {
+  if (!tray) return;
+  const bound = (id, label) => {
+    const acc = binds.accelerator(id);
+    return { label, click: () => palette.run(id), ...(acc ? { accelerator: acc, registerAccelerator: false } : {}) };
+  };
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Abrir Devkit', click: () => showMain() },
     { label: 'Command Palette', accelerator: 'Ctrl+Alt+Space', registerAccelerator: false, click: () => palette.show('tray') },
     { type: 'separator' },
+    bound('clipboard:auto', 'Formatar clipboard (SQL ou XML)'),
+    bound('clipboard:sql', 'Formatar SQL do clipboard'),
+    bound('clipboard:xml', 'Formatar XML do clipboard'),
+    { type: 'separator' },
     { label: 'Sair', click: () => { quitting = true; app.quit(); } },
   ]));
-  tray.on('click', () => showMain());
 }
 
 /** Na primeira vez que a janela vai para a bandeja, avisa que o app continua rodando. */
@@ -261,6 +276,12 @@ ipcMain.on('palette:toggle', () => palette.toggle('app'));
 ipcMain.on('palette:hide', () => palette.hide());
 ipcMain.on('palette:resize', (_e, height) => palette.resize(height));
 ipcMain.handle('palette:status', () => palette.getStatus());
+
+/* ─────────────── Smart Binds (atalhos globais → comandos da palette) ─────────────── */
+ipcMain.handle('binds:get', () => binds.get());
+ipcMain.handle('binds:set', (_e, next) => binds.set(next && typeof next === 'object' ? next : {}));
+ipcMain.handle('binds:suspend', (_e, on) => binds.suspend(!!on));
+ipcMain.on('binds:result', (_e, result) => binds.notify(result));
 
 ipcMain.on('app:open', (_e, route, params) => {
   palette.hide();
@@ -394,6 +415,12 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', () => showMain());
 
+  // AppUserModelId próprio: a barra de tarefas e as notificações pegam ícone/nome do atalho do Menu Iniciar com
+  // o mesmo ID. Instalado, é o atalho do instalador. Em dev, sem ID explícito o processo fica com o padrão
+  // electron.app.Electron e herda o ícone de qualquer atalho "Electron" que exista; com um ID sem atalho, o
+  // Windows usa o ícone da janela. O sufixo .dev evita agrupar com o Devkit instalado.
+  if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'br.com.navship.tonidevkit' : 'br.com.navship.tonidevkit.dev');
+
   app.whenReady().then(() => {
     initNotes();
     registerNotesProtocol();
@@ -402,6 +429,12 @@ if (!app.requestSingleInstanceLock()) {
     palette.create();
     palette.registerShortcut();
     createTray();
+    binds.init({ run: (id) => palette.run(id), changed: buildTrayMenu })
+      .then(() => {
+        // Com um atalho que formata SQL, aquece o Pyodide em segundo plano: o primeiro uso não espera o motor subir.
+        if (binds.accelerator('clipboard:auto') || binds.accelerator('clipboard:sql')) setTimeout(() => startSqlWorker().catch(() => {}), 5000);
+      })
+      .catch((e) => console.error('[binds]', e));
     if (!startHidden) createMainWindow();
     app.on('activate', () => showMain());
   });

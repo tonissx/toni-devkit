@@ -5,6 +5,7 @@ import { formatDuration } from '../devcore/engine/format.js';
 import { rank, loadRecent, pushRecent, normalize } from '../commands/search.js';
 import { draftMatches } from '../commands/providers.js';
 import { paletteKey, keyHint } from '../commands/keys.js';
+import { BINDABLE_IDS } from '../commands/binds.js';
 import { createNote, snippetCode } from '../notes/note.js';
 import { recoverUnsaved, shortTime, cleanError } from '../notes/client.js';
 import { QuickNote } from './QuickNote.jsx';
@@ -269,6 +270,26 @@ export function Palette() {
     if (el) el.scrollIntoView({ block: 'nearest' });
   }, [cur, sections]);
 
+  /** Registra a execução de um comando: recentes da palette + Event Bus (DevCore). */
+  const trackExecuted = (cmd) => {
+    setRecent(pushRecent(localStorage, cmd.id));
+    emit('command.executed', { id: cmd.id });
+    if (cmd.id.startsWith('clipboard:')) emit('clipboard.formatted', { tool: cmd.id.slice(10) });
+  };
+
+  // Smart Binds / bandeja: roda o comando com a palette oculta; o resultado vira notificação no processo principal.
+  React.useEffect(() => window.devkit.palette.onRun(async (id) => {
+    const cmd = BINDABLE_IDS.includes(id) && COMMANDS.find((c) => c.id === id);
+    if (!cmd) return;
+    try {
+      const msg = await cmd.run(ctx);
+      trackExecuted(cmd);
+      window.devkit.binds.result({ ok: true, message: typeof msg === 'string' ? msg : '' });
+    } catch (e) {
+      window.devkit.binds.result({ ok: false, message: cleanError(e) });
+    }
+  }), []);
+
   const fail = (id, name, e) => { setBusy(null); setError({ id, name, message: cleanError(e) }); };
 
   /** Nota: Enter abre · snippet: Enter copia o código e Ctrl+Enter abre. */
@@ -298,11 +319,7 @@ export function Palette() {
     setError(null); setDone(null); setBusy(cmd.id);
     try {
       const msg = await cmd.run(ctx, item.arg);
-      if (!cmd.dynamic) {
-        setRecent(pushRecent(localStorage, cmd.id));
-        emit('command.executed', { id: cmd.id });
-        if (cmd.id.startsWith('clipboard:')) emit('clipboard.formatted', { tool: cmd.id.slice(10) });
-      }
+      if (!cmd.dynamic) trackExecuted(cmd);
       setBusy(null);
       if (typeof msg === 'string' && msg) { setDone(msg); setTimeout(close, 700); } else if (!cmd.keepOpen) close();
     } catch (e) { fail(cmd.id, cmd.name, e); }
