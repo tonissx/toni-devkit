@@ -108,6 +108,8 @@ export function NotesScreen({ toast, request }) {
       setRows(list); setAllRows(all); setTags(tg); setInfo(inf); setRecent(rec); setFolders(fld); setTrashCount(trash); setLoadError(null);
       // A pasta ativa deixou de existir (apagada ou renomeada): novas notas voltam para a raiz.
       setUi((u) => (typeof u.folder === 'string' && u.folder && !fld.some((f) => f.path === u.folder) ? { ...u, folder: null } : u));
+      // A tag ativa deixou de existir: sem isso a lista fica filtrada por algo que o usuário nem vê.
+      setUi((u) => (u.tag && !tg.some((t) => t.tag === u.tag) ? { ...u, tag: null } : u));
     } catch (e) {
       setLoadError(cleanError(e));
       setRows([]);
@@ -396,7 +398,7 @@ export function NotesScreen({ toast, request }) {
           </div>
           {tags.length > 0 && (
             <div className="nts-tagcloud" aria-label="Tags">
-              {tags.slice(0, 16).map((t) => (
+              {[...tags.slice(0, 16), ...tags.slice(16).filter((t) => t.tag === ui.tag)].map((t) => (
                 <button key={t.tag} type="button" className={'nts-chip is-tag' + (ui.tag === t.tag ? ' is-on' : '')} aria-pressed={ui.tag === t.tag}
                   onClick={() => setUi((u) => ({ ...u, tag: u.tag === t.tag ? null : t.tag }))}>#{t.tag}<span>{t.count}</span></button>
               ))}
@@ -419,7 +421,14 @@ export function NotesScreen({ toast, request }) {
             {rows && !loadError && !useTree && flat.length === 0 && (
               q ? <div className="nts-list__msg"><b>Nenhuma nota para “{q}”.</b><br />Tente outro termo.</div>
                 : noNotesAtAll ? <div className="nts-list__msg">Nenhuma nota ainda.</div>
-                : <div className="nts-list__msg">Nada neste filtro.</div>
+                : (
+                  <div className="nts-list__msg">
+                    Nada neste filtro.
+                    {(ui.filter !== 'all' || ui.tag) && (
+                      <><br /><Button size="sm" variant="secondary" onClick={() => setUi((u) => ({ ...u, filter: 'all', tag: null }))}>Limpar filtros</Button></>
+                    )}
+                  </div>
+                )
             )}
 
             {useTree ? (
