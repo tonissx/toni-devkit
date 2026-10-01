@@ -166,6 +166,22 @@ contextBridge.exposeInMainWorld('devkit', {
       return () => ipcRenderer.removeListener('notes:flush', h);
     },
   },
+  /** Links rápidos: alias → URL com {q} (ver electron/links/service.js). */
+  links: {
+    list: () => ipcRenderer.invoke('links:list'),
+    save: (link) => ipcRenderer.invoke('links:save', link),
+    remove: (id) => ipcRenderer.invoke('links:remove', id),
+    /** Abre no navegador com o valor no {q} (e guarda o valor nos recentes) → url. */
+    open: (id, value) => ipcRenderer.invoke('links:open', id, value),
+    /** Só monta a URL (para copiar) → url. */
+    url: (id, value) => ipcRenderer.invoke('links:url', id, value),
+    forget: (id, value) => ipcRenderer.invoke('links:forget', id, value),
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('links:changed', h);
+      return () => ipcRenderer.removeListener('links:changed', h);
+    },
+  },
   /** Atualização automática (ver electron/updater/service.js). */
   updater: {
     status: () => ipcRenderer.invoke('updater:status'),

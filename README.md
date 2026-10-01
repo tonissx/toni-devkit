@@ -135,6 +135,21 @@ sem restaurar a janela principal. Dentro do Devkit, `Ctrl+K` abre a mesma palett
 - **Bandeja**: fechar a janela mantém o Devkit rodando (o atalho continua valendo). Em Configurações:
   **Iniciar com o Windows** (sobe em segundo plano) e o status do atalho (avisa se outro app já usa `Ctrl+Alt+Space`)
 
+### Links rápidos
+
+Uma URL atrás de um alias, com `{q}` onde entra a parte variável — por exemplo `solic` →
+`https://fluig.navship.com.br/portal/p/001/pageworkflowview?app_ecm_workflowview_detailsProcessInstanceID={q}`.
+
+- **Usar**: digite o alias e aperte **Tab** — ele vira um chip (`solic ›`) e o que você digitar depois entra no `{q}`.
+  `Enter` abre no navegador · `Ctrl+Enter` copia a URL · `Backspace` com o campo vazio solta o chip. Os últimos valores
+  usados em cada link aparecem para reabrir com um Enter (Tab completa o campo com o selecionado)
+- **Só de propósito**: digitar nunca é interceptado — "solic" sozinho continua sendo uma busca normal; o chip só
+  aparece com Tab (ou Enter no item do link). Link sem `{q}` é um favorito: Enter abre direto
+- **Cadastrar**: Configurações → **Links rápidos** (alias, nome, rótulo do valor, URL, botão Testar) ou direto na
+  palette: `link: solic https://…{q} Solicitação Fluig`. Só `http://`/`https://`; o valor vai com encode de URL
+- **Onde ficam**: `Documentos\Devkit Notes\.devkit\links.json` — vão junto se as notas forem sincronizadas/
+  versionadas, mas não aparecem no Notes (lista, busca, grafo e lixeira ignoram a pasta `.devkit`)
+
 ### Adicionando um comando
 
 Inclua um objeto em `src/commands/registry.js`:
@@ -363,6 +378,7 @@ no Windows portátil o app só avisa e abre a página da última release.
 electron/
   main.js            janela principal (sob demanda), bandeja, login item, IPC
   palette.js         janela da command palette + atalho global Ctrl+Alt+Space
+  links/service.js   links rápidos (alias → URL com {q}) em Devkit Notes\.devkit\links.json
   notes/             store.js (arquivos .md, gravação atômica, lixeira) e service.js (cache, busca, IPC)
   events.js          Event Bus (features → módulos, sem acoplamento)
   devcore/service.js estado do DevCore, heartbeat, IPC

@@ -1,6 +1,7 @@
 import { DS } from '../lib/ds.js';
 import { resolveTheme } from '../lib/themes.js';
-import { CATEGORIES, COMMANDS, categoryName, abilityCommands, itemCommands } from '../commands/registry.js';
+import { CATEGORIES, COMMANDS, categoryName, abilityCommands, itemCommands, linkCommands } from '../commands/registry.js';
+import { parseCapture, needsValue, sameAlias, shortUrl, buildUrl } from '../links/link.js';
 import { formatDuration } from '../devcore/engine/format.js';
 import { rank, loadRecent, pushRecent, normalize } from '../commands/search.js';
 import { draftMatches } from '../commands/providers.js';
@@ -28,9 +29,44 @@ const SNIPPETS = 'notes:snippets'; // lista só os snippets; Enter cola no progr
 const isNotesScope = (s) => !!s && s.startsWith('notes');
 const readPrefs = () => { try { return JSON.parse(localStorage.getItem('tk.prefs')) || {}; } catch { return {}; } };
 
+/**
+ * Link rápido com o chip fixado ("solic ›"): o texto digitado é o valor do {q}.
+ * Enter abre · Ctrl+Enter copia a URL · os valores usados antes aparecem para reabrir.
+ */
+function linkSections(link, q) {
+  const valueItem = (value, name) => {
+    let preview = '';
+    try { preview = shortUrl(buildUrl(link, value)); } catch { /* valor inválido: sem prévia */ }
+    return {
+      key: 'lv:' + value, kind: 'command', linkValue: value,
+      cmd: {
+        id: 'linkv:' + link.id, name, description: preview, icon: 'external-link', dynamic: true,
+        run: async (ctx, _arg, { ctrl } = {}) => {
+          if (ctrl) {
+            const url = await ctx.links.url(link.id, value);
+            await ctx.clipboard.write(url);
+            return 'URL copiada: ' + shortUrl(url);
+          }
+          await ctx.links.open(link.id, value);
+          return undefined;
+        },
+      },
+    };
+  };
+  const title = link.name || link.alias;
+  const label = link.param || 'o valor';
+  const recents = (link.recent || []).filter((v) => v !== q && (!q || normalize(v).includes(normalize(q))));
+  const out = [];
+  if (q) out.push({ title, items: [valueItem(q, `Abrir ${link.alias} → ${q}`)] });
+  if (recents.length) out.push({ title: 'Usados recentemente', items: recents.map((v) => valueItem(v, v)) });
+  if (!out.length) out.push({ title, hint: 'Digite ' + label.toLowerCase(), items: [] });
+  return out;
+}
+
 /** Seções de resultados para o estado atual (comandos + notas vindas do processo principal). */
-function buildSections(scope, query, recent, nd, extra = []) {
+function buildSections(scope, query, recent, nd, extra = [], link = null) {
   const q = query.trim();
+  if (link) return linkSections(link, q);
   const opts = { recent, categoryName };
   const cmdItem = (r, arg) => ({ key: r.cmd.id, kind: 'command', cmd: r.cmd, idx: r.idx || [], arg });
   const noteItem = (n, time) => ({ key: 'note:' + n.id + (time || ''), kind: 'note', note: n, time });
@@ -62,6 +98,23 @@ function buildSections(scope, query, recent, nd, extra = []) {
         })],
       }];
     }
+    const cap = parseCapture(q);
+    if (cap) {
+      if (cap.error) return [{ title: 'Novo link rápido', hint: cap.error, items: [] }];
+      return [{
+        title: 'Novo link rápido',
+        items: [cmdItem({
+          cmd: {
+            id: 'links:capture', name: `Salvar link “${cap.alias}”`, description: shortUrl(cap.url) + (cap.name ? ' · ' + cap.name : ''),
+            icon: 'link', category: 'links', dynamic: true,
+            run: async (ctx) => {
+              const l = await ctx.links.save({ alias: cap.alias, url: cap.url, name: cap.name });
+              return needsValue(l) ? `Link salvo — digite “${l.alias}” e Tab` : `Link salvo — digite “${l.alias}” e Enter`;
+            },
+          },
+        })],
+      }];
+    }
     if (!q) {
       const rec = recent.filter((id) => id !== QUICK.id) // Quick Note já está fixa em Categorias
         .map((id) => APP_CMDS.find((c) => c.id === id) || WEB_CMDS.find((c) => c.id === id)).filter(Boolean).slice(0, 5);
@@ -71,6 +124,9 @@ function buildSections(scope, query, recent, nd, extra = []) {
       ].filter(Boolean);
     }
     const ranked = rank([...APP_CMDS, ...extra], q, opts);
+    // Alias digitado por inteiro: o link vai para o topo (Tab fixa o chip).
+    const exact = ranked.findIndex((r) => r.cmd.quickLink && sameAlias(r.cmd.quickLink.alias, q));
+    if (exact > 0) ranked.unshift(...ranked.splice(exact, 1));
     const found = ranked.map((r) => cmdItem(r));
     const drafts = draftMatches(q, localStorage).map((cmd) => cmdItem({ cmd }));
     if (!found.length && !hits.length && !drafts.length) {
@@ -182,12 +238,15 @@ export function Palette() {
   const [notesTick, setNotesTick] = React.useState(0);
   const [abilities, setAbilities] = React.useState([]); // habilidades dos DevPets (dinâmicas)
   const [items, setItems] = React.useState([]);         // consumíveis em estoque (dinâmicos)
+  const [links, setLinks] = React.useState([]);         // links rápidos (alias → URL com {q})
+  const [linkId, setLinkId] = React.useState(null);     // link com o chip fixado (o texto vira o {q})
   const inputRef = React.useRef(null);
   const panelRef = React.useRef(null);
   const listRef = React.useRef(null);
 
   const close = () => window.devkit.palette.hide();
-  const enterScope = (id) => { setScope(id); setQuery(''); setHi(0); setError(null); };
+  const enterScope = (id) => { setLinkId(null); setScope(id); setQuery(''); setHi(0); setError(null); };
+  const enterLink = (id) => { setScope(null); setLinkId(id); setQuery(''); setHi(0); setError(null); };
   const startQuick = (text = '') => { setError(null); setQuick(createNote({ quick: true, content: text })); };
 
   /** API disponível para os comandos (ver src/commands/registry.js). */
@@ -210,8 +269,9 @@ export function Palette() {
       storage: localStorage,
       quit: () => d.app.quit(),
       notes: d.notes,
+      links: d.links,
       openNote: (payload) => d.notes.open(payload),
-      palette: { quickNote: startQuick, enter: enterScope, search: (text) => { setScope(null); setQuery(text); setHi(0); } },
+      palette: { quickNote: startQuick, enter: enterScope, enterLink, search: (text) => { setLinkId(null); setScope(null); setQuery(text); setHi(0); } },
     };
   }, []);
 
@@ -239,8 +299,11 @@ export function Palette() {
   }, [ndKey]);
   React.useEffect(() => window.devkit.notes.onChanged(() => setNotesTick((t) => t + 1)), []);
 
-  const abilityCmds = React.useMemo(() => [...abilityCommands(abilities, formatDuration), ...itemCommands(items)], [abilities, items]);
-  const sections = React.useMemo(() => buildSections(scope, query, recent, nd, abilityCmds), [scope, query, recent, nd, abilityCmds]);
+  const abilityCmds = React.useMemo(() => [...abilityCommands(abilities, formatDuration), ...itemCommands(items), ...linkCommands(links)], [abilities, items, links]);
+  const link = linkId ? links.find((l) => l.id === linkId) || null : null;
+  const sections = React.useMemo(() => buildSections(scope, query, recent, nd, abilityCmds, link), [scope, query, recent, nd, abilityCmds, link]);
+  const loadLinks = () => window.devkit.links.list().then(setLinks, () => setLinks([]));
+  React.useEffect(() => window.devkit.links.onChanged(loadLinks), []);
   const flat = React.useMemo(() => sections.flatMap((s) => s.items), [sections]);
   const cur = Math.min(hi, flat.length - 1);
   const curItem = flat[cur];
@@ -250,6 +313,8 @@ export function Palette() {
     emit('palette.opened');
     window.devkit.devcore.abilities().then(setAbilities, () => setAbilities([]));
     window.devkit.devcore.items().then(setItems, () => setItems([]));
+    loadLinks();
+    setLinkId(null);
     // Smart Bind "Colar snippet": abre direto na lista de snippets.
     setScope(info && info.source === 'snippets' ? SNIPPETS : null); setQuery(''); setHi(0); setBusy(null); setError(null); setDone(null); setQuick(null);
     setRecent(loadRecent(localStorage));
@@ -335,7 +400,7 @@ export function Palette() {
     const { cmd } = item;
     setError(null); setDone(null); setBusy(cmd.id);
     try {
-      const msg = await cmd.run(ctx, item.arg);
+      const msg = await cmd.run(ctx, item.arg, { ctrl });
       if (!cmd.dynamic) trackExecuted(cmd);
       setBusy(null);
       if (typeof msg === 'string' && msg) { setDone(msg); setTimeout(close, 700); } else if (!cmd.keepOpen) close();
@@ -360,11 +425,19 @@ export function Palette() {
     } else if (e.key === 'Escape') {
       e.preventDefault();
       window.devkit.palette.hide({ restore: true }); // cancelar: o foco volta para o programa de antes
+    } else if (e.key === 'Backspace' && !query && link) {
+      // Solta o chip e devolve o alias ao campo (dá para seguir buscando).
+      e.preventDefault();
+      setLinkId(null); setQuery(link.alias); setHi(0); setError(null);
     } else if (e.key === 'Backspace' && !query && scope) {
       e.preventDefault();
       enterScope(isNotesScope(scope) && scope !== 'notes' && scope !== SNIPPETS ? 'notes' : null);
     } else if (e.key === 'Tab') {
       e.preventDefault(); // o foco fica sempre no campo
+      // Tab é o gesto intencional dos links rápidos: fixa o chip do link selecionado (nada é interceptado ao digitar).
+      // Com o chip fixado, Tab completa o campo com o valor recente selecionado.
+      if (link) { if (curItem && curItem.linkValue) { setQuery(curItem.linkValue); setHi(0); } }
+      else if (curItem && curItem.cmd && curItem.cmd.quickLink && needsValue(curItem.cmd.quickLink)) enterLink(curItem.cmd.quickLink.id);
     } else {
       // Letras são sempre texto; Alt+letra navega (ver src/commands/keys.js).
       const act = paletteKey(e, scope);
@@ -376,7 +449,8 @@ export function Palette() {
   };
 
   const scopeCat = catOf(scope);
-  const placeholder = scope === SNIPPETS ? 'Colar snippet…'
+  const placeholder = link ? (link.param || 'Valor') + '…'
+    : scope === SNIPPETS ? 'Colar snippet…'
     : scope === 'notes' ? 'Buscar nas notas…'
     : isNotesScope(scope) ? 'Buscar em ' + SUB[scope].toLowerCase() + '…'
     : scopeCat ? 'Filtrar ' + scopeCat.name.toLowerCase() + '…'
@@ -385,6 +459,7 @@ export function Palette() {
   const countLabel = count + (count === 1 ? ' resultado' : ' resultados');
   const announce = done || (error ? 'Erro: ' + error.message : (sections[0] && sections[0].empty ? 'Nada encontrado' : countLabel));
   const snippetSel = curItem && curItem.kind === 'note' && curItem.note.type === 'snippet';
+  const linkSel = !link && curItem && curItem.kind === 'command' && curItem.cmd.quickLink && needsValue(curItem.cmd.quickLink);
   let n = -1;
 
   const rowFor = (it) => {
@@ -438,7 +513,7 @@ export function Palette() {
           ? <Spinner size={14} />
           : hintKey ? <Kbd size="sm">{keyHint(hintKey)}</Kbd>
           : cmd.shortcut ? <Kbd size="sm">{cmd.shortcut}</Kbd>
-          : sel ? <Kbd size="sm">↵</Kbd> : null}
+          : sel ? <Kbd size="sm">{cmd.quickLink && needsValue(cmd.quickLink) ? 'Tab' : '↵'}</Kbd> : null}
       </div>
     );
   };
@@ -450,7 +525,12 @@ export function Palette() {
           <QuickNote key={quick.id} initial={quick} onClose={close} onOpenInApp={(id) => window.devkit.notes.open({ id })} />
         ) : (<>
           <div className="tk-palette__search">
-            <Icon name={scopeCat ? scopeCat.icon : 'search'} size={16} />
+            <Icon name={link ? 'link-2' : scopeCat ? scopeCat.icon : 'search'} size={16} />
+            {link && (
+              <button type="button" className="pl-chip" onClick={() => { setLinkId(null); setQuery(link.alias); }} title={(link.name ? link.name + ' · ' : '') + 'Voltar (Backspace)'} tabIndex={-1}>
+                {link.alias}<Icon name="chevron-right" size={12} />
+              </button>
+            )}
             {scopeCat && (
               <button type="button" className="pl-chip" onClick={() => enterScope(null)} title="Voltar (Backspace)" tabIndex={-1}>
                 {scopeCat.name}{SUB[scope] && <><Icon name="chevron-right" size={12} />{SUB[scope]}</>}<Icon name="chevron-right" size={12} />
@@ -498,11 +578,16 @@ export function Palette() {
 
           <div className="tk-palette__foot">
             {/* Um "Alt" seguido das letras cabe na largura: Alt + T A N */}
-            {!scope && !q ? <><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">T</Kbd><Kbd size="sm">A</Kbd><Kbd size="sm">N</Kbd> categorias</span><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">Q</Kbd> Quick Note</span></>
+            {link ? null
+              : !scope && !q ? <><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">T</Kbd><Kbd size="sm">A</Kbd><Kbd size="sm">N</Kbd> categorias</span><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">Q</Kbd> Quick Note</span></>
               : scope === 'notes' && !q ? <><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">Q</Kbd><Kbd size="sm">N</Kbd><Kbd size="sm">P</Kbd><Kbd size="sm">R</Kbd></span><span><Kbd size="sm">⌫</Kbd> voltar</span></>
               : scope && !q ? <span><Kbd size="sm">⌫</Kbd> voltar</span> : null}
-            {!(!q && (!scope || scope === 'notes')) && <span><Kbd size="sm">↑</Kbd><Kbd size="sm">↓</Kbd> navegar</span>}
-            {snippetSel && scope === SNIPPETS
+            {(link || !(!q && (!scope || scope === 'notes'))) && <span><Kbd size="sm">↑</Kbd><Kbd size="sm">↓</Kbd> navegar</span>}
+            {link
+              ? <><span><Kbd size="sm">↵</Kbd> abrir</span><span><Kbd size="sm">Ctrl+↵</Kbd> copiar URL</span><span><Kbd size="sm">⌫</Kbd> soltar</span></>
+              : linkSel
+              ? <><span><Kbd size="sm">Tab</Kbd> fixar {curItem.cmd.quickLink.alias}</span><span><Kbd size="sm">↵</Kbd> fixar</span></>
+              : snippetSel && scope === SNIPPETS
               ? <><span><Kbd size="sm">↵</Kbd> colar</span><span><Kbd size="sm">Ctrl+↵</Kbd> copiar</span></>
               : snippetSel
               ? <><span><Kbd size="sm">↵</Kbd> copiar</span><span><Kbd size="sm">Ctrl+↵</Kbd> abrir</span></>

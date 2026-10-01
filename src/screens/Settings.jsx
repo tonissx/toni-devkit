@@ -1,6 +1,7 @@
 import { DS, mod } from '../lib/ds.js';
 import { THEMES } from '../lib/themes.js';
 import { acceleratorFromEvent, acceleratorLabel } from '../commands/binds.js';
+import { LinksCard } from './LinksCard.jsx';
 
 const { PageHeader, Card, Select, Kbd, Badge, Toggle, Alert, Button } = DS;
 
@@ -167,7 +168,7 @@ function UpdaterCard({ updater }) {
   );
 }
 
-export function Settings({ prefs, setPrefs, info, sqlVersion, updater }) {
+export function Settings({ prefs, setPrefs, info, sqlVersion, updater, toast }) {
   const [binds, setBinds] = React.useState(null);
   const shortcuts = [
     ['Command palette (global)', 'Ctrl+Alt+Space'],
@@ -194,6 +195,7 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater }) {
           </Row>
         </Card>
         <PaletteCard />
+        <LinksCard toast={toast} />
         <BindsCard onChange={setBinds} />
         <Card padding={24}>
           <div className="tk-card__title">Atalhos</div>

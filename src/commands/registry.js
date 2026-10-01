@@ -28,6 +28,7 @@ const { THEMES } = require('../lib/themes.js');
 const { DEFAULT_SQL_OPTIONS } = require('../tools/sql-formatter/defaults.js');
 const { DEFAULT_XML_OPTIONS } = require('../tools/xml-formatter/defaults.js');
 const { formatXml } = require('../tools/xml-formatter/engine.js');
+const { needsValue, shortUrl } = require('../links/link.js');
 
 const CATEGORIES = [
   { id: 'tools', name: 'Tools', key: 't', icon: 'wrench', description: 'Abrir uma ferramenta do Devkit' },
@@ -177,6 +178,14 @@ const actionCommands = [
     run: (ctx) => { ctx.appCommand({ type: 'sidebar' }); },
   },
   {
+    id: 'links:manage',
+    name: 'Links rápidos',
+    description: 'Cadastrar aliases para URLs (ex.: solic → solicitação do Fluig) — ou digite “link: alias url”',
+    icon: 'link',
+    keywords: ['links', 'alias', 'atalho', 'url', 'favoritos', 'bookmark', 'quicklink'],
+    run: (ctx) => ctx.openApp('settings'),
+  },
+  {
     id: 'app:quit',
     name: 'Sair do Devkit',
     description: 'Encerra o app (o atalho global deixa de funcionar)',
@@ -322,8 +331,31 @@ function itemCommands(list) {
   }));
 }
 
+/* ─────────────── Links rápidos ─────────────── */
+/**
+ * Links rápidos como comandos dinâmicos (vêm do processo principal quando a palette abre).
+ * Com {q}: Tab ou Enter fixa o chip do alias e o que se digita depois é o valor (ver src/palette/Palette.jsx).
+ * Sem {q} (favorito): Enter abre direto.
+ */
+function linkCommands(list) {
+  return (list || []).map((l) => {
+    const param = needsValue(l);
+    return {
+      id: 'link:' + l.id, name: l.alias, category: 'links', icon: param ? 'link-2' : 'link', dynamic: true,
+      quickLink: l, keepOpen: param,
+      description: [l.name, shortUrl(l.url)].filter(Boolean).join(' · '),
+      keywords: [l.name, 'link', 'alias'].filter(Boolean),
+      run: async (ctx) => {
+        if (param) { ctx.palette.enterLink(l.id); return undefined; }
+        await ctx.links.open(l.id, '');
+        return undefined;
+      },
+    };
+  });
+}
+
 const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands];
 
-const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
+const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : id === 'links' ? 'Link' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
 
-module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, detectClipboardKind };
+module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, linkCommands, detectClipboardKind };
