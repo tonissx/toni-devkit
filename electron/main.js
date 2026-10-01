@@ -6,6 +6,8 @@ const fs = require('node:fs/promises');
 const { Worker } = require('node:worker_threads');
 const palette = require('./palette');
 const binds = require('./binds');
+const { createPaster } = require('./paste');
+const { UI_BINDABLE_IDS } = require('../src/commands/binds.js');
 const { createNotesService } = require('./notes/service');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
@@ -310,6 +312,13 @@ ipcMain.handle('binds:set', (_e, next) => binds.set(next && typeof next === 'obj
 ipcMain.handle('binds:suspend', (_e, on) => binds.suspend(!!on));
 ipcMain.on('binds:result', (_e, result) => binds.notify(result));
 
+/** Dispara um bind: a maioria roda oculta na palette; os de UI (lista de snippets) mostram a palette. */
+const runBind = (id) => (UI_BINDABLE_IDS.includes(id) ? palette.show('snippets') : palette.run(id));
+
+// Colar snippet: a palette esconde, o foco volta ao programa anterior e o Ctrl+V é simulado (ver electron/paste.js).
+const snippetPaster = createPaster({ clipboard, hide: () => palette.hide(), notify: (r) => binds.notify(r) });
+ipcMain.handle('snippet:paste', (_e, payload) => snippetPaster.paste(payload && typeof payload === 'object' ? payload : {}));
+
 ipcMain.on('app:open', (_e, route, params) => {
   palette.hide();
   showMain(typeof route === 'string' ? route : undefined, params && typeof params === 'object' ? params : undefined);
@@ -456,7 +465,7 @@ if (!app.requestSingleInstanceLock()) {
     palette.create();
     palette.registerShortcut();
     createTray();
-    binds.init({ run: (id) => palette.run(id), changed: buildTrayMenu })
+    binds.init({ run: runBind, changed: buildTrayMenu })
       .then(() => {
         // Com um atalho que formata SQL, aquece o Pyodide em segundo plano: o primeiro uso não espera o motor subir.
         if (binds.accelerator('clipboard:auto') || binds.accelerator('clipboard:sql')) setTimeout(() => startSqlWorker().catch(() => {}), 5000);

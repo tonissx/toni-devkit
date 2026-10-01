@@ -58,6 +58,10 @@ contextBridge.exposeInMainWorld('devkit', {
     suspend: (on) => ipcRenderer.invoke('binds:suspend', on),
     result: (r) => ipcRenderer.send('binds:result', r),
   },
+  /** Colar um snippet no programa que tinha o foco (ver electron/paste.js). payload: { code, title } */
+  snippet: {
+    paste: (payload) => ipcRenderer.invoke('snippet:paste', payload),
+  },
   app: {
     /** Mostra a janela principal (e navega para a rota, se houver). */
     open: (route, params) => ipcRenderer.send('app:open', route, params),

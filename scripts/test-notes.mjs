@@ -179,8 +179,9 @@ test('templates: variables, {{cursor}}, unknown kept, trailing empty vars trimme
   assert.equal(r.text, '# X — 29/09/2026\n- [ ] \n{{naoexiste}}\n');
   assert.equal(r.cursor, '# X — 29/09/2026\n- [ ] '.length);
   assert.equal(T.applyTemplate('sem cursor', vars).cursor, null);
-  // Toda variável sugerida existe de verdade (ou é o {{cursor}}).
-  for (const v of T.TEMPLATE_VARS) assert.ok(v.name === 'cursor' || T.varKey(v.name) in vars, v.name);
+  // Toda variável sugerida existe de verdade (ou é o {{cursor}} / vale só em snippets).
+  for (const v of T.TEMPLATE_VARS) assert.ok(v.name === 'cursor' || v.snippetOnly || T.varKey(v.name) in vars, v.name);
+  assert.equal(T.applyTemplate('{{clipboard}}', vars).text, '{{clipboard}}\n'); // em template fica literal
   assert.ok(T.isTemplateFolder('Templates') && T.isTemplateFolder('templates/Suporte') && !T.isTemplateFolder('Trabalho/Templates') && !T.isTemplateFolder(''));
 });
 
@@ -915,4 +916,73 @@ test('markdown: toggleTask flips the n-th task, skipping code blocks', async () 
   assert.equal(toggleTask(md, 1), md.replace('- [x] b', '- [ ] b'));
   assert.equal(toggleTask(md, 2), md.replace('1. [ ] c', '1. [x] c'));
   assert.equal(toggleTask(md, 9), md);
+});
+
+/* ─────────────── snippets: variáveis e colagem ─────────────── */
+const { createPaster, keysFor } = require('../electron/paste.js');
+const NOW = new Date(2026, 8, 29, 14, 21); // 29/09/2026 14:21
+
+test('expandSnippet: datas, clipboard e título; sem "\\n" final; desconhecida fica literal', () => {
+  const vars = T.templateVars(NOW, { titulo: 'Meu', clipboard: 'tabela' });
+  const r = T.expandSnippet('-- {{data}} {{HORA}} {{titulo}}\nSELECT * FROM {{clipboard}}  \n{{xyz}}', vars);
+  assert.equal(r.text, '-- 29/09/2026 14:21 Meu\nSELECT * FROM tabela  \n{{xyz}}');
+  assert.equal(r.back, 0);
+});
+
+test('expandSnippet: {{cursor}} sai do texto e back conta o que vem depois', () => {
+  assert.deepEqual(T.expandSnippet('SELECT * FROM {{cursor}} WHERE 1=1', {}), { text: 'SELECT * FROM  WHERE 1=1', back: 10 });
+  assert.deepEqual(T.expandSnippet('fn({{cursor}})', {}), { text: 'fn()', back: 1 });
+  assert.deepEqual(T.expandSnippet('abc{{ cursor }}', {}), { text: 'abc', back: 0 });
+  // segundo {{cursor}} é ignorado; a variável antes do cursor conta no texto expandido
+  assert.deepEqual(T.expandSnippet('{{hoje}}|{{cursor}}x{{cursor}}y', T.templateVars(NOW)), { text: '2026-09-29|xy', back: 2 });
+});
+
+function fakePaster({ prev = 'antes', image = false, failKeys = false } = {}) {
+  const log = [];
+  let clip = prev;
+  const clipboard = {
+    readText: () => clip,
+    writeText: (t) => { clip = t; log.push('write:' + t); },
+    availableFormats: () => (image ? ['image/png'] : ['text/plain']),
+    readImage: () => 'IMG',
+    write: (o) => { log.push('image:' + o.image); },
+  };
+  const p = createPaster({
+    clipboard, now: () => NOW, sleep: async () => {},
+    hide: () => log.push('hide'),
+    notify: (r) => log.push('notify:' + r.message),
+    sendKeys: async (k) => { log.push('keys:' + k); if (failKeys) throw new Error('bloqueado'); },
+  });
+  return { p, log, clip: () => clip };
+}
+
+test('paste: grava expandido, esconde, simula Ctrl+V e ← até o cursor, restaura o clipboard', async () => {
+  const f = fakePaster();
+  const r = await f.p.paste({ code: 'a({{cursor}}) // {{clipboard}} {{data}}', title: 'T' });
+  assert.deepEqual(r, { pasted: true });
+  // depois do cursor: ") // antes 29/09/2026" = 21 caracteres
+  assert.deepEqual(f.log, ['write:a() // antes 29/09/2026', 'hide', 'keys:^v{LEFT 21}', 'write:antes']);
+  assert.equal(f.clip(), 'antes');
+});
+
+test('paste: sem cursor só Ctrl+V; clipboard de imagem volta como imagem', async () => {
+  const f = fakePaster({ prev: '', image: true });
+  await f.p.paste({ code: 'ok' });
+  assert.deepEqual(f.log, ['write:ok', 'hide', 'keys:^v', 'image:IMG']);
+});
+
+test('paste: falha da simulação deixa copiado e avisa', async () => {
+  const f = fakePaster({ failKeys: true });
+  const r = await f.p.paste({ code: 'xyz' });
+  assert.equal(r.pasted, false);
+  assert.equal(f.clip(), 'xyz');
+  assert.ok(f.log.some((l) => l.startsWith('notify:Snippet copiado')));
+});
+
+test('paste: snippet vazio é recusado antes de mexer no clipboard; keysFor limita ←', async () => {
+  const f = fakePaster();
+  await assert.rejects(() => f.p.paste({ code: '{{cursor}}' }), /vazio/);
+  assert.deepEqual(f.log, []);
+  assert.equal(keysFor(5000), '^v{LEFT 2000}');
+  assert.equal(keysFor(0), '^v');
 });
