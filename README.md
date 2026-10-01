@@ -186,7 +186,7 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   **Inexistentes** (`[[links]]` para notas que ainda não existem — clique cria). Templates ficam de fora
 - **Templates**: qualquer nota na pasta **Templates** vira modelo. `Ctrl+Shift+N` (ou o ícone ao lado de "Nova
   nota", ou a palette) lista os templates; escolher cria a nota na pasta ativa com as variáveis trocadas — `{{data}}`
-  `{{hoje}}` `{{ontem}}` `{{amanha}}` `{{hora}}` `{{dia_semana}}` `{{data_extenso}}` e `{{cursor}}` (onde o cursor começa). O título só é copiado
+  `{{hoje}}` `{{ontem}}` `{{amanha}}` `{{hora}}` `{{dia_semana}}` `{{data_extenso}}` `{{data_extenso_ontem}}` `{{data_extenso_amanha}}` e `{{cursor}}` (onde o cursor começa). O título só é copiado
   se usar variáveis (`Chamado {{data}}`); tags vão junto (menos `template`). Tarefas dentro de templates não aparecem
   no painel Tarefas. Editando um template, digitar `{` sugere as variáveis com o que cada uma faz e o valor de agora
   (`Enter`, `Tab` ou clique insere, `Esc` fecha; em blocos de código só abre com `{{`)
