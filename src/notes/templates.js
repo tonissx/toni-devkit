@@ -20,6 +20,7 @@ const TEMPLATE_VARS = [
   { name: 'dia_semana', desc: 'Dia da semana por extenso' },
   { name: 'data_extenso', desc: 'Data completa por extenso' },
   { name: 'cursor', desc: 'Onde o cursor começa na nota criada (some do texto)' },
+  { name: 'clipboard', desc: 'Só em snippets: o texto que estava no clipboard ao colar', snippetOnly: true },
 ];
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -66,10 +67,35 @@ function applyTemplate(text, vars = {}) {
   return { text: trimmed, cursor: cursor === null ? null : Math.min(cursor, trimmed.length) };
 }
 
+/**
+ * Variáveis de um snippet colado/copiado: as mesmas dos templates + {{clipboard}} (o que estava no clipboard).
+ * Diferente de applyTemplate, o texto não ganha "\n" final nem perde espaços: é colado como está.
+ * → { text, back } — `back` = quantos caracteres ficam depois do {{cursor}} (0 sem cursor), isto é, quantas vezes
+ * apertar ← depois de colar para o cursor cair onde ele estava marcado.
+ */
+function expandSnippet(code, vars = {}) {
+  const map = Object.fromEntries(Object.entries(vars).map(([k, v]) => [varKey(k), v]));
+  let cursor = null;
+  let out = '';
+  let last = 0;
+  const src = String(code || '');
+  for (const m of src.matchAll(/\{\{\s*([\p{L}\p{N}_]+)\s*\}\}/gu)) {
+    const key = varKey(m[1]);
+    out += src.slice(last, m.index);
+    last = m.index + m[0].length;
+    if (key === 'cursor') { if (cursor === null) cursor = out.length; continue; }
+    out += key in map && map[key] != null ? String(map[key]) : m[0];
+  }
+  out += src.slice(last);
+  // Um segundo {{cursor}} é ignorado (some do texto); `back` conta o que vem depois do primeiro.
+  const back = cursor === null ? 0 : [...out.slice(cursor)].length;
+  return { text: out, back };
+}
+
 /** A pasta (caminho com "/") é a Templates ou está dentro dela? */
 const isTemplateFolder = (folder) => {
   const top = String(folder || '').split('/')[0];
   return !!top && varKey(top) === varKey(TEMPLATES_FOLDER);
 };
 
-module.exports = { TEMPLATES_FOLDER, TEMPLATE_VARS, templateVars, applyTemplate, isTemplateFolder, varKey };
+module.exports = { TEMPLATES_FOLDER, TEMPLATE_VARS, templateVars, applyTemplate, expandSnippet, isTemplateFolder, varKey };

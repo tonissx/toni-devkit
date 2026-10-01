@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { BINDABLE_IDS, DEFAULT_BINDS, acceleratorFromEvent, acceleratorLabel, normalizeBinds } = require('../src/commands/binds.js');
+const { BINDABLE_IDS, UI_BINDABLE_IDS, DEFAULT_BINDS, acceleratorFromEvent, acceleratorLabel, normalizeBinds } = require('../src/commands/binds.js');
 const { COMMANDS, detectClipboardKind } = require('../src/commands/registry.js');
 
 const key = (code, mods = {}) => ({ code, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...mods });
@@ -45,7 +45,7 @@ test('normalizeBinds drops unknown ids, non-strings, the palette shortcut and du
 
 test('defaults are valid and survive normalization', () => {
   assert.deepEqual(normalizeBinds(DEFAULT_BINDS), DEFAULT_BINDS);
-  assert.deepEqual(DEFAULT_BINDS, { 'clipboard:auto': 'Control+Alt+Shift+F' });
+  assert.deepEqual(DEFAULT_BINDS, { 'clipboard:auto': 'Control+Alt+Shift+F', 'snippets:paste': 'Control+Alt+Shift+P' });
 });
 
 test('clipboard kind: leading < means XML, anything else is SQL', () => {
@@ -85,6 +85,7 @@ test('bindable commands exist and run without the palette UI', () => {
   for (const id of BINDABLE_IDS) {
     const cmd = COMMANDS.find((c) => c.id === id);
     assert.ok(cmd, id + ' não está no registry');
+    if (UI_BINDABLE_IDS.includes(id)) continue; // o processo principal mostra a palette para esses
     assert.ok(!cmd.keepOpen && !cmd.takesQuery, id + ' depende da UI da palette');
   }
 });

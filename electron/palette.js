@@ -54,15 +54,27 @@ function create() {
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.on('did-finish-load', () => {
     loaded = true;
-    if (pendingShow) { const s = pendingShow; pendingShow = null; show(s); }
+    if (pendingShow) { const s = pendingShow; pendingShow = null; showNow(s); }
     for (const id of pendingRuns) win.webContents.send('palette:run', id);
     pendingRuns = [];
   });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'palette.html'));
 }
 
+/**
+ * Gancho chamado ANTES de a palette tomar o foco, com a origem ('shortcut', 'snippets', 'tray'…): é a única
+ * hora em que ainda dá para saber qual janela estava ativa (ver electron/paste.js).
+ */
+let beforeShow = null;
+const setBeforeShow = (fn) => { beforeShow = fn; };
+
 /** Mostra a palette centralizada no monitor onde está o cursor, a ~20% do topo. */
-function show(source = 'app') {
+async function show(source = 'app') {
+  if (beforeShow && !isOpen() && !pendingShow) { try { await beforeShow(source); } catch { /* sem captura: segue */ } }
+  showNow(source);
+}
+
+function showNow(source) {
   if (!win) create();
   if (!loaded) { pendingShow = source; return; }
   const { workArea: wa } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
@@ -111,4 +123,4 @@ function registerShortcut() {
   return status;
 }
 
-module.exports = { create, show, hide, toggle, run, resize, registerShortcut, getStatus: () => status, ACCELERATOR };
+module.exports = { create, show, hide, toggle, run, resize, registerShortcut, setBeforeShow, getStatus: () => status, ACCELERATOR };

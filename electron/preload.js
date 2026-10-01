@@ -36,7 +36,8 @@ contextBridge.exposeInMainWorld('devkit', {
   },
   palette: {
     toggle: () => ipcRenderer.send('palette:toggle'),
-    hide: () => ipcRenderer.send('palette:hide'),
+    /** opts.restore: devolve o foco ao programa que estava na frente quando a palette abriu (Esc). */
+    hide: (opts) => ipcRenderer.send('palette:hide', opts),
     resize: (height) => ipcRenderer.send('palette:resize', height),
     status: () => ipcRenderer.invoke('palette:status'),
     onOpened: (cb) => {
@@ -57,6 +58,10 @@ contextBridge.exposeInMainWorld('devkit', {
     set: (next) => ipcRenderer.invoke('binds:set', next),
     suspend: (on) => ipcRenderer.invoke('binds:suspend', on),
     result: (r) => ipcRenderer.send('binds:result', r),
+  },
+  /** Colar um snippet no programa que tinha o foco (ver electron/paste.js). payload: { code, title } */
+  snippet: {
+    paste: (payload) => ipcRenderer.invoke('snippet:paste', payload),
   },
   app: {
     /** Mostra a janela principal (e navega para a rota, se houver). */

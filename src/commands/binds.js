@@ -4,7 +4,7 @@
  *
  * O processo principal guarda os binds (userData/binds.json) e registra os atalhos; ao disparar,
  * a janela da palette — oculta — roda o comando do registry (ver electron/binds.js).
- * Só entram comandos que funcionam sem a UI da palette (nada de keepOpen/takesQuery).
+ * Só entram comandos que funcionam sem a UI da palette (nada de keepOpen/takesQuery) — exceto UI_BINDABLE_IDS.
  *
  * Aceleradores no formato do Electron: 'Control+Alt+Shift+S'.
  */
@@ -15,13 +15,17 @@ const BINDABLE = [
   { id: 'clipboard:sql', name: 'Formatar SQL do clipboard' },
   { id: 'clipboard:xml', name: 'Formatar XML do clipboard' },
   { id: 'theme:toggle', name: 'Alternar tema claro/escuro' },
+  { id: 'snippets:paste', name: 'Colar snippet em qualquer programa' },
 ];
 const BINDABLE_IDS = BINDABLE.map((b) => b.id);
+// Exceção à regra "sem UI": estes mostram a palette (lista de snippets) em vez de rodar com ela oculta.
+const UI_BINDABLE_IDS = ['snippets:paste'];
 
 // Um atalho só (F de "Format") que detecta SQL/XML; os específicos ficam opcionais.
 // Shift junto evita colisão com AltGr (= Ctrl+Alt) no ABNT2 e com atalhos de IDE (Ctrl+Alt+S, Ctrl+Alt+L…).
 const DEFAULT_BINDS = {
   'clipboard:auto': 'Control+Alt+Shift+F',
+  'snippets:paste': 'Control+Alt+Shift+P', // P de Paste
 };
 
 // Atalho da própria palette (electron/palette.js) — não pode ser reaproveitado.
@@ -85,4 +89,4 @@ function normalizeBinds(raw, ids = BINDABLE_IDS) {
   return out;
 }
 
-module.exports = { BINDABLE, BINDABLE_IDS, DEFAULT_BINDS, RESERVED, acceleratorFromEvent, acceleratorLabel, normalizeBinds };
+module.exports = { BINDABLE, BINDABLE_IDS, UI_BINDABLE_IDS, DEFAULT_BINDS, RESERVED, acceleratorFromEvent, acceleratorLabel, normalizeBinds };

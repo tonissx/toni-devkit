@@ -7,6 +7,7 @@ import { draftMatches } from '../commands/providers.js';
 import { paletteKey, keyHint } from '../commands/keys.js';
 import { BINDABLE_IDS } from '../commands/binds.js';
 import { createNote, snippetCode } from '../notes/note.js';
+import { expandSnippet, templateVars } from '../notes/templates.js';
 import { recoverUnsaved, shortTime, cleanError } from '../notes/client.js';
 import { QuickNote } from './QuickNote.jsx';
 import { emit } from '../lib/events.js';
@@ -22,7 +23,8 @@ const TASKS = APP_CMDS.find((c) => c.id === 'notes:tasks');
 const TASK_RE = /^(?:task|tarefa|t)\s*:\s*(.*)$/i;
 const FALLBACK = ['web:google', 'web:github'].map((id) => COMMANDS.find((c) => c.id === id));
 const catOf = (id) => CATEGORIES.find((c) => c.id === (id && id.startsWith('notes') ? 'notes' : id));
-const SUB = { 'notes:pinned': 'Pinned', 'notes:recent': 'Recentes' };
+const SUB = { 'notes:pinned': 'Pinned', 'notes:recent': 'Recentes', 'notes:snippets': 'Snippets' };
+const SNIPPETS = 'notes:snippets'; // lista só os snippets; Enter cola no programa anterior (Smart Bind "Colar snippet")
 const isNotesScope = (s) => !!s && s.startsWith('notes');
 const readPrefs = () => { try { return JSON.parse(localStorage.getItem('tk.prefs')) || {}; } catch { return {}; } };
 
@@ -105,6 +107,7 @@ function buildSections(scope, query, recent, nd, extra = []) {
     let items;
     if (q) items = hits;
     else if (scope === 'notes:pinned') items = nd.pinned.map((n) => noteItem(n));
+    else if (scope === SNIPPETS) items = nd.snippets.map((n) => noteItem(n));
     else if (scope === 'notes:recent' && nd.recent) {
       return [
         { title: 'Recently Edited', items: nd.recent.edited.map((n) => noteItem(n, n.updated)) },
@@ -163,7 +166,7 @@ function noteDesc(note, q) {
   return rest || (note.type === 'snippet' ? 'Snippet · Enter copia' : note.quick ? 'Quick Note' : '');
 }
 
-const EMPTY_NOTES ={ key: '', hits: [], pinned: [], recent: null, pending: false };
+const EMPTY_NOTES ={ key: '', hits: [], pinned: [], snippets: [], recent: null, pending: false };
 
 export function Palette() {
   const [scope, setScope] = React.useState(null);
@@ -221,10 +224,11 @@ export function Palette() {
     if (!wants) { setNd({ ...EMPTY_NOTES, key: ndKey }); return undefined; }
     let alive = true;
     setNd((d) => ({ ...d, key: ndKey, pending: true }));
-    const filter = scope === 'notes:pinned' ? { pinned: true } : undefined;
+    const filter = scope === 'notes:pinned' ? { pinned: true } : scope === SNIPPETS ? { type: 'snippet' } : undefined;
     const job = q ? api.search(q, { limit: isNotesScope(scope) ? 30 : 6, filter }).then((hits) => ({ hits }))
       : scope === 'notes:recent' ? api.recent().then((rec) => ({ recent: rec }))
       : scope === 'notes:pinned' ? api.list({ pinned: true }).then((pinned) => ({ pinned }))
+      : scope === SNIPPETS ? api.list({ type: 'snippet' }).then((snippets) => ({ snippets }))
       : scope === 'notes' ? Promise.all([api.list({ pinned: true }), api.recent()]).then(([pinned, rec]) => ({ pinned, recent: rec }))
       : Promise.resolve({});
     job.then(
@@ -242,11 +246,12 @@ export function Palette() {
   const curItem = flat[cur];
 
   // Cada abertura começa do zero: campo vazio, tela inicial, tema atual, foco no campo.
-  React.useEffect(() => window.devkit.palette.onOpened(() => {
+  React.useEffect(() => window.devkit.palette.onOpened((info) => {
     emit('palette.opened');
     window.devkit.devcore.abilities().then(setAbilities, () => setAbilities([]));
     window.devkit.devcore.items().then(setItems, () => setItems([]));
-    setScope(null); setQuery(''); setHi(0); setBusy(null); setError(null); setDone(null); setQuick(null);
+    // Smart Bind "Colar snippet": abre direto na lista de snippets.
+    setScope(info && info.source === 'snippets' ? SNIPPETS : null); setQuery(''); setHi(0); setBusy(null); setError(null); setDone(null); setQuick(null);
     setRecent(loadRecent(localStorage));
     document.documentElement.dataset.theme = resolveTheme(readPrefs().theme || 'dark');
     setOpenKey((k) => k + 1);
@@ -292,15 +297,27 @@ export function Palette() {
 
   const fail = (id, name, e) => { setBusy(null); setError({ id, name, message: cleanError(e) }); };
 
-  /** Nota: Enter abre · snippet: Enter copia o código e Ctrl+Enter abre. */
+  /**
+   * Nota: Enter abre · snippet: Enter copia o código e Ctrl+Enter abre.
+   * Na lista de snippets (Smart Bind): Enter COLA no programa anterior e Ctrl+Enter só copia.
+   * Os dois expandem as {{variáveis}} do snippet.
+   */
   const runNote = async (n, ctrl) => {
     setError(null); setDone(null); setBusy('note:' + n.id);
     try {
-      if (n.type === 'snippet' && !ctrl) {
+      if (n.type === 'snippet' && (scope === SNIPPETS || !ctrl)) {
         const full = await window.devkit.notes.get(n.id);
         if (!full) throw new Error('A nota não existe mais');
-        await window.devkit.clipboard.write(snippetCode(full));
         window.devkit.notes.markViewed(n.id);
+        if (scope === SNIPPETS && !ctrl) {
+          // O processo principal esconde a palette, devolve o foco e simula o Ctrl+V.
+          await window.devkit.snippet.paste({ code: snippetCode(full), title: full.title || n.title });
+          setBusy(null);
+          return;
+        }
+        let clip = '';
+        try { clip = await window.devkit.clipboard.read(); } catch { /* sem {{clipboard}} */ }
+        await window.devkit.clipboard.write(expandSnippet(snippetCode(full), templateVars(new Date(), { titulo: full.title || n.title, clipboard: clip })).text);
         setBusy(null);
         setDone('Snippet copiado: ' + n.title);
         setTimeout(close, 650);
@@ -342,10 +359,10 @@ export function Palette() {
       run(curItem, { ctrl: e.ctrlKey || e.metaKey });
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      close();
+      window.devkit.palette.hide({ restore: true }); // cancelar: o foco volta para o programa de antes
     } else if (e.key === 'Backspace' && !query && scope) {
       e.preventDefault();
-      enterScope(isNotesScope(scope) && scope !== 'notes' ? 'notes' : null);
+      enterScope(isNotesScope(scope) && scope !== 'notes' && scope !== SNIPPETS ? 'notes' : null);
     } else if (e.key === 'Tab') {
       e.preventDefault(); // o foco fica sempre no campo
     } else {
@@ -359,7 +376,8 @@ export function Palette() {
   };
 
   const scopeCat = catOf(scope);
-  const placeholder = scope === 'notes' ? 'Buscar nas notas…'
+  const placeholder = scope === SNIPPETS ? 'Colar snippet…'
+    : scope === 'notes' ? 'Buscar nas notas…'
     : isNotesScope(scope) ? 'Buscar em ' + SUB[scope].toLowerCase() + '…'
     : scopeCat ? 'Filtrar ' + scopeCat.name.toLowerCase() + '…'
     : 'Buscar comandos, notas e web…';
@@ -391,7 +409,7 @@ export function Palette() {
           {note.tags.length > 0 && <span className="pl-item__tags">{note.tags.slice(0, 3).map((t) => '#' + t).join(' ')}</span>}
           {it.time && <span className="pl-item__time">{shortTime(it.time)}</span>}
           {!scope && q && <span className="pl-item__cat">{note.type === 'snippet' ? 'Snippet' : 'Note'}</span>}
-          {busy === id ? <Spinner size={14} /> : sel ? <Kbd size="sm">{note.type === 'snippet' ? '↵ copiar' : '↵'}</Kbd> : null}
+          {busy === id ? <Spinner size={14} /> : sel ? <Kbd size="sm">{note.type === 'snippet' ? (scope === SNIPPETS ? '↵ colar' : '↵ copiar') : '↵'}</Kbd> : null}
         </div>
       );
     }
@@ -484,7 +502,9 @@ export function Palette() {
               : scope === 'notes' && !q ? <><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">Q</Kbd><Kbd size="sm">N</Kbd><Kbd size="sm">P</Kbd><Kbd size="sm">R</Kbd></span><span><Kbd size="sm">⌫</Kbd> voltar</span></>
               : scope && !q ? <span><Kbd size="sm">⌫</Kbd> voltar</span> : null}
             {!(!q && (!scope || scope === 'notes')) && <span><Kbd size="sm">↑</Kbd><Kbd size="sm">↓</Kbd> navegar</span>}
-            {snippetSel
+            {snippetSel && scope === SNIPPETS
+              ? <><span><Kbd size="sm">↵</Kbd> colar</span><span><Kbd size="sm">Ctrl+↵</Kbd> copiar</span></>
+              : snippetSel
               ? <><span><Kbd size="sm">↵</Kbd> copiar</span><span><Kbd size="sm">Ctrl+↵</Kbd> abrir</span></>
               : (q || (scope && scope !== 'notes')) && <span><Kbd size="sm">↵</Kbd> executar</span>}
             <span><Kbd size="sm">Esc</Kbd> fechar</span>

@@ -237,6 +237,12 @@ const noteCommands = [
     run: (ctx) => ctx.palette.enter('notes:recent'),
   },
   {
+    id: 'snippets:paste', name: 'Colar snippet', icon: 'braces', keepOpen: true,
+    description: 'Lista só os snippets e cola o escolhido no programa em que você estava',
+    keywords: ['snippet', 'colar', 'paste', 'inserir', 'codigo'],
+    run: (ctx) => ctx.palette.enter('notes:snippets'),
+  },
+  {
     id: 'notes:tasks', name: 'Tarefas', icon: 'list-checks',
     description: 'Todas as tarefas “- [ ]” das notas — capture uma com “task: texto”',
     keywords: ['tasks', 'todo', 'tarefas', 'checklist', 'pendencias', 'afazeres'],
