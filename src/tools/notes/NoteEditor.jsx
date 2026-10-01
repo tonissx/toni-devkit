@@ -207,6 +207,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
         resolve={resolve}
         onOpenLink={onOpenLink}
         onCopy={copy}
+        toast={toast}
         onChange={(content) => update({ content })}
         onDoubleClick={mode === 'preview' ? () => setMode('edit') : undefined}
       />

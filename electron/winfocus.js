@@ -9,6 +9,7 @@
  *   focus <hwnd>  → "ok 1|0"      traz a janela de volta (1 = conseguiu)
  *   paste <n>     → "ok"          Ctrl+V e n× ← num único SendInput (0..2000); "err BLOQUEADO…" se o Windows recusar
  *   keys <teclas> → "ok"          SendKeys.SendWait (^v, {LEFT 3}…) — reserva do paste
+ *   clip <base64> → "ok"          Vault: texto no clipboard fora do histórico do Windows e da nuvem
  * Respostas voltam na mesma ordem dos pedidos. Se o processo morrer, o próximo pedido sobe outro.
  */
 const { spawn: nodeSpawn } = require('node:child_process');
@@ -111,6 +112,18 @@ const SCRIPT = [
   '        if ($sent -ne (4 + 2 * $b)) { throw "SendInput aceitou so $sent eventos" }',
   '        $r = "ok"',
   '      }',
+  // Vault: texto (UTF-8 em base64) no clipboard marcado para ficar fora do histórico (Win+V) e da nuvem.
+  '      "clip" {',
+  '        $t = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($arg))',
+  '        $d = New-Object System.Windows.Forms.DataObject',
+  '        $d.SetData([System.Windows.Forms.DataFormats]::UnicodeText, $t)',
+  '        foreach ($f in @("ExcludeClipboardContentFromMonitorProcessing", "CanIncludeInClipboardHistory", "CanUploadToCloudClipboard")) {',
+  '          $d.SetData($f, (New-Object System.IO.MemoryStream(,[byte[]]@(0,0,0,0))))',
+  '        }',
+  '        [System.Windows.Forms.Clipboard]::SetDataObject($d, $true, 5, 100)',
+  '        $t = $null; $d = $null',
+  '        $r = "ok"',
+  '      }',
   '      default { $r = "err comando desconhecido" }',
   '    }',
   '  } catch { $r = "err " + ($_.Exception.Message -replace "[\\r\\n]+", " ") }',
@@ -208,6 +221,8 @@ function createWinHelper({ spawn = nodeSpawn, platform = process.platform, timeo
         throw e;
       }
     },
+    /** Vault: grava o texto no clipboard fora do histórico do Windows (Win+V) e da sincronização na nuvem. */
+    secretClip: (text) => send('clip ' + Buffer.from(String(text), 'utf8').toString('base64')).then(() => undefined),
     dispose() { if (proc) { try { proc.kill(); } catch { /* já saiu */ } } reset(new Error('encerrado')); },
   };
 }

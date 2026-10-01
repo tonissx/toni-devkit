@@ -166,6 +166,34 @@ contextBridge.exposeInMainWorld('devkit', {
       return () => ipcRenderer.removeListener('notes:flush', h);
     },
   },
+  /**
+   * Vault — cofre de dados sensíveis (ver electron/vault/service.js). Listas trazem só metadados (segredos = null);
+   * um segredo só chega aqui por reveal (olho da tela) — o normal é copy, que vai direto para o clipboard.
+   */
+  vault: {
+    status: () => ipcRenderer.invoke('vault:status'),
+    create: (password) => ipcRenderer.invoke('vault:create', password),
+    unlock: (password) => ipcRenderer.invoke('vault:unlock', password),
+    lock: () => ipcRenderer.invoke('vault:lock'),
+    /** Entradas (metadados) ou null se trancado. */
+    list: () => ipcRenderer.invoke('vault:list'),
+    /** Notas: nomes → { locked, exists, items: { nome: metadados | null } }. */
+    resolve: (names) => ipcRenderer.invoke('vault:resolve', names),
+    save: (entry) => ipcRenderer.invoke('vault:save', entry),
+    remove: (id) => ipcRenderer.invoke('vault:remove', id),
+    reveal: (id, index) => ipcRenderer.invoke('vault:reveal', id, index),
+    /** what: índice do campo | 'primary' | 'connstr' | 'jdbc' → { label, name, clearsIn }. */
+    copy: (id, what) => ipcRenderer.invoke('vault:copy', id, what),
+    setSettings: (s) => ipcRenderer.invoke('vault:setSettings', s),
+    changePassword: (current, next) => ipcRenderer.invoke('vault:changePassword', current, next),
+    exportBackup: () => ipcRenderer.invoke('vault:export'),
+    reset: (confirm) => ipcRenderer.invoke('vault:reset', confirm),
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('vault:changed', h);
+      return () => ipcRenderer.removeListener('vault:changed', h);
+    },
+  },
   /** Atualização automática (ver electron/updater/service.js). */
   updater: {
     status: () => ipcRenderer.invoke('updater:status'),
