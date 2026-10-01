@@ -8,8 +8,9 @@ import { DiffChecker } from './diff-checker/DiffChecker.jsx';
 import { JsonVisualizer } from './json-visualizer/JsonVisualizer.jsx';
 import { NotesScreen } from './notes/NotesScreen.jsx';
 import { DevCoreScreen } from './devcore/DevCoreScreen.jsx';
+import { VaultScreen } from './vault/VaultScreen.jsx';
 
-const COMPONENTS = { sql: SqlFormatter, xml: XmlFormatter, diff: DiffChecker, json: JsonVisualizer, notes: NotesScreen, devcore: DevCoreScreen };
+const COMPONENTS = { sql: SqlFormatter, xml: XmlFormatter, diff: DiffChecker, json: JsonVisualizer, notes: NotesScreen, vault: VaultScreen, devcore: DevCoreScreen };
 
 export const TOOLS = TOOL_META.map((t) => ({ ...t, component: COMPONENTS[t.id] }));
 

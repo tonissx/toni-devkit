@@ -37,6 +37,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **Diff Checker**: compara dois textos nos moldes do diffchecker.com | ✅ |
 | **JSON Visualizer**: edita, formata e explora JSON como grafo (estilo JSON Crack), árvore, YAML ou CSV | ✅ |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
+| **Vault**: cofre de senhas, tokens e credenciais de banco, com senha mestra e cópia que se apaga | ✅ |
 | **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
 
 ### SQL Formatter
@@ -264,6 +265,39 @@ const hits = await window.devkit.notes.search('coalesce', { limit: 5 });
 window.devkit.notes.open({ id: hits[0].id }); // abre no editor
 ```
 
+## Vault
+
+Cofre local para dados sensíveis — senha do banco, tokens, logins — protegido por uma **senha mestra**
+(`Ctrl+7`). As notas continuam sendo o lugar do conhecimento; o segredo fica no cofre e a nota só o referencia.
+
+- **Criptografia**: o arquivo inteiro (nomes inclusive) é AES-256-GCM com chave derivada da senha mestra por scrypt
+  (N=2¹⁷, ~0,25 s e 128 MB por tentativa). Fica em `%APPDATA%\Toni Devkit\vault.json` — **fora** de
+  `Documentos\Devkit Notes`, que pode ir para OneDrive/git. Trancado, o Devkit não sabe nem os nomes das entradas
+- **Sem recuperação**: esqueceu a senha mestra, o conteúdo fica ilegível. "Esqueci a senha" guarda o arquivo atual
+  como `vault-<data>.bak.json` (ainda criptografado) e começa um cofre vazio
+- **Entradas** com modelos (Banco de dados, Login, API/token, Outro) e campos livres; cada campo pode ser
+  **secreto** (mascarado). Botão para **gerar senha** forte. Banco ganha **Connection string** (SQL Server) e **URL JDBC**
+- **Copiar**: o texto vai para o clipboard marcado para ficar **fora do histórico do Windows (`Win+V`)** e da
+  sincronização na nuvem, e **some sozinho** depois de 30 s (configurável) se ainda for ele que estiver lá
+- **Os segredos não saem do processo principal**: telas e palette recebem só metadados; o valor só vai para o
+  clipboard ou, com clique no olho, para a própria tela do Vault
+- **Bloqueio**: automático após 10 min sem uso (configurável), ao travar a tela ou suspender o PC, pelo botão, pela
+  bandeja, pela palette ("Bloquear cofre") ou por um Smart Bind. A partir da 3ª senha errada seguida, espera crescente
+- **Nas notas**: um bloco
+
+  ````md
+  ```secret RM Produção
+  ```
+  ````
+
+  vira um cartão com os campos da entrada — os secretos mascarados, cada um com **Copiar** — e, para bancos,
+  Connection string/URL JDBC. Com o cofre trancado, o cartão oferece **Desbloquear** ali mesmo. O `.md`, o histórico
+  de versões, a lixeira e a busca só contêm o nome. Na entrada, "Copiar referência para nota" gera o bloco
+- **Na palette** (cofre aberto): digite o nome, a tag ou o usuário — `Enter` copia a senha/chave, `Ctrl+Enter`
+  abre a entrada; bancos têm também "Connection string: <nome>". As entradas não entram nos recentes da palette
+- **Backup**: Configurações do cofre → Exportar (cópia do arquivo, continua criptografada). Ali também se troca a
+  senha mestra (pede a atual e recriptografa tudo)
+
 ## DevCore
 
 Uma camada idle opcional: uma pequena infraestrutura de desenvolvimento que cresce sozinha, inclusive com o app
@@ -366,6 +400,7 @@ electron/
   notes/             store.js (arquivos .md, gravação atômica, lixeira) e service.js (cache, busca, IPC)
   events.js          Event Bus (features → módulos, sem acoplamento)
   devcore/service.js estado do DevCore, heartbeat, IPC
+  vault/service.js   cofre: senha mestra, auto-lock, cópia protegida (vault.json criptografado)
   lib/fsx.js         escrita atômica e fila por arquivo (Notes e DevCore)
   preload.js         API segura exposta ao renderer: window.devkit
   sql/engine.js      Pyodide + sqlparse (mapeia opções da UI → sqlparse.format)
@@ -383,6 +418,8 @@ src/                 código do app (JSX → renderer/dist/app.js via esbuild)
   tools/notes/       tela Notes: NotesScreen, NoteEditor, NotePreview (+ SnippetCard)
   devcore/           content/ (dados e balanceamento), engine/ (regras puras), director.js (cena), sim.js
   tools/devcore/     tela DevCore: DevCoreScreen, Scene, PetSprite (SVG), Panels
+  vault/             crypto.js (scrypt + AES-256-GCM), entry.js (modelo, connection string, blocos secret), client.js
+  tools/vault/       tela Vault: VaultScreen, UnlockForm
   palette/           Palette.jsx e QuickNote.jsx
   tools/meta.js      metadados das ferramentas (sidebar, Início, palette)
   tools/registry.js  associa cada ferramenta ao seu componente
