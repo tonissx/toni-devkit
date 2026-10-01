@@ -45,7 +45,7 @@ test('normalizeBinds drops unknown ids, non-strings, the palette shortcut and du
 
 test('defaults are valid and survive normalization', () => {
   assert.deepEqual(normalizeBinds(DEFAULT_BINDS), DEFAULT_BINDS);
-  assert.deepEqual(DEFAULT_BINDS, { 'clipboard:auto': 'Control+Alt+Shift+F' });
+  assert.deepEqual(DEFAULT_BINDS, { 'clipboard:auto': 'Control+Alt+Shift+F', 'snippets:paste': 'Control+Alt+Shift+P' });
 });
 
 test('clipboard kind: leading < means XML, anything else is SQL', () => {

@@ -25,6 +25,7 @@ const UI_BINDABLE_IDS = ['snippets:paste'];
 // Shift junto evita colisão com AltGr (= Ctrl+Alt) no ABNT2 e com atalhos de IDE (Ctrl+Alt+S, Ctrl+Alt+L…).
 const DEFAULT_BINDS = {
   'clipboard:auto': 'Control+Alt+Shift+F',
+  'snippets:paste': 'Control+Alt+Shift+P', // P de Paste
 };
 
 // Atalho da própria palette (electron/palette.js) — não pode ser reaproveitado.
