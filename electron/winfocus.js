@@ -7,7 +7,8 @@
  * Um único PowerShell fica vivo (o tipo user32 é compilado uma vez) e conversa por linhas:
  *   fg            → "ok <hwnd>"   janela em primeiro plano agora
  *   focus <hwnd>  → "ok 1|0"      traz a janela de volta (1 = conseguiu)
- *   keys <teclas> → "ok"          SendKeys.SendWait (^v, {LEFT 3}…)
+ *   paste <n>     → "ok"          Ctrl+V e n× ← num único SendInput (0..2000); "err BLOQUEADO…" se o Windows recusar
+ *   keys <teclas> → "ok"          SendKeys.SendWait (^v, {LEFT 3}…) — reserva do paste
  * Respostas voltam na mesma ordem dos pedidos. Se o processo morrer, o próximo pedido sobe outro.
  */
 const { spawn: nodeSpawn } = require('node:child_process');
@@ -28,6 +29,39 @@ const SCRIPT = [
   '  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);',
   '  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();',
   '  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);',
+  // Colar + voltar o cursor: um SendInput só com TODOS os eventos, em vez de uma tecla por vez (o SendKeys do
+  // .NET) — a fila do programa recebe tudo junto e a tela quase não repinta no caminho.
+  '  [StructLayout(LayoutKind.Sequential)] public struct MOUSEINPUT { public int dx; public int dy; public uint mouseData; public uint dwFlags; public uint time; public UIntPtr dwExtraInfo; }',
+  '  [StructLayout(LayoutKind.Sequential)] public struct KEYBDINPUT { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public UIntPtr dwExtraInfo; }',
+  '  [StructLayout(LayoutKind.Explicit)] public struct INPUTUNION { [FieldOffset(0)] public MOUSEINPUT mi; [FieldOffset(0)] public KEYBDINPUT ki; }',
+  '  [StructLayout(LayoutKind.Sequential)] public struct INPUT { public uint type; public INPUTUNION u; }',
+  '  [DllImport("user32.dll", SetLastError=true)] public static extern uint SendInput(uint n, INPUT[] inputs, int size);',
+  '  [DllImport("user32.dll")] public static extern uint MapVirtualKey(uint code, uint mapType);',
+  '  static INPUT Key(ushort vk, bool up, bool ext) {',
+  '    INPUT x = new INPUT(); x.type = 1;',
+  '    x.u.ki.wVk = vk; x.u.ki.wScan = (ushort)MapVirtualKey(vk, 0);',
+  '    x.u.ki.dwFlags = (uint)((up ? 2 : 0) | (ext ? 1 : 0));', // 1 = EXTENDEDKEY (setas; sem isso vira a seta do teclado numérico)
+  '    return x;',
+  '  }',
+  // Devolve quantos eventos o Windows aceitou (4 + 2*back se tudo certo; 0 = bloqueado, ex.: janela elevada).
+  '  public static int PasteAndBack(int back) {',
+  '    int n = 4 + 2 * back;',
+  '    INPUT[] all = new INPUT[n];',
+  '    int i = 0;',
+  '    all[i++] = Key(0x11, false, false); all[i++] = Key(0x56, false, false);', // Ctrl↓ V↓
+  '    all[i++] = Key(0x56, true, false);  all[i++] = Key(0x11, true, false);',  // V↑ Ctrl↑
+  '    for (int k = 0; k < back; k++) { all[i++] = Key(0x25, false, true); all[i++] = Key(0x25, true, true); }', // ←↓ ←↑
+  '    int sent = 0;',
+  '    while (sent < n) {',
+  '      int chunk = Math.Min(1000, n - sent);',
+  '      INPUT[] part = new INPUT[chunk];',
+  '      Array.Copy(all, sent, part, 0, chunk);',
+  '      int ok = (int)SendInput((uint)chunk, part, Marshal.SizeOf(typeof(INPUT)));',
+  '      sent += ok;',
+  '      if (ok != chunk) break;',
+  '    }',
+  '    return sent;',
+  '  }',
   '  [DllImport("user32.dll", EntryPoint="SystemParametersInfo")] public static extern bool SpiGet(uint a, uint p, ref uint v, uint f);',
   '  [DllImport("user32.dll", EntryPoint="SystemParametersInfo")] public static extern bool SpiSet(uint a, uint p, IntPtr v, uint f);',
   '}',
@@ -69,6 +103,14 @@ const SCRIPT = [
   '      "fg" { $r = "ok " + (Fg) }',
   '      "focus" { $r = Focus ([int64]$arg) }',
   '      "keys" { [System.Windows.Forms.SendKeys]::SendWait($arg); $r = "ok" }',
+  '      "paste" {',
+  '        $b = [int]$arg',
+  '        if ($b -lt 0 -or $b -gt 2000) { throw "back invalido" }',
+  '        $sent = [DkWin]::PasteAndBack($b)',
+  '        if ($sent -eq 0) { throw "BLOQUEADO: o Windows recusou as teclas (janela de administrador?)" }',
+  '        if ($sent -ne (4 + 2 * $b)) { throw "SendInput aceitou so $sent eventos" }',
+  '        $r = "ok"',
+  '      }',
   '      default { $r = "err comando desconhecido" }',
   '    }',
   '  } catch { $r = "err " + ($_.Exception.Message -replace "[\\r\\n]+", " ") }',
@@ -76,6 +118,7 @@ const SCRIPT = [
   '}',
 ].join('\n');
 
+const MAX_BACK = 2000; // quantas setas ← no máximo depois de colar (mesmo limite de electron/paste.js)
 const isHandle = (h) => /^\d+$/.test(String(h)) && String(h) !== '0';
 
 function createWinHelper({ spawn = nodeSpawn, platform = process.platform, timeoutMs = 4000 } = {}) {
@@ -153,6 +196,18 @@ function createWinHelper({ spawn = nodeSpawn, platform = process.platform, timeo
     },
     /** SendKeys.SendWait. Rejeita se o auxiliar não existir/falhar. */
     keys: (keys) => send('keys ' + keys, { wait: 8000 }).then(() => undefined),
+    /**
+     * Ctrl+V seguido de `back` setas ← num único SendInput. Rejeita se o auxiliar falhar; se o Windows RECUSAR
+     * as teclas (janela elevada), o erro vem com `code === 'BLOCKED'` — aí cair no SendKeys não adianta.
+     */
+    async paste(back = 0) {
+      const n = Number(back);
+      if (!Number.isInteger(n) || n < 0 || n > MAX_BACK) throw new Error('Posição do cursor inválida');
+      try { await send('paste ' + n, { wait: 8000 }); } catch (e) {
+        if (/BLOQUEADO/.test(String((e && e.message) || e))) e.code = 'BLOCKED';
+        throw e;
+      }
+    },
     dispose() { if (proc) { try { proc.kill(); } catch { /* já saiu */ } } reset(new Error('encerrado')); },
   };
 }

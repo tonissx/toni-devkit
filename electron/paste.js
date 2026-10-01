@@ -38,7 +38,8 @@ function sendKeysWindows(keys) {
 /**
  * clipboard: { readText, writeText, availableFormats?, readImage?, write? } (o do Electron)
  * hide(): esconde a palette · notify({ ok, message }) · sleep(ms) · now()
- * win: { foreground(), focus(hwnd), keys(keys) } (electron/winfocus.js) — opcional; sem ele só há o `sendKeys` avulso.
+ * win: { foreground(), focus(hwnd), paste(back), keys(keys) } (electron/winfocus.js) — opcional; sem ele só há o
+ *      `sendKeys` avulso. `paste(back)` rejeita com code 'BLOCKED' quando o Windows recusa as teclas.
  */
 function createPaster({ clipboard, hide, notify, win = null, sendKeys = sendKeysWindows, sleep = wait, now = () => new Date() }) {
   let target = null; // janela que estava ativa quando a palette foi aberta por atalho
@@ -78,7 +79,16 @@ function createPaster({ clipboard, hide, notify, win = null, sendKeys = sendKeys
       // Sem confirmação de foco (janela fechada, bloqueio do Windows) ainda tenta colar: pode ter dado certo.
       if (t && win) { await win.focus(t); await sleep(AFTER_FOCUS_MS); }
       const keys = keysFor(back);
-      if (win) await win.keys(keys).catch(() => sendKeys(keys)); else await sendKeys(keys);
+      if (win && typeof win.paste === 'function') {
+        // Preferência: Ctrl+V e as ← num único SendInput (o cursor não "viaja" na tela). Reservas: SendKeys do
+        // auxiliar e depois um PowerShell avulso — exceto se o Windows RECUSOU as teclas (janela elevada): as
+        // reservas também seriam recusadas, e o SendKeys falharia em silêncio parecendo sucesso.
+        try { await win.paste(Math.min(back, MAX_BACK)); } catch (e) {
+          if (e && e.code === 'BLOCKED') throw e;
+          await win.keys(keys).catch(() => sendKeys(keys));
+        }
+      } else if (win) await win.keys(keys).catch(() => sendKeys(keys));
+      else await sendKeys(keys);
       await sleep(SETTLE_MS);
     } catch (e) {
       // Fica copiado: o usuário cola na mão.

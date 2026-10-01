@@ -979,12 +979,17 @@ test('paste: falha da simulação deixa copiado e avisa', async () => {
   assert.ok(f.log.some((l) => l.startsWith('notify:Snippet copiado')));
 });
 
-function fakeWin({ focusOk = true, keysFail = false, fg = '4242' } = {}) {
+function fakeWin({ focusOk = true, keysFail = false, pasteFail = false, blocked = false, fg = '4242' } = {}) {
   const calls = [];
   return {
     calls,
     foreground: async () => { calls.push('fg'); return fg; },
     focus: async (h) => { calls.push('focus:' + h); return focusOk; },
+    paste: async (n) => {
+      calls.push('paste:' + n);
+      if (blocked) throw Object.assign(new Error('BLOQUEADO: o Windows recusou as teclas'), { code: 'BLOCKED' });
+      if (pasteFail) throw new Error('x');
+    },
     keys: async (k) => { calls.push('keys:' + k); if (keysFail) throw new Error('x'); },
   };
 }
@@ -994,18 +999,18 @@ test('paste: guarda a janela ativa ao abrir e devolve o foco a ela ANTES das tec
   const win = fakeWin();
   const order = [];
   win.focus = async (h) => { order.push('focus:' + h); return true; };
-  win.keys = async (k) => { order.push('keys:' + k); };
+  win.paste = async (n) => { order.push('paste:' + n); };
   const p = createPaster({
     clipboard: { readText: () => 'c', writeText: (t) => log.push('w:' + t) }, win, now: () => NOW, sleep: async () => {},
     hide: () => order.push('hide'), notify: () => {},
   });
   assert.equal(await p.capture(), '4242');
   await p.paste({ code: 'x{{cursor}}y' });
-  assert.deepEqual(order, ['hide', 'focus:4242', 'keys:^v{LEFT 1}']);
+  assert.deepEqual(order, ['hide', 'focus:4242', 'paste:1']); // Ctrl+V + 1× ← num único envio
   // o alvo foi consumido: a próxima colagem (palette aberta por outro caminho) não força foco
   order.length = 0;
   await p.paste({ code: 'z' });
-  assert.deepEqual(order, ['hide', 'keys:^v']);
+  assert.deepEqual(order, ['hide', 'paste:0']);
 });
 
 test('paste: Esc devolve o foco uma vez; forget descarta o alvo; focus que falha ainda tenta colar', async () => {
@@ -1021,18 +1026,35 @@ test('paste: Esc devolve o foco uma vez; forget descarta o alvo; focus que falha
   const q = mk(bad);
   await q.capture();
   assert.deepEqual(await q.paste({ code: 'a' }), { pasted: true });
-  assert.deepEqual(bad.calls, ['fg', 'focus:4242', 'keys:^v']);
+  assert.deepEqual(bad.calls, ['fg', 'focus:4242', 'paste:0']);
 });
 
-test('paste: auxiliar sem resposta cai no SendKeys avulso', async () => {
-  const win = fakeWin({ keysFail: true });
-  const sent = [];
-  const p = createPaster({
-    clipboard: { readText: () => '', writeText() {} }, win, sleep: async () => {}, hide() {}, notify() {},
+test('paste: cadeia de reserva — paste → keys do auxiliar → SendKeys avulso', async () => {
+  const mk = (win, sent, notes = []) => createPaster({
+    clipboard: { readText: () => '', writeText() {} }, win, sleep: async () => {}, hide() {}, notify: (r) => notes.push(r.message),
     sendKeys: async (k) => { sent.push(k); },
   });
-  assert.deepEqual(await p.paste({ code: 'a' }), { pasted: true });
-  assert.deepEqual(sent, ['^v']);
+  // paste falha (auxiliar com problema) → tenta o SendKeys do auxiliar, que funciona
+  const w1 = fakeWin({ pasteFail: true }); const s1 = [];
+  assert.deepEqual(await mk(w1, s1).paste({ code: 'a{{cursor}}b' }), { pasted: true });
+  assert.deepEqual(w1.calls, ['paste:1', 'keys:^v{LEFT 1}']); assert.deepEqual(s1, []);
+  // os dois do auxiliar falham → PowerShell avulso
+  const w2 = fakeWin({ pasteFail: true, keysFail: true }); const s2 = [];
+  assert.deepEqual(await mk(w2, s2).paste({ code: 'a' }), { pasted: true });
+  assert.deepEqual(s2, ['^v']);
+});
+
+test('paste: Windows recusou as teclas (janela elevada) → fica copiado e avisa, sem reservas', async () => {
+  const w = fakeWin({ blocked: true }); const sent = []; const notes = [];
+  const p = createPaster({
+    clipboard: { readText: () => 'antes', writeText() {} }, win: w, sleep: async () => {}, hide() {},
+    notify: (r) => notes.push(r.message), sendKeys: async (k) => { sent.push(k); },
+  });
+  const r = await p.paste({ code: 'a' });
+  assert.equal(r.pasted, false);
+  assert.deepEqual(w.calls, ['paste:0']);   // nada de keys: seriam recusadas em silêncio
+  assert.deepEqual(sent, []);
+  assert.match(notes[0], /Snippet copiado/);
 });
 
 test('winfocus: protocolo por linhas, respostas em ordem, erro e falha de plataforma', async () => {
@@ -1059,7 +1081,11 @@ test('winfocus: protocolo por linhas, respostas em ordem, erro e falha de plataf
   assert.equal(await h.focus('1'), false);          // janela fechada
   assert.equal(await h.focus('abc'), false);        // handle inválido nem chega ao processo
   await h.keys('^v');
-  assert.deepEqual(written, ['fg', 'focus 777', 'focus 1', 'keys ^v']);
+  await h.paste(12);
+  await assert.rejects(() => h.paste(-1), /inválida/);     // validado em JS: nem chega ao processo
+  await assert.rejects(() => h.paste(2001), /inválida/);
+  await assert.rejects(() => h.paste('abc'), /inválida/);
+  assert.deepEqual(written, ['fg', 'focus 777', 'focus 1', 'keys ^v', 'paste 12']);
   h.dispose();
   const off = createWinHelper({ spawn, platform: 'linux' });
   assert.equal(await off.foreground(), null);
