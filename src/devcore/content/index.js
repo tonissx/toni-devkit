@@ -13,12 +13,14 @@ const { STAGES, SKINS } = require('./appearance.js');
 const { INCIDENTS } = require('./incidents.js');
 const { CONSUMABLES } = require('./consumables.js');
 const { BLUEPRINTS } = require('./blueprints.js');
+const { QUESTS } = require('./quests.js');
 
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 
 const CONTENT = {
   BALANCE, RESOURCES, CATEGORIES, TIERS, GENERATORS, UPGRADES, PETS, RARITY, ABILITIES, SYNERGIES, DISCOVERIES, STAGES, SKINS,
-  INCIDENTS, CONSUMABLES, BLUEPRINTS,
+  INCIDENTS, CONSUMABLES, BLUEPRINTS, QUESTS,
+  quest: byId(QUESTS),
   gen: byId(GENERATORS), upgrade: byId(UPGRADES), pet: byId(PETS), ability: byId(ABILITIES),
   category: byId(CATEGORIES), discovery: byId(DISCOVERIES), synergy: byId(SYNERGIES), skin: byId(SKINS),
   incident: byId(INCIDENTS), consumable: byId(CONSUMABLES),
@@ -60,6 +62,14 @@ function validate(c = CONTENT) {
   for (const k of c.SKINS) {
     if (k.unlock.discovery && !c.discovery[k.unlock.discovery]) errors.push(`skin ${k.id}: descoberta ${k.unlock.discovery}`);
     for (const v of Object.values(k.colors)) if (!/^#[0-9a-fA-F]{6}$/.test(v)) errors.push(`skin ${k.id}: cor inválida ${v}`);
+    if (k.pet && !c.pet[k.pet]) errors.push(`skin ${k.id}: pet ${k.pet}`);
+    if (k.unlock.petQuests && !c.QUESTS.some((x) => x.pet === k.unlock.petQuests.pet)) errors.push(`skin ${k.id}: nenhuma missão do pet ${k.unlock.petQuests.pet}`);
+  }
+  uniq('quests', c.QUESTS);
+  if (c.BALANCE.quests.perDay > c.QUESTS.length) errors.push('quests: perDay maior que o pool');
+  for (const x of c.QUESTS) {
+    if (!x.when || !x.when.event) errors.push(`quest ${x.id}: falta when.event`);
+    if (x.pet && !c.pet[x.pet]) errors.push(`quest ${x.id}: pet ${x.pet}`);
   }
   if (c.STAGES[0].minLevel !== 1) errors.push('stages: o primeiro estágio deve começar no nível 1');
   uniq('incidents', c.INCIDENTS); uniq('consumables', c.CONSUMABLES); uniq('villains', c.INCIDENTS.map((i) => i.villain));

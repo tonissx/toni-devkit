@@ -11,7 +11,8 @@
  *   skin { pet, skin }        visual (paleta) de um DevPet — só visuais já desbloqueados
  *   use { item, ability? }    consumível (Coffee, Hotfix, Rollback, Cache Warmer)
  *   craft { item }            fabrica um consumível com Compute (N minutos da produção atual)
- *   quiet { on }              modo tranquilo: sem incidentes (e sem as recompensas deles)
+ *   (missões diárias: progresso vem de `event`; concluir rende contador de visuais e, às vezes, um consumível)
+ *   quiet { on }             modo tranquilo: sem incidentes (e sem as recompensas deles)
  *   buyPart { part }          compra uma peça de Blueprint com Compute (N minutos da produção atual)
  *   scrapPart { part }        troca sucata por uma peça faltante
  *   refactor { gen }          conjunto completo → próximo Mk (produção do gerador × mult, visual novo)
@@ -24,6 +25,7 @@ const { check } = require('./conditions.js');
 const { recordEvent, evaluate } = require('./discoveries.js');
 const { rng } = require('./rng.js');
 const { stageOf, evaluateSkins } = require('./appearance.js');
+const { record: recordQuestEvent, evaluateQuests } = require('./quests.js');
 const { ensureScheduled, endIncident, grantItem, abilitiesLocked, randFor } = require('./incidents.js');
 const { bpOf, partId, levelOf, parsePart, partError, dropPart, costDivOf } = require('./blueprints.js');
 
@@ -180,6 +182,7 @@ function act(s, action, now, c, log) {
     }
     case 'event':
       recordEvent(s, String(action.name || ''), action.data, now);
+      recordQuestEvent(s, String(action.name || ''), action.data, now, c);
       return null;
     case 'ackWelcome':
       s.pending.welcome = null;
@@ -187,6 +190,7 @@ function act(s, action, now, c, log) {
     case 'skin': {
       if (!s.run.pets[action.pet]) return 'DevPet indisponível';
       if (!c.skin[action.skin] || !s.cosmetics.unlocked.includes(action.skin)) return 'Visual bloqueado';
+      if (c.skin[action.skin].pet && c.skin[action.skin].pet !== action.pet) return 'Visual exclusivo de outro DevPet';
       s.cosmetics.skins[action.pet] = action.skin;
       s.cosmetics.fresh = s.cosmetics.fresh.filter((id) => id !== action.skin);
       log.push({ type: 'skinChanged', pet: action.pet, skin: action.skin });
@@ -291,7 +295,7 @@ function dispatch(state, action, now, c = CONTENT) {
     log.push(...advanceTo(s, now, { offline: false }, c).log);
     if (action.type !== 'tick') error = act(s, action, now, c, log);
   }
-  log.push(...evaluate(s, now, c), ...evaluateSkins(s, c));
+  log.push(...evaluate(s, now, c), ...evaluateQuests(s, now, c), ...evaluateSkins(s, c));
   s.run.boosts = s.run.boosts.filter((b) => b.until > now);
   ensureScheduled(s, now, c); // um tier novo (ou sair do modo tranquilo) liga os incidentes a partir de agora
   return error ? { state: s, log, error } : { state: s, log };

@@ -213,7 +213,86 @@ function Armo({ c, eye, stage }) {
   );
 }
 
-const SPECIES = { byte: Byte, noxi: Noxi, query: Query, memo: Memo, relay: Relay, armo: Armo };
+/** Git — "gato-ramificado": gato baixo e largo (cabeça em elipse, orelhas grandes), cauda em Y subindo pela esquerda com nós de commit. */
+function Git({ c, eye, stage }) {
+  return (
+    <g>
+      <g className="pet-tail" fill="none" stroke={c} strokeWidth="3.2" strokeLinecap="round" opacity=".9">
+        <path d="M17 48 q-12 -2 -11 -16" />
+        <path d="M6 32 q-1 -8 4 -13" />
+        <path d="M6 32 q5 -3 9 -10" />
+        <circle cx="6" cy="32" r="2.4" fill={eye} stroke="none" />
+        <circle cx="10" cy="19" r="2.2" fill={eye} stroke="none" />
+        <circle cx="15" cy="22" r="2.2" fill={eye} stroke="none" />
+      </g>
+      {stage >= 2 && (
+        <g className="pet-acc pet-signal" fill="none" stroke={eye} strokeWidth="1.6" strokeLinecap="round">
+          <path d="M24 6 h16" /><circle cx="24" cy="6" r="2" fill={eye} stroke="none" /><circle cx="40" cy="6" r="2" fill={eye} stroke="none" />
+        </g>
+      )}
+      <g className="pet-body">
+        <ellipse cx="34" cy="46" rx="19" ry="9" fill={c} />
+        <path d="M17 24 L19 8 L30 18 Z M38 18 L49 8 L51 24 Z" fill={c} />
+        <path d="M20 22 L21 13 L27 19 Z M41 19 L47 13 L48 22 Z" fill={DARK} opacity=".3" />
+        <ellipse cx="34" cy="31" rx="17" ry="12" fill={c} />
+        <ellipse cx="27" cy="29" rx="3.6" ry="4" fill={DARK} />
+        <ellipse cx="41" cy="29" rx="3.6" ry="4" fill={DARK} />
+        <ellipse className="pet-eye" cx="27.5" cy="29" rx="1.8" ry="2.6" fill={eye} />
+        <ellipse className="pet-eye" cx="41.5" cy="29" rx="1.8" ry="2.6" fill={eye} />
+        <path d="M32.5 34 L34 36 L35.5 34 Z" fill={DARK} opacity=".75" />
+        <g stroke={DARK} strokeWidth="1" opacity=".5" strokeLinecap="round">
+          <path d="M20 35 l-8 -1 M20 38 l-8 2" /><path d="M48 35 l8 -1 M48 38 l8 2" />
+        </g>
+        {stage >= 1 && (
+          <g className="pet-acc">
+            <path d="M24 42 q10 5 20 0" fill="none" stroke={GEAR} strokeWidth="2.2" strokeLinecap="round" />
+            <circle cx="34" cy="47" r="2.6" fill={eye} />
+          </g>
+        )}
+      </g>
+      <rect className="pet-leg pet-leg--l" x="25" y="52" width="8" height="5" rx="2.5" fill={c} />
+      <rect className="pet-leg pet-leg--r" x="38" y="52" width="8" height="5" rx="2.5" fill={c} />
+    </g>
+  );
+}
+
+/** Lint — "esquilo-fiscal": esquilo em pé, cabeça redonda, focinho curto e uma cauda grande e fofa atrás. */
+function Lint({ c, eye, stage }) {
+  return (
+    <g>
+      <g className="pet-tail">
+        <ellipse cx="47" cy="34" rx="12" ry="21" transform="rotate(14 47 34)" fill={c} opacity=".85" />
+        <ellipse cx="48" cy="33" rx="6" ry="14" transform="rotate(14 48 33)" fill={DARK} opacity=".16" />
+      </g>
+      {stage >= 2 && (
+        <g className="pet-acc pet-signal" fill="none" stroke={eye} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 6 l4 4 l9 -9" />
+        </g>
+      )}
+      <g className="pet-body">
+        <ellipse cx="30" cy="43" rx="11" ry="13" fill={c} />
+        <ellipse cx="27" cy="45" rx="6" ry="9" fill="var(--tk-surface-1)" opacity=".8" />
+        <path d="M18 17 L19 8 L26 14 Z M28 14 L35 8 L36 18 Z" fill={c} />
+        <circle cx="27" cy="25" r="10.5" fill={c} />
+        <ellipse cx="20" cy="29" rx="5" ry="4" fill={c} />
+        <circle cx="16" cy="28" r="1.6" fill={DARK} />
+        <circle cx="26" cy="23" r="3.3" fill={DARK} />
+        <circle className="pet-eye" cx="26.5" cy="23" r="1.7" fill={eye} />
+        <rect x="19" y="31" width="3.2" height="4" rx="1" fill="#FFF6D6" />
+        {stage >= 1 && (
+          <g className="pet-acc" fill="none" stroke={GEAR} strokeWidth="2" strokeLinecap="round">
+            <circle cx="15" cy="46" r="5.5" fill="rgba(255,255,255,.14)" />
+            <line x1="19" y1="50" x2="24" y2="55" />
+          </g>
+        )}
+      </g>
+      <rect className="pet-leg pet-leg--l" x="22" y="53" width="6" height="4" rx="2" fill={c} />
+      <rect className="pet-leg pet-leg--r" x="32" y="53" width="6" height="4" rx="2" fill={c} />
+    </g>
+  );
+}
+
+const SPECIES = { byte: Byte, noxi: Noxi, query: Query, memo: Memo, relay: Relay, armo: Armo, git: Git, lint: Lint };
 
 /**
  * Sprite de um DevPet.

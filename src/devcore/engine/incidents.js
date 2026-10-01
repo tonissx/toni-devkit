@@ -80,10 +80,21 @@ function endIncident(s, t, c, log, outcome) {
   if (out === 'escaped') bump(s, inc.villain.id, 'escaped');
   if (out === 'hotfixed') {
     bump(s, inc.villain.id, 'defeated');
+    const rand = randFor(s, I.seq * 15485863 + Math.floor(t / 1000));
     if (inc.villain.boss) {
-      const part = dropPart(s, randFor(s, I.seq * 15485863 + Math.floor(t / 1000)), { mk3: true }, c);
+      const part = dropPart(s, rand, { mk3: true }, c);
       a.part = part.type === 'part' && !part.dup ? { gen: part.gen, mk: part.mk, name: part.name } : { scrap: true, gen: part.gen };
       log.push({ ...part, source: 'boss', at: t });
+    } else {
+      // Vilão comum: sempre +1 sucata e uma chance de peça da categoria atacada — menos que conter (item + peça).
+      s.run.scrap += 1;
+      a.part = { scrap: true, gen: null };
+      log.push({ type: 'scrap', gen: null, source: 'hotfix', at: t });
+      if (rand() < c.BALANCE.incidents.hotfixPartChance) {
+        const part = dropPart(s, rand, { category: inc.category }, c);
+        if (part.type === 'part' && !part.dup) a.part = { gen: part.gen, mk: part.mk, name: part.name };
+        log.push({ ...part, source: 'hotfix', at: t });
+      }
     }
   }
   I.history = [{ id: a.id, villain: inc.villain.id, start: a.start, end: t, outcome: out, by: a.by, part: a.part || null }, ...I.history].slice(0, 10);

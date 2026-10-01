@@ -1073,3 +1073,39 @@ test('paste: snippet vazio é recusado antes de mexer no clipboard; keysFor limi
   assert.equal(keysFor(5000), '^v{LEFT 2000}');
   assert.equal(keysFor(0), '^v');
 });
+
+/* ─────────────── importar .md ─────────────── */
+const { fromMarkdown, isMarkdownFile } = require('../src/notes/importmd.js');
+
+test('fromMarkdown: H1 vira título e sai do corpo', () => {
+  const r = fromMarkdown('# Guia SQL\n\ntexto #sql\n', 'x.md');
+  assert.equal(r.title, 'Guia SQL');
+  assert.equal(r.content, 'texto #sql\n');
+});
+
+test('fromMarkdown: front matter fornece título/tags e ignora id', () => {
+  const r = fromMarkdown('---\nid: abc\ntitle: "Meu"\ntags: ["a","b"]\ntype: snippet\n---\n# Outro\ncorpo', 'x.md');
+  assert.equal(r.title, 'Meu');
+  assert.deepEqual(r.tags, ['a', 'b']);
+  assert.equal(r.type, 'snippet');
+  assert.equal(r.content, '# Outro\ncorpo');
+  assert.equal(r.id, undefined);
+});
+
+test('fromMarkdown: sem H1 usa o nome do arquivo; colagem sem nome fica sem título', () => {
+  assert.equal(fromMarkdown('só texto', 'C:\\docs\\meu-guia.md').title, 'meu-guia');
+  assert.equal(fromMarkdown('só texto').title, '');
+});
+
+test('fromMarkdown: CRLF e BOM', () => {
+  const r = fromMarkdown('\uFEFF# T\r\n\r\ncorpo\r\n');
+  assert.equal(r.title, 'T');
+  assert.equal(r.content, 'corpo\n');
+});
+
+test('isMarkdownFile: extensão e tamanho', () => {
+  assert.ok(isMarkdownFile({ name: 'a.md', size: 10 }));
+  assert.ok(isMarkdownFile({ name: 'A.MARKDOWN', size: 10 }));
+  assert.ok(!isMarkdownFile({ name: 'a.png', size: 10 }));
+  assert.ok(!isMarkdownFile({ name: 'a.md', size: 3 * 1024 * 1024 }));
+});

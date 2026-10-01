@@ -162,7 +162,7 @@ function SkinPicker({ pet, skins, act }) {
   return (
     <div className="dc-skins" role="group" aria-label={'Visual de ' + pet.name}>
       <span className="dc-skins__label">Visual</span>
-      {skins.map((k) => {
+      {skins.filter((k) => !k.pet || k.pet === pet.id).map((k) => {
         const body = k.colors.body || pet.baseColor;
         const on = pet.skin === k.id;
         return k.unlocked ? (
@@ -192,8 +192,36 @@ function AbilityButton({ a, act, now }) {
   return <Button size="sm" variant="primary" icon="zap" onClick={() => act({ type: 'ability', id: a.id })}>Ativar</Button>;
 }
 
+/** Missões do dia: só cosméticos e consumíveis (nada de produção); ignorar um dia não custa nada. */
+function QuestsCard({ quests }) {
+  const done = quests.items.filter((q) => q.done).length;
+  return (
+    <section className="dc-quests" aria-label="Missões do dia">
+      <div className="dc-quests__head">
+        <span className="tk-menu__heading">Missões do dia</span>
+        <span className="dc-chip" title="Missões concluídas na vida (sem streak)">{quests.total} concluídas</span>
+        {quests.nextSkin && <span className="dc-chip is-muted" title="Próximo visual por missões">{quests.nextSkin.name} em {quests.nextSkin.left}</span>}
+        <span className="dc-quests__hint">Opcional · rende visuais e, às vezes, um consumível · {done}/{quests.items.length}</span>
+      </div>
+      <div className="dc-quests__list">
+        {quests.items.map((q) => (
+          <div key={q.id} className={'dc-quest' + (q.done ? ' is-done' : '')}>
+            <Icon name={q.done ? 'check' : 'circle'} size={13} />
+            <div className="dc-row__main">
+              <div className="dc-row__title">{q.title}{q.pet && <span className="dc-chip is-muted">{q.pet}</span>}</div>
+              <div className="dc-row__desc">{q.text}{q.need > 1 && !q.done ? ` (${q.progress}/${q.need})` : ''}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function PetsPanel({ snap, amount, act, now }) {
   return (
+    <div>
+    <QuestsCard quests={snap.quests} />
     <div className="dc-grid is-pets">
       {snap.pets.map((p) => (p.owned ? (
         <div key={p.id} className="dc-pet-card" style={{ '--pet': p.color }}>
@@ -236,6 +264,7 @@ export function PetsPanel({ snap, amount, act, now }) {
           </div>
         </div>
       )))}
+    </div>
     </div>
   );
 }

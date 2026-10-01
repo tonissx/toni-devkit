@@ -65,7 +65,7 @@ function blueprints(s, now, c, step) {
   v = snapshot(s, now, c);
   for (const g of v.generators) {
     const bp = g.blueprint;
-    if (!bp || bp.owned < 2 || g.rate < 0.1 * v.rate) continue;
+    if (!bp || bp.complete || bp.owned < 2 || g.rate < 0.1 * v.rate) continue; // conjunto completo: só falta o Refactor
     if (s.run.resources.compute.amount >= bp.buyCost) step({ type: 'buyPart', part: bp.parts.find((p) => !p.owned).id });
   }
   v = snapshot(s, now, c);

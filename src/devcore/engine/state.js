@@ -8,6 +8,7 @@
  *   pending      → resumo de retorno aguardando ser mostrado
  *   cosmetics    → visuais dos DevPets (escolhidos/desbloqueados) — nunca resetam
  *   bestiary     → vilões encontrados (visto/contido/escapou/derrotado) — nunca reseta
+ *   quests       → missões diárias (do dia + contadores vitalícios) — só cosméticos/consumíveis
  *   settings     → preferências do jogo (modo tranquilo)
  */
 const { CONTENT } = require('../content/index.js');
@@ -40,6 +41,7 @@ function createState(now, c = CONTENT) {
     pending: { welcome: null },
     cosmetics: { skins: {}, unlocked: ['default'], fresh: [] },
     bestiary: {},
+    quests: { day: '', ids: [], done: [], seen: {}, total: 0, byPet: {} }, // missões diárias — o contador nunca reseta
     settings: { quiet: false },
   };
   for (const [id, owned] of Object.entries(B.start.generators)) s.run.generators[id] = { owned };
