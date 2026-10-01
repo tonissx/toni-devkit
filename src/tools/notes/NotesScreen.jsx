@@ -2,6 +2,7 @@ import { DS, mod, isMod } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { notesApi, recoverUnsaved, shortTime, cleanError } from '../../notes/client.js';
 import { createNote } from '../../notes/note.js';
+import { fromMarkdown, isMarkdownFile } from '../../notes/importmd.js';
 import { normalize } from '../../commands/search.js';
 import { NoteEditor } from './NoteEditor.jsx';
 import { TasksPanel } from './TasksPanel.jsx';
@@ -76,6 +77,7 @@ export function NotesScreen({ toast, request }) {
   const [foldersUi, setFoldersUi] = usePersisted('notes.folders', { open: {} });
   const [dialog, setDialog] = React.useState(null);      // { kind: 'create'|'rename'|'delete'|'move', … }
   const [ctxMenu, setCtxMenu] = React.useState(null);    // { x, y, kind: 'folder'|'note', path?, note? }
+  const [dropping, setDropping] = React.useState(false); // arrastando arquivo(s) sobre a janela
   const searchRef = React.useRef(null);
   const listRef = React.useRef(null);
 
@@ -145,6 +147,62 @@ export function NotesScreen({ toast, request }) {
     setCurrent({ note, isNew: true, focus: title ? 'body' : 'title' });
     setUi((u) => ({ ...toNoteView(u), selectedId: note.id }));
   }, [folderSel]);
+
+  // Importar markdown como notas novas (arrastar .md para o app / colar). Cai na pasta ativa.
+  const importNotes = React.useCallback(async (items) => {
+    let last = null, count = 0;
+    for (const it of items) {
+      try {
+        const f = fromMarkdown(it.text, it.fileName);
+        const n = await notesApi().create({ ...f, ...(folderSel ? { folder: folderSel } : {}) });
+        if (n) { last = n; count++; }
+      } catch (e) { toast('Não foi possível importar' + (it.fileName ? ' ' + it.fileName : ''), cleanError(e), 'error'); }
+    }
+    if (last) { await openNote(last.id, 'body'); toast(count === 1 ? 'Nota criada' : count + ' notas criadas', count === 1 ? (last.title || 'a partir do markdown') : undefined); }
+  }, [folderSel, openNote, toast]);
+
+  React.useEffect(() => {
+    const hasFiles = (e) => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+    const mdOf = (dt) => [...(dt.files || [])].filter(isMarkdownFile);
+    let depth = 0;
+    const onEnter = (e) => { if (hasFiles(e)) { depth++; setDropping(true); } };
+    const onLeave = (e) => { if (hasFiles(e) && --depth <= 0) { depth = 0; setDropping(false); } };
+    const onOver = (e) => { if (hasFiles(e)) e.preventDefault(); }; // sem isto o Electron abre o arquivo na janela
+    const onDrop = (e) => {
+      if (!hasFiles(e)) return;
+      depth = 0; setDropping(false);
+      const files = mdOf(e.dataTransfer);
+      e.preventDefault();
+      if (!files.length) return; // imagens soltas no editor seguem com images.js
+      Promise.all(files.map(async (f) => ({ text: await f.text(), fileName: f.name }))).then(importNotes);
+    };
+    const onPaste = (e) => {
+      const dt = e.clipboardData;
+      if (!dt) return;
+      const files = mdOf(dt);
+      if (files.length) {
+        e.preventDefault();
+        Promise.all(files.map(async (f) => ({ text: await f.text(), fileName: f.name }))).then(importNotes);
+        return;
+      }
+      const t = e.target;
+      const editable = t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
+      const text = dt.getData('text/plain');
+      if (!editable && text && text.trim()) { e.preventDefault(); importNotes([{ text, fileName: '' }]); }
+    };
+    window.addEventListener('dragenter', onEnter, true);
+    window.addEventListener('dragleave', onLeave, true);
+    window.addEventListener('dragover', onOver, true);
+    window.addEventListener('drop', onDrop, true);
+    window.addEventListener('paste', onPaste, true);
+    return () => {
+      window.removeEventListener('dragenter', onEnter, true);
+      window.removeEventListener('dragleave', onLeave, true);
+      window.removeEventListener('dragover', onOver, true);
+      window.removeEventListener('drop', onDrop, true);
+      window.removeEventListener('paste', onPaste, true);
+    };
+  }, [importNotes]);
 
   // Abertura: recupera alterações que ficaram só no backup local e reabre a última nota.
   React.useEffect(() => {
@@ -362,10 +420,11 @@ export function NotesScreen({ toast, request }) {
 
   return (
     <div className="nts-screen">
+      {dropping && <div className="nts-dropzone" aria-hidden="true"><Icon name="file-down" size={28} /> Solte o .md para criar uma nota</div>}
       <PageHeader
         icon="notebook-pen"
         title="Notes"
-        subtitle="Sua memória técnica — Markdown, snippets e busca. Capture com Ctrl+Alt+Space → Alt+Q"
+        subtitle="Sua memória técnica — Markdown, snippets e busca. Capture com Ctrl+Alt+Space → Alt+Q · arraste um .md ou cole para criar"
         actions={<>
           <Button variant="secondary" icon="folder-open" onClick={() => notesApi().openFolder()}>Abrir pasta</Button>
           <IconButton icon="layout-template" label={'Nova nota a partir de template (' + mod('N', true) + ')'} onClick={() => setDialog({ kind: 'template' })} />

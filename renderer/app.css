@@ -229,6 +229,8 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-side__trash-n { padding: 0 5px; border-radius: 8px; background: var(--tk-surface-3); font: 500 10px/15px var(--tk-font-mono); color: var(--tk-text-2); }
 .nts-warn { display: inline-flex; align-items: center; gap: 4px; color: var(--tk-amber); cursor: help; }
 
+.nts-screen { position: relative; }
+.nts-dropzone { position: absolute; inset: 8px; z-index: 50; display: flex; align-items: center; justify-content: center; gap: 10px; pointer-events: none; font-weight: 600; color: var(--tk-text); background: color-mix(in srgb, var(--tk-bg) 82%, transparent); border: 2px dashed var(--tk-accent, var(--tk-border)); border-radius: var(--tk-radius-md); }
 .nts-empty { flex: 1; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--tk-border); border-radius: var(--tk-radius-md); }
 
 .nts-editor { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--tk-bg); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); overflow: hidden; }
