@@ -23,6 +23,7 @@ module.exports = {
     everyHours: [3, 6],        // intervalo entre um incidente e o próximo
     forecastHours: 2,          // o próximo fica visível com esta antecedência
     blockedSec: 60,            // contido: o vilão aparece, é barrado e some
+    hotfixPartChance: 0.3,     // Hotfix em vilão comum: +1 sucata garantida e esta chance de uma peça (conter rende item + peça)
     lossFloor: 0.8,            // nenhum alvo cai abaixo de ×0,8 por incidentes
   },
 
@@ -36,6 +37,12 @@ module.exports = {
     mk3ChanceContained: 0.4,       // vilão contido com o Mk II já feito: chance de peça Mk III (senão sucata)
     scrapPerPart: { 2: 5, 3: 8 }, // sucata para trocar por uma peça faltante
     buyMinutes: { 2: 120, 3: 360 }, // cabe no que acumula numa noite offline (teto 8 h)
+  },
+
+  // Missões diárias: só cosméticos e consumíveis, nunca produção.
+  quests: {
+    perDay: 3,
+    itemChance: 0.5,           // chance de uma missão concluída render um consumível (estoque cheio → nada)
   },
 
   // Anti-abuso: soma máxima dos bônus que vêm de uso do DevKit (descobertas)

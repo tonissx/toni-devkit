@@ -79,6 +79,28 @@ const PETS = [
       idle: ['curled up in the rack...', 'humming at 40°C...', 'counting uptime...'],
     },
   },
+  {
+    id: 'git', name: 'Git', species: 'gato-ramificado', rarity: 'rare',
+    specialization: 'Versioning', category: 'shell', color: '#F05133',
+    bonus: [{ type: 'add', target: 'cat:shell', value: 0.12 }, { type: 'add', target: 'global', value: 0.03 }],
+    perLevel: 0.1, trainCost: 1e4, trainScaling: 2.2,
+    ability: 'branch-off',
+    lines: {
+      working: ['committing...', 'rebasing quietly...', 'resolving a conflict...', 'pushing to origin...'],
+      idle: ['licking a diff clean...', 'chasing a detached HEAD...', 'napping on a branch...'],
+    },
+  },
+  {
+    id: 'lint', name: 'Lint', species: 'esquilo-fiscal', rarity: 'common',
+    specialization: 'Quality', category: 'automation', color: '#4FC3C8',
+    bonus: [{ type: 'add', target: 'cat:automation', value: 0.12 }],
+    perLevel: 0.1, trainCost: 3000, trainScaling: 2.2,
+    ability: 'lint-pass',
+    lines: {
+      working: ['fixing trailing spaces...', 'sorting imports...', 'reading the style guide...'],
+      idle: ['hoarding semicolons...', 'warning: acorn unused...', 'tail twitching at tabs...'],
+    },
+  },
 ];
 
 module.exports = { PETS, RARITY };

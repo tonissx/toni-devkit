@@ -131,6 +131,11 @@ export function DevCoreScreen({ toast, request }) {
       }
       else if (e.type === 'ability') out.push({ at: t, type: 'ability', pet: e.pet, text: (s.pets.find((p) => p.ability.id === e.id) || { ability: {} }).ability.name });
     }
+    for (const e of log || []) {
+      if (e.type !== 'quest') continue;
+      const item = e.item && (s.inventory.find((k) => k.id === e.item) || {}).name;
+      toast('Missão concluída', e.title + (item ? ' · +1 ' + item : ''));
+    }
     if (out.length) setReactions((r) => [...r.filter((x) => t - x.at < REACTION_MS), ...out]);
     if ((log || []).some((e) => e.type === 'discovery')) setFreshUnseen((f) => [...new Set([...f, ...log.filter((e) => e.type === 'discovery').map((e) => e.id)])]);
   }, []);
