@@ -979,6 +979,93 @@ test('paste: falha da simulação deixa copiado e avisa', async () => {
   assert.ok(f.log.some((l) => l.startsWith('notify:Snippet copiado')));
 });
 
+function fakeWin({ focusOk = true, keysFail = false, fg = '4242' } = {}) {
+  const calls = [];
+  return {
+    calls,
+    foreground: async () => { calls.push('fg'); return fg; },
+    focus: async (h) => { calls.push('focus:' + h); return focusOk; },
+    keys: async (k) => { calls.push('keys:' + k); if (keysFail) throw new Error('x'); },
+  };
+}
+
+test('paste: guarda a janela ativa ao abrir e devolve o foco a ela ANTES das teclas', async () => {
+  const log = [];
+  const win = fakeWin();
+  const order = [];
+  win.focus = async (h) => { order.push('focus:' + h); return true; };
+  win.keys = async (k) => { order.push('keys:' + k); };
+  const p = createPaster({
+    clipboard: { readText: () => 'c', writeText: (t) => log.push('w:' + t) }, win, now: () => NOW, sleep: async () => {},
+    hide: () => order.push('hide'), notify: () => {},
+  });
+  assert.equal(await p.capture(), '4242');
+  await p.paste({ code: 'x{{cursor}}y' });
+  assert.deepEqual(order, ['hide', 'focus:4242', 'keys:^v{LEFT 1}']);
+  // o alvo foi consumido: a próxima colagem (palette aberta por outro caminho) não força foco
+  order.length = 0;
+  await p.paste({ code: 'z' });
+  assert.deepEqual(order, ['hide', 'keys:^v']);
+});
+
+test('paste: Esc devolve o foco uma vez; forget descarta o alvo; focus que falha ainda tenta colar', async () => {
+  const win = fakeWin();
+  const mk = (w) => createPaster({ clipboard: { readText: () => '', writeText() {} }, win: w, sleep: async () => {}, hide() {}, notify() {} });
+  const p = mk(win);
+  await p.capture();
+  assert.equal(await p.restoreFocus(), true);
+  assert.equal(await p.restoreFocus(), false);
+  await p.capture(); p.forget();
+  assert.equal(await p.restoreFocus(), false);
+  const bad = fakeWin({ focusOk: false });
+  const q = mk(bad);
+  await q.capture();
+  assert.deepEqual(await q.paste({ code: 'a' }), { pasted: true });
+  assert.deepEqual(bad.calls, ['fg', 'focus:4242', 'keys:^v']);
+});
+
+test('paste: auxiliar sem resposta cai no SendKeys avulso', async () => {
+  const win = fakeWin({ keysFail: true });
+  const sent = [];
+  const p = createPaster({
+    clipboard: { readText: () => '', writeText() {} }, win, sleep: async () => {}, hide() {}, notify() {},
+    sendKeys: async (k) => { sent.push(k); },
+  });
+  assert.deepEqual(await p.paste({ code: 'a' }), { pasted: true });
+  assert.deepEqual(sent, ['^v']);
+});
+
+test('winfocus: protocolo por linhas, respostas em ordem, erro e falha de plataforma', async () => {
+  const { createWinHelper } = require('../electron/winfocus.js');
+  const { EventEmitter } = require('node:events');
+  const written = [];
+  const spawn = () => {
+    const p = new EventEmitter();
+    p.stdout = new EventEmitter(); p.stderr = new EventEmitter();
+    p.kill = () => p.emit('exit');
+    p.stdin = {
+      write: (s) => {
+        written.push(s.trim());
+        const [cmd, arg] = s.trim().split(' ');
+        setImmediate(() => p.stdout.emit('data', cmd === 'fg' ? 'ok 777\r\n' : cmd === 'focus' ? (arg === '1' ? 'err janela fechada\r\n' : 'ok 1\r\n') : 'ok\r\n'));
+      },
+    };
+    setImmediate(() => p.stdout.emit('data', 'ready\r\n'));
+    return p;
+  };
+  const h = createWinHelper({ spawn, platform: 'win32' });
+  assert.equal(await h.foreground(), '777');
+  assert.equal(await h.focus('777'), true);
+  assert.equal(await h.focus('1'), false);          // janela fechada
+  assert.equal(await h.focus('abc'), false);        // handle inválido nem chega ao processo
+  await h.keys('^v');
+  assert.deepEqual(written, ['fg', 'focus 777', 'focus 1', 'keys ^v']);
+  h.dispose();
+  const off = createWinHelper({ spawn, platform: 'linux' });
+  assert.equal(await off.foreground(), null);
+  await assert.rejects(() => off.keys('^v'), /Windows/);
+});
+
 test('paste: snippet vazio é recusado antes de mexer no clipboard; keysFor limita ←', async () => {
   const f = fakePaster();
   await assert.rejects(() => f.p.paste({ code: '{{cursor}}' }), /vazio/);

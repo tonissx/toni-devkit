@@ -7,6 +7,7 @@ const { Worker } = require('node:worker_threads');
 const palette = require('./palette');
 const binds = require('./binds');
 const { createPaster } = require('./paste');
+const { createWinHelper } = require('./winfocus');
 const { UI_BINDABLE_IDS } = require('../src/commands/binds.js');
 const { createNotesService } = require('./notes/service');
 const { createBus } = require('./events');
@@ -302,7 +303,11 @@ ipcMain.handle('file:open-text', async (e) => {
 
 /* ─────────────── Command palette, janela principal e sistema ─────────────── */
 ipcMain.on('palette:toggle', () => palette.toggle('app'));
-ipcMain.on('palette:hide', () => palette.hide());
+// restore: Esc na palette aberta por atalho → o foco volta para o programa que estava na frente.
+ipcMain.on('palette:hide', (_e, opts) => {
+  palette.hide();
+  if (opts && opts.restore) snippetPaster.restoreFocus().catch(() => {}); else snippetPaster.forget();
+});
 ipcMain.on('palette:resize', (_e, height) => palette.resize(height));
 ipcMain.handle('palette:status', () => palette.getStatus());
 
@@ -316,8 +321,11 @@ ipcMain.on('binds:result', (_e, result) => binds.notify(result));
 const runBind = (id) => (UI_BINDABLE_IDS.includes(id) ? palette.show('snippets') : palette.run(id));
 
 // Colar snippet: a palette esconde, o foco volta ao programa anterior e o Ctrl+V é simulado (ver electron/paste.js).
-const snippetPaster = createPaster({ clipboard, hide: () => palette.hide(), notify: (r) => binds.notify(r) });
+const winHelper = createWinHelper();
+const snippetPaster = createPaster({ clipboard, win: winHelper, hide: () => palette.hide(), notify: (r) => binds.notify(r) });
 ipcMain.handle('snippet:paste', (_e, payload) => snippetPaster.paste(payload && typeof payload === 'object' ? payload : {}));
+// Abertura por atalho: guarda a janela ativa (o foco volta para ela ao colar ou no Esc). Outras origens esquecem a antiga.
+palette.setBeforeShow((source) => (source === 'shortcut' || source === 'snippets' ? snippetPaster.capture() : snippetPaster.forget()));
 
 ipcMain.on('app:open', (_e, route, params) => {
   palette.hide();
@@ -467,6 +475,8 @@ if (!app.requestSingleInstanceLock()) {
     createTray();
     binds.init({ run: runBind, changed: buildTrayMenu })
       .then(() => {
+        // Sobe o auxiliar do Windows em segundo plano: o 1º atalho já encontra a janela anterior para guardar.
+        winHelper.warm();
         // Com um atalho que formata SQL, aquece o Pyodide em segundo plano: o primeiro uso não espera o motor subir.
         if (binds.accelerator('clipboard:auto') || binds.accelerator('clipboard:sql')) setTimeout(() => startSqlWorker().catch(() => {}), 5000);
       })

@@ -359,7 +359,7 @@ export function Palette() {
       run(curItem, { ctrl: e.ctrlKey || e.metaKey });
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      close();
+      window.devkit.palette.hide({ restore: true }); // cancelar: o foco volta para o programa de antes
     } else if (e.key === 'Backspace' && !query && scope) {
       e.preventDefault();
       enterScope(isNotesScope(scope) && scope !== 'notes' && scope !== SNIPPETS ? 'notes' : null);

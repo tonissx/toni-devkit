@@ -36,7 +36,8 @@ contextBridge.exposeInMainWorld('devkit', {
   },
   palette: {
     toggle: () => ipcRenderer.send('palette:toggle'),
-    hide: () => ipcRenderer.send('palette:hide'),
+    /** opts.restore: devolve o foco ao programa que estava na frente quando a palette abriu (Esc). */
+    hide: (opts) => ipcRenderer.send('palette:hide', opts),
     resize: (height) => ipcRenderer.send('palette:resize', height),
     status: () => ipcRenderer.invoke('palette:status'),
     onOpened: (cb) => {
