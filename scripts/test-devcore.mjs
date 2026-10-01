@@ -34,9 +34,9 @@ const run = (s, action, now = T0) => dispatch(s, action, now);
 test('content: ids unique and references valid; MVP sizes', () => {
   assert.deepEqual(validate(), []);
   assert.ok(CONTENT.GENERATORS.length >= 4 && CONTENT.GENERATORS.length <= 6);
-  assert.ok(CONTENT.PETS.length >= 3 && CONTENT.PETS.length <= 6);
+  assert.ok(CONTENT.PETS.length >= 3 && CONTENT.PETS.length <= 8);
   assert.ok(CONTENT.UPGRADES.length >= 10 && CONTENT.UPGRADES.length <= 15);
-  assert.ok(CONTENT.DISCOVERIES.length >= 5 && CONTENT.DISCOVERIES.length <= 12);
+  assert.ok(CONTENT.DISCOVERIES.length >= 5 && CONTENT.DISCOVERIES.length <= 14);
   assert.equal(CONTENT.TIERS.length, 3);
 });
 
@@ -731,4 +731,110 @@ test('balance: blueprints — 1st Mk II within ~2–4.5 days, Mk III reachable i
   assert.ok(m.t3 >= 1 * 86400e3 && m.t3 <= 3 * 86400e3, 't3 ' + m.t3 / 86400e3);
   assert.ok(m.firstMk2 && m.firstMk2 >= 2 * 86400e3 && m.firstMk2 <= 4.5 * 86400e3, 'mk2 ' + m.firstMk2 / 86400e3);
   assert.ok(m.firstMk3 && m.firstMk3 <= 14 * 86400e3, 'mk3');
+});
+
+/* ─────────────── missões diárias ─────────────── */
+/** Dispara no estado os eventos que completam todas as missões do dia. */
+function doAllQuests(s, now) {
+  let r = run(s, { type: 'tick' }, now); // rola o dia
+  for (const id of r.state.quests.ids) {
+    const w = CONTENT.quest[id].when;
+    const [name, key] = w.event.split(':');
+    const keys = key ? [key] : ['sql', 'xml', 'diff'].slice(0, w.distinct || 1);
+    for (const k of keys) r = run(r.state, { type: 'event', name, data: key || w.distinct ? { tool: k, id: k } : undefined }, now);
+  }
+  return r;
+}
+
+test('quests: 3 missões por dia, determinísticas, e trocam no dia seguinte sem perder nada', () => {
+  const a = run(make(), { type: 'tick' });
+  assert.equal(a.state.quests.ids.length, CONTENT.BALANCE.quests.perDay);
+  assert.equal(new Set(a.state.quests.ids).size, a.state.quests.ids.length);
+  assert.deepEqual(run(make(), { type: 'tick' }).state.quests.ids, a.state.quests.ids); // mesma seed + dia
+  const done = doAllQuests(make(), T0);
+  assert.equal(done.state.quests.total, 3);
+  const next = run(done.state, { type: 'tick' }, T0 + 24 * H);
+  assert.equal(next.state.quests.total, 3, 'o contador vitalício fica');
+  assert.deepEqual(next.state.quests.done, []);
+  assert.notEqual(next.state.quests.day, done.state.quests.day);
+});
+
+test('quests: concluir não gera Compute nem mexe na produção (só contador e consumível)', () => {
+  const s = make({ gens: { 'terminal-worker': 10 } });
+  const before = production(s, T0, CONTENT).rate;
+  const r = doAllQuests(s, T0);
+  assert.equal(r.state.quests.total, 3);
+  near(production(r.state, T0, CONTENT).rate, before);
+  assert.equal(r.state.run.resources.compute.lifetime, 0);
+});
+
+test('quests: cada missão conta uma vez por dia; consumível respeita o estoque máximo', () => {
+  const s = make();
+  s.run.inventory = Object.fromEntries(CONTENT.CONSUMABLES.map((k) => [k.id, k.cap])); // tudo cheio
+  const r = doAllQuests(s, T0);
+  for (const k of CONTENT.CONSUMABLES) assert.equal(r.state.run.inventory[k.id], k.cap);
+  const again = doAllQuests(r.state, T0);
+  assert.equal(again.state.quests.total, 3, 'repetir eventos no mesmo dia não conta de novo');
+});
+
+test('quests: marcos liberam visuais; visual exclusivo só serve ao DevPet dele', () => {
+  const s = make({ pets: ['byte', 'memo'] });
+  s.quests.total = 9;
+  s.quests.byPet.memo = 4;
+  let r = run(s, { type: 'tick' });
+  assert.ok(!r.state.cosmetics.unlocked.includes('dracula'));
+  r.state.quests.total = 10; r.state.quests.byPet.memo = 5;
+  r = run(r.state, { type: 'tick' });
+  assert.ok(r.state.cosmetics.unlocked.includes('dracula'));
+  assert.ok(r.state.cosmetics.unlocked.includes('pergaminho'));
+  assert.equal(run(r.state, { type: 'skin', pet: 'byte', skin: 'pergaminho' }).error, 'Visual exclusivo de outro DevPet');
+  assert.equal(run(r.state, { type: 'skin', pet: 'memo', skin: 'pergaminho' }).error, undefined);
+  const v = snapshot(r.state, T0);
+  assert.equal(v.quests.items.length, 3);
+  assert.equal(v.skins.find((k) => k.id === 'pergaminho').pet, 'memo');
+});
+
+test('quests: saves antigos (sem quests) migram', () => {
+  const old = createState(T0);
+  delete old.quests;
+  const s = migrate(old, T0);
+  assert.equal(s.quests.total, 0);
+  assert.equal(run(s, { type: 'tick' }).state.quests.ids.length, 3);
+});
+
+test('pets: Git e Lint chegam por uso do Diff / JSON-XML e têm sprite e habilidade', () => {
+  assert.ok(CONTENT.pet.git && CONTENT.pet.lint);
+  let s = make();
+  for (const day of [0, 1]) s = run(s, { type: 'event', name: 'tool.used', data: { tool: 'diff' } }, T0 + day * 24 * H).state;
+  assert.ok(s.run.pets.git, 'Git aparece após 2 dias usando o Diff');
+  for (const day of [0, 1]) s = run(s, { type: 'event', name: 'tool.used', data: { tool: 'json' } }, T0 + day * 24 * H).state;
+  assert.ok(s.run.pets.lint, 'Lint aparece após 2 dias usando o JSON');
+  s.run.tier = 2;
+  assert.equal(run(s, { type: 'ability', id: 'branch-off' }, T0 + 2 * 24 * H).error, undefined);
+});
+
+/* ─────────────── Hotfix em vilão comum ─────────────── */
+test('hotfix: derrotar um vilão comum sempre rende algo (sucata ou peça), menos que conter', () => {
+  const hotfix = (seedTweak = 0) => {
+    const s = withNext({ tier: 2, pets: ['byte'] }, 'memory-leak', 1000);
+    s.seed += seedTweak;
+    s.run.inventory.hotfix = 1;
+    const started = run(s, { type: 'tick' }, T0 + 5000).state;
+    assert.equal(started.run.incidents.active.contained, false);
+    const scrap0 = started.run.scrap;
+    const r = run(started, { type: 'use', item: 'hotfix' }, T0 + 6000);
+    assert.equal(r.state.run.incidents.active, null);
+    assert.equal(r.state.bestiary.leaky.defeated, 1);
+    return { r, scrapGain: r.state.run.scrap - scrap0 };
+  };
+  let parts = 0;
+  for (let i = 0; i < 40; i++) {
+    const { r, scrapGain } = hotfix(i * 7919);
+    const part = r.log.find((e) => e.type === 'part' && e.source === 'hotfix' && !e.dup);
+    assert.ok(scrapGain >= 1 || part, 'o Hotfix nunca rende nada: seed +' + i * 7919);
+    if (part) parts++;
+    assert.ok(r.state.run.incidents.history[0].part, 'o histórico do Ops mostra o prêmio');
+    assert.equal(r.log.filter((e) => e.type === 'item').length, 1); // só o Hotfix gasto: nenhum consumível volta
+  }
+  assert.ok(parts > 0 && parts < 40, 'peça é uma chance, não garantia: ' + parts + '/40');
 });

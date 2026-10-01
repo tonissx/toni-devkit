@@ -469,6 +469,14 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-empty { padding: 12px 4px; font-size: 12.5px; color: var(--tk-text-3); }
 .dc-owned-list { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .dc-owned-list .tk-menu__heading { width: 100%; padding-left: 0; }
+.dc-quests { margin-bottom: 14px; padding: 10px 12px; border: 1px solid var(--tk-border); border-radius: 8px; background: var(--tk-surface-2); }
+.dc-quests__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+.dc-quests__head .tk-menu__heading { padding-left: 0; }
+.dc-quests__hint { margin-left: auto; font-size: 11px; color: var(--tk-text-3); }
+.dc-quests__list { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.dc-quest { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 6px; background: var(--tk-surface-1); color: var(--tk-text-3); }
+.dc-quest.is-done { color: var(--tk-accent-text); }
+.dc-quest.is-done .dc-row__title { text-decoration: line-through; opacity: .75; }
 .dc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 4px; background: var(--tk-surface-3); color: var(--tk-text-2); font: 400 11px var(--tk-font-mono); }
 
 .dc-pet-card { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-bg); border-top: 2px solid var(--pet, var(--tk-border)); }

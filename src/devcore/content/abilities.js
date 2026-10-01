@@ -18,6 +18,10 @@ const ABILITIES = [
     effect: { type: 'burst', target: 'cat:agents', mult: 4, durationSec: 40 }, cooldownSec: 10 * 60 },
   { id: 'scale-out', name: 'Scale Out', description: 'Infra ×3 por 60 s.',
     effect: { type: 'burst', target: 'cat:infra', mult: 3, durationSec: 60 }, cooldownSec: 12 * 60 },
+  { id: 'branch-off', name: 'Branch Off', description: 'Shell ×2,5 por 45 s.',
+    effect: { type: 'burst', target: 'cat:shell', mult: 2.5, durationSec: 45 }, cooldownSec: 7 * 60 },
+  { id: 'lint-pass', name: 'Lint Pass', description: 'Gera na hora 5 min da produção atual.',
+    effect: { type: 'instant', seconds: 300 }, cooldownSec: 6 * 60 },
 ];
 
 module.exports = { ABILITIES };

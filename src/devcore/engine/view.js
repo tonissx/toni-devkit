@@ -14,6 +14,7 @@ const { stationedPets } = require('../content/index.js');
 const { offlineCapMs } = require('./advance.js');
 const { formatNum } = require('./format.js');
 const { stageOf, nextStageOf, skinOf } = require('./appearance.js');
+const { questsView } = require('./quests.js');
 
 const pct = (v) => (v >= 0 ? '+' : '') + Math.round(v * 1000) / 10 + '%';
 
@@ -38,6 +39,8 @@ function describeCondition(cond, c = CONTENT) {
   if (cond.lifetime != null) return formatNum(cond.lifetime) + ' Compute acumulado';
   if (cond.maxPetLevel != null) return 'um DevPet no nível ' + cond.maxPetLevel;
   if (cond.anyPetMaxed) return 'um DevPet no nível máximo';
+  if (cond.questsDone != null) return cond.questsDone + ' missões diárias concluídas';
+  if (cond.petQuests) return cond.petQuests.n + ' missões de ' + (c.pet[cond.petQuests.pet] || { name: cond.petQuests.pet }).name;
   return '???';
 }
 
@@ -127,7 +130,7 @@ function snapshot(s, now, c = CONTENT) {
     : { id: d.id, found: false }));
 
   const skins = c.SKINS.map((k) => ({
-    id: k.id, name: k.name, colors: k.colors,
+    id: k.id, name: k.name, colors: k.colors, pet: k.pet || null,
     unlocked: s.cosmetics.unlocked.includes(k.id), fresh: s.cosmetics.fresh.includes(k.id),
     requirement: s.cosmetics.unlocked.includes(k.id) ? '' : describeCondition(k.unlock, c),
   }));
@@ -156,6 +159,7 @@ function snapshot(s, now, c = CONTENT) {
       rate: c.GENERATORS.filter((g) => g.category === cat.id).reduce((n, g) => n + (prod.gens[g.id] || 0), 0),
     })),
     generators, upgrades, pets, synergies, discoveries, skins,
+    quests: questsView(s, c),
     stations: { slots, used },
     ops: opsView(s, now, c),
     inventory: c.CONSUMABLES.map((k) => ({ id: k.id, name: k.name, icon: k.icon, description: k.description, n: s.run.inventory[k.id] || 0, cap: k.cap, craftCost: craftCost(s, k, now, c) })),
