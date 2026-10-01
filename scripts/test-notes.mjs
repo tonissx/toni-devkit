@@ -175,6 +175,9 @@ test('templates: variables, {{cursor}}, unknown kept, trailing empty vars trimme
   assert.equal(vars.hora, '09:05');
   assert.equal(vars.dia_semana, 'terça-feira');
   assert.equal(vars.data_extenso, 'terça-feira, 29 de setembro de 2026');
+  assert.equal(vars.data_extenso_ontem, 'segunda-feira, 28 de setembro de 2026');
+  assert.equal(vars.data_extenso_amanha, 'quarta-feira, 30 de setembro de 2026');
+  assert.equal(T.templateVars(new Date(2026, 11, 31, 9, 5)).data_extenso_amanha, 'sexta-feira, 1 de janeiro de 2027');
   const r = T.applyTemplate('# {{ Titulo }} — {{data}}\n- [ ] {{cursor}}\n{{naoexiste}}\n{{vazio}}\n\n', { ...vars, vazio: '' });
   assert.equal(r.text, '# X — 29/09/2026\n- [ ] \n{{naoexiste}}\n');
   assert.equal(r.cursor, '# X — 29/09/2026\n- [ ] '.length);

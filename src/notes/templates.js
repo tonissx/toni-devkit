@@ -4,7 +4,7 @@
  *
  * Template = qualquer nota dentro da pasta "Templates". Ao criar uma nota a partir dele, as variáveis
  * {{nome}} são trocadas: {{data}} 29/09/2026 · {{hoje}} 2026-09-29 · {{ontem}} 28/09/2026 · {{amanha}} 30/09/2026 ·
- * {{hora}} 14:21 · {{dia_semana}} terça-feira · {{data_extenso}} terça-feira, 29 de setembro de 2026 · {{titulo}} ·
+ * {{hora}} 14:21 · {{dia_semana}} terça-feira · {{data_extenso}} terça-feira, 29 de setembro de 2026 · {{data_extenso_ontem}} · {{data_extenso_amanha}} · {{titulo}} ·
  * {{cursor}} (onde o cursor começa). Nomes sem diferenciar maiúsculas nem acentos ({{amanhã}} também vale {{amanha}}).
  * Variável desconhecida fica como está.
  */
@@ -19,6 +19,8 @@ const TEMPLATE_VARS = [
   { name: 'hora', desc: 'Hora em que a nota foi criada (hh:mm)' },
   { name: 'dia_semana', desc: 'Dia da semana por extenso' },
   { name: 'data_extenso', desc: 'Data completa por extenso' },
+  { name: 'data_extenso_ontem', desc: 'Data completa de ontem por extenso' },
+  { name: 'data_extenso_amanha', desc: 'Data completa de amanhã por extenso' },
   { name: 'cursor', desc: 'Onde o cursor começa na nota criada (some do texto)' },
   { name: 'clipboard', desc: 'Só em snippets: o texto que estava no clipboard ao colar', snippetOnly: true },
 ];
@@ -31,6 +33,7 @@ const varKey = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLower
 function templateVars(now = new Date(), extra = {}) {
   const br = (d) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
   const plus = (days) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + days); // vira mês/ano sozinho
+  const extenso = (d) => new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(d);
   return {
     hoje: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
     data: br(now),
@@ -38,7 +41,9 @@ function templateVars(now = new Date(), extra = {}) {
     amanha: br(plus(1)),
     hora: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
     dia_semana: new Intl.DateTimeFormat('pt-BR', { weekday: 'long' }).format(now),
-    data_extenso: new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now),
+    data_extenso: extenso(now),
+    data_extenso_ontem: extenso(plus(-1)),
+    data_extenso_amanha: extenso(plus(1)),
     titulo: '',
     ...extra,
   };
