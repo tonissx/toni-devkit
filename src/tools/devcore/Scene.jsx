@@ -3,6 +3,7 @@ import { plan, villainSpot, hash } from '../../devcore/director.js';
 import { formatNum } from '../../devcore/engine/format.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
 import { VillainSprite } from './VillainSprite.jsx';
+import { PartChip } from './PartArt.jsx';
 
 const { Icon } = DS;
 const DEFEAT_MS = 2500;
@@ -64,6 +65,11 @@ export function Scene({ snap, reactions, now }) {
               <span className="dc-station__leds" aria-hidden="true"><i /><i /><i /></span>
               {s.mk > 1 && <span className="dc-station__leds is-left" aria-hidden="true"><i /><i /><i /></span>}
               {s.mk === 3 && <span className="dc-station__mk">III</span>}
+              {s.rack.length > 0 && (
+                <div className="dc-rack" aria-hidden="true">
+                  {s.rack.map((r) => <div key={r.gen} className="dc-rack__row">{r.parts.map((p) => <PartChip key={p.id} part={p} />)}</div>)}
+                </div>
+              )}
               {stationState(s.id, i) === ' is-shielded' && <span className="dc-station__badge"><Icon name="shield-check" size={11} /></span>}
               {stationState(s.id, i) === ' is-alert' && <span className="dc-station__badge is-alert">!</span>}
             </div>

@@ -664,6 +664,14 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-station__leds.is-left { right: auto; left: 4px; }
 .dc-station__leds.is-left i { animation-duration: .9s; }
 .dc-station__mk { position: absolute; right: -8px; bottom: -7px; padding: 0 3px; border-radius: 3px; background: var(--tk-accent); color: var(--tk-on-accent); font: 700 8.5px/12px var(--tk-font-mono); }
+/* Peças montadas: uma fileira de chips por gerador, em cima da caixa. Encaixe vazio = tracejado apagado. */
+.dc-rack { position: absolute; left: 50%; bottom: calc(100% + 3px); transform: translateX(-50%); display: flex; flex-direction: column-reverse; gap: 2px; }
+.dc-rack__row { display: flex; gap: 2px; justify-content: center; }
+.dc-part-chip {
+  display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 3px;
+  border: 1px dashed var(--tk-border-strong); color: var(--tk-text-3); opacity: .45;
+}
+.dc-part-chip.is-on { border-style: solid; border-color: var(--tk-accent); background: var(--tk-surface-2); color: var(--tk-accent-text); opacity: 1; }
 .dc-station.is-refactored .dc-station__box { animation: dc-refactor .8s ease-in-out 4; }
 @keyframes dc-refactor { 50% { transform: scale(1.12); box-shadow: 0 0 16px var(--tk-accent); } }
 @media (prefers-reduced-motion: reduce) {

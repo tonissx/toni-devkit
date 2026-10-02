@@ -726,6 +726,22 @@ test('blueprints: old saves migrate; view exposes Mk, milestone and the set', ()
   assert.equal(v.scrap, 0);
 });
 
+test('blueprints: station rack shows owned parts of the set, then the installed set after Refactor', () => {
+  const rackOf = (s, cat) => snapshot(s, T0).categories.find((c) => c.id === cat).rack;
+  const s = make({ gens: { 'terminal-worker': 30, 'script-runner': 30 } });
+  assert.deepEqual(rackOf(s, 'shell'), []);
+  give(s, 'terminal-worker', 2, 2);
+  const [row] = rackOf(s, 'shell');
+  assert.deepEqual([row.gen, row.mk, row.parts.map((p) => p.on)], ['terminal-worker', 2, [true, true, false, false]]);
+  assert.deepEqual(row.parts.map((p) => p.id), setOf('terminal-worker', 2));
+  give(s, 'terminal-worker', 2);
+  run(s, { type: 'refactor', gen: 'terminal-worker' });
+  assert.deepEqual(rackOf(s, 'shell')[0].parts.map((p) => p.on), [true, true, true, true]);
+  // Dois geradores na mesma estação: uma fileira por gerador que já tem alguma peça.
+  give(s, 'script-runner', 2, 1);
+  assert.deepEqual(rackOf(s, 'automation').map((r) => r.gen), ['script-runner']);
+});
+
 test('balance: blueprints — 1st Mk II within ~2–4.5 days, Mk III reachable in 2 weeks; T3 casual 1–3 days', () => {
   const m = simulate({ ...PROFILES.casual, days: 14, strategy: 'prepared' });
   assert.ok(m.t3 >= 1 * 86400e3 && m.t3 <= 3 * 86400e3, 't3 ' + m.t3 / 86400e3);
