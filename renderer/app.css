@@ -746,3 +746,6 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .lnk-form input { min-width: 0; }
 .lnk-form__error { font-size: 12px; color: var(--tk-red); }
 .lnk-form__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.lnk-form__preview { font-size: 12px; color: var(--tk-text-3); line-height: 1.5; overflow-wrap: anywhere; }
+.lnk-form__preview b { color: var(--tk-accent-text); font-weight: 600; }
+.lnk-form__preview code { font: 400 11px var(--tk-font-mono); color: var(--tk-text-2); }

@@ -1,5 +1,5 @@
 import { DS } from '../lib/ds.js';
-import { needsValue, shortUrl } from '../links/link.js';
+import { needsValue, shortUrl, withPlaceholder } from '../links/link.js';
 import { cleanError } from '../notes/client.js';
 
 const { Card, Button, IconButton, Input, Field, Badge } = DS;
@@ -44,10 +44,17 @@ export function LinksCard({ toast }) {
         <Field label="Nome"><Input size="sm" value={edit.name} placeholder="Solicitação do Fluig" onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
         <Field label="Rótulo do valor"><Input size="sm" value={edit.param} placeholder="Número da solicitação" onChange={(e) => setEdit({ ...edit, param: e.target.value })} /></Field>
       </div>
-      <Field label="URL" hint="Use {q} onde entra a parte variável. Sem {q}, o link abre direto (favorito).">
+      <Field label="URL" hint="Use {q} onde entra a parte variável — se a URL terminar em “=” ou houver rótulo do valor, o {q} vai para o fim sozinho. Sem nada disso, o link abre direto (favorito).">
         <Input size="sm" mono value={edit.url} placeholder="https://fluig.navship.com.br/portal/p/001/pageworkflowview?app_ecm_workflowview_detailsProcessInstanceID={q}"
           onChange={(e) => { setEdit({ ...edit, url: e.target.value }); setError(null); }} />
       </Field>
+      {edit.url.trim() && edit.alias.trim() && (() => {
+        // Prévia de como o link vai se comportar (o {q} é completado como no salvar: rótulo ou "=" no fim).
+        const url = withPlaceholder(edit.url, edit.param);
+        return needsValue({ url })
+          ? <div className="lnk-form__preview">Na palette: <b>{edit.alias.trim()}</b> + Tab → digite {(edit.param.trim() || 'o valor').toLowerCase()} → abre <code>{shortUrl(url)}</code></div>
+          : <div className="lnk-form__preview">Favorito: <b>{edit.alias.trim()}</b> + Enter abre direto. Para digitar um valor, use {'{q}'} na URL ou preencha o rótulo.</div>;
+      })()}
       {error && <div className="lnk-form__error" role="alert">{error}</div>}
       <div className="lnk-form__actions">
         <Button size="sm" variant="ghost" onClick={() => { setEdit(null); setError(null); }}>Cancelar</Button>

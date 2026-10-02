@@ -437,7 +437,12 @@ export function Palette() {
       // Tab é o gesto intencional dos links rápidos: fixa o chip do link selecionado (nada é interceptado ao digitar).
       // Com o chip fixado, Tab completa o campo com o valor recente selecionado.
       if (link) { if (curItem && curItem.linkValue) { setQuery(curItem.linkValue); setHi(0); } }
-      else if (curItem && curItem.cmd && curItem.cmd.quickLink && needsValue(curItem.cmd.quickLink)) enterLink(curItem.cmd.quickLink.id);
+      else if (curItem && curItem.cmd && curItem.cmd.quickLink) {
+        const ql = curItem.cmd.quickLink;
+        if (needsValue(ql)) enterLink(ql.id);
+        // Favorito (sem {q}): Tab não tem o que fixar — diz por quê, em vez de não fazer nada.
+        else setError({ id: curItem.cmd.id, name: ql.alias, message: 'este link não tem {q}, então abre direto com Enter. Para digitar um valor, ponha {q} na URL em Configurações → Links rápidos.' });
+      }
     } else {
       // Letras são sempre texto; Alt+letra navega (ver src/commands/keys.js).
       const act = paletteKey(e, scope);

@@ -9,7 +9,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { atomicWrite, createQueue } = require('../lib/fsx');
-const { normalizeLink, buildUrl, pushRecent, sameAlias } = require('../../src/links/link.js');
+const { normalizeLink, buildUrl, pushRecent, sameAlias, withPlaceholder } = require('../../src/links/link.js');
 
 function createLinksService({ file, broadcast = () => {}, now = () => new Date() }) {
   const queue = createQueue();
@@ -21,7 +21,10 @@ function createLinksService({ file, broadcast = () => {}, now = () => new Date()
       const st = await fs.stat(file);
       if (st.mtimeMs === mtime) return;
       const data = JSON.parse(await fs.readFile(file, 'utf8'));
-      links = Array.isArray(data && data.links) ? data.links.filter((l) => l && l.id && l.alias && l.url) : [];
+      // withPlaceholder: links salvos sem {q} mas com rótulo/"=" no fim passam a receber o valor (versões antigas).
+      links = Array.isArray(data && data.links)
+        ? data.links.filter((l) => l && l.id && l.alias && l.url).map((l) => ({ ...l, url: withPlaceholder(l.url, l.param) }))
+        : [];
       mtime = st.mtimeMs;
     } catch (e) {
       if (e.code === 'ENOENT') { links = []; mtime = 0; return; }

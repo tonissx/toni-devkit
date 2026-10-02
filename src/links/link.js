@@ -30,6 +30,16 @@ function checkUrl(url) {
   if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('Só links http:// ou https://');
 }
 
+/**
+ * Põe o {q} no fim quando a intenção de receber valor é clara mas ele ficou de fora: há rótulo do valor (param)
+ * ou a URL termina em "=" (…ProcessInstanceID=). Sem nenhum dos dois, segue favorito (abre direto).
+ */
+function withPlaceholder(url, param) {
+  const u = String(url || '').trim();
+  if (!u || /\{q\}/i.test(u)) return u;
+  return String(param || '').trim() || /=$/.test(u) ? u + '{q}' : u;
+}
+
 function newId() {
   return 'l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
@@ -40,7 +50,7 @@ function normalizeLink(raw, prev = null, now = new Date()) {
   const alias = cleanAlias(raw.alias);
   if (!alias) throw new Error('Dê um alias ao link (ex.: solic)');
   if (!/^[\p{L}\p{N}._-]+$/u.test(alias)) throw new Error('O alias só pode ter letras, números, ponto, - e _');
-  const url = String(raw.url || '').trim();
+  const url = withPlaceholder(raw.url, raw.param);
   if (!url) throw new Error('Informe a URL');
   checkUrl(url);
   const stamp = now.toISOString();
@@ -92,4 +102,4 @@ function parseCapture(text) {
 /** Texto curto para exibir a URL (sem protocolo). */
 const shortUrl = (url) => String(url || '').replace(/^https?:\/\//i, '');
 
-module.exports = { MAX_RECENT, norm, sameAlias, cleanAlias, needsValue, checkUrl, normalizeLink, buildUrl, pushRecent, parseCapture, shortUrl };
+module.exports = { MAX_RECENT, norm, sameAlias, cleanAlias, needsValue, withPlaceholder, checkUrl, normalizeLink, buildUrl, pushRecent, parseCapture, shortUrl };

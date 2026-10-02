@@ -45,6 +45,18 @@ test('buildUrl: valor no {q} com encode; vazio é erro; sem {q} é favorito', ()
   assert.equal(L.needsValue(l), true, 'chamar de novo não muda o resultado');
 });
 
+test('withPlaceholder: {q} no fim quando há rótulo ou a URL termina em "="', () => {
+  const semQ = FLUIG.replace('{q}', '');
+  assert.equal(L.withPlaceholder(semQ, ''), FLUIG, 'termina em =');
+  assert.equal(L.withPlaceholder('https://a.com/busca/', 'Termo'), 'https://a.com/busca/{q}', 'tem rótulo');
+  assert.equal(L.withPlaceholder('https://tdn.totvs.com/', ''), 'https://tdn.totvs.com/', 'favorito continua favorito');
+  assert.equal(L.withPlaceholder(FLUIG, 'Número'), FLUIG, 'já tem {q}');
+  // O caso real: salvo sem {q}, com rótulo → passa a pedir o número.
+  const l = L.normalizeLink({ alias: 'solic', url: semQ, param: 'Número da Solicitação' });
+  assert.equal(l.url, FLUIG);
+  assert.equal(L.buildUrl(l, '4321'), FLUIG.replace('{q}', '4321'));
+});
+
 test('pushRecent: mais recente primeiro, sem repetir, até 8', () => {
   let r = [];
   for (const v of ['1', '2', '3', '2', ' ', '4', '5', '6', '7', '8', '9']) r = L.pushRecent(r, v);
@@ -92,6 +104,20 @@ test('service: grava em .devkit/links.json, alias único, recentes e relê do di
     await svc.remove(l.id);
     assert.deepEqual(await svc.list(), []);
     assert.ok(events.includes('save') && events.includes('use') && events.includes('remove'));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('service: link antigo salvo sem {q} (termina em "=") passa a receber o valor ao carregar', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'devkit-links-'));
+  const file = path.join(dir, '.devkit', 'links.json');
+  try {
+    await (await import('node:fs/promises')).mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify({ v: 1, links: [{ id: 'lx', alias: 'solic', name: 'Solicitação do Fluig', url: FLUIG.replace('{q}', ''), param: 'Número da Solicitação', recent: [] }] }));
+    const svc = createLinksService({ file });
+    await svc.init();
+    const [l] = await svc.list();
+    assert.equal(L.needsValue(l), true);
+    assert.equal(await svc.use('lx', '999'), FLUIG.replace('{q}', '999'));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
