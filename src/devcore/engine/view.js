@@ -157,8 +157,6 @@ function snapshot(s, now, c = CONTENT) {
       // Visual da estação: o maior Mk entre os geradores da categoria.
       mk: Math.max(1, ...c.GENERATORS.filter((g) => g.category === cat.id).map((g) => bpOf(s, g.id).mk)),
       rate: c.GENERATORS.filter((g) => g.category === cat.id).reduce((n, g) => n + (prod.gens[g.id] || 0), 0),
-      // Peças montadas na estação (uma fileira por gerador que já tem alguma).
-      rack: c.GENERATORS.filter((g) => g.category === cat.id).map((g) => rackOf(s, g.id, c)).filter(Boolean),
     })),
     generators, upgrades, pets, synergies, discoveries, skins,
     quests: questsView(s, c),
@@ -189,21 +187,6 @@ function blueprintView(s, gen, now, c) {
     mk: next.mk, mult: next.mult, costDiv: next.costDiv || 1, parts, complete, owned: parts.filter((p) => p.owned).length,
     buyCost: partCost(s, next.mk, now, c), scrapCost: c.BALANCE.blueprints.scrapPerPart[next.mk],
   };
-}
-
-/**
- * Peças de um gerador que aparecem na estação: com o Mk II ainda por fazer, as do conjunto em andamento
- * (acesas = obtidas); depois do Refactor, o conjunto do Mk atual inteiro, já instalado. null = nada a mostrar.
- */
-function rackOf(s, gen, c) {
-  const bp = bpOf(s, gen);
-  const level = levelOf(gen, Math.max(2, bp.mk), c);
-  if (!level) return null;
-  const parts = level.parts.map((name, i) => {
-    const id = partId(gen, level.mk, i);
-    return { id, name, on: bp.mk >= level.mk || !!bp.parts[id] };
-  });
-  return parts.some((p) => p.on) ? { gen, mk: level.mk, parts } : null;
 }
 
 /** Incidente → dados para a UI (vilão, efeito, quem contém e se isso já está armado). */

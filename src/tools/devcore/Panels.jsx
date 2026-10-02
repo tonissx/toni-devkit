@@ -1,6 +1,7 @@
 import { DS } from '../../lib/ds.js';
 import { formatNum, formatDuration } from '../../devcore/engine/format.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
+import { PartIcon } from './PartArt.jsx';
 
 const { Button, Icon, ProgressBar, Toggle } = DS;
 
@@ -37,8 +38,9 @@ function BlueprintArea({ g, snap, amount, act }) {
       <div className="dc-bp__parts">
         {bp.parts.map((p) => (
           <div key={p.id} className={'dc-part' + (p.owned ? ' is-owned' : '')}>
-            <Icon name={p.owned ? 'check' : 'package'} size={12} />
+            <PartIcon id={p.id} />
             <span className="dc-part__name">{p.name}</span>
+            {p.owned && <Icon name="check" size={12} />}
             {!p.owned && (
               <span className="dc-part__actions">
                 <Button size="sm" variant="ghost" disabled={amount < bp.buyCost} title="Comprar com Compute" onClick={() => act({ type: 'buyPart', part: p.id })}>

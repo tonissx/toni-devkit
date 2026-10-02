@@ -44,12 +44,10 @@ const ART = {
 
 const FALLBACK = <><rect x="2" y="2" width="8" height="8" rx="1.5" /><circle cx="6" cy="6" r="1.4" fill={A} stroke="none" /></>;
 
-/** Chip de uma peça na estação. `on` = obtida/instalada; apagada = encaixe vazio (o conjunto ainda não fechou). */
-export function PartChip({ part }) {
+/** Ícone de uma peça de Blueprint (usa a cor do texto: acende quando obtida, apaga quando falta). */
+export function PartIcon({ id, size = 16 }) {
   return (
-    <span className={'dc-part-chip' + (part.on ? ' is-on' : '')} title={part.on ? part.name : `${part.name} (falta)`}>
-      <svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.1"
-        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ART[part.id] || FALLBACK}</svg>
-    </span>
+    <svg className="dc-part__art" viewBox="0 0 12 12" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{ART[id] || FALLBACK}</svg>
   );
 }
