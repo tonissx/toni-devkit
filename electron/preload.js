@@ -193,6 +193,8 @@ contextBridge.exposeInMainWorld('devkit', {
     lock: () => ipcRenderer.invoke('vault:lock'),
     /** Entradas (metadados) ou null se trancado. */
     list: () => ipcRenderer.invoke('vault:list'),
+    /** Índice público { id, name, kind, tags } — vale com o cofre trancado (a palette busca por ele). */
+    index: () => ipcRenderer.invoke('vault:index'),
     /** Notas: nomes → { locked, exists, items: { nome: metadados | null } }. */
     resolve: (names) => ipcRenderer.invoke('vault:resolve', names),
     save: (entry) => ipcRenderer.invoke('vault:save', entry),

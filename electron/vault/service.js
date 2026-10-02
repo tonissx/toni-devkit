@@ -3,7 +3,9 @@
  * Vault — cofre local de dados sensíveis (senhas de banco, tokens…), protegido por senha mestra.
  *
  * - Arquivo: %APPDATA%\Toni Devkit\vault.json (fora de Documentos\Devkit Notes, que pode ir para OneDrive/git).
- *   Todo o conteúdo — nomes inclusive — é criptografado (src/vault/crypto.js); trancado, o Devkit não sabe nada.
+ *   Todo o conteúdo é criptografado (src/vault/crypto.js). Única exceção: vault-index.json ao lado, com só
+ *   { id, name, kind, tags } de cada entrada em texto puro — é o que deixa a palette achar entradas com o cofre
+ *   trancado (Enter pede a senha e copia). Servidor, usuário, campos e segredos nunca entram nele.
  * - Aberto, a chave e as entradas ficam só aqui no processo principal. As janelas recebem metadados (segredos =
  *   null); um segredo só sai daqui para o clipboard (`copy`) ou, sob pedido explícito, para o olho da tela (`reveal`).
  * - Auto-lock por inatividade (só ações do usuário contam: listar/abrir a palette não prolonga), e também ao
@@ -26,7 +28,8 @@ const CLEAR_OPTIONS = [10, 20, 30, 60, 120];
 
 function createVaultService({
   file,
-  clipboard,                       // { readText(), clear() }
+  indexFile = path.join(path.dirname(file), 'vault-index.json'),
+  clipboard,                      // { readText(), clear() }
   writeSecret,                     // (text) → Promise: grava no clipboard fora do histórico (fallback: writeText)
   broadcast = () => {},
   now = () => Date.now(),
@@ -42,6 +45,14 @@ function createVaultService({
   let failures = 0;
   let waitUntil = 0;
   let unlocking = null;
+  let idx = [];        // índice público (id, name, kind, tags) — o que a palette vê com o cofre trancado
+
+  const indexOf = (entries) => entries.map((e) => ({ id: e.id, name: e.name, kind: e.kind, tags: e.tags || [] }));
+  /** Melhor esforço: o índice só serve para achar entradas trancadas, o cofre em si não depende dele. */
+  async function writeIndex(entries) {
+    idx = entries;
+    try { await atomicWrite(indexFile, JSON.stringify({ v: 1, entries })); } catch { /* sem índice, a palette só acha após desbloquear */ }
+  }
 
   const settings = () => ({ ...DEFAULT_SETTINGS, ...((data && data.settings) || {}) });
   const isOpen = () => !!(key && data);
@@ -52,7 +63,12 @@ function createVaultService({
       if (e.code === 'ENOENT') { env = null; return; }
       // Arquivo ilegível: não sobrescreve nada; o status mostra o erro.
       env = { broken: String((e && e.message) || e) };
+      return;
     }
+    try {
+      const j = JSON.parse(await fs.readFile(indexFile, 'utf8'));
+      idx = Array.isArray(j.entries) ? j.entries.filter((x) => x && typeof x.id === 'string' && typeof x.name === 'string') : [];
+    } catch { idx = []; }
   }
 
   function status() {
@@ -85,10 +101,14 @@ function createVaultService({
     touch();
   }
 
-  const persist = () => queue.run('vault', async () => {
-    env = vc.seal(key, env.kdf, data);
-    await atomicWrite(file, JSON.stringify(env, null, 1));
-  });
+  const persist = () => {
+    const pub = indexOf(data.entries);
+    return queue.run('vault', async () => {
+      env = vc.seal(key, env.kdf, data);
+      await atomicWrite(file, JSON.stringify(env, null, 1));
+      await writeIndex(pub);
+    });
+  };
 
   async function create(password) {
     if (env) throw new Error(env.broken ? 'O arquivo do cofre está ilegível — use “Esqueci a senha” para guardá-lo de lado' : 'O cofre já existe');
@@ -119,6 +139,9 @@ function createVaultService({
         data = { entries: Array.isArray(d.entries) ? d.entries : [], settings: { ...DEFAULT_SETTINGS, ...(d.settings || {}) } };
         failures = 0; waitUntil = 0;
         touch();
+        // Cofres criados antes do índice (ou editados em outro lugar): põe o índice em dia.
+        const pub = indexOf(data.entries);
+        if (JSON.stringify(pub) !== JSON.stringify(idx)) queue.run('vault', () => writeIndex(pub));
         changed('unlock');
         return status();
       } catch (e) {
@@ -145,6 +168,12 @@ function createVaultService({
   function list() {
     if (!isOpen()) return null;
     return data.entries.map(metaOf).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+  }
+
+  /** Índice público { id, name, kind, tags } — vale trancado ou aberto. Sem segredos nem campos. */
+  function index() {
+    const list = isOpen() ? indexOf(data.entries) : idx;
+    return list.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
   }
 
   const find = (id) => {
@@ -268,13 +297,14 @@ function createVaultService({
     await queue.flush();
     const stamp = new Date(now()).toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
     try { await fs.rename(file, path.join(path.dirname(file), `vault-${stamp}.bak.json`)); } catch (e) { if (e.code !== 'ENOENT') throw e; }
-    env = null; failures = 0; waitUntil = 0;
+    env = null; failures = 0; waitUntil = 0; idx = [];
+    try { await fs.rm(indexFile, { force: true }); } catch { /* ignore */ }
     changed('reset');
     return status();
   }
 
   return {
-    init, status, create, unlock, lock, list, resolve, save, remove, reveal, copy, setSettings, changePassword,
+    init, status, create, unlock, lock, list, index, resolve, save, remove, reveal, copy, setSettings, changePassword,
     exportTo, reset, flush: () => queue.flush(),
     /** Só testes. */
     _peek: () => ({ env, failures }),

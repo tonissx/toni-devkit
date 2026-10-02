@@ -382,6 +382,22 @@ function vaultCommands(list) {
   const out = [];
   for (const e of list || []) {
     const k = kindOf(e.kind);
+    if (e.locked) {
+      // Cofre trancado: só nome/tipo/tags são conhecidos. Enter pede a senha mestra na palette e copia em seguida.
+      const keywords = ['vault', 'cofre', 'senha', 'password', k.label.toLowerCase(), ...e.tags].filter(Boolean);
+      const locked = (id, what, name, description, extra = []) => ({
+        id, name, category: 'vault', icon: what === 'primary' ? k.icon : 'plug', dynamic: true, vault: true, locked: true, keepOpen: true,
+        description, keywords: [...keywords, ...extra],
+        run: async (ctx, _arg, opts = {}) => {
+          if (opts.ctrl) { ctx.openApp('vault', { id: e.id }); return undefined; }
+          ctx.palette.unlock({ name: e.name, then: async () => vaultMsg(await ctx.vault.copy(e.id, what)) });
+          return undefined;
+        },
+      });
+      out.push(locked('vault:entry:' + e.id, 'primary', e.name, k.label + ' · trancado — Enter pede a senha e copia'));
+      if (e.kind === 'db') out.push(locked('vault:conn:' + e.id, 'connstr', 'Connection string: ' + e.name, 'Trancado — Enter pede a senha e copia (SQL Server)', ['connection string', 'conexao', 'ado', 'sql server']));
+      continue;
+    }
     const main = e.fields[primaryIndex(e)];
     const keywords = ['vault', 'cofre', 'senha', 'password', k.label.toLowerCase(), ...e.tags, summary(e)].filter(Boolean);
     out.push({
