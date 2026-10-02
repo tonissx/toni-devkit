@@ -1,6 +1,6 @@
 import { DS } from '../lib/ds.js';
 import { resolveTheme } from '../lib/themes.js';
-import { CATEGORIES, COMMANDS, categoryName, abilityCommands, itemCommands, linkCommands } from '../commands/registry.js';
+import { CATEGORIES, COMMANDS, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands } from '../commands/registry.js';
 import { parseCapture, needsValue, sameAlias, shortUrl, buildUrl } from '../links/link.js';
 import { formatDuration } from '../devcore/engine/format.js';
 import { rank, loadRecent, pushRecent, normalize } from '../commands/search.js';
@@ -240,6 +240,7 @@ export function Palette() {
   const [items, setItems] = React.useState([]);         // consumíveis em estoque (dinâmicos)
   const [links, setLinks] = React.useState([]);         // links rápidos (alias → URL com {q})
   const [linkId, setLinkId] = React.useState(null);     // link com o chip fixado (o texto vira o {q})
+  const [vaultList, setVaultList] = React.useState(null); // entradas do cofre aberto (metadados) ou null
   const inputRef = React.useRef(null);
   const panelRef = React.useRef(null);
   const listRef = React.useRef(null);
@@ -255,6 +256,7 @@ export function Palette() {
     return {
       openApp: (route, params) => d.app.open(route, params),
       devcore: d.devcore,
+      vault: d.vault,
       appCommand: (cmd) => {
         if (cmd.type === 'theme') {
           // Grava já, para a palette (e a janela principal, se ainda não existir) usarem o tema novo.
@@ -299,7 +301,10 @@ export function Palette() {
   }, [ndKey]);
   React.useEffect(() => window.devkit.notes.onChanged(() => setNotesTick((t) => t + 1)), []);
 
-  const abilityCmds = React.useMemo(() => [...abilityCommands(abilities, formatDuration), ...itemCommands(items), ...linkCommands(links)], [abilities, items, links]);
+  const abilityCmds = React.useMemo(() => [...abilityCommands(abilities, formatDuration), ...itemCommands(items), ...vaultCommands(vaultList), ...linkCommands(links)], [abilities, items, vaultList, links]);
+  // Cofre: as entradas só entram na busca com ele aberto (trancado, list() devolve null).
+  const loadVault = () => window.devkit.vault.list().then(setVaultList, () => setVaultList(null));
+  React.useEffect(() => window.devkit.vault.onChanged(loadVault), []);
   const link = linkId ? links.find((l) => l.id === linkId) || null : null;
   const sections = React.useMemo(() => buildSections(scope, query, recent, nd, abilityCmds, link), [scope, query, recent, nd, abilityCmds, link]);
   const loadLinks = () => window.devkit.links.list().then(setLinks, () => setLinks([]));
@@ -315,6 +320,7 @@ export function Palette() {
     window.devkit.devcore.items().then(setItems, () => setItems([]));
     loadLinks();
     setLinkId(null);
+    loadVault();
     // Smart Bind "Colar snippet": abre direto na lista de snippets.
     setScope(info && info.source === 'snippets' ? SNIPPETS : null); setQuery(''); setHi(0); setBusy(null); setError(null); setDone(null); setQuick(null);
     setRecent(loadRecent(localStorage));
@@ -465,6 +471,7 @@ export function Palette() {
   const announce = done || (error ? 'Erro: ' + error.message : (sections[0] && sections[0].empty ? 'Nada encontrado' : countLabel));
   const snippetSel = curItem && curItem.kind === 'note' && curItem.note.type === 'snippet';
   const linkSel = !link && curItem && curItem.kind === 'command' && curItem.cmd.quickLink && needsValue(curItem.cmd.quickLink);
+  const vaultSel = curItem && curItem.kind === 'command' && curItem.cmd.vault;
   let n = -1;
 
   const rowFor = (it) => {
@@ -518,7 +525,7 @@ export function Palette() {
           ? <Spinner size={14} />
           : hintKey ? <Kbd size="sm">{keyHint(hintKey)}</Kbd>
           : cmd.shortcut ? <Kbd size="sm">{cmd.shortcut}</Kbd>
-          : sel ? <Kbd size="sm">{cmd.quickLink && needsValue(cmd.quickLink) ? 'Tab' : '↵'}</Kbd> : null}
+          : sel ? <Kbd size="sm">{cmd.quickLink && needsValue(cmd.quickLink) ? 'Tab' : cmd.vault ? '↵ copiar' : '↵'}</Kbd> : null}
       </div>
     );
   };
@@ -594,7 +601,7 @@ export function Palette() {
               ? <><span><Kbd size="sm">Tab</Kbd> fixar {curItem.cmd.quickLink.alias}</span><span><Kbd size="sm">↵</Kbd> fixar</span></>
               : snippetSel && scope === SNIPPETS
               ? <><span><Kbd size="sm">↵</Kbd> colar</span><span><Kbd size="sm">Ctrl+↵</Kbd> copiar</span></>
-              : snippetSel
+              : snippetSel || vaultSel
               ? <><span><Kbd size="sm">↵</Kbd> copiar</span><span><Kbd size="sm">Ctrl+↵</Kbd> abrir</span></>
               : (q || (scope && scope !== 'notes')) && <span><Kbd size="sm">↵</Kbd> executar</span>}
             <span><Kbd size="sm">Esc</Kbd> fechar</span>

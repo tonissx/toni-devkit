@@ -49,6 +49,15 @@ const TOOL_META = [
     keywords: ['anotações', 'notas', 'snippets', 'conhecimento', 'markdown', 'wiki'],
   },
   {
+    id: 'vault',
+    name: 'Vault',
+    icon: 'vault',
+    group: 'Conhecimento',
+    desc: 'Cofre de senhas e tokens: criptografado com senha mestra, cópia que se apaga sozinha',
+    shortcutKey: '7',
+    keywords: ['cofre', 'senha', 'senhas', 'password', 'credenciais', 'segredo', 'secret', 'token', 'banco', 'connection string', 'login'],
+  },
+  {
     id: 'devcore',
     name: 'DevCore',
     icon: 'cpu',

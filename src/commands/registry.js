@@ -12,8 +12,10 @@
  *     ctx.openUrl(url)      abre no navegador (só https)
  *     ctx.clipboard / ctx.sql / ctx.storage / ctx.quit()
  *     ctx.notes (API de Notes) · ctx.openNote({ id } | { new: true, title? }) · ctx.devcore (API do DevCore)
+ *     ctx.vault (API do Vault — só metadados; copy() grava no clipboard pelo processo principal)
  *     ctx.openApp(route, params?) — params chega à ferramenta (ex.: { tab: 'pets' })
  *     ctx.palette.quickNote(texto?) / ctx.palette.enter(escopo)   (comandos keepOpen: a palette continua aberta)
+ *   O 3º argumento traz { ctrl } (Ctrl+Enter).
  *   Pode ser async. Se devolver uma string, ela aparece como confirmação antes da palette fechar.
  *   Se lançar erro, a palette mostra o erro e continua aberta.
  * - takesQuery: o texto digitado vira argumento (ex.: buscas na web).
@@ -29,6 +31,7 @@ const { DEFAULT_SQL_OPTIONS } = require('../tools/sql-formatter/defaults.js');
 const { DEFAULT_XML_OPTIONS } = require('../tools/xml-formatter/defaults.js');
 const { formatXml } = require('../tools/xml-formatter/engine.js');
 const { needsValue, shortUrl } = require('../links/link.js');
+const { kindOf, summary, primaryIndex, isDbLike } = require('../vault/entry.js');
 
 const CATEGORIES = [
   { id: 'tools', name: 'Tools', key: 't', icon: 'wrench', description: 'Abrir uma ferramenta do Devkit' },
@@ -184,6 +187,19 @@ const actionCommands = [
     icon: 'link',
     keywords: ['links', 'alias', 'atalho', 'url', 'favoritos', 'bookmark', 'quicklink'],
     run: (ctx) => ctx.openApp('settings'),
+  },
+  {
+    id: 'vault:lock',
+    name: 'Bloquear cofre',
+    description: 'Tranca o Vault agora (as senhas só voltam com a senha mestra)',
+    icon: 'lock',
+    keywords: ['vault', 'cofre', 'senha', 'lock', 'trancar', 'fechar'],
+    run: async (ctx) => {
+      const s = await ctx.vault.status();
+      if (!s.unlocked) return 'O cofre já está bloqueado';
+      await ctx.vault.lock();
+      return 'Cofre bloqueado';
+    },
   },
   {
     id: 'app:quit',
@@ -354,8 +370,46 @@ function linkCommands(list) {
   });
 }
 
+/* ─────────────── Vault ─────────────── */
+const vaultMsg = (r) => `${r.label} de “${r.name}” copiado — some do clipboard em ${r.clearsIn} s`;
+
+/**
+ * Entradas do cofre aberto como comandos (dinâmicos: metadados vindos do processo principal quando a palette abre).
+ * Enter copia o campo principal (senha/chave) pelo clipboard protegido · Ctrl+Enter abre a entrada no Vault.
+ * Bancos ganham também "Connection string: <nome>".
+ */
+function vaultCommands(list) {
+  const out = [];
+  for (const e of list || []) {
+    const k = kindOf(e.kind);
+    const main = e.fields[primaryIndex(e)];
+    const keywords = ['vault', 'cofre', 'senha', 'password', k.label.toLowerCase(), ...e.tags, summary(e)].filter(Boolean);
+    out.push({
+      id: 'vault:entry:' + e.id, name: e.name, category: 'vault', icon: k.icon, dynamic: true, vault: true,
+      description: [summary(e) || k.label, main ? 'Enter copia ' + main.name.toLowerCase() : 'Enter abre'].join(' · '),
+      keywords,
+      run: async (ctx, _arg, opts = {}) => {
+        if (opts.ctrl || !main) { ctx.openApp('vault', { id: e.id }); return undefined; }
+        return vaultMsg(await ctx.vault.copy(e.id, 'primary'));
+      },
+    });
+    if (isDbLike(e)) {
+      out.push({
+        id: 'vault:conn:' + e.id, name: 'Connection string: ' + e.name, category: 'vault', icon: 'plug', dynamic: true, vault: true,
+        description: 'SQL Server (ADO.NET) com a senha — some do clipboard sozinha',
+        keywords: [...keywords, 'connection string', 'conexao', 'ado', 'sql server'],
+        run: async (ctx, _arg, opts = {}) => {
+          if (opts.ctrl) { ctx.openApp('vault', { id: e.id }); return undefined; }
+          return vaultMsg(await ctx.vault.copy(e.id, 'connstr'));
+        },
+      });
+    }
+  }
+  return out;
+}
+
 const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands];
 
-const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : id === 'links' ? 'Link' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
+const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : id === 'vault' ? 'Vault' : id === 'links' ? 'Link' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
 
-module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, linkCommands, detectClipboardKind };
+module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands, detectClipboardKind };

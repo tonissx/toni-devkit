@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, globalShortcut, Tray, Menu, nativeImage, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, globalShortcut, Tray, Menu, nativeImage, protocol, net, powerMonitor } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const fs = require('node:fs/promises');
@@ -14,6 +14,7 @@ const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
 const { createUpdaterService } = require('./updater/service');
 const { createLinksService } = require('./links/service');
+const { createVaultService } = require('./vault/service');
 
 // Event Bus: as features anunciam o que aconteceu; módulos (DevCore) escutam sem acoplamento.
 const bus = createBus();
@@ -165,6 +166,8 @@ function buildTrayMenu() {
     bound('clipboard:auto', 'Formatar clipboard (SQL ou XML)'),
     bound('clipboard:sql', 'Formatar SQL do clipboard'),
     bound('clipboard:xml', 'Formatar XML do clipboard'),
+    { type: 'separator' },
+    { label: 'Bloquear cofre', click: () => { if (vault) vault.lock('tray'); } },
     { type: 'separator' },
     { label: 'Sair', click: () => { quitting = true; app.quit(); } },
   ]));
@@ -446,6 +449,47 @@ ipcMain.handle('app:login-item', (_e, enable) => {
   return { supported, openAtLogin: supported && app.getLoginItemSettings({ args: loginArgs() }).openAtLogin };
 });
 
+/* ─────────────── Vault (cofre de dados sensíveis) ─────────────── */
+// %APPDATA%/Toni Devkit/vault.json, criptografado com a senha mestra (ver electron/vault/service.js).
+let vault = null;
+let vaultReady = null;
+const broadcastVault = (evt) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('vault:changed', evt); };
+
+function initVault() {
+  vault = createVaultService({
+    file: path.join(app.getPath('userData'), 'vault.json'),
+    clipboard,
+    // Fora do histórico do Windows (Win+V) pelo auxiliar; sem ele (outro SO, auxiliar fora do ar), texto comum.
+    writeSecret: async (text) => {
+      if (process.platform === 'win32') {
+        try { await winHelper.secretClip(text); return; } catch (e) { console.warn('[vault] clipboard protegido indisponível:', e.message); }
+      }
+      clipboard.writeText(text);
+    },
+    broadcast: broadcastVault,
+  });
+  vaultReady = vault.init().catch((e) => { console.error('[vault]', e); throw e; });
+  // Tela bloqueada ou PC suspenso: tranca o cofre.
+  powerMonitor.on('lock-screen', () => vault.lock('system'));
+  powerMonitor.on('suspend', () => vault.lock('system'));
+}
+
+const VAULT_API = ['status', 'create', 'unlock', 'lock', 'list', 'resolve', 'save', 'remove', 'reveal', 'copy', 'setSettings', 'changePassword', 'reset'];
+for (const fn of VAULT_API) {
+  ipcMain.handle('vault:' + fn, async (_e, ...args) => { await vaultReady; return vault[fn](...args); });
+}
+ipcMain.handle('vault:export', async (e) => {
+  await vaultReady;
+  if (!vault.status().unlocked) throw new Error('O cofre está bloqueado');
+  const stamp = new Date().toISOString().slice(0, 10);
+  const r = await dialog.showSaveDialog(fromEvent(e), {
+    defaultPath: `devkit-vault-${stamp}.json`,
+    filters: [{ name: 'Cofre do Devkit (criptografado)', extensions: ['json'] }],
+  });
+  if (r.canceled || !r.filePath) return null;
+  return vault.exportTo(r.filePath);
+});
+
 /* ─────────────── Atualização ─────────────── */
 // Windows instalado (NSIS) e Linux: electron-updater troca os arquivos sozinho. macOS e Windows
 // portátil (não conseguem se auto-substituir em disco): só avisam e abrem a release no navegador.
@@ -495,6 +539,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     initNotes();
     initLinks();
+    initVault();
     registerNotesProtocol();
     initDevCore();
     initUpdater();
@@ -524,6 +569,7 @@ if (!app.requestSingleInstanceLock()) {
       await notes.flush().catch(() => {});
       if (devcore) await devcore.flush().catch(() => {});
       if (links) await links.flush().catch(() => {});
+      if (vault) await vault.flush().catch(() => {});
       notesFlushed = true;
       app.quit();
     }, 300);

@@ -2,11 +2,13 @@
 // Seguro: HTML cru é escapado, só links http(s)/mailto viram <a>, imagens externas viram link
 // (a CSP bloqueia imagens remotas). Imagens coladas (".assets/<nome>") viram <img> servidas pelo
 // protocolo devkit-note:// do processo principal. Extras: [[Título]] (link interno), checklists
-// clicáveis, botão "Copiar" em cada bloco de código.
+// clicáveis, botão "Copiar" em cada bloco de código e o cartão do Vault (```secret <nome>```: a nota guarda só o
+// nome; os campos vêm do cofre, com os segredos mascarados e botões de copiar).
 import { Marked } from 'marked';
 import { tokenize } from '../tools/diff-checker/syntax.js';
 import { toggleTaskAt } from './note.js';
 import { isoDate } from './edit.js';
+import { secretNameFromBlock, kindOf, isDbLike } from '../vault/entry.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -28,10 +30,40 @@ const META_START_RE = /(^|\s)(?:@\d{4}-\d{2}-\d{2}|![123])(?=\s|$)/;
 const META_RE = /^(?:(@\d{4}-\d{2}-\d{2})|!([123]))(?=\s|$)/;
 
 /**
+ * Cartão de um bloco ```secret <nome>```. info: undefined (carregando) · { locked, exists } · { missing } · metadados
+ * da entrada (segredos = null). Os botões levam data-vault-* (ver NotePreview); nenhum valor secreto entra no HTML.
+ */
+function secretCard(name, info) {
+  const head = (extra = '') => `<div class="md-secret__head"><span class="md-secret__lock">🔒</span><span class="md-secret__name">${esc(name)}</span>${extra}</div>`;
+  const msg = (text, btn = '') => `<div class="md-secret is-msg" data-secret="${esc(name)}">${head()}<div class="md-secret__msg"><span>${text}</span>${btn}</div></div>`;
+  if (info === undefined) return msg('Carregando…');
+  if (info.locked) {
+    return info.exists
+      ? msg('Cofre bloqueado.', '<button type="button" class="md-secret__btn" data-vault-unlock="1">Desbloquear</button>')
+      : msg('Ainda não há cofre neste computador.', `<button type="button" class="md-secret__btn" data-vault-create="${esc(name)}">Criar no Vault</button>`);
+  }
+  if (info.missing) return msg('Não existe no cofre.', `<button type="button" class="md-secret__btn" data-vault-create="${esc(name)}">Criar no Vault</button>`);
+  const rows = info.fields.map((f, i) => {
+    const value = f.secret ? (f.set ? '<span class="md-secret__mask">••••••••</span>' : '<span class="md-secret__empty">vazio</span>') : (f.value ? esc(f.value) : '<span class="md-secret__empty">—</span>');
+    const can = f.secret ? f.set : !!f.value;
+    return `<div class="md-secret__row"><span class="md-secret__key">${esc(f.name)}</span><span class="md-secret__val">${value}</span>`
+      + (can ? `<button type="button" class="md-secret__btn" data-vault-copy="${esc(info.id)}" data-vault-what="${i}" title="Copiar ${esc(f.name)}">Copiar</button>` : '<span></span>')
+      + '</div>';
+  }).join('');
+  const extra = isDbLike(info)
+    ? `<div class="md-secret__extra"><button type="button" class="md-secret__btn" data-vault-copy="${esc(info.id)}" data-vault-what="connstr">Connection string</button>`
+      + `<button type="button" class="md-secret__btn" data-vault-copy="${esc(info.id)}" data-vault-what="jdbc">URL JDBC</button></div>`
+    : '';
+  return `<div class="md-secret" data-secret="${esc(name)}">${head(`<span class="md-secret__kind">${esc(kindOf(info.kind).label)}</span><button type="button" class="md-secret__open" data-vault-open="${esc(info.id)}" title="Abrir no Vault">Vault ↗</button>`)}`
+    + `<div class="md-secret__rows">${rows}</div>${extra}</div>`;
+}
+
+/**
  * Renderiza markdown. resolve(título) → id | null decide o estilo dos [[links]].
+ * secret(nome) → estado da entrada do Vault para os blocos ```secret``` (ver secretCard).
  * Retorna { html, blocks } — blocks[i] é o código do i-ésimo bloco (para o botão Copiar).
  */
-export function renderMarkdown(md, { resolve = () => null } = {}) {
+export function renderMarkdown(md, { resolve = () => null, secret = () => undefined } = {}) {
   const blocks = [];
   let task = 0;
   const marked = new Marked({ gfm: true, breaks: true });
@@ -65,6 +97,8 @@ export function renderMarkdown(md, { resolve = () => null } = {}) {
     renderer: {
       html: ({ text }) => esc(text),
       code({ text, lang }) {
+        const secretName = secretNameFromBlock(lang, text);
+        if (secretName) return secretCard(secretName, secret(secretName));
         const i = blocks.push(text) - 1;
         const label = String(lang || '').trim().split(/\s+/)[0];
         return `<div class="md-code"><div class="md-code__bar"><span>${esc(label || 'código')}</span>`
