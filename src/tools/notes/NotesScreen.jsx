@@ -474,7 +474,8 @@ export function NotesScreen({ toast, request }) {
             <IconButton size="sm" icon="folder-plus" label="Nova pasta" onClick={() => setDialog({ kind: 'create', parent: '' })} />
           </div>
 
-          <div ref={listRef} className={'nts-list tk-scroll' + (dnd.over === '' ? ' is-drop-root' : '')} role={useTree ? 'tree' : 'listbox'} aria-label="Notas" {...dnd.dropProps('')}>
+          <div ref={listRef} className={'nts-list tk-scroll' + (dnd.over === '' ? ' is-drop-root' : '')} role={useTree ? 'tree' : 'listbox'} aria-label="Notas" {...dnd.dropProps('')}
+            onClick={(e) => { if (folderSel && (e.target === e.currentTarget || e.target.getAttribute('role') === 'group')) selectFolder(null); }}>
             {rows === null && <div className="nts-list__msg"><Spinner size={14} /> Carregando…</div>}
             {loadError && <div className="nts-list__msg is-error">Erro ao ler as notas: {loadError}</div>}
             {rows && !loadError && !useTree && flat.length === 0 && (
