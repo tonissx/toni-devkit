@@ -726,6 +726,29 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-graph__tip b { color: var(--tk-text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nts-graph__help { position: absolute; right: 10px; bottom: 8px; font-size: 11px; color: var(--tk-text-3); pointer-events: none; }
 
+/* ─── Links rápidos (Configurações) ─── */
+.lnk-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.lnk-head .tk-card__title { margin-bottom: 0; }
+.lnk-help { margin: 8px 0 6px; line-height: 1.55; }
+.lnk-help code { font: 400 11.5px var(--tk-font-mono); padding: 1px 4px; border-radius: 4px; background: var(--tk-surface-3); color: var(--tk-text); }
+.lnk-empty { padding: 12px 0 2px; font-size: 12.5px; color: var(--tk-text-3); }
+.lnk-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--tk-border); }
+.lnk-row:last-child { border-bottom: 0; }
+.lnk-row__main { flex: 1; min-width: 0; }
+.lnk-row__name { font-size: 13px; color: var(--tk-text); }
+.lnk-row__param { color: var(--tk-text-3); }
+.lnk-row__url { font: 400 11.5px var(--tk-font-mono); color: var(--tk-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lnk-test { display: flex; align-items: center; gap: 6px; }
+.lnk-test .tk-input { width: 150px; }
+.lnk-test input { min-width: 0; }
+.lnk-form { display: flex; flex-direction: column; gap: 10px; margin: 10px 0; padding: 14px; border: 1px solid var(--tk-border-strong); border-radius: var(--tk-radius-md); background: var(--tk-surface-1); }
+.lnk-form__row { display: grid; grid-template-columns: 140px 1fr 1fr; gap: 10px; }
+.lnk-form input { min-width: 0; }
+.lnk-form__error { font-size: 12px; color: var(--tk-red); }
+.lnk-form__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.lnk-form__preview { font-size: 12px; color: var(--tk-text-3); line-height: 1.5; overflow-wrap: anywhere; }
+.lnk-form__preview b { color: var(--tk-accent-text); font-weight: 600; }
+.lnk-form__preview code { font: 400 11px var(--tk-font-mono); color: var(--tk-text-2); }
 /* ─── Vault ─── */
 .vlt-screen { height: 100%; display: flex; flex-direction: column; }
 .vlt-center { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 24px; overflow: auto; }

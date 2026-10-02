@@ -13,6 +13,7 @@ const { createNotesService } = require('./notes/service');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
 const { createUpdaterService } = require('./updater/service');
+const { createLinksService } = require('./links/service');
 const { createVaultService } = require('./vault/service');
 
 // Event Bus: as features anunciam o que aconteceu; módulos (DevCore) escutam sem acoplamento.
@@ -370,9 +371,10 @@ let notes = null;
 let notesReady = null;
 const broadcastNotes = (evt) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:changed', evt); };
 
+const notesDir = () => process.env.DEVKIT_NOTES_DIR || path.join(app.getPath('documents'), 'Devkit Notes');
+
 function initNotes() {
-  const dir = process.env.DEVKIT_NOTES_DIR || path.join(app.getPath('documents'), 'Devkit Notes');
-  notes = createNotesService({ dir, broadcast: broadcastNotes, events: bus });
+  notes = createNotesService({ dir: notesDir(), broadcast: broadcastNotes, events: bus });
   notesReady = notes.init().catch((e) => { console.error('[notes]', e); throw e; });
 }
 
@@ -405,6 +407,31 @@ ipcMain.on('app:open-note', (_e, payload) => {
   if (payload && (typeof payload.id === 'string' || payload.new)) sendToMain({ type: 'open-note', ...payload });
   showMain('notes');
 });
+
+/* ─────────────── Links rápidos (alias → URL com {q}) ─────────────── */
+// Documentos\Devkit Notes\.devkit\links.json — junto das notas, fora da interface do Notes.
+let links = null;
+let linksReady = null;
+const broadcastLinks = (evt) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('links:changed', evt); };
+
+function initLinks() {
+  links = createLinksService({ file: path.join(notesDir(), '.devkit', 'links.json'), broadcast: broadcastLinks });
+  linksReady = links.init().catch((e) => { console.error('[links]', e); });
+}
+
+for (const fn of ['list', 'save', 'remove', 'forget']) {
+  ipcMain.handle('links:' + fn, async (_e, ...args) => { await linksReady; return links[fn](...args); });
+}
+// Abrir: monta a URL (só http/https, validado em src/links/link.js), guarda o valor nos recentes e abre no navegador.
+ipcMain.handle('links:open', async (_e, id, value) => {
+  await linksReady;
+  const url = await links.use(id, value);
+  palette.hide();
+  await shell.openExternal(url);
+  return url;
+});
+// Copiar: só monta a URL (e guarda o valor nos recentes); o renderer põe no clipboard.
+ipcMain.handle('links:url', async (_e, id, value) => { await linksReady; return links.use(id, value); });
 
 ipcMain.handle('shell:open-url', (_e, url) => {
   const u = new URL(String(url));
@@ -511,6 +538,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     initNotes();
+    initLinks();
     initVault();
     registerNotesProtocol();
     initDevCore();
@@ -540,6 +568,7 @@ if (!app.requestSingleInstanceLock()) {
     setTimeout(async () => {
       await notes.flush().catch(() => {});
       if (devcore) await devcore.flush().catch(() => {});
+      if (links) await links.flush().catch(() => {});
       if (vault) await vault.flush().catch(() => {});
       notesFlushed = true;
       app.quit();

@@ -106,7 +106,7 @@ function App() {
   const tool = findTool(route);
   const Screen = tool && tool.component;
   const screen = route === 'home' ? <Home go={go} openPalette={openPalette} />
-    : route === 'settings' ? <Settings prefs={prefs} setPrefs={setPrefs} info={info} sqlVersion={sqlVersion} updater={updater} />
+    : route === 'settings' ? <Settings prefs={prefs} setPrefs={setPrefs} info={info} sqlVersion={sqlVersion} updater={updater} toast={toast} />
     : <Screen toast={toast} request={request && request.route === route ? request : undefined} />;
 
   const title = (tool ? tool.name : route === 'settings' ? 'Configurações' : 'Início') + ' — Devkit';
