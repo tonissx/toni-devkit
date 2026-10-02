@@ -240,7 +240,9 @@ export function Palette() {
   const [items, setItems] = React.useState([]);         // consumíveis em estoque (dinâmicos)
   const [links, setLinks] = React.useState([]);         // links rápidos (alias → URL com {q})
   const [linkId, setLinkId] = React.useState(null);     // link com o chip fixado (o texto vira o {q})
-  const [vaultList, setVaultList] = React.useState(null); // entradas do cofre aberto (metadados) ou null
+  const [vaultList, setVaultList] = React.useState(null); // entradas do cofre: metadados (aberto) ou { locked } só com nome/tags (trancado)
+  const [pwd, setPwd] = React.useState(null);           // { name, then }: pedindo a senha mestra para copiar uma entrada trancada
+  const [pw, setPw] = React.useState('');               // a senha digitada — fora de `query`, para nunca ir à busca de notas
   const inputRef = React.useRef(null);
   const panelRef = React.useRef(null);
   const listRef = React.useRef(null);
@@ -273,7 +275,7 @@ export function Palette() {
       notes: d.notes,
       links: d.links,
       openNote: (payload) => d.notes.open(payload),
-      palette: { quickNote: startQuick, enter: enterScope, enterLink, search: (text) => { setLinkId(null); setScope(null); setQuery(text); setHi(0); } },
+      palette: { unlock: (p) => { setError(null); setPw(''); setPwd(p); }, quickNote: startQuick, enter: enterScope, enterLink, search: (text) => { setLinkId(null); setScope(null); setQuery(text); setHi(0); } },
     };
   }, []);
 
@@ -302,8 +304,11 @@ export function Palette() {
   React.useEffect(() => window.devkit.notes.onChanged(() => setNotesTick((t) => t + 1)), []);
 
   const abilityCmds = React.useMemo(() => [...abilityCommands(abilities, formatDuration), ...itemCommands(items), ...vaultCommands(vaultList), ...linkCommands(links)], [abilities, items, vaultList, links]);
-  // Cofre: as entradas só entram na busca com ele aberto (trancado, list() devolve null).
-  const loadVault = () => window.devkit.vault.list().then(setVaultList, () => setVaultList(null));
+  // Cofre: aberto, as entradas vêm completas (metadados); trancado, list() devolve null e a busca usa o índice
+  // público (nome/tipo/tags) — Enter nelas pede a senha.
+  const loadVault = () => window.devkit.vault.list().then(
+    (l) => (l ? setVaultList(l) : window.devkit.vault.index().then((ix) => setVaultList(ix.map((e) => ({ ...e, locked: true }))))),
+  ).catch(() => setVaultList(null));
   React.useEffect(() => window.devkit.vault.onChanged(loadVault), []);
   const link = linkId ? links.find((l) => l.id === linkId) || null : null;
   const sections = React.useMemo(() => buildSections(scope, query, recent, nd, abilityCmds, link), [scope, query, recent, nd, abilityCmds, link]);
@@ -322,7 +327,7 @@ export function Palette() {
     setLinkId(null);
     loadVault();
     // Smart Bind "Colar snippet": abre direto na lista de snippets.
-    setScope(info && info.source === 'snippets' ? SNIPPETS : null); setQuery(''); setHi(0); setBusy(null); setError(null); setDone(null); setQuick(null);
+    setScope(info && info.source === 'snippets' ? SNIPPETS : null); setQuery(''); setHi(0); setBusy(null); setError(null); setDone(null); setQuick(null); setPwd(null); setPw('');
     setRecent(loadRecent(localStorage));
     document.documentElement.dataset.theme = resolveTheme(readPrefs().theme || 'dark');
     setOpenKey((k) => k + 1);
@@ -399,8 +404,24 @@ export function Palette() {
     } catch (e) { fail('note:' + n.id, n.title, e); }
   };
 
+  /** Senha mestra digitada na palette: destranca e, em seguida, faz a cópia que estava pendente. */
+  const submitUnlock = async () => {
+    if (!pwd || busy || !pw) return;
+    const cur = pwd;
+    setError(null); setDone(null); setBusy('vault:unlock');
+    try {
+      await window.devkit.vault.unlock(pw);
+    } catch (e) { setPw(''); fail('vault:unlock', cur.name, e); return; } // senha errada: continua pedindo
+    setPw(''); setPwd(null);
+    try {
+      const msg = await cur.then();
+      setBusy(null);
+      setDone(msg); setTimeout(close, 700);
+    } catch (e) { fail('vault:unlock', cur.name, e); }
+  };
+
   const run = async (item, { ctrl = false } = {}) => {
-    if (!item || busy) return;
+    if (!item || busy || pwd) return;
     if (item.kind === 'category') { enterScope(item.cat.id); return; }
     if (item.kind === 'note') { runNote(item.note, ctrl); return; }
     const { cmd } = item;
@@ -415,6 +436,12 @@ export function Palette() {
 
   const onKeyDown = (e) => {
     if (e.nativeEvent.isComposing) return;
+    if (pwd) { // pedindo a senha: só Enter e Esc têm função; o resto é digitação
+      if (e.key === 'Enter') { e.preventDefault(); submitUnlock(); }
+      else if (e.key === 'Escape') { e.preventDefault(); setPwd(null); setPw(''); setError(null); }
+      else if (e.key === 'Tab' || e.key === 'ArrowDown' || e.key === 'ArrowUp') e.preventDefault();
+      return;
+    }
     const n = flat.length;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
@@ -460,7 +487,8 @@ export function Palette() {
   };
 
   const scopeCat = catOf(scope);
-  const placeholder = link ? (link.param || 'Valor') + '…'
+  const placeholder = pwd ? 'Senha mestra para copiar “' + pwd.name + '”…'
+    : link ?(link.param || 'Valor') + '…'
     : scope === SNIPPETS ? 'Colar snippet…'
     : scope === 'notes' ? 'Buscar nas notas…'
     : isNotesScope(scope) ? 'Buscar em ' + SUB[scope].toLowerCase() + '…'
@@ -525,7 +553,7 @@ export function Palette() {
           ? <Spinner size={14} />
           : hintKey ? <Kbd size="sm">{keyHint(hintKey)}</Kbd>
           : cmd.shortcut ? <Kbd size="sm">{cmd.shortcut}</Kbd>
-          : sel ? <Kbd size="sm">{cmd.quickLink && needsValue(cmd.quickLink) ? 'Tab' : cmd.vault ? '↵ copiar' : '↵'}</Kbd> : null}
+          : sel ? <Kbd size="sm">{cmd.quickLink && needsValue(cmd.quickLink) ? 'Tab' : cmd.locked ? '↵ senha' : cmd.vault ? '↵ copiar' : '↵'}</Kbd> : null}
       </div>
     );
   };
@@ -550,8 +578,10 @@ export function Palette() {
             )}
             <input
               ref={inputRef}
-              value={query}
-              onChange={(e) => { setQuery(e.target.value); setHi(0); setError(null); }}
+              type={pwd ? 'password' : 'text'}
+              autoComplete="off"
+              value={pwd ? pw : query}
+              onChange={(e) => { if (pwd) { setPw(e.target.value); setError(null); return; } setQuery(e.target.value); setHi(0); setError(null); }}
               onKeyDown={onKeyDown}
               placeholder={placeholder}
               spellCheck={false}
@@ -567,7 +597,8 @@ export function Palette() {
           </div>
 
           <div ref={listRef} id="pl-list" className="pl-list tk-scroll" role="listbox" aria-label="Resultados">
-            {sections.map((s, si) => (
+            {pwd && <div className="pl-empty"><Icon name="lock" size={16} />Cofre trancado — digite a senha mestra e Enter para copiar “{pwd.name}”.</div>}
+            {!pwd && sections.map((s, si) => (
               <div key={s.title + si} role="group" aria-labelledby={'pl-sec-' + si}>
                 {s.empty && <div className="pl-empty"><Icon name="search-x" size={16} />Nada encontrado para “{q}”{scope ? ' em ' + scopeCat.name : ''}</div>}
                 <div id={'pl-sec-' + si} className="tk-menu__heading">{s.title}{s.hint && <span className="pl-heading-hint"> · {s.hint}</span>}</div>
@@ -595,7 +626,9 @@ export function Palette() {
               : scope === 'notes' && !q ? <><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">Q</Kbd><Kbd size="sm">N</Kbd><Kbd size="sm">P</Kbd><Kbd size="sm">R</Kbd></span><span><Kbd size="sm">⌫</Kbd> voltar</span></>
               : scope && !q ? <span><Kbd size="sm">⌫</Kbd> voltar</span> : null}
             {(link || !(!q && (!scope || scope === 'notes'))) && <span><Kbd size="sm">↑</Kbd><Kbd size="sm">↓</Kbd> navegar</span>}
-            {link
+            {pwd
+              ? <><span><Kbd size="sm">↵</Kbd> desbloquear e copiar</span><span><Kbd size="sm">Esc</Kbd> cancelar</span></>
+              : link
               ? <><span><Kbd size="sm">↵</Kbd> abrir</span><span><Kbd size="sm">Ctrl+↵</Kbd> copiar URL</span><span><Kbd size="sm">⌫</Kbd> soltar</span></>
               : linkSel
               ? <><span><Kbd size="sm">Tab</Kbd> fixar {curItem.cmd.quickLink.alias}</span><span><Kbd size="sm">↵</Kbd> fixar</span></>
@@ -604,8 +637,8 @@ export function Palette() {
               : snippetSel || vaultSel
               ? <><span><Kbd size="sm">↵</Kbd> copiar</span><span><Kbd size="sm">Ctrl+↵</Kbd> abrir</span></>
               : (q || (scope && scope !== 'notes')) && <span><Kbd size="sm">↵</Kbd> executar</span>}
-            <span><Kbd size="sm">Esc</Kbd> fechar</span>
-            {(scope || q) && <span style={{ marginLeft: 'auto' }}>{countLabel}</span>}
+            {!pwd && <span><Kbd size="sm">Esc</Kbd> fechar</span>}
+            {!pwd && (scope || q) &&<span style={{ marginLeft: 'auto' }}>{countLabel}</span>}
           </div>
         </>)}
         <div className="pl-sr" aria-live="polite">{quick ? '' : announce}</div>

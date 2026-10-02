@@ -474,7 +474,7 @@ function initVault() {
   powerMonitor.on('suspend', () => vault.lock('system'));
 }
 
-const VAULT_API = ['status', 'create', 'unlock', 'lock', 'list', 'resolve', 'save', 'remove', 'reveal', 'copy', 'setSettings', 'changePassword', 'reset'];
+const VAULT_API = ['status', 'create', 'unlock', 'lock', 'list', 'index', 'resolve', 'save', 'remove', 'reveal', 'copy', 'setSettings', 'changePassword', 'reset'];
 for (const fn of VAULT_API) {
   ipcMain.handle('vault:' + fn, async (_e, ...args) => { await vaultReady; return vault[fn](...args); });
 }

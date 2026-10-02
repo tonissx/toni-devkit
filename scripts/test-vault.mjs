@@ -153,6 +153,52 @@ test('service: list/resolve expose metadata only; locked hides everything', asyn
   } finally { await s.done(); }
 });
 
+test('service: public index (name/kind/tags only) lets locked search work, never leaks fields or secrets', async () => {
+  const s = await setup();
+  try {
+    await s.svc.create(PW);
+    await s.svc.save(dbEntry());
+    const raw = await readFile(path.join(s.dir, 'vault-index.json'), 'utf8');
+    for (const leak of ['s3nh@', 'sql01', 'CorporeRM', '"sa"', 'Senha']) assert.ok(!raw.includes(leak), 'vazou ' + leak);
+    s.svc.lock();
+    assert.equal(s.svc.list(), null);
+    assert.deepEqual(s.svc.index().map(({ id, ...e }) => e), [{ name: 'RM Produção', kind: 'db', tags: ['rm'] }]);
+
+    // Processo novo, cofre trancado: o índice vem do disco.
+    const again = s.make();
+    await again.init();
+    assert.equal(again.status().unlocked, false);
+    const [hit] = again.index();
+    assert.equal(hit.name, 'RM Produção');
+    await again.unlock(PW);
+    assert.equal((await again.copy(hit.id, 'primary')).label, 'Senha');
+
+    // Remover entrada tira do índice; reset apaga o índice.
+    await again.remove(hit.id);
+    assert.deepEqual(again.index(), []);
+    await again.save(dbEntry());
+    await again.reset('APAGAR');
+    assert.deepEqual(again.index(), []);
+    assert.ok(!(await readdir(s.dir)).includes('vault-index.json'));
+  } finally { await s.done(); }
+});
+
+test('service: unlock rebuilds a missing index (vault created before the index existed)', async () => {
+  const s = await setup();
+  try {
+    await s.svc.create(PW);
+    await s.svc.save(dbEntry());
+    await rm(path.join(s.dir, 'vault-index.json'));
+    const again = s.make();
+    await again.init();
+    assert.deepEqual(again.index(), []);
+    await again.unlock(PW);
+    await again.flush();
+    assert.equal(again.index().length, 1);
+    assert.match(await readFile(path.join(s.dir, 'vault-index.json'), 'utf8'), /RM Produção/);
+  } finally { await s.done(); }
+});
+
 test('service: reopen from disk with the right password only', async () => {
   const s = await setup();
   try {
@@ -326,6 +372,23 @@ test('palette: vault entries become dynamic commands; Enter copies, Ctrl+Enter o
   await cmds[0].run(ctx, undefined, { ctrl: true });
   await cmds[1].run(ctx, undefined, {});
   assert.deepEqual(calls, [['copy', meta.id, 'primary'], ['open', 'vault', { id: meta.id }], ['copy', meta.id, 'connstr']]);
+
+  // Trancado: só índice público. Enter pede a senha (palette.unlock) e, depois dela, copia.
+  const lockedCmds = vaultCommands([{ id: meta.id, name: meta.name, kind: 'db', tags: ['rm'], locked: true }]);
+  assert.deepEqual(lockedCmds.map((c) => c.id), ['vault:entry:' + meta.id, 'vault:conn:' + meta.id]);
+  assert.ok(lockedCmds.every((c) => c.dynamic && c.vault && c.locked && c.keepOpen));
+  const asks = [];
+  const lctx = { ...ctx, palette: { unlock: (p) => asks.push(p) } };
+  calls.length = 0;
+  assert.equal(await lockedCmds[0].run(lctx, undefined, {}), undefined);
+  assert.equal(asks.length, 1);
+  assert.equal(asks[0].name, meta.name);
+  assert.deepEqual(calls, [], 'nada é copiado antes da senha');
+  assert.match(await asks[0].then(), /Senha de “RM Produção” copiado/);
+  await lockedCmds[1].run(lctx, undefined, {});
+  await asks[1].then();
+  await lockedCmds[0].run(lctx, undefined, { ctrl: true });
+  assert.deepEqual(calls, [['copy', meta.id, 'primary'], ['copy', meta.id, 'connstr'], ['open', 'vault', { id: meta.id }]]);
 
   assert.ok(BINDABLE_IDS.includes('vault:lock'));
   assert.ok(COMMANDS.some((c) => c.id === 'vault:lock' && !c.keepOpen && !c.takesQuery));
