@@ -53,6 +53,16 @@ function defaultRun(cwd, args, { stdin, ok = [0], read = true, timeout = 120e3, 
   });
 }
 
+/** Algumas recusas comuns do git explicadas em português (o resto passa como veio). */
+function friendly(msg) {
+  const m = String(msg || '');
+  let x;
+  if ((x = /used by worktree at '([^']+)'/.exec(m))) return `em uso pelo worktree ${x[1].split(/[\\/]/).pop()} — remova o worktree antes`;
+  if (/not fully merged/.test(m)) return 'tem commits que não estão em outra branch';
+  if (/contains modified or untracked files/.test(m)) return 'a pasta tem mudanças não commitadas';
+  return m.split('\n')[0];
+}
+
 const sameDir = (a, b) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
 const stamp = (d) => {
   const p = (n, w = 2) => String(n).padStart(w, '0');
@@ -259,12 +269,30 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     return truncate((await run(r.top, ['diff', '-M', ...pathArg])).stdout);
   }
 
+  async function worktreeList(r) {
+    return P.parseWorktrees((await run(r.top, ['worktree', 'list', '--porcelain'])).stdout);
+  }
+
+  /** Worktrees além do principal: pasta, branch, se a pasta ainda existe e quantas mudanças tem. */
+  async function worktrees(repo) {
+    const r = await repoOf(repo);
+    const list = (await worktreeList(r)).filter((w) => !w.main);
+    return Promise.all(list.map(async (w) => {
+      const exists = fss.existsSync(w.path);
+      const dirty = exists ? (await run(w.path, ['status', '--porcelain'], { ok: [0, 128] }).then((x) => x.stdout.split('\n').filter(Boolean).length, () => 0)) : 0;
+      return { ...w, exists, dirty, name: w.path.split(/[\\/]/).pop() };
+    }));
+  }
+
   /** Branches locais com upstream, à frente/atrás da base (main/master) e se já foram mescladas nela. */
   async function branches(repo) {
     if (!(await hasHead(repo))) return { base: null, branches: [] };
     const list = P.parseBranches((await git(repo, ['for-each-ref', `--format=${P.BRANCH_FORMAT}`, '--sort=-committerdate', 'refs/heads'])).stdout);
     const base = ['main', 'master', 'develop'].find((b) => list.some((x) => x.name === b)) || (list.find((x) => x.current) || list[0] || {}).name || null;
     const merged = base ? new Set((await git(repo, ['branch', '--format=%(refname:short)', '--merged', base])).stdout.split('\n').filter(Boolean)) : new Set();
+    // Branch aberta noutro worktree: o git não deixa excluir nem trocar para ela daqui.
+    const inWorktree = new Map((await worktreeList(await repoOf(repo))).filter((w) => !w.main && w.branch).map((w) => [w.branch, w.path]));
+    for (const b of list) b.worktree = inWorktree.get(b.name) || null;
     await Promise.all(list.map(async (b) => {
       b.merged = b.name !== base && merged.has(b.name);
       if (!base || b.name === base) return;
@@ -414,13 +442,15 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
         const list = b.branchNames ? b.branchNames.map((n, i) => [n, ref('branch-' + i)]) : [[b.branchName, ref('branch')]];
         const made = [];
         for (const [orig, from] of list) {
-          const exists = (await run(r.top, ['rev-parse', '--verify', '-q', `refs/heads/${orig}`], { ok: [0, 1] })).code === 0;
-          const name = exists ? `${orig}-restaurada` : orig;
+          const cur = (await run(r.top, ['rev-parse', '--verify', '-q', `refs/heads/${orig}`], { ok: [0, 1] })).stdout.trim();
+          const saved = (await run(r.top, ['rev-parse', from])).stdout.trim();
+          if (cur && cur === saved) continue; // nunca saiu (ex.: o git recusou excluir): nada a recriar
+          const name = cur ? `${orig}-restaurada` : orig;
           if (!validBranchName(name)) throw new Error('Nome de branch inválido');
           await run(r.top, ['branch', name, from], { read: false });
           made.push(name);
         }
-        message = made.length === 1 ? `Branch “${made[0]}” recriada` : `${made.length} branches recriadas`;
+        message = !made.length ? 'As branches já estavam lá — nada a recriar' : made.length === 1 ? `Branch “${made[0]}” recriada` : `${made.length} branches recriadas`;
       } else if (b.kind === 'tag') {
         const exists = (await run(r.top, ['rev-parse', '--verify', '-q', `refs/tags/${b.tagName}`], { ok: [0, 1] })).code === 0;
         const name = exists ? `${b.tagName}-restaurada` : b.tagName;
@@ -478,6 +508,21 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
           if (next.added) await fs.writeFile(file, next.content);
         }
         if (!op.args.length) return { ok: true, title: op.title, display: op.display, risk: op.risk, backup: backup ? backup.id : null, output: '' };
+        if (op.worktreePath) {
+          const known = (await worktreeList(r)).filter((w) => !w.main).map((w) => w.path);
+          if (!known.some((k) => sameDir(path.normalize(k), path.normalize(op.worktreePath)))) throw new Error('Esse worktree não é deste repositório');
+        }
+        if (op.each) {
+          // Um comando por item: o que o git recusar não impede os outros; o resultado diz o que saiu e o que ficou.
+          const done = [], failed = [];
+          for (let i = 0; i < op.each.length; i++) {
+            try { await run(r.top, op.each[i], { read: false }); done.push(op.eachLabel[i]); }
+            catch (e) { failed.push({ name: op.eachLabel[i], error: friendly(e.message) }); }
+          }
+          if (!done.length) throw new Error(failed.map((f) => `${f.name}: ${f.error}`).join('\n'));
+          const warning = failed.length ? `${done.length} de ${op.each.length} feito(s). Não deu: ${failed.map((f) => `${f.name} (${f.error})`).join('; ')}` : null;
+          return { ok: true, partial: failed.length > 0, warning, done, failed, title: op.title, display: op.display, risk: op.risk, backup: backup ? backup.id : null, output: '' };
+        }
         if (op.writeFile) {
           const abs = path.join(r.top, op.writeFile.path);
           if (!validPath(op.writeFile.path) || !abs.startsWith(r.top)) throw new Error('Caminho inválido');
@@ -705,7 +750,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     init, version, list, add, remove, scan, open, summaries,
     status, log, commit, diff, branches, compare, stashes, stashFiles, reflog, overview, backups,
     exec, restoreBackup, mergePreview, conflictFile, rebaseInfo, files,
-    blame, searchText, bisectState, tags, cleanPreview, gitignore, rhythm, fileVersions,
+    blame, searchText, bisectState, tags, cleanPreview, gitignore, rhythm, fileVersions, worktrees,
     unwatch, top: async (repo) => (await repoOf(repo)).top,
     flush: () => queue.flush(),
   };

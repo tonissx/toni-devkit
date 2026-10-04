@@ -179,7 +179,8 @@ operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nad
     no meio do caminho e você responde **Funciona / Está quebrado / Pular** até ele apontar o culpado. A faixa do topo
     lembra que há uma caça em andamento; **Encerrar** volta para a branch
 - **Manutenção**: **tags** (criar simples ou anotada no commit atual, excluir com ponto de volta) · **branches já
-  mescladas** (todas marcadas, exclui de uma vez, recuperáveis) · **arquivos e pastas não versionados** (o que um
+  mescladas** (marcadas, exclui de uma vez, recuperáveis; as abertas num worktree aparecem bloqueadas) · **worktrees**
+  (as pastas extras do repositório, como as de `.claude/worktrees`; remover libera a branch) · **arquivos e pastas não versionados** (o que um
   `git clean` apagaria, com escolha e cópia antes) · **.gitignore** (ver e acrescentar padrões). Em Mudanças, o ícone de
   olho riscado num arquivo novo sugere padrões (este arquivo, a extensão, a pasta…) — inclusive para pastas com outro
   repositório dentro

@@ -887,3 +887,48 @@ test('serviço: limpar branches mescladas, arquivos não versionados e .gitignor
     assert.equal(rh.grid.length, 7);
   } finally { t.done(); }
 });
+
+test('parseWorktrees', () => {
+  const w = P.parseWorktrees('worktree C:/r\nHEAD aaa\nbranch refs/heads/main\n\nworktree C:/r/.claude/worktrees/x\nHEAD bbb\nbranch refs/heads/worktree-x\nlocked\n\nworktree C:/tmp/y\nHEAD ccc\ndetached\nprunable gitdir file points to non-existent location\n');
+  assert.deepEqual(w.map((x) => [x.path, x.branch, x.main, x.locked, x.detached, x.prunable]), [
+    ['C:/r', 'main', true, false, false, false], ['C:/r/.claude/worktrees/x', 'worktree-x', false, true, false, false], ['C:/tmp/y', null, false, false, true, true],
+  ]);
+});
+
+test('serviço: branch em uso por worktree — exclusão parcial, desfazer sem duplicar, remover worktree', async () => {
+  const t = await setup();
+  try {
+    const dir = bugRepo(t.root);
+    const repo = await t.svc.add(dir);
+    sh(dir, 'branch', 'mesclada-1', 'HEAD~1');
+    sh(dir, 'branch', 'mesclada-2', 'HEAD~2');
+    sh(dir, 'worktree', 'add', '-q', '-b', 'worktree-x', path.join(dir, '.claude', 'worktrees', 'x'), 'HEAD~3');
+    const br = await t.svc.branches(repo);
+    assert.match(br.branches.find((b) => b.name === 'worktree-x').worktree, /worktrees[\\/]x$/);
+    assert.equal(br.branches.find((b) => b.name === 'mesclada-1').worktree, null);
+    const wts = await t.svc.worktrees(repo);
+    assert.deepEqual(wts.map((w) => [w.name, w.branch, w.exists, w.dirty]), [['x', 'worktree-x', true, 0]]);
+
+    // Como aconteceu: a seleção inclui a branch do worktree. As outras saem; o resultado diz qual ficou e por quê.
+    const r = await t.svc.exec(repo, { op: 'branch.deleteMany', names: ['mesclada-1', 'worktree-x', 'mesclada-2'] });
+    assert.equal(r.partial, true);
+    assert.deepEqual(r.done, ['mesclada-1', 'mesclada-2']);
+    assert.match(r.warning, /2 de 3/);
+    assert.match(r.failed[0].error, /em uso pelo worktree x/);
+    assert.deepEqual((await t.svc.branches(repo)).branches.map((b) => b.name).sort(), ['main', 'worktree-x']);
+    // Desfazer recria só as que saíram (nada de "worktree-x-restaurada").
+    const res = await t.svc.restoreBackup(repo, r.backup);
+    assert.match(res.message, /2 branches/);
+    assert.deepEqual((await t.svc.branches(repo)).branches.map((b) => b.name).sort(), ['main', 'mesclada-1', 'mesclada-2', 'worktree-x']);
+
+    // Remover o worktree libera a branch.
+    await assert.rejects(t.svc.exec(repo, { op: 'worktree.remove', path: path.join(t.root, 'outro') }), /não é deste repositório/);
+    await t.svc.exec(repo, { op: 'worktree.remove', path: wts[0].path });
+    assert.equal(existsSync(path.join(dir, '.claude', 'worktrees', 'x')), false);
+    assert.deepEqual(await t.svc.worktrees(repo), []);
+    const all = await t.svc.exec(repo, { op: 'branch.deleteMany', names: ['worktree-x'] });
+    assert.ok(!all.partial);
+    // Nenhuma deu certo → erro com o motivo.
+    await assert.rejects(t.svc.exec(repo, { op: 'branch.deleteMany', names: ['main'] }), /main/);
+  } finally { t.done(); }
+});

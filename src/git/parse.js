@@ -282,7 +282,29 @@ function parseBisectLog(out) {
 /** `clean -n -d` → [caminho] (pastas terminam em "/"). */
 const parseCleanPreview = (out) => String(out || '').split('\n').map((l) => /^Would remove (.+)$/.exec(l.trim())).filter(Boolean).map((m) => m[1]);
 
+/**
+ * `worktree list --porcelain` → [{ path, head, branch (curto) | null, detached, locked, prunable, main }].
+ * O primeiro é o principal (a pasta do próprio repositório).
+ */
+function parseWorktrees(out) {
+  return String(out || '').replace(/\r/g, '').split('\n\n').map((b) => b.trim()).filter(Boolean).map((b, i) => {
+    const w = { path: '', head: null, branch: null, detached: false, locked: false, prunable: false, main: i === 0 };
+    for (const line of b.split('\n')) {
+      const [k, ...rest] = line.split(' ');
+      const v = rest.join(' ');
+      if (k === 'worktree') w.path = v;
+      else if (k === 'HEAD') w.head = v;
+      else if (k === 'branch') w.branch = v.replace(/^refs\/heads\//, '');
+      else if (k === 'detached') w.detached = true;
+      else if (k === 'locked') w.locked = true;
+      else if (k === 'prunable') w.prunable = true;
+    }
+    return w;
+  });
+}
+
 module.exports = {
+  parseWorktrees,
   parseBlame, PICKAXE_FORMAT, parsePickaxe, parseBisectLog, parseCleanPreview,
   US, RS, LOG_FORMAT, BRANCH_FORMAT, REFLOG_FORMAT, STASH_FORMAT,
   parseStatus, parseDecorations, parseLog, parseBranches, describeReflog, parseReflog, parseStashes, parseNumstat,

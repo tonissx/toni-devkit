@@ -39,16 +39,17 @@ function MergedBranches({ repo, run }) {
   const { data } = useRepoData(repo, (r) => gitApi().branches(r));
   const [pick, setPick] = React.useState(() => new Set());
   const merged = data ? data.branches.filter((b) => b.merged && !b.current) : null;
-  const key = merged ? merged.map((b) => b.name).join('\n') : '';
+  const free = merged ? merged.filter((b) => !b.worktree) : null;
+  const key = merged ? merged.map((b) => b.name + (b.worktree ? '@' : '')).join('\n') : '';
   // Começa com todas marcadas; recargas (o watcher recarrega sozinho) só tiram as que sumiram.
   const seen = React.useRef('');
   React.useEffect(() => {
     if (!merged) return;
-    if (!seen.current) setPick(new Set(merged.map((b) => b.name)));
-    else setPick((s) => new Set([...s].filter((n) => merged.some((b) => b.name === n))));
+    if (!seen.current) setPick(new Set(free.map((b) => b.name)));
+    else setPick((s) => new Set([...s].filter((n) => free.some((b) => b.name === n))));
     seen.current = key;
   }, [key]);
-  const names = merged ? merged.filter((b) => pick.has(b.name)).map((b) => b.name) : [];
+  const names = free ? free.filter((b) => pick.has(b.name)).map((b) => b.name) : [];
   return (
     <section className="gt-card">
       <h3><Icon name="git-branch" size={14} /> Branches já mescladas em {data ? data.base : '…'}</h3>
@@ -58,8 +59,9 @@ function MergedBranches({ repo, run }) {
           <div className="gt-mt__list">
             {merged.map((b) => (
               <div key={b.name} className="gt-mt__row">
-                <Checkbox checked={pick.has(b.name)} onChange={() => setPick((s) => { const n = new Set(s); n.has(b.name) ? n.delete(b.name) : n.add(b.name); return n; })} label={<b className="gt-mono">{b.name}</b>} />
+                <Checkbox checked={!b.worktree && pick.has(b.name)} disabled={!!b.worktree} onChange={() => setPick((s) => { const n = new Set(s); n.has(b.name) ? n.delete(b.name) : n.add(b.name); return n; })} label={<b className="gt-mono">{b.name}</b>} />
                 <span className="gt-mt__main"><small>{b.subject} · {ago(b.time)}</small></span>
+                {b.worktree && <span className="gt-tag is-gone" title={`Aberta no worktree ${b.worktree}. Remova o worktree (seção Worktrees) para poder excluí-la.`}>em uso por worktree</span>}
               </div>
             ))}
           </div>
@@ -118,12 +120,39 @@ function Gitignore({ repo, run }) {
   );
 }
 
+/** Worktrees: cópias de trabalho extras do repositório (o Claude Code cria em .claude/worktrees). */
+function Worktrees({ repo, run }) {
+  const { data: list } = useRepoData(repo, (r) => gitApi().worktrees(r));
+  if (!list || !list.length) return null;
+  const missing = list.some((w) => !w.exists || w.prunable);
+  return (
+    <section className="gt-card">
+      <h3><Icon name="folder-tree" size={14} /> Worktrees <span className="gt-files__n">{list.length}</span></h3>
+      <p className="gt-hint">Outras pastas de trabalho deste repositório, cada uma com uma branch aberta (o Claude Code cria em <code>.claude/worktrees</code>). Enquanto um worktree existe, a branch dele não pode ser excluída nem aberta aqui. Remover apaga só a pasta — commits e branch continuam.</p>
+      <div className="gt-mt__list">
+        {list.map((w) => (
+          <div key={w.path} className="gt-mt__row">
+            <Icon name="folder-git-2" size={14} />
+            <span className="gt-mt__main">
+              <b>{w.name}{w.branch ? <span className="gt-mono"> · {w.branch}</span> : ' · HEAD solto'}</b>
+              <small>{w.path}{!w.exists ? ' · a pasta não existe mais' : w.dirty ? ` · ${w.dirty} mudança(s) não commitada(s)` : ' · sem mudanças'}{w.locked ? ' · travado' : ''}</small>
+            </span>
+            {w.exists && <OpButton op={{ op: 'worktree.remove', path: w.path }} run={run} disabled={w.dirty > 0 || w.locked} icon="trash-2" variant="danger">Remover</OpButton>}
+          </div>
+        ))}
+      </div>
+      {missing && <OpButton op={{ op: 'worktree.prune' }} run={run} icon="eraser">Esquecer worktrees cuja pasta sumiu</OpButton>}
+    </section>
+  );
+}
+
 export function Maintenance({ repo, status, run }) {
   if (status.unborn) return <div className="gt-msg">Faça o primeiro commit para usar a manutenção.</div>;
   return (
     <div className="gt-maint tk-scroll">
       <Tags repo={repo} run={run} />
       <MergedBranches repo={repo} run={run} />
+      <Worktrees repo={repo} run={run} />
       <Untracked repo={repo} run={run} />
       <Gitignore repo={repo} run={run} />
     </div>

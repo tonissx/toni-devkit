@@ -285,6 +285,8 @@ contextBridge.exposeInMainWorld('devkit', {
     rhythm: (repo) => ipcRenderer.invoke('git:rhythm', repo),
     /** Antes/depois de um arquivo num commit (para o Diff Checker). */
     fileVersions: (repo, hash, path) => ipcRenderer.invoke('git:fileVersions', repo, hash, path),
+    /** Worktrees além do principal: { path, name, branch, exists, dirty, locked }. */
+    worktrees: (repo) => ipcRenderer.invoke('git:worktrees', repo),
     onChanged: (cb) => {
       const h = (_e, evt) => cb(evt);
       ipcRenderer.on('git:changed', h);

@@ -197,7 +197,8 @@ export function GitScreen({ toast, request }) {
         setUi((u) => ({ ...u, tab: 'changes' }));
         return true;
       }
-      setLast({ title: r.title, display: r.display, risk: r.risk, explain: p.explain, backup: r.backup });
+      // Feito em parte (ex.: uma das branches estava em uso): mostra o que ficou e por quê.
+      setLast({ title: r.title, display: r.display, risk: r.risk, explain: p.explain, backup: r.backup, stopped: r.warning || undefined });
       return true;
     } catch (e) {
       setLast({ title: p.title, display: p.display, error: errText(e), explain: p.explain });

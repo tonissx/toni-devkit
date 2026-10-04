@@ -242,7 +242,9 @@ const OPS = {
     need(Array.isArray(names) && names.length > 0 && names.length <= 200, 'Escolha as branches');
     names.forEach(branch);
     return {
-      args: ['branch', '-d', ...names], risk: 'safe', backup: true, backupRef: names,
+      // Uma por vez: se o git recusar alguma (em uso num worktree, por exemplo), as outras ainda saem e o resultado diz quais.
+      args: ['branch', '-d', ...names], each: names.map((n) => ['branch', '-d', n]), eachLabel: names,
+      risk: 'safe', backup: true, backupRef: names,
       title: names.length === 1 ? `Excluir a branch ${names[0]}` : `Excluir ${names.length} branches já mescladas`,
       explain: 'Exclui branches cujos commits já estão em outra branch (o git confere). O Devkit guarda a ponta de cada uma num ponto de volta.',
     };
@@ -260,6 +262,17 @@ const OPS = {
       display: `echo "${pattern.trim()}" >> .gitignore`,
     };
   },
+  'worktree.remove': ({ path: p }) => {
+    need(typeof p === 'string' && p.length > 0 && p.length < 1024 && !p.startsWith('-') && !/[\0\r\n]/.test(p), 'Worktree inválido');
+    return {
+      args: ['worktree', 'remove', p], risk: 'safe', worktreePath: p, title: 'Remover o worktree',
+      explain: 'Apaga a pasta desse worktree (uma segunda cópia de trabalho do repositório). Os commits e a branch continuam; depois a branch pode ser excluída. O git recusa se a pasta tiver mudanças não commitadas.',
+    };
+  },
+  'worktree.prune': () => ({
+    args: ['worktree', 'prune'], risk: 'safe', title: 'Esquecer worktrees apagados',
+    explain: 'Remove do registro do git os worktrees cuja pasta não existe mais.',
+  }),
   'bisect.start': ({ bad, good }) => ({
     args: ['bisect', 'start', rev(bad || 'HEAD', 'Versão quebrada'), rev(good, 'Versão boa')], risk: 'safe', title: 'Começar a caçar o commit do bug (bisect)',
     explain: 'O git vai pulando para commits no meio do caminho entre a versão boa e a quebrada; você testa cada um e diz se funciona. Em poucos passos ele aponta o commit que introduziu o problema.',
