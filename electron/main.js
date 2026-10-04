@@ -16,6 +16,7 @@ const { createUpdaterService } = require('./updater/service');
 const { createLinksService } = require('./links/service');
 const { createVaultService } = require('./vault/service');
 const { createStickiesService } = require('./stickies/service');
+const { createGitService } = require('./git/service');
 
 // Event Bus: as features anunciam o que aconteceu; módulos (DevCore) escutam sem acoplamento.
 const bus = createBus();
@@ -562,6 +563,56 @@ ipcMain.handle('stickies:self', async (e) => { await stickiesReady; const id = s
 ipcMain.handle('stickies:set', async (e, patch) => { await stickiesReady; return stickies.set(stickyOf(e), patch && typeof patch === 'object' ? patch : {}); });
 ipcMain.handle('stickies:close', async (e) => { await stickiesReady; return stickies.close(stickyOf(e)); });
 
+/* ─────────────── Git (repositórios locais) ─────────────── */
+// Lista de repositórios em %APPDATA%/Toni Devkit/git-repos.json; o git do sistema roda sem shell (ver electron/git/service.js).
+let gitSvc = null;
+let gitReady = null;
+const broadcastGit = (evt) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('git:changed', evt); };
+
+function initGit() {
+  gitSvc = createGitService({ file: path.join(app.getPath('userData'), 'git-repos.json'), broadcast: broadcastGit });
+  gitReady = gitSvc.init().catch((e) => { console.error('[git]', e); });
+}
+
+const GIT_API = ['version', 'list', 'add', 'remove', 'scan', 'open', 'summaries', 'status', 'log', 'commit', 'diff', 'branches', 'compare', 'stashes', 'stashFiles', 'reflog', 'overview', 'backups', 'exec', 'restoreBackup'];
+for (const fn of GIT_API) {
+  ipcMain.handle('git:' + fn, async (_e, ...args) => { await gitReady; return gitSvc[fn](...args); });
+}
+// Adicionar escolhendo a pasta no diálogo do sistema.
+ipcMain.handle('git:pick', async (e) => {
+  await gitReady;
+  const r = await dialog.showOpenDialog(fromEvent(e), { title: 'Escolha a pasta do repositório (ou uma pasta para procurar repositórios)', properties: ['openDirectory'] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  return r.filePaths[0];
+});
+// Pastas comuns para procurar repositórios (Documentos, source/repos, a pasta do usuário).
+ipcMain.handle('git:scan-default', async () => {
+  await gitReady;
+  const home = app.getPath('home');
+  const roots = [app.getPath('documents'), path.join(home, 'source', 'repos'), path.join(home, 'repos'), path.join(home, 'projetos'), home];
+  const seen = new Set();
+  const out = [];
+  for (const root of roots) {
+    for (const f of await gitSvc.scan(root, root === home ? 2 : 3)) if (!seen.has(f.toLowerCase())) { seen.add(f.toLowerCase()); out.push(f); }
+  }
+  return out;
+});
+// Abrir o repositório no Explorer, no VS Code ou num terminal.
+ipcMain.handle('git:open-in', async (_e, repo, where) => {
+  await gitReady;
+  const top = await gitSvc.top(repo);
+  if (where === 'vscode') return shell.openExternal('vscode://file/' + top.replace(/\\/g, '/'));
+  if (where === 'terminal') {
+    const { spawn } = require('node:child_process');
+    const p = process.platform === 'win32'
+      ? spawn('cmd.exe', ['/c', 'start', '', 'cmd.exe', '/K', 'cd', '/d', top], { detached: true, windowsHide: true, stdio: 'ignore' })
+      : spawn(process.platform === 'darwin' ? 'open' : 'x-terminal-emulator', process.platform === 'darwin' ? ['-a', 'Terminal', top] : [], { cwd: top, detached: true, stdio: 'ignore' });
+    p.unref();
+    return true;
+  }
+  return shell.openPath(top);
+});
+
 /* ─────────────── Atualização ─────────────── */
 // Windows instalado (NSIS) e Linux: electron-updater troca os arquivos sozinho. macOS e Windows
 // portátil (não conseguem se auto-substituir em disco): só avisam e abrem a release no navegador.
@@ -612,6 +663,7 @@ if (!app.requestSingleInstanceLock()) {
     initNotes();
     initStickies();
     initLinks();
+    initGit();
     initVault();
     registerNotesProtocol();
     initDevCore();
@@ -645,6 +697,7 @@ if (!app.requestSingleInstanceLock()) {
       if (links) await links.flush().catch(() => {});
       if (vault) await vault.flush().catch(() => {});
       if (stickies) await stickies.flush().catch(() => {});
+      if (gitSvc) { gitSvc.unwatch(); await gitSvc.flush().catch(() => {}); }
       notesFlushed = true;
       app.quit();
     }, 300);

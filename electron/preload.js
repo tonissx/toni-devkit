@@ -237,6 +237,40 @@ contextBridge.exposeInMainWorld('devkit', {
       return () => ipcRenderer.removeListener('stickies:changed', h);
     },
   },
+  /**
+   * Git — repositórios locais (ver electron/git/service.js). Escritas só por exec({ op, ... }) — operações tipadas de
+   * src/git/ops.js; a tela nunca manda linha de comando.
+   */
+  git: {
+    version: () => ipcRenderer.invoke('git:version'),
+    list: () => ipcRenderer.invoke('git:list'),
+    add: (dir) => ipcRenderer.invoke('git:add', dir),
+    remove: (repo) => ipcRenderer.invoke('git:remove', repo),
+    scan: (root, depth) => ipcRenderer.invoke('git:scan', root, depth),
+    scanDefault: () => ipcRenderer.invoke('git:scan-default'),
+    pick: () => ipcRenderer.invoke('git:pick'),
+    open: (repo) => ipcRenderer.invoke('git:open', repo),
+    openIn: (repo, where) => ipcRenderer.invoke('git:open-in', repo, where),
+    summaries: () => ipcRenderer.invoke('git:summaries'),
+    status: (repo) => ipcRenderer.invoke('git:status', repo),
+    log: (repo, opts) => ipcRenderer.invoke('git:log', repo, opts),
+    commit: (repo, hash) => ipcRenderer.invoke('git:commit', repo, hash),
+    diff: (repo, opts) => ipcRenderer.invoke('git:diff', repo, opts),
+    branches: (repo) => ipcRenderer.invoke('git:branches', repo),
+    compare: (repo, a, b) => ipcRenderer.invoke('git:compare', repo, a, b),
+    stashes: (repo) => ipcRenderer.invoke('git:stashes', repo),
+    stashFiles: (repo, ref) => ipcRenderer.invoke('git:stashFiles', repo, ref),
+    reflog: (repo, limit) => ipcRenderer.invoke('git:reflog', repo, limit),
+    overview: (repo) => ipcRenderer.invoke('git:overview', repo),
+    backups: (repo) => ipcRenderer.invoke('git:backups', repo),
+    exec: (repo, op) => ipcRenderer.invoke('git:exec', repo, op),
+    restoreBackup: (repo, id) => ipcRenderer.invoke('git:restoreBackup', repo, id),
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('git:changed', h);
+      return () => ipcRenderer.removeListener('git:changed', h);
+    },
+  },
   /** Atualização automática (ver electron/updater/service.js). */
   updater: {
     status: () => ipcRenderer.invoke('updater:status'),

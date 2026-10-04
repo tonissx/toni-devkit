@@ -36,6 +36,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **XML Formatter**: formata nos moldes do vscode-xml (LemMinX) | ✅ |
 | **Diff Checker**: compara dois textos nos moldes do diffchecker.com | ✅ |
 | **JSON Visualizer**: edita, formata e explora JSON como grafo (estilo JSON Crack), árvore, YAML ou CSV | ✅ |
+| **Git**: repositórios locais com grafo do histórico, stage por trecho, branches, stash e desfazer qualquer coisa | ✅ (fase 1) |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
 | **Vault**: cofre de senhas, tokens e credenciais de banco, com senha mestra e cópia que se apaga | ✅ |
 | **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
@@ -115,6 +116,37 @@ o documento como **grafo de nós** (esquerda → direita). Tudo em JS puro e sem
 
 Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar a visão atual · `Ctrl+O` abrir .json · `Ctrl+S` salvar a visão atual ·
 `Ctrl+6` JSON Visualizer.
+
+### Git
+
+Uma interface visual para os repositórios do computador (`Ctrl+8`), pensada para quem usa o básico do git e trava nas
+operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nada de fetch/pull/push por enquanto).
+
+- **Repositórios**: **Adicionar pasta** (se a pasta não for um repositório, procura os que estão dentro dela) ou **Procurar
+  no PC** (Documentos, `source\repos`, pasta do usuário). Cada um mostra a branch e as mudanças pendentes; abre no
+  Explorer, no VS Code ou num terminal. A lista fica em `%APPDATA%\Toni Devkit\git-repos.json`
+- **Visão geral**: números, mapa de atividade dos últimos 90 dias, quem mais commitou, arquivos mais alterados, último commit
+- **Mudanças**: preparadas, modificadas, novas e em conflito; o diff mostra o que mudou dentro da linha e cada **trecho**
+  tem **Preparar** / **Tirar do stage** / **Descartar** (o `git add -p` sem decorar nada). Caixa de commit com contador da
+  1ª linha, `Ctrl+Enter` e **corrigir o último commit** (amend)
+- **Histórico**: **grafo** dos commits com raias nas cores do tema, branches e tags, filtros por mensagem e autor; o
+  commit escolhido mostra mensagem, arquivos e diff, e permite **criar uma branch ali** ou **voltar a branch para lá**
+  (mantendo as mudanças no stage, nos arquivos, ou jogando fora)
+- **Branches**: à frente/atrás da base (main), **mesclada**, upstream; criar, **trocar** (com mudanças pendentes pergunta:
+  guardar num stash ou levar junto), renomear, excluir e **comparar duas branches** (o que cada uma tem, o ancestral comum,
+  os arquivos e o diff)
+- **Stash**: guardar com nome (inclusive arquivos novos), ver o conteúdo, aplicar, aplicar e remover, descartar
+- **Máquina do tempo**: os pontos de volta do Devkit e o **reflog** em português ("Trocou de main para feature", "Corrigiu o
+  último commit"…), com **recuperar como branch** e **voltar para cá**
+- **Aprender**: passar o mouse em qualquer ação mostra o **comando git equivalente**; operações que reescrevem o histórico
+  ou descartam trabalho pedem confirmação com a explicação, o comando e o **nível de risco**; depois de executar, a barra
+  de baixo mostra o comando que rodou, "O que isso fez?" e **Desfazer**
+- **Nada se perde**: antes de descartar, corrigir commit, voltar a branch, excluir branch ou stash, o Devkit grava um
+  ponto de volta em `refs/devkit/backup/…` (as mudanças via `git stash create`) e cópias de arquivos novos apagados em
+  `.git\devkit\` — os 30 mais recentes. O próprio Desfazer também vira um ponto de volta
+
+Próximas fases (planejadas): merge com prévia de conflitos, editor de conflitos, cherry-pick, rebase interativo visual,
+receitas "Quero…"; depois blame, bisect guiado, tags, limpeza de branches e integração com Início/palette/Notes.
 
 ## Início
 

@@ -1,0 +1,126 @@
+// Git — Mudanças: o que está preparado (stage), o que não está, arquivos novos e conflitos; diff do arquivo escolhido
+// com botões por trecho; e a caixa de commit (com "corrigir o último commit").
+import { DS, isMod } from '../../lib/ds.js';
+import { gitApi, useRepoData, FilePath, KindBadge, OpButton, preview, RiskBadge } from './shared.jsx';
+import { GitDiff } from './GitDiff.jsx';
+
+const { Icon, Spinner, Checkbox } = DS;
+
+function FileRow({ f, area, selected, onSelect, run, unborn }) {
+  const p = [f.path];
+  return (
+    <div className={'gt-file' + (selected ? ' is-sel' : '')} onClick={() => onSelect({ area, path: f.path })} role="button" tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') onSelect({ area, path: f.path }); }}>
+      <KindBadge kind={area === 'untracked' ? 'untracked' : area === 'conflicts' ? 'conflict' : f.kind} />
+      <FilePath path={f.path} />
+      {f.orig && <span className="gt-file__orig" title={'Antes: ' + f.orig}>← {f.orig.split('/').pop()}</span>}
+      <span className="gt-file__actions">
+        {area === 'unstaged' && <OpButton op={{ op: 'discard', paths: p }} run={run} icon="undo-2" variant="danger" />}
+        {area === 'untracked' && <OpButton op={{ op: 'removeUntracked', paths: p }} run={run} icon="trash-2" variant="danger" />}
+        {(area === 'unstaged' || area === 'untracked') && <OpButton op={{ op: 'stage', paths: p }} run={run} icon="plus" variant="accent" />}
+        {area === 'staged' && <OpButton op={{ op: 'unstage', paths: p }} run={run} icon="minus" ctx={{ unborn }} />}
+        {area === 'conflicts' && <OpButton op={{ op: 'stage', paths: p }} run={run} icon="check">Resolvido</OpButton>}
+      </span>
+    </div>
+  );
+}
+
+function Section({ title, hint, files, area, actions, sel, ...rest }) {
+  if (!files.length) return null;
+  return (
+    <section className={'gt-files is-' + area}>
+      <header className="gt-files__head">
+        <span className="gt-files__title" title={hint}>{title}</span>
+        <span className="gt-files__n">{files.length}</span>
+        <span className="gt-files__actions">{actions}</span>
+      </header>
+      {files.map((f) => <FileRow key={area + f.path} f={f} area={area} selected={!!sel && sel.area === area && sel.path === f.path} {...rest} />)}
+    </section>
+  );
+}
+
+function CommitBox({ status, run, repo }) {
+  const [msg, setMsg] = React.useState(() => { try { return localStorage.getItem('tk.git.draft:' + repo) || ''; } catch { return ''; } });
+  const [amend, setAmend] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => { try { localStorage.setItem('tk.git.draft:' + repo, msg); } catch { /* ignore */ } }, [msg, repo]);
+  const subject = msg.split('\n')[0];
+  const canCommit = (status.staged.length > 0 || amend) && msg.trim() && !status.conflicts.length;
+  const p = preview({ op: 'commit', message: msg || 'x', amend });
+  const go = async () => {
+    if (!canCommit || busy) return;
+    setBusy(true);
+    const ok = await run({ op: 'commit', message: msg, amend });
+    setBusy(false);
+    if (ok) { setMsg(''); setAmend(false); }
+  };
+  // Amend: traz a mensagem do último commit para editar.
+  const toggleAmend = async (on) => {
+    setAmend(on);
+    if (on && !msg.trim()) {
+      try { const [c] = await gitApi().log(repo, { limit: 1, ref: 'HEAD' }); if (c) { const d = await gitApi().commit(repo, c.hash); setMsg(d.message); } } catch { /* sem commit */ }
+    }
+  };
+  return (
+    <div className="gt-commit">
+      <textarea className="gt-commit__msg" value={msg} onChange={(e) => setMsg(e.target.value)} rows={3}
+        placeholder={'Mensagem do commit — o que mudou e por quê\n(1ª linha curta; detalhes depois de uma linha em branco)'}
+        onKeyDown={(e) => { if (isMod(e) && e.key === 'Enter') { e.preventDefault(); go(); } }} aria-label="Mensagem do commit" />
+      <div className="gt-commit__bar">
+        <span className={'gt-commit__count' + (subject.length > 72 ? ' is-long' : subject.length > 50 ? ' is-warn' : '')} title="A 1ª linha fica melhor com até 50 caracteres (máximo 72)">{subject.length}/50</span>
+        {!status.unborn && <Checkbox label="Corrigir o último commit (amend)" checked={amend} onChange={toggleAmend} />}
+        <span className="gt-commit__spacer" />
+        {amend && <RiskBadge risk="rewrite" />}
+        <button type="button" className="gt-op is-primary is-md" disabled={!canCommit || busy} onClick={go}
+          title={status.conflicts.length ? 'Resolva os conflitos antes' : !status.staged.length && !amend ? 'Prepare (stage) algum arquivo primeiro' : `${p.display}\nCtrl+Enter`}>
+          {busy ? <Spinner size={13} /> : <Icon name="git-commit-horizontal" size={14} />}
+          <span>{amend ? 'Corrigir commit' : status.staged.length ? `Commit de ${status.staged.length} arquivo${status.staged.length === 1 ? '' : 's'}` : 'Commit'}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function Changes({ repo, status, run }) {
+  const [sel, setSel] = React.useState(null); // { area, path }
+  const s = status;
+  const untracked = React.useMemo(() => s.untracked.map((p) => ({ path: p, kind: 'untracked' })), [s.untracked]);
+  const all = { staged: s.staged, unstaged: s.unstaged, untracked, conflicts: s.conflicts };
+  // Seleção some (arquivo commitado/descartado)? Vai para o próximo disponível.
+  React.useEffect(() => {
+    if (sel && all[sel.area] && all[sel.area].some((f) => f.path === sel.path)) return;
+    const first = ['conflicts', 'unstaged', 'untracked', 'staged'].map((a) => all[a][0] && { area: a, path: all[a][0].path }).find(Boolean);
+    setSel(first || null);
+  }, [s]);
+  const diffArea = sel ? (sel.area === 'conflicts' ? 'unstaged' : sel.area) : null;
+  const diff = useRepoData(repo, (r) => (sel ? gitApi().diff(r, { area: diffArea, path: sel.path }) : null), [sel && sel.area, sel && sel.path, s]);
+  const total = s.staged.length + s.unstaged.length + untracked.length + s.conflicts.length;
+
+  return (
+    <div className="gt-changes">
+      <div className="gt-changes__side">
+        <div className="gt-changes__lists tk-scroll">
+          {total === 0 && <div className="gt-clean"><Icon name="circle-check" size={28} /><b>Tudo commitado</b><span>Nenhuma mudança pendente na branch {s.branch.head || 'atual'}.</span></div>}
+          {['conflicts', 'staged', 'unstaged', 'untracked'].map((area) => (
+            <Section key={area} area={area} files={all[area]} sel={sel} onSelect={setSel} run={run} unborn={s.unborn}
+              title={{ conflicts: 'Em conflito', staged: 'Preparadas para o commit', unstaged: 'Modificadas', untracked: 'Novas (fora do git)' }[area]}
+              hint={{ conflicts: 'Arquivos com conflito: edite, resolva e marque como resolvido', staged: 'Área de preparação (stage): o que entra no próximo commit', unstaged: 'Mudanças que ainda não vão para o commit', untracked: 'Arquivos que o git ainda não acompanha' }[area]}
+              actions={area === 'staged' ? <OpButton op={{ op: 'unstageAll' }} ctx={{ unborn: s.unborn }} run={run} icon="minus">Tirar tudo</OpButton>
+                : area === 'unstaged' || area === 'untracked' ? <OpButton op={{ op: 'stage', paths: all[area].map((f) => f.path) }} run={run} icon="plus" variant="accent">Preparar todos</OpButton> : null}
+            />
+          ))}
+        </div>
+        <CommitBox status={s} run={run} repo={repo} />
+      </div>
+      <div className="gt-changes__diff tk-scroll">
+        {sel ? (
+          <>
+            <div className="gt-diffhead"><FilePath path={sel.path} /><span className="gt-diffhead__area">{{ staged: 'preparado', unstaged: 'não preparado', untracked: 'arquivo novo', conflicts: 'em conflito' }[sel.area]}</span></div>
+            {diff.data ? <GitDiff patch={diff.data.patch} truncated={diff.data.truncated} mode={sel.area === 'conflicts' ? 'readonly' : sel.area} run={run} />
+              : diff.error ? <div className="gt-msg is-error">{diff.error}</div> : <div className="gt-msg"><Spinner size={14} /> Carregando o diff…</div>}
+          </>
+        ) : <div className="gt-msg">Escolha um arquivo para ver o que mudou.</div>}
+      </div>
+    </div>
+  );
+}

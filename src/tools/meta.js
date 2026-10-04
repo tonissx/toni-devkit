@@ -40,6 +40,15 @@ const TOOL_META = [
     keywords: ['jsoncrack', 'json crack', 'grafo', 'graph', 'árvore', 'tree', 'jsonpath', 'yaml', 'csv', 'minificar', 'beautify', 'formatar'],
   },
   {
+    id: 'git',
+    name: 'Git',
+    icon: 'git-branch',
+    group: 'Texto & código',
+    desc: 'Repositórios locais: grafo do histórico, mudanças por trecho, branches, stash e desfazer qualquer coisa',
+    shortcutKey: '8',
+    keywords: ['git', 'commit', 'branch', 'stash', 'merge', 'rebase', 'reflog', 'historico', 'repositório', 'versionamento', 'desfazer', 'diff'],
+  },
+  {
     id: 'notes',
     name: 'Notes',
     icon: 'notebook-pen',
