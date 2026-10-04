@@ -22,7 +22,7 @@ Outros comandos úteis:
 
 ```bash
 npm run dev        # como o start, mas com DevTools abertas
-npm test           # testa os motores SQL e XML no Node (sem Electron)
+npm test           # todos os testes no Node (motores, serviços, palette, DevCore; sem Electron)
 npm run dist       # gera instalador Windows (NSIS) + portable em dist/
 npm run dist:mac   # gera .dmg (macOS)
 npm run dist:linux # gera AppImage (Linux)
@@ -115,6 +115,24 @@ o documento como **grafo de nós** (esquerda → direita). Tudo em JS puro e sem
 
 Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar a visão atual · `Ctrl+O` abrir .json · `Ctrl+S` salvar a visão atual ·
 `Ctrl+6` JSON Visualizer.
+
+## Início
+
+O painel do dia, aberto ao clicar em **Início** na sidebar. Tudo se atualiza sozinho quando uma nota, um link ou o cofre
+muda.
+
+- **Cabeçalho**: saudação conforme a hora do dia, a data e o resumo do que vence ("1 tarefa vencida · 2 tarefas para hoje")
+- **Status**: quantidade de notas, estado do cofre (aberto → clique bloqueia; bloqueado → abre o Vault), aviso quando
+  outro app ocupa `Ctrl+Alt+Space` e a atualização disponível/baixada (um clique baixa ou reinicia já na versão nova)
+- **Tarefas**: vencidas, de hoje e dos próximos 7 dias, mais as sem prazo que têm prioridade. Marcar grava na nota;
+  clicar no texto abre a nota; o campo no topo captura uma tarefa no **Inbox** (`@hoje`/`@amanha` viram a data)
+- **Notas recentes** (editadas e vistas) e as **fixadas**; **Nova** abre uma nota em branco
+- **Links rápidos**: favoritos abrem com um clique; links com `{q}` têm um campo para o valor e os últimos valores usados
+- **DevCore**: Compute, tier, missões do dia e o incidente ativo ou previsto (só consulta o DevCore com o painel visível)
+- **Ferramentas**: a grade de sempre, com favoritas primeiro
+- **Personalizar** esconde ou mostra cada painel (fica salvo)
+
+As regras do painel (agenda, rótulos de prazo, resumo) ficam em `src/home/dashboard.js` (`npm run test:home`).
 
 ## Command Palette
 
@@ -237,7 +255,7 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   - Aba **Tarefas** (no topo da área principal): todas as tarefas de todas as notas, agrupadas em Vencidas · Hoje · Próximas ·
     Sem data (aba Concluídas à parte); marcar ali grava na nota de origem, clicar no texto abre a nota. A lista
     de notas mostra o progresso (`☑ 3/7`)
-  - Na palette: `task: revisar PR #42` (também `tarefa:` e `t:`) acrescenta `- [ ] revisar PR #42` à nota **Inbox**
+  - Na palette: `task: revisar PR #42` (também `tarefa:` e `t:`) acrescenta `- [ ] revisar PR #42` à nota **Inbox** (`@hoje`/`@amanha` já viram a data)
     (criada se não existir) · comando **Tarefas** abre o filtro
 - **Auto-save** em todo lugar, sem botão Salvar: grava ao digitar, ao perder o foco, ao trocar de nota, no `Esc`
   e antes de o app sair. Se o disco falhar, o texto continua no editor e num backup local, com "Tentar de novo"

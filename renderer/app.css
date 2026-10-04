@@ -91,6 +91,64 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .home-section { padding: 8px 24px 24px; display: flex; flex-direction: column; gap: 12px; max-width: 1200px; }
 .home-section__title { font: 500 11px/1 var(--tk-font-sans); color: var(--tk-text-3); text-transform: uppercase; letter-spacing: .06em; }
 
+/* Início: painel do dia */
+.home { padding-bottom: 8px; }
+.home-sub { text-transform: none; }
+.home-sub::first-letter { text-transform: uppercase; }
+.home-sub__sep { margin: 0 6px; opacity: .5; }
+.home-custom { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 14px 24px 0; padding: 10px 14px; max-width: 1152px;
+  border: 1px dashed var(--tk-border-strong); border-radius: var(--tk-radius-md); background: var(--tk-surface-2); }
+.home-status { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 24px; max-width: 1200px; }
+.home-status:empty { display: none; }
+.home-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-pill);
+  background: var(--tk-surface-2); color: var(--tk-text-2); font: 400 12px var(--tk-font-sans); cursor: pointer; }
+.home-chip:hover { border-color: var(--tk-border-strong); color: var(--tk-text); }
+.home-chip.is-warn { color: var(--tk-amber); border-color: var(--tk-amber-a12); background: var(--tk-amber-a12); }
+.home-chip.is-error { color: var(--tk-red); border-color: var(--tk-red-a24); background: var(--tk-red-a12); }
+.home-chip.is-accent { color: var(--tk-accent-text); border-color: var(--tk-green-a24); background: var(--tk-green-a12); }
+.home-dash { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; padding: 0 24px 16px; max-width: 1200px; align-items: start; }
+.home-panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.home-panel .tk-card__head { margin-bottom: 2px; }
+.home-msg { display: flex; align-items: center; gap: 8px; padding: 6px 2px; font-size: 12.5px; color: var(--tk-text-3); line-height: 1.45; }
+.home-msg code { font: 12px var(--tk-font-mono); color: var(--tk-accent-text); }
+.home-list { display: flex; flex-direction: column; margin: 0 -8px; }
+.home-add { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm);
+  background: var(--tk-surface-input); color: var(--tk-text-3); }
+.home-add:focus-within { border-color: var(--tk-accent); }
+.home-add input, .home-link__body input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--tk-text); font: 400 13px var(--tk-font-sans); }
+.home-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: var(--tk-radius-sm); background: none;
+  color: var(--tk-text-3); text-align: left; cursor: pointer; }
+.home-row:hover { background: var(--tk-surface-2); }
+.home-row__main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.home-row__title { font: 500 13px var(--tk-font-sans); color: var(--tk-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-row:hover .home-row__title { color: var(--tk-accent-text); }
+.home-row__sub { font-size: 11.5px; color: var(--tk-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-row__aside { flex-shrink: 0; font: 11px var(--tk-font-mono); color: var(--tk-text-3); }
+.home-pinned { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--tk-border); }
+.home-pinned__list { display: flex; flex-wrap: wrap; gap: 6px; }
+.home-pill { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; height: 24px; padding: 0 9px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-pill);
+  background: var(--tk-surface-2); color: var(--tk-text-2); font: 400 12px var(--tk-font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.home-pill.is-mono { font-family: var(--tk-font-mono); font-size: 11.5px; }
+.home-pill:hover { border-color: var(--tk-accent); color: var(--tk-accent-text); }
+.home-link { display: flex; flex-direction: column; gap: 6px; padding: 7px 8px; border-radius: var(--tk-radius-sm); }
+.home-link:hover { background: var(--tk-surface-2); }
+.home-link__head { display: flex; align-items: center; gap: 8px; padding: 0; border: 0; background: none; color: var(--tk-text-3); text-align: left; cursor: pointer; }
+.home-link__head:disabled { cursor: default; }
+.home-link__head:not(:disabled):hover .home-link__name { color: var(--tk-accent-text); }
+.home-link__name { flex: 1; min-width: 0; font-size: 13px; color: var(--tk-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.home-link__body { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.home-link__body form { display: flex; flex: 1 1 140px; min-width: 120px; height: 24px; padding: 0 8px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm); background: var(--tk-surface-input); }
+.home-link__body form:focus-within { border-color: var(--tk-accent); }
+.home-link__body input { font: 12px var(--tk-font-mono); }
+.home-panel.is-click { cursor: pointer; }
+.home-dc { display: flex; flex-wrap: wrap; gap: 8px 28px; }
+.home-dc__stat { display: flex; flex-direction: column; gap: 3px; }
+.home-dc__value { font: 600 18px var(--tk-font-mono); color: var(--tk-text); }
+.home-dc__label { font-size: 11.5px; color: var(--tk-text-3); }
+.home-dc__alert { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: var(--tk-radius-sm); background: var(--tk-amber-a12); color: var(--tk-amber); font-size: 12px; }
+.home-dc__alert.is-bad { background: var(--tk-red-a12); color: var(--tk-red); }
+.home-dc__alert.is-ok { background: var(--tk-green-a12); color: var(--tk-accent-text); }
+
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 0; border-bottom: 1px solid var(--tk-border); }
 .set-row:last-child { border-bottom: 0; }
 .set-row__label { font-size: 13px; color: var(--tk-text); }
