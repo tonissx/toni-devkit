@@ -59,15 +59,18 @@ function agenda(tasks, today, { limit = 7, horizon = 7 } = {}) {
   return { items: [...due, ...extra].slice(0, limit), counts };
 }
 
-/** Frase-resumo do dia para o cabeçalho, ou '' quando não há nada pendente com prazo. */
-function daySummary(counts) {
-  if (!counts) return '';
+/** Partes do resumo do dia para o cabeçalho, com o tom de cada uma: [{ text, tone: 'late'|'today'|'calm' }]. */
+function daySummaryParts(counts) {
+  if (!counts) return [];
   const parts = [];
-  if (counts.late) parts.push(counts.late === 1 ? '1 tarefa vencida' : `${counts.late} tarefas vencidas`);
-  if (counts.today) parts.push(counts.today === 1 ? '1 tarefa para hoje' : `${counts.today} tarefas para hoje`);
-  if (!parts.length) return counts.open ? 'Nada vencendo hoje' : '';
-  return parts.join(' · ');
+  if (counts.late) parts.push({ text: counts.late === 1 ? '1 tarefa vencida' : `${counts.late} tarefas vencidas`, tone: 'late' });
+  if (counts.today) parts.push({ text: counts.today === 1 ? '1 tarefa para hoje' : `${counts.today} tarefas para hoje`, tone: 'today' });
+  if (!parts.length && counts.open) parts.push({ text: 'Nada vencendo hoje', tone: 'calm' });
+  return parts;
 }
+
+/** Frase-resumo do dia, ou '' quando não há nada pendente. */
+const daySummary = (counts) => daySummaryParts(counts).map((p) => p.text).join(' · ');
 
 /** Notas recentes sem repetir: as editadas primeiro, completando com as vistas (recent() do serviço). */
 function recentNotes(recent, limit = 6) {
@@ -98,4 +101,4 @@ const PANELS = [
   { id: 'tools', name: 'Ferramentas' },
 ];
 
-module.exports = { greeting, longDate, daysBetween, dueLabel, agenda, daySummary, recentNotes, dashboardLinks, PANELS };
+module.exports = { greeting, longDate, daysBetween, dueLabel, agenda, daySummary, daySummaryParts, recentNotes, dashboardLinks, PANELS };

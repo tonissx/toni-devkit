@@ -895,3 +895,33 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .md-secret__btn:hover { color: var(--tk-accent-text); border-color: var(--tk-accent); }
 .md-secret__btn.is-ok { color: var(--tk-accent-text); border-color: var(--tk-accent); }
 .md-secret__btn.is-err { color: var(--tk-red); border-color: var(--tk-red); }
+
+/* Início: pontos de cor. Cada painel ganha uma --hue tirada da paleta de sintaxe do tema (--tk-syn-*), que todos
+   os temas redefinem — então as cores acompanham Hacking, Dracula, Tokyo Night, Claro etc. */
+.home-panel.is-tasks, .home-tool.is-code { --hue: var(--tk-syn-keyword); }
+.home-panel.is-notes, .home-tool.is-know { --hue: var(--tk-syn-string); }
+.home-panel.is-links { --hue: var(--tk-syn-bool); }
+.home-panel.is-dc, .home-tool.is-core { --hue: var(--tk-syn-number); }
+
+.home .tk-pagehead { background: radial-gradient(ellipse 60% 140% at 0% 0%, color-mix(in srgb, var(--tk-accent) 12%, transparent), transparent 70%); }
+.home-sub__part.is-late { color: var(--tk-red); font-weight: 500; }
+.home-sub__part.is-today { color: var(--tk-accent-text); font-weight: 500; }
+
+.home-panel { background-image: linear-gradient(180deg, color-mix(in srgb, var(--hue) 7%, transparent), transparent 110px); overflow: hidden; }
+.home-panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--hue), color-mix(in srgb, var(--hue) 0%, transparent)); }
+.home-panel .tk-card__icon, .home-tool .tk-toolcard__icon { color: var(--hue);
+  background: color-mix(in srgb, var(--hue) 14%, transparent); border-color: color-mix(in srgb, var(--hue) 32%, transparent); }
+.home-panel.is-click:hover, .home-tool:hover { border-color: color-mix(in srgb, var(--hue) 45%, var(--tk-border)); }
+.home-panel .nts-task .md-task { accent-color: var(--hue); }
+.home-panel .nts-task__text:hover, .home-row:hover .home-row__title, .home-link__head:not(:disabled):hover .home-link__name { color: var(--hue); }
+.home-add:focus-within, .home-link__body form:focus-within { border-color: var(--hue); }
+.home-add > svg, .home-row > svg, .home-pill > svg { color: var(--hue); }
+.home-pill:hover { border-color: var(--hue); color: var(--hue); }
+.home-link .tk-badge { color: var(--hue); background: color-mix(in srgb, var(--hue) 14%, transparent); border-color: transparent; }
+.home-dc__value.is-hue { color: var(--hue); }
+
+.home-chip.is-notes { --hue: var(--tk-syn-string); }
+.home-chip.is-vault { --hue: var(--tk-syn-bool); }
+.home-chip.is-notes svg, .home-chip.is-vault svg { color: var(--hue); }
+.home-chip.is-notes:hover, .home-chip.is-vault:hover { border-color: color-mix(in srgb, var(--hue) 50%, var(--tk-border)); }

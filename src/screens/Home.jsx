@@ -5,9 +5,12 @@ import { isoDate } from '../notes/edit.js';
 import { cleanError, shortTime } from '../notes/client.js';
 import { needsValue } from '../links/link.js';
 import { formatNum } from '../devcore/engine/format.js';
-import { greeting, longDate, dueLabel, agenda, daySummary, recentNotes, dashboardLinks, PANELS } from '../home/dashboard.js';
+import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, PANELS } from '../home/dashboard.js';
 
 const { PageHeader, ToolCard, Button, Card, Icon, Badge, Checkbox, EmptyState, Spinner } = DS;
+
+// Cor de cada grupo de ferramentas — a mesma do painel correspondente (ver .home-tool em app.css).
+const GROUP_HUE = { 'Texto & código': 'code', Conhecimento: 'know', DevCore: 'core' };
 
 /** Assina um evento "changed" de um serviço e recarrega com debounce (várias gravações seguidas = 1 leitura). */
 function useLive(load, subscribe, delay = 120) {
@@ -44,7 +47,7 @@ function StatusStrip({ noteCount, vault, palette, updater, go }) {
   return (
     <div className="home-status" role="status">
       {noteCount != null && (
-        <StatusChip icon="notebook-pen" title="Abrir Notes" onClick={() => go('notes')}>
+        <StatusChip icon="notebook-pen" tone="notes" title="Abrir Notes" onClick={() => go('notes')}>
           {noteCount === 1 ? '1 nota' : `${noteCount} notas`}
         </StatusChip>
       )}
@@ -52,7 +55,7 @@ function StatusStrip({ noteCount, vault, palette, updater, go }) {
         ? <StatusChip icon="lock-open" tone="warn" title="Cofre aberto — clique para bloquear" onClick={() => window.devkit.vault.lock()}>
             Cofre aberto{vault.count != null ? ` · ${vault.count} ${vault.count === 1 ? 'entrada' : 'entradas'}` : ''}
           </StatusChip>
-        : <StatusChip icon={vault.exists ? 'lock' : 'vault'} title="Abrir o Vault" onClick={() => go('vault')}>
+        : <StatusChip icon={vault.exists ? 'lock' : 'vault'} tone="vault" title="Abrir o Vault" onClick={() => go('vault')}>
             {vault.exists ? 'Cofre bloqueado' : 'Criar cofre'}
           </StatusChip>)}
       {palette && !palette.registered && (
@@ -99,7 +102,7 @@ function TasksPanel({ tasks, today, open, toast }) {
   };
 
   return (
-    <Card className="home-panel" padding={16} icon="list-checks" title="Tarefas"
+    <Card className="home-panel is-tasks" padding={16} icon="list-checks" title="Tarefas"
       subtitle={tasks ? (counts.open ? `${counts.open} ${counts.open === 1 ? 'aberta' : 'abertas'}` : 'Nenhuma aberta') : ''}
       actions={<Button size="sm" variant="ghost" onClick={() => open('notes', { view: 'tasks' })}>Ver todas</Button>}>
       <form className="home-add" onSubmit={add}>
@@ -134,7 +137,7 @@ function TasksPanel({ tasks, today, open, toast }) {
 function NotesPanel({ recent, pinned, open }) {
   const list = recentNotes(recent, 6);
   return (
-    <Card className="home-panel" padding={16} icon="notebook-pen" title="Notas recentes"
+    <Card className="home-panel is-notes" padding={16} icon="notebook-pen" title="Notas recentes"
       actions={<Button size="sm" variant="ghost" icon="file-plus" onClick={() => open('notes', { new: true })}>Nova</Button>}>
       {!recent && <div className="home-msg"><Spinner size={14} /> Carregando…</div>}
       {recent && list.length === 0 && <div className="home-msg">Nenhuma nota ainda. Capture uma com a Quick Note: Ctrl+Alt+Space → Q.</div>}
@@ -199,7 +202,7 @@ function LinkRow({ link, toast }) {
 function LinksPanel({ links, go, toast }) {
   const list = dashboardLinks(links, 6);
   return (
-    <Card className="home-panel" padding={16} icon="link" title="Links rápidos"
+    <Card className="home-panel is-links" padding={16} icon="link" title="Links rápidos"
       actions={<Button size="sm" variant="ghost" onClick={() => go('settings')}>Gerenciar</Button>}>
       {!links && <div className="home-msg"><Spinner size={14} /> Carregando…</div>}
       {links && list.length === 0 && (
@@ -219,10 +222,10 @@ function DevCorePanel({ snap, now, go }) {
   const done = quests.filter((q) => q.done).length;
   const ops = snap.ops || {};
   return (
-    <Card className="home-panel is-click" padding={16} icon="cpu" title="DevCore" interactive onClick={() => go('devcore')}
+    <Card className="home-panel is-dc is-click" padding={16} icon="cpu" title="DevCore" interactive onClick={() => go('devcore')}
       actions={snap.hasNews ? <Badge size="sm" variant="accent" dot>novidade</Badge> : null}>
       <div className="home-dc">
-        <div className="home-dc__stat"><span className="home-dc__value">{formatNum(amount)}</span><span className="home-dc__label">Compute · +{formatNum(snap.rate, { rate: true })}/s</span></div>
+        <div className="home-dc__stat"><span className="home-dc__value is-hue">{formatNum(amount)}</span><span className="home-dc__label">Compute · +{formatNum(snap.rate, { rate: true })}/s</span></div>
         <div className="home-dc__stat"><span className="home-dc__value">{snap.tier ? snap.tier.name : '—'}</span><span className="home-dc__label">Tier atual</span></div>
         {quests.length > 0 && <div className="home-dc__stat"><span className="home-dc__value">{done}/{quests.length}</span><span className="home-dc__label">Missões de hoje</span></div>}
       </div>
@@ -288,12 +291,12 @@ export function Home({ go, open, openPalette, updater, toast }) {
 
   const toggleFav = (id) => setFav((f) => ({ ids: f.ids.includes(id) ? f.ids.filter((x) => x !== id) : [...f.ids, id] }));
   const sorted = [...TOOLS].sort((a, b) => fav.ids.includes(b.id) - fav.ids.includes(a.id));
-  const summary = tasks ? daySummary(agenda(tasks, today).counts) : '';
+  const summary = tasks ? daySummaryParts(agenda(tasks, today).counts) : [];
 
   return (
     <div className="home">
       <PageHeader icon="layout-dashboard" title={greeting(now)}
-        subtitle={<span className="home-sub">{longDate(now)}{summary ? <><span className="home-sub__sep">·</span>{summary}</> : null}</span>}
+        subtitle={<span className="home-sub">{longDate(now)}{summary.map((p) => <React.Fragment key={p.tone}><span className="home-sub__sep">·</span><span className={'home-sub__part is-' + p.tone}>{p.text}</span></React.Fragment>)}</span>}
         actions={<>
           <Button variant="ghost" icon="sliders-horizontal" onClick={() => setEditing((v) => !v)} aria-pressed={editing}>Personalizar</Button>
           <Button variant="secondary" icon="search" kbd={mod('K')} onClick={openPalette}>Buscar</Button>
@@ -321,7 +324,7 @@ export function Home({ go, open, openPalette, updater, toast }) {
           <span className="home-section__title">Ferramentas</span>
           <div className="home-grid">
             {sorted.map((t) => (
-              <ToolCard key={t.id} icon={t.icon} name={t.name} description={t.desc} category={t.group}
+              <ToolCard key={t.id} className={'home-tool is-' + (GROUP_HUE[t.group] || 'code')} icon={t.icon} name={t.name} description={t.desc} category={t.group}
                 shortcut={t.shortcutKey ? mod(t.shortcutKey) : undefined}
                 favorite={fav.ids.includes(t.id)} onToggleFavorite={() => toggleFav(t.id)} onClick={() => go(t.id)} />
             ))}

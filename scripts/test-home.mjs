@@ -66,6 +66,8 @@ test('daySummary resume o que vence', () => {
   assert.equal(H.daySummary({ late: 0, today: 0, open: 4 }), 'Nada vencendo hoje');
   assert.equal(H.daySummary({ late: 0, today: 0, open: 0 }), '');
   assert.equal(H.daySummary(null), '');
+  assert.deepEqual(H.daySummaryParts({ late: 1, today: 2, open: 3 }).map((p) => p.tone), ['late', 'today']);
+  assert.deepEqual(H.daySummaryParts({ late: 0, today: 0, open: 2 }), [{ text: 'Nada vencendo hoje', tone: 'calm' }]);
 });
 
 test('recentNotes junta editadas e vistas sem repetir', () => {
