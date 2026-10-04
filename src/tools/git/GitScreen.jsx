@@ -219,18 +219,18 @@ export function GitScreen({ toast, request }) {
   }
 
   const counts = s ? { changes: s.staged.length + s.unstaged.length + s.untracked.length + s.conflicts.length, stash: s.stashes } : {};
-  // Só texto: com 10 abas, os ícones não cabem na largura da janela.
+  // Ícones só quando a área é larga o bastante (container query em git.css); na janela estreita ficam só os textos.
   const tabs = [
-    { value: 'overview', label: 'Visão geral' },
-    { value: 'recipes', label: 'Quero…' },
-    { value: 'changes', label: 'Mudanças', count: counts.changes || undefined },
-    { value: 'history', label: 'Histórico' },
-    { value: 'branches', label: 'Branches' },
-    { value: 'stash', label: 'Stash', count: counts.stash || undefined },
-    { value: 'rebase', label: 'Reorganizar' },
-    { value: 'investigate', label: 'Investigar' },
-    { value: 'maintenance', label: 'Manutenção' },
-    { value: 'time', label: 'Máquina do tempo' },
+    { value: 'overview', label: 'Visão geral', icon: 'layout-dashboard' },
+    { value: 'recipes', label: 'Quero…', icon: 'sparkles' },
+    { value: 'changes', label: 'Mudanças', icon: 'file-diff', count: counts.changes || undefined },
+    { value: 'history', label: 'Histórico', icon: 'git-commit-horizontal' },
+    { value: 'branches', label: 'Branches', icon: 'git-branch' },
+    { value: 'stash', label: 'Stash', icon: 'archive', count: counts.stash || undefined },
+    { value: 'rebase', label: 'Reorganizar', icon: 'list-ordered' },
+    { value: 'investigate', label: 'Investigar', icon: 'search-code' },
+    { value: 'maintenance', label: 'Manutenção', icon: 'wrench' },
+    { value: 'time', label: 'Máquina do tempo', icon: 'life-buoy' },
   ];
   const props = { repo, status: s, run, go, undo, focus, openMerge: setMerging };
   const Panel = PANELS[ui.tab] || Overview;

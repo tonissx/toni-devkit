@@ -43,6 +43,12 @@
 
 /* área principal */
 .gt-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+/* Abas: com ícones quando cabem; abaixo dessa largura, só o texto (10 abas com ícone não cabem numa janela normal). */
+.gt-main { container-type: inline-size; container-name: gtmain; }
+@container gtmain (max-width: 1080px) {
+  /* !important: o Icon do DS põe display:block inline no svg. */
+  .gt-tabs .tk-tab > svg { display: none !important; }
+}
 .gt-head { display: flex; align-items: center; gap: 12px; padding: 12px 20px 6px; }
 .gt-head__title { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; color: var(--tk-accent-text); }
 .gt-head__title b { font: 600 16px var(--tk-font-sans); color: var(--tk-text); }
