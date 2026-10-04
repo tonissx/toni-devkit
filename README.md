@@ -273,7 +273,7 @@ o que você muda ali grava no `.md`, aparece no Início/Tarefas e entra no hist�
 - **Na sticky**: abre em **Visualizar** (checklists clicáveis, código com Copiar, cartão do Vault); **Editar** com o
   botão, `Ctrl+E` ou duplo clique no texto (`Esc` volta), com os atalhos do editor (`Enter` continua a lista, `Ctrl+L`,
   `@hoje`, `Ctrl+B`/`I`). Cabeçalho: arrastar move · duplo clique recolhe · **cor** da faixa (5 cores do tema atual) ·
-  **sempre por cima** (desligado por padrão) · **abrir no Devkit** · **✕** tira da tela (a nota continua)
+  **sempre por cima** (ligado ao fixar; desligue na sticky que estiver atrapalhando) · **abrir no Devkit** · **✕** tira da tela (a nota continua)
 - **Mostrar/ocultar todas**: palette, menu da bandeja ou um Smart Bind. Elas voltam ao lugar quando o Devkit inicia
 - **Tema**: acompanha o do app na hora. Excluir a nota fecha a sticky dela. Máximo de 6 ao mesmo tempo
 - **Onde fica**: posição, tamanho e cor por computador em `%APPDATA%\Toni Devkit\stickies.json` (cada PC tem seus

@@ -88,7 +88,8 @@ function createStickiesService({ file, createWindow, workAreas, cursorWorkArea, 
     let s = find(noteId);
     if (!s) {
       if (state.stickies.length >= MAX_STICKIES) throw new Error(`Máximo de ${MAX_STICKIES} sticky notes — feche uma antes`);
-      s = { noteId, bounds: null, color: COLORS.includes(color) ? color : COLORS[state.stickies.length % COLORS.length], onTop: false, collapsed: false };
+      // Nasce "sempre por cima": a sticky existe para ficar à vista sobre o programa em que se está trabalhando.
+      s = { noteId, bounds: null, color: COLORS.includes(color) ? color : COLORS[state.stickies.length % COLORS.length], onTop: true, collapsed: false };
       state.stickies.push(s);
     }
     if (state.hidden) { state.hidden = false; restore(); }

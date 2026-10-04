@@ -103,6 +103,8 @@ test('serviço: abrir, limite, fechar e persistir', async () => {
     assert.equal(fw.created.length, 1);
     assert.equal(fw.created[0].visible, true);
     assert.deepEqual(a.bounds, S.cascadeBounds([], MAIN));
+    assert.equal(a.onTop, true); // nasce sempre por cima
+    assert.equal(fw.created[0].opts.onTop, true);
     assert.equal(events.at(-1).noteId, 'nota-a');
     // Abrir de novo só traz para frente.
     await svc.open('nota-a');
@@ -144,6 +146,7 @@ test('serviço: mover/redimensionar grava; reabre no mesmo lugar ao reiniciar', 
     assert.equal(fw.created.length, 1);
     assert.deepEqual(fw.created[0].opts.bounds, { x: 50, y: 60, width: 320, height: 300 });
     assert.equal(svc.get('x').color, 'bool');
+    assert.equal(fw.created[0].opts.onTop, true);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -238,5 +241,6 @@ test('serviço: monitor desconectado — sticky volta para um monitor existente'
     await svc.init();
     svc.restore();
     assert.deepEqual(fw.created[0].opts.bounds, { x: 1620, y: 100, width: 300, height: 260 });
+    assert.equal(fw.created[0].opts.onTop, false); // salva sem "por cima" continua assim (o padrão novo vale só ao fixar)
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
