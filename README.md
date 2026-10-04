@@ -204,7 +204,7 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
 - **Recuperar**: `Ctrl+Alt+Space` e digite o que você lembra. A busca geral da palette já traz notas e snippets
   (título, conteúdo, tags, aliases e tipo; sem acento; tolera 1 erro de digitação) com o trecho que casou
 - **Categoria Notes na palette** (`Alt+N`): digitar busca só nas notas · `Alt+Q` Quick Note · `Alt+N` New Note ·
-  `Alt+P` Pinned · `Alt+R` Recentes
+  `Alt+P` Pinned · `Alt+R` Recentes · `Alt+S` Nova sticky note
 - **Snippets**: na palette, `Enter` **copia** o código e `Ctrl+Enter` abre. No editor, cartão com [Copiar] e
   `Ctrl+Shift+C`
 - **Editor** (ferramenta Notes, `Ctrl+4`): Markdown com modos Editar / Lado a lado / Visualizar (`Ctrl+E`),
@@ -269,7 +269,7 @@ os parâmetros de uma consulta enquanto você trabalha em outro programa. Não �
 o que você muda ali grava no `.md`, aparece no Início/Tarefas e entra no histórico.
 
 - **Fixar**: botão de sticky na barra do editor, ícone ao passar o mouse em "Notas recentes" no Início, ou
-  **Nova sticky note** na palette (cria uma nota e já fixa)
+  **Nova sticky note** na palette (cria uma nota e já fixa; dentro de Notes, `Alt+S`)
 - **Na sticky**: abre em **Visualizar** (checklists clicáveis, código com Copiar, cartão do Vault); **Editar** com o
   botão, `Ctrl+E` ou duplo clique no texto (`Esc` volta), com os atalhos do editor (`Enter` continua a lista, `Ctrl+L`,
   `@hoje`, `Ctrl+B`/`I`). Cabeçalho: arrastar move · duplo clique recolhe · **cor** da faixa (5 cores do tema atual) ·

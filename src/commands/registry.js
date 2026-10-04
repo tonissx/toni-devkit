@@ -275,7 +275,7 @@ const noteCommands = [
     run: (ctx) => ctx.openApp('notes', { view: 'tasks' }),
   },
   {
-    id: 'stickies:new', name: 'Nova sticky note', icon: 'sticky-note',
+    id: 'stickies:new', key: 's', name: 'Nova sticky note', icon: 'sticky-note',
     description: 'Cria uma nota e fixa na tela — para fixar uma que já existe, use o botão no editor ou no Início',
     keywords: ['sticky', 'post-it', 'postit', 'lembrete', 'fixar na tela', 'nota na tela', 'flutuante', 'note'],
     run: async (ctx) => {

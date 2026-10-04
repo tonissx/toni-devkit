@@ -624,7 +624,7 @@ export function Palette() {
             {/* Um "Alt" seguido das letras cabe na largura: Alt + T A N */}
             {link ? null
               : !scope && !q ? <><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">T</Kbd><Kbd size="sm">A</Kbd><Kbd size="sm">N</Kbd> categorias</span><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">Q</Kbd> Quick Note</span></>
-              : scope === 'notes' && !q ? <><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">Q</Kbd><Kbd size="sm">N</Kbd><Kbd size="sm">P</Kbd><Kbd size="sm">R</Kbd></span><span><Kbd size="sm">⌫</Kbd> voltar</span></>
+              : scope === 'notes' && !q ? <><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">Q</Kbd><Kbd size="sm">N</Kbd><Kbd size="sm">P</Kbd><Kbd size="sm">R</Kbd><Kbd size="sm">S</Kbd></span><span><Kbd size="sm">⌫</Kbd> voltar</span></>
               : scope && !q ? <span><Kbd size="sm">⌫</Kbd> voltar</span> : null}
             {(link || !(!q && (!scope || scope === 'notes'))) && <span><Kbd size="sm">↑</Kbd><Kbd size="sm">↓</Kbd> navegar</span>}
             {pwd

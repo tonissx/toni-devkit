@@ -17,11 +17,12 @@ const GLOBAL = {
   q: { type: 'command', id: 'notes:quick' },
 };
 
-// Dentro de Notes (inclusive Pinned/Recentes): Alt+N passa a ser "New Note".
+// Dentro de Notes (inclusive Pinned/Recentes): Alt+N passa a ser "New Note"; Alt+S cria uma sticky note.
 const IN_NOTES = {
   n: { type: 'command', id: 'notes:new' },
   p: { type: 'command', id: 'notes:pinned' },
   r: { type: 'command', id: 'notes:recent' },
+  s: { type: 'command', id: 'stickies:new' },
 };
 
 /**
