@@ -6,6 +6,7 @@
  */
 const { CONTENT } = require('../content/index.js');
 const { check, dayKey } = require('./conditions.js');
+const { petStartLevel } = require('./legacy.js');
 
 const KEEP_DAYS = 60;
 const KEEP_IDS = 50;
@@ -27,19 +28,31 @@ function recordEvent(s, name, data, now) {
   }
 }
 
-/** Aplica descobertas cujas condições passaram. Retorna o log ({ type:'discovery', id, … }). */
+/** Recompensas da run (pet, tier) de uma descoberta. Retorna se algo mudou. */
+function grantRunRewards(s, d, c, log) {
+  let changed = false;
+  for (const r of d.rewards) {
+    if (r.pet && !s.run.pets[r.pet]) { s.run.pets[r.pet] = { level: petStartLevel(s, r.pet, c), station: false }; changed = true; }
+    if (r.tier && r.tier > s.run.tier) { s.run.tier = r.tier; log.push({ type: 'tier', tier: r.tier }); changed = true; }
+  }
+  return changed;
+}
+
+/**
+ * Aplica descobertas cujas condições passaram. Retorna o log ({ type:'discovery', id, … }).
+ * Descobertas já feitas devolvem suas recompensas de run quando a condição volta a valer (depois de
+ * um Rebuild: tiers pelo Compute da run nova, DevPets já encontrados) — sem anunciar de novo.
+ */
 function evaluate(s, now, c = CONTENT) {
   const log = [];
   for (let round = 0; round < 5; round++) { // recompensas podem liberar outras (ex.: tier → condição de tier)
     let changed = false;
     for (const d of c.DISCOVERIES) {
-      if (s.discoveries.found[d.id] || !check(d.when, s)) continue;
+      if (!check(d.when, s)) continue;
+      if (s.discoveries.found[d.id]) { if (grantRunRewards(s, d, c, log)) changed = true; continue; }
       s.discoveries.found[d.id] = now;
       s.discoveries.unseen.push(d.id);
-      for (const r of d.rewards) {
-        if (r.pet && !s.run.pets[r.pet]) s.run.pets[r.pet] = { level: 1, station: false };
-        if (r.tier && r.tier > s.run.tier) { s.run.tier = r.tier; log.push({ type: 'tier', tier: r.tier }); }
-      }
+      grantRunRewards(s, d, c, log);
       log.push({ type: 'discovery', id: d.id, title: d.title, finder: d.finder, pets: d.rewards.filter((r) => r.pet).map((r) => r.pet) });
       changed = true;
     }

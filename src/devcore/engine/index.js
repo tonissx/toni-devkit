@@ -16,6 +16,8 @@
  *   buyPart { part }          compra uma peça de Blueprint com Compute (N minutos da produção atual)
  *   scrapPart { part }        troca sucata por uma peça faltante
  *   refactor { gen }          conjunto completo → próximo Mk (produção do gerador × mult, visual novo)
+ *   rebuild                   Legado: converte o Compute em fragmentos e recomeça a run (ver engine/legacy.js)
+ *   perk { id }               compra um perk da Árvore de Legado com fragmentos
  */
 const { CONTENT } = require('../content/index.js');
 const { advanceTo } = require('./advance.js');
@@ -28,6 +30,7 @@ const { stageOf, evaluateSkins } = require('./appearance.js');
 const { record: recordQuestEvent, evaluateQuests } = require('./quests.js');
 const { ensureScheduled, endIncident, grantItem, abilitiesLocked, randFor } = require('./incidents.js');
 const { bpOf, partId, levelOf, parsePart, partError, dropPart, costDivOf } = require('./blueprints.js');
+const { perkMod, buyPerk, rebuild } = require('./legacy.js');
 
 const upgradeAvailable = (s, u) => !s.run.upgrades[u.id] && check(u.requires, s);
 
@@ -40,7 +43,7 @@ const craftCost = (s, k, now, c = CONTENT) => Math.max(50, k.craftMinutes * 60 *
 /** Achados dos pets durante o tempo fechado: a cada N horas um cache de 1–3 min de produção ou um consumível. */
 function petFinds(s, countedMs, from, now, c) {
   const B = c.BALANCE;
-  const n = Math.floor(countedMs / (B.petFindEveryHours * 3600e3));
+  const n = Math.floor(countedMs / (B.petFindEveryHours * perkMod(s, 'petFindEvery', c) * 3600e3));
   const pets = Object.keys(s.run.pets);
   if (!n || !pets.length) return [];
   const rand = rng(s.seed ^ Math.floor(from / 1000));
@@ -163,7 +166,7 @@ function act(s, action, now, c, log) {
       const a = s.run.abilities[def.id] || { activeUntil: 0, readyAt: 0 };
       if (a.readyAt > now) return 'Em recarga';
       const e = def.effect;
-      if (e.type === 'burst') a.activeUntil = now + e.durationSec * 1000;
+      if (e.type === 'burst') a.activeUntil = now + e.durationSec * perkMod(s, 'abilityDuration', c) * 1000;
       if (e.type === 'instant') {
         const gained = production(s, now, c).rate * e.seconds;
         s.run.resources.compute.amount += gained;
@@ -175,7 +178,7 @@ function act(s, action, now, c, log) {
           if (id !== def.id && other.readyAt > now) other.readyAt = now + (other.readyAt - now) * e.factor;
         }
       }
-      a.readyAt = now + def.cooldownSec * 1000;
+      a.readyAt = now + def.cooldownSec * perkMod(s, 'abilityCooldown', c) * 1000;
       s.run.abilities[def.id] = a;
       log.push({ type: 'ability', id: def.id, pet: owner.id });
       return null;
@@ -276,6 +279,10 @@ function act(s, action, now, c, log) {
       }
       return null;
     }
+    case 'rebuild':
+      return rebuild(s, now, c, log);
+    case 'perk':
+      return buyPerk(s, String(action.id || ''), now, c, log);
     case 'seen':
       s.discoveries.unseen = [];
       if (action.skins) s.cosmetics.fresh = [];

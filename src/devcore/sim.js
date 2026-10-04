@@ -73,13 +73,14 @@ function blueprints(s, now, c, step) {
 }
 
 /**
- * profile: { checkEverySec, onlineHoursPerDay, days, events(day) → [{name,data}], strategy?, quiet?, blueprints? }
+ * profile: { checkEverySec, onlineHoursPerDay, days, events(day) → [{name,data}], strategy?, quiet?, blueprints?, state? }
+ * state: continua a partir de um estado (ex.: logo depois de um Rebuild) em vez de um jogo novo.
  * Retorna marcos { t2, t3, pets:{id:t}, synergies:{id:t}, incidents, items, finalAmount, … }.
  */
 function simulate(profile, c = CONTENT) {
-  const t0 = Date.UTC(2026, 0, 5, 9); // uma segunda-feira, 9h UTC
+  const t0 = profile.state ? profile.state.clock.lastUpdate : Date.UTC(2026, 0, 5, 9); // uma segunda-feira, 9h UTC
   const strategy = profile.strategy || 'prepared';
-  let s = createState(t0, c);
+  let s = profile.state ? structuredClone(profile.state) : createState(t0, c);
   let now = t0;
   const marks = { t2: null, t3: null, pets: {}, synergies: {}, purchases: 0, maxWaitSec: 0, maxCheapestSec: 0,
     incidents: { seen: 0, contained: 0, escaped: 0, hotfixed: 0 }, items: 0, parts: 0, firstMk2: null, firstMk3: null };
@@ -157,6 +158,32 @@ function incidentLoss(profile, c = CONTENT) {
   return { loss: 1 - withIncidents.finalAmount / quiet.finalAmount, marks: withIncidents };
 }
 
+/**
+ * Legado: joga `runs` runs de `profile.days` dias; ao fim de cada uma dá Rebuild e gasta os fragmentos
+ * nos perks mais baratos disponíveis. Retorna por run: { t2, t3, final, rate, gained, level, perks }.
+ */
+function simulateLegacy(profile, runs = 2, c = CONTENT) {
+  const out = [];
+  let state = null;
+  for (let i = 0; i < runs; i++) {
+    const m = simulate({ ...profile, state }, c);
+    let s = m.state;
+    const now = s.clock.lastUpdate;
+    const r = dispatch(s, { type: 'rebuild' }, now, c);
+    if (r.error) { out.push({ ...pick(m), error: r.error }); break; }
+    s = r.state;
+    for (let guard = 0; guard < 50; guard++) {
+      const k = snapshot(s, now, c).legacy.perks.filter((x) => x.affordable).sort((a, b) => a.cost - b.cost)[0];
+      if (!k) break;
+      s = dispatch(s, { type: 'perk', id: k.id }, now, c).state;
+    }
+    out.push({ ...pick(m), gained: r.log.find((e) => e.type === 'rebuild').gained, level: s.meta.earned, perks: Object.keys(s.meta.perks) });
+    state = s;
+  }
+  return out;
+}
+const pick = (m) => ({ t2: m.t2, t3: m.t3, final: m.state.run.resources.compute.lifetime, rate: m.finalRate });
+
 /** Perfis padrão. */
 const PROFILES = {
   // Sessão ativa: DevCore aberto, olhando a cada 30 s, app aberto o dia inteiro.
@@ -176,4 +203,4 @@ const PROFILES = {
   },
 };
 
-module.exports = { simulate, PROFILES, options, incidentLoss };
+module.exports = { simulate, simulateLegacy, PROFILES, options, incidentLoss };

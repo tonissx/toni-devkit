@@ -1,8 +1,9 @@
 'use strict';
 /**
  * Estado do DevCore: um único objeto serializável, com seções separadas.
- *   run          → a infraestrutura atual (o que um futuro "Rebuild" zeraria)
- *   meta         → progressão permanente (prestige; vazio no MVP)
+ *   run          → a infraestrutura atual
+ *   run          ↑ zerado pelo Rebuild (ver engine/legacy.js)
+ *   meta         → Legado (prestige): fragmentos, nível, perks, Compute de runs passadas — nunca reseta
  *   usage        → fatos de uso do DevKit (dias/ids distintos) — nunca resetam
  *   discoveries  → descobertas feitas e ainda não vistas
  *   pending      → resumo de retorno aguardando ser mostrado
@@ -16,26 +17,13 @@ const { CONTENT } = require('../content/index.js');
 const VERSION = 1;
 
 function createState(now, c = CONTENT) {
-  const B = c.BALANCE;
   const s = {
     version: VERSION,
     seed: (Math.floor(now) % 2147483646) + 1,
     clock: { lastUpdate: now, startedAt: now, lastOfflineMs: 0 },
-    run: {
-      resources: { compute: { amount: B.start.compute, lifetime: 0 } },
-      generators: {},
-      upgrades: {},
-      tier: 1,
-      pets: {},
-      abilities: {},
-      incidents: { seq: 0, next: null, active: null, history: [] },
-      inventory: {},
-      boosts: [],
-      shields: 0,
-      blueprints: {},  // { [gen]: { mk, parts: { [partId]: true } } } — sem entrada = Mk I
-      scrap: 0,
-    },
-    meta: { fragments: 0, rebuilds: 0, perks: {} },
+    run: createRun(c),
+    // fragments: não gastos · earned: ganhos na vida (= nível de Legado) · lifetime: Compute de runs passadas
+    meta: { fragments: 0, earned: 0, rebuilds: 0, perks: {}, lifetime: 0, lastRebuildAt: 0 },
     usage: { days: {}, distinct: {}, first: {} },
     discoveries: { found: {}, unseen: [], seenUpgrades: [] },
     pending: { welcome: null },
@@ -44,9 +32,29 @@ function createState(now, c = CONTENT) {
     quests: { day: '', ids: [], done: [], seen: {}, total: 0, byPet: {} }, // missões diárias — o contador nunca reseta
     settings: { quiet: false },
   };
-  for (const [id, owned] of Object.entries(B.start.generators)) s.run.generators[id] = { owned };
-  for (const id of B.start.pets) s.run.pets[id] = { level: 1, station: false };
   return s;
+}
+
+/** Uma run nova (início do jogo ou Rebuild). `seq` mantém a sequência de incidentes entre runs. */
+function createRun(c = CONTENT, seq = 0) {
+  const B = c.BALANCE;
+  const run = {
+    resources: { compute: { amount: B.start.compute, lifetime: 0 } },
+    generators: {},
+    upgrades: {},
+    tier: 1,
+    pets: {},
+    abilities: {},
+    incidents: { seq, next: null, active: null, history: [] },
+    inventory: {},
+    boosts: [],
+    shields: 0,
+    blueprints: {},  // { [gen]: { mk, parts: { [partId]: true } } } — sem entrada = Mk I
+    scrap: 0,
+  };
+  for (const [id, owned] of Object.entries(B.start.generators)) run.generators[id] = { owned };
+  for (const id of B.start.pets) run.pets[id] = { level: 1, station: false };
+  return run;
 }
 
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
@@ -74,4 +82,4 @@ function migrate(raw, now, c = CONTENT) {
   return s;
 }
 
-module.exports = { VERSION, createState, migrate };
+module.exports = { VERSION, createState, createRun, migrate };

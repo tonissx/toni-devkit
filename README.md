@@ -465,7 +465,14 @@ tela do DevCore aparece, no máximo, um ponto discreto no item da sidebar quando
   moeda. Contam **dias distintos** e **ferramentas distintas**: 100 notas num dia valem o mesmo que 1
 - **Offline**: sem ticks; o ganho é calculado pelo tempo (taxa × Δt, em trechos a cada evento: habilidade, Coffee, incidente), com
   teto de 8 h (12 h com upgrade). Ao voltar, o resumo "Welcome back" aparece só ao abrir o DevCore
-- **Palette**: "devcore" lista Open DevCore / View Generators / Blueprints / DevPets / Upgrades / Discoveries / Ops / Collect
+- **Legado** (prestige, a partir do Tier 3): o **Rebuild** reescreve a infraestrutura do zero e converte o Compute
+  acumulado em **fragmentos** (total na vida = ⌊∛(Compute de todas as runs ÷ 1 B)⌋; cada Rebuild rende a diferença).
+  Cada fragmento ganho é **+1% de produção para sempre** (nível de Legado); os não gastos compram perks na
+  **Árvore de Legado** — raiz *Legacy Core*, 4 ramos (Infra, DevPets, Ops, Arquivo) e o capstone *Hall of Fame* (+2% por
+  nível). Perks mudam como cada run começa (Tier 2, Compute, pets no nível 3/5, Rollback/Hotfix) e o que atravessa
+  (consumíveis, sucata/peças, Mk II). Ficam: descobertas (pets e tiers voltam por elas), visuais, bestiário, missões
+  (`src/devcore/content/legacy.js`, `engine/legacy.js`)
+- **Palette**: "devcore" lista Open DevCore / View Generators / Blueprints / DevPets / Upgrades / Discoveries / Ops / Legacy / Collect
   Offline Progress; habilidades prontas ("Ativar Compile Burst (Byte)") e consumíveis ("Usar Coffee") executam sem
   abrir a janela
 
@@ -485,7 +492,7 @@ Features (ferramentas, palette, Notes) ── emit ──► Event Bus (electron
   jogador em perfis de uso e imprime a linha do tempo; um teste garante as faixas de ritmo (T2 em 15–60 min de
   sessão ativa, T3 em 1–3 dias de uso casual, 1º Mk II em ~2–4 dias e Mk III em até 2 semanas)
 - **Estado** em `%APPDATA%/Toni Devkit/devcore.json` (escrita atômica, versão + migração), separado em `run`
-  (o que um futuro *Rebuild* zeraria), `meta` (prestige), `usage`, `discoveries` e `pending`
+  (o que o *Rebuild* zera), `meta` (Legado: fragmentos, nível, perks), `usage`, `discoveries` e `pending`
 - **Testes**: `npm run test:devcore` (economia, modificadores, integral por trechos, teto offline, descobertas
   anti-spam, estado, bus, serviço com relógio falso, ritmo)
 
@@ -547,7 +554,7 @@ src/                 código do app (JSX → renderer/dist/app.js via esbuild)
   notes/             domínio: note.js (modelo), format.js (.md ⇄ nota), search.js, markdown.js, client.js (auto-save)
   tools/notes/       tela Notes: NotesScreen, NoteEditor, NotePreview (+ SnippetCard)
   devcore/           content/ (dados e balanceamento), engine/ (regras puras), director.js (cena), sim.js
-  tools/devcore/     tela DevCore: DevCoreScreen, Scene, PetSprite (SVG), Panels
+  tools/devcore/     tela DevCore: DevCoreScreen, Scene, PetSprite (SVG), Panels, OpsPanel, LegacyPanel
   vault/             crypto.js (scrypt + AES-256-GCM), entry.js (modelo, connection string, blocos secret), client.js
   tools/vault/       tela Vault: VaultScreen, UnlockForm
   palette/           Palette.jsx e QuickNote.jsx

@@ -8,6 +8,7 @@
 const { CONTENT } = require('../content/index.js');
 const { incidentEffects } = require('./incidents.js');
 const { blueprintEffects } = require('./blueprints.js');
+const { legacyEffects } = require('./legacy.js');
 
 /** Agrega efeitos por alvo. */
 function aggregate(effects) {
@@ -42,9 +43,11 @@ function stationSlots(s, c = CONTENT) {
   return base + sumAdd(aggregate(upgradeEffects(s, c)), 'stationSlots');
 }
 
+/** Upgrades da run + Legado (nível e perks permanentes) — mesmos alvos (global, petBonus, offlineCap, stationSlots…). */
 function upgradeEffects(s, c) {
   const out = [];
   for (const id of Object.keys(s.run.upgrades)) for (const e of (c.upgrade[id] || { effects: [] }).effects) out.push({ ...e, source: 'upgrade:' + id });
+  out.push(...legacyEffects(s, c));
   return out;
 }
 

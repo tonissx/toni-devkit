@@ -28,6 +28,9 @@ const SKINS = [
   { id: 'synthwave', name: 'Synthwave', colors: { body: '#FF00A0', eye: '#00F0FF' }, unlock: { questsDone: 100 } },
   { id: 'matrix', name: 'Matrix', colors: { body: '#12662A', eye: '#00FF41' }, unlock: { questsDone: 200 } },
   { id: 'cyberpunk', name: 'Cyberpunk', colors: { body: '#FCEE0A', eye: '#00F0FF' }, unlock: { discovery: 'always-on' } },
+  // Legado: cada Rebuild é um marco (para sempre).
+  { id: 'phoenix', name: 'Phoenix', colors: { body: '#FF6B35', eye: '#FFE66D' }, unlock: { rebuilds: 1 } },
+  { id: 'legacy', name: 'Legacy', colors: { body: '#C9A227', eye: '#1B1B2F' }, unlock: { rebuilds: 5 } },
   // Exclusivos de um DevPet: cada missão do tema dele conta (pet = só ele pode usar).
   { id: 'pergaminho', name: 'Pergaminho', pet: 'memo', colors: { body: '#D9B77E', eye: '#5B3A1E' }, unlock: { petQuests: { pet: 'memo', n: 5 } } },
   { id: 'tablespace', name: 'Tablespace', pet: 'query', colors: { body: '#2FB8A6', eye: '#E8FF6B' }, unlock: { petQuests: { pet: 'query', n: 5 } } },

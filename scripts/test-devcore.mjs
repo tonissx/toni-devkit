@@ -838,3 +838,148 @@ test('hotfix: derrotar um vilão comum sempre rende algo (sucata ou peça), meno
   }
   assert.ok(parts > 0 && parts < 40, 'peça é uma chance, não garantia: ' + parts + '/40');
 });
+
+/* ─────────────── Legado (Rebuild + Árvore de perks) ─────────────── */
+const legacy = require('../src/devcore/engine/legacy.js');
+
+/** Run no tier 3 com Compute acumulado, pronta para o Rebuild. */
+function ripe(lifetime = 27e9, extra = {}) {
+  const s = make({ compute: 1e6, gens: { 'terminal-worker': 120, agent: 5 }, tier: 3, pets: ['byte', 'noxi', 'relay'], upgrades: ['hot-reload'], ...extra });
+  s.run.resources.compute.lifetime = lifetime;
+  s.discoveries.found['automation-era'] = T0; s.discoveries.found['agent-era'] = T0;
+  s.discoveries.found['command-center'] = T0;
+  s.run.pets.byte.level = 7;
+  return s;
+}
+
+test('legacy: fragmentos = cbrt(Compute de todas as runs / 1 B), com retorno decrescente', () => {
+  assert.equal(legacy.fragmentsFor(0), 0);
+  assert.equal(legacy.fragmentsFor(1e9), 1);
+  assert.equal(legacy.fragmentsFor(8e9 - 1), 1);
+  assert.equal(legacy.fragmentsFor(8e9), 2);
+  assert.equal(legacy.fragmentsFor(1e12), 10);
+  assert.equal(legacy.fragmentsFor(1e15), 100);
+  const s = ripe(27e9);
+  assert.equal(legacy.pendingFragments(s), 3);
+  s.meta.earned = 2;
+  assert.equal(legacy.pendingFragments(s), 1, 'só rende a diferença para os já ganhos');
+});
+
+test('legacy: Rebuild só no tier 3 e quando rende ≥ 1 fragmento', () => {
+  assert.match(run(ripe(27e9, { tier: 2 }), { type: 'rebuild' }).error, /Tier 3/);
+  assert.match(run(ripe(1e8), { type: 'rebuild' }).error, /nenhum fragmento/);
+  assert.equal(run(ripe(27e9), { type: 'rebuild' }).error, undefined);
+});
+
+test('legacy: Rebuild zera a run e guarda o permanente; pets e tiers voltam pelas descobertas', () => {
+  const s = ripe(27e9);
+  s.cosmetics.unlocked.push('neon'); s.bestiary.leaky = { seen: 2, contained: 1, escaped: 1, defeated: 0 };
+  s.usage.days['palette.opened'] = ['2026-01-01', '2026-01-02'];
+  s.discoveries.found['shortcut-engine'] = T0;
+  s.run.incidents.seq = 17;
+  const r = run(s, { type: 'rebuild' });
+  const n = r.state;
+  assert.ok(r.log.some((e) => e.type === 'rebuild' && e.gained === 3));
+  assert.deepEqual([n.meta.fragments, n.meta.earned, n.meta.rebuilds, n.meta.lifetime], [3, 3, 1, 27e9]);
+  assert.equal(n.run.tier, 1);
+  assert.equal(n.run.resources.compute.lifetime, 0);
+  assert.equal(n.run.resources.compute.amount, CONTENT.BALANCE.start.compute);
+  assert.deepEqual(n.run.upgrades, {});
+  assert.equal(n.run.generators['terminal-worker'].owned, 1);
+  assert.equal(n.run.generators.agent, undefined);
+  assert.equal(n.run.pets.byte.level, 1);
+  assert.ok(n.run.pets.noxi, 'Noxi volta: a condição de uso (palette em 2 dias) continua valendo');
+  assert.equal(n.run.pets.relay, undefined, 'Relay só volta no tier 3 (Command Center)');
+  assert.equal(n.run.incidents.seq, 17, 'a sequência de incidentes continua (não repete a da run anterior)');
+  assert.ok(n.cosmetics.unlocked.includes('neon') && n.bestiary.leaky.seen === 2 && n.discoveries.found['agent-era']);
+  assert.ok(n.cosmetics.unlocked.includes('phoenix'), 'o primeiro Rebuild libera um visual');
+  // Tier volta pelo Compute da run nova, sem anunciar a descoberta de novo.
+  const back = structuredClone(n);
+  back.run.resources.compute.lifetime = 1e4;
+  const t2 = run(back, { type: 'tick' }, T0 + 2000);
+  assert.equal(t2.state.run.tier, 2);
+  assert.ok(t2.log.some((e) => e.type === 'tier' && e.tier === 2));
+  assert.ok(!t2.log.some((e) => e.type === 'discovery'));
+});
+
+test('legacy: nível de Legado multiplica a produção (+1% por fragmento ganho, gasto ou não)', () => {
+  const s = make({ gens: { 'terminal-worker': 10 } });
+  const base = production(s, T0).rate;
+  s.meta.earned = 20; s.meta.fragments = 0;
+  near(production(s, T0).rate, base * 1.2);
+  s.meta.perks['hall-of-fame'] = T0;
+  near(production(s, T0).rate, base * 1.4);
+});
+
+test('legacy: perks — requisitos da árvore, custo em fragmentos, permanentes', () => {
+  const s = make();
+  s.meta.fragments = 3;
+  assert.match(run(s, { type: 'perk', id: 'bootstrap' }).error, /perk anterior/);
+  let r = run(s, { type: 'perk', id: 'legacy-core' });
+  assert.equal(r.error, undefined);
+  assert.equal(r.state.meta.fragments, 2);
+  assert.match(run(r.state, { type: 'perk', id: 'legacy-core' }).error, /já adquirido/);
+  r = run(r.state, { type: 'perk', id: 'bootstrap' });
+  assert.equal(r.error, undefined);
+  assert.equal(r.state.meta.fragments, 0);
+  assert.match(run(r.state, { type: 'perk', id: 'muscle-memory' }).error, /insuficientes/);
+  // Capstone: qualquer ramo completo.
+  const t = make(); t.meta.fragments = 100;
+  assert.match(run(t, { type: 'perk', id: 'hall-of-fame' }).error, /perk anterior/);
+  t.meta.perks.monorepo = T0;
+  assert.equal(run(t, { type: 'perk', id: 'hall-of-fame' }).error, undefined);
+});
+
+test('legacy: perks mudam como o Rebuild começa e o que atravessa', () => {
+  const s = ripe(27e9);
+  for (const id of ['legacy-core', 'bootstrap', 'warm-start', 'economies-of-scale', 'muscle-memory', 'runbook', 'incident-playbook', 'sustained-load', 'supply-chain', 'nightly-build', 'scavenger', 'blueprint-archive', 'design-docs']) s.meta.perks[id] = T0;
+  s.run.inventory = { coffee: 4, 'cache-warmer': 2 };
+  s.run.scrap = 3;
+  s.run.blueprints = {
+    'terminal-worker': { mk: 3, parts: {} },
+    'script-runner': { mk: 2, parts: { 'script-runner:mk3:0': true } },
+    'index-worker': { mk: 1, parts: { 'index-worker:mk2:1': true } },
+  };
+  const n = run(s, { type: 'rebuild' }).state;
+  assert.equal(n.run.tier, 2);
+  assert.equal(n.run.resources.compute.amount, 2e5);
+  assert.equal(n.run.generators['terminal-worker'].owned, 10);
+  assert.equal(n.run.pets.byte.level, 3);
+  assert.equal(n.run.shields, 1);
+  assert.deepEqual([n.run.inventory.coffee, n.run.inventory.hotfix, n.run.inventory['cache-warmer']], [5, 2, 2], 'estoque mantido + kit inicial, no teto');
+  assert.equal(n.run.blueprints['terminal-worker'].mk, 2, 'Design Docs: Mk III volta como Mk II');
+  assert.ok(n.run.blueprints['script-runner'].parts['script-runner:mk3:0'], 'peça solta do próximo nível fica');
+  assert.ok(n.run.blueprints['index-worker'].parts['index-worker:mk2:1']);
+  assert.equal(n.run.scrap, 3);
+  // Mods: recarga −20%, burst +50%, geradores −25%, +4 h offline.
+  const t = run(n, { type: 'ability', id: 'compile-burst' }, T0 + 1000).state;
+  assert.equal(t.run.abilities['compile-burst'].readyAt, T0 + 1000 + 300e3 * 0.8);
+  assert.equal(t.run.abilities['compile-burst'].activeUntil, T0 + 1000 + 30e3 * 1.5);
+  const g = CONTENT.gen['script-runner'];
+  near(snapshot(n, T0).generators.find((x) => x.id === g.id).cost1, costOf(g, 0, 1, 4 / 0.75));
+  assert.equal(offlineCapMs(n) / H, CONTENT.BALANCE.offlineCapHours + 4);
+});
+
+test('legacy: sem perks de Arquivo, peças e sucata não atravessam; a view expõe a árvore', () => {
+  const s = ripe(27e9);
+  s.run.scrap = 9;
+  s.run.blueprints = { 'terminal-worker': { mk: 2, parts: { 'terminal-worker:mk3:2': true } } };
+  const n = run(s, { type: 'rebuild' }).state;
+  assert.equal(n.run.scrap, 0);
+  assert.deepEqual(n.run.blueprints, {});
+  const v = snapshot(n, T0).legacy;
+  assert.equal(v.level, 3); assert.equal(v.fragments, 3); assert.equal(v.rebuilds, 1);
+  assert.equal(v.perks.length, CONTENT.PERKS.length);
+  assert.equal(v.perks.find((k) => k.id === 'legacy-core').status, 'available');
+  assert.equal(v.perks.find((k) => k.id === 'bootstrap').status, 'locked');
+  assert.ok(v.nextLeft > 0 && v.nextPct >= 0 && v.nextPct <= 100);
+  assert.equal(v.canRebuild, false);
+});
+
+test('legacy: saves antigos (meta do MVP) migram', () => {
+  const old = createState(T0);
+  old.meta = { fragments: 0, rebuilds: 0, perks: {} };
+  const s = migrate(JSON.parse(JSON.stringify(old)), T0);
+  assert.deepEqual([s.meta.earned, s.meta.lifetime], [0, 0]);
+  assert.equal(snapshot(s, T0).legacy.pending, 0);
+});

@@ -15,6 +15,7 @@ const { offlineCapMs } = require('./advance.js');
 const { formatNum } = require('./format.js');
 const { stageOf, nextStageOf, skinOf } = require('./appearance.js');
 const { questsView } = require('./quests.js');
+const { perkMod, startConfig, allTimeCompute, fragmentsFor, computeFor, pendingFragments, rebuildError, perkStatus } = require('./legacy.js');
 
 const pct = (v) => (v >= 0 ? '+' : '') + Math.round(v * 1000) / 10 + '%';
 
@@ -40,6 +41,7 @@ function describeCondition(cond, c = CONTENT) {
   if (cond.maxPetLevel != null) return 'um DevPet no nível ' + cond.maxPetLevel;
   if (cond.anyPetMaxed) return 'um DevPet no nível máximo';
   if (cond.questsDone != null) return cond.questsDone + ' missões diárias concluídas';
+  if (cond.rebuilds != null) return cond.rebuilds === 1 ? 'o primeiro Rebuild' : cond.rebuilds + ' Rebuilds';
   if (cond.petQuests) return cond.petQuests.n + ' missões de ' + (c.pet[cond.petQuests.pet] || { name: cond.petQuests.pet }).name;
   return '???';
 }
@@ -102,7 +104,7 @@ function snapshot(s, now, c = CONTENT) {
       station: st.station, canStation: slots > 0 && (st.station || used < slots),
       lines: p.lines,
       ability: {
-        id: ability.id, name: ability.name, description: ability.description, cooldownSec: ability.cooldownSec,
+        id: ability.id, name: ability.name, description: ability.description, cooldownSec: ability.cooldownSec * perkMod(s, 'abilityCooldown', c),
         locked: s.run.tier < 2, blocked: abilitiesLocked(s, now, c), activeUntil: a.activeUntil, readyAt: a.readyAt,
         ready: s.run.tier >= 2 && a.readyAt <= now && !abilitiesLocked(s, now, c),
       },
@@ -164,12 +166,49 @@ function snapshot(s, now, c = CONTENT) {
     ops: opsView(s, now, c),
     inventory: c.CONSUMABLES.map((k) => ({ id: k.id, name: k.name, icon: k.icon, description: k.description, n: s.run.inventory[k.id] || 0, cap: k.cap, craftCost: craftCost(s, k, now, c) })),
     bestiary: c.INCIDENTS.map((i) => ({ id: i.villain.id, incident: i.id, category: i.category, defeatedLine: i.villain.lines.defeated[0], name: i.villain.name, species: i.villain.species, color: i.villain.color, boss: !!i.villain.boss, description: i.description, counterText: i.counterText, stats: s.bestiary[i.villain.id] || null })),
+    legacy: legacyView(s, c),
     offlineCapHours: offlineCapMs(s, c) / 3600e3,
     welcome: s.pending.welcome,
     unseen: [...s.discoveries.unseen],
     newUpgrades: newUpgrades.map((u) => u.id),
     freshSkins: [...s.cosmetics.fresh],
     hasNews: s.discoveries.unseen.length > 0 || newUpgrades.length > 0 || s.cosmetics.fresh.length > 0,
+  };
+}
+
+/** Legado: fragmentos, nível, o que o Rebuild renderia agora e a árvore de perks. */
+function legacyView(s, c) {
+  const m = s.meta;
+  const total = allTimeCompute(s);
+  const pending = pendingFragments(s, c);
+  const nextN = fragmentsFor(total, c) + 1;
+  const cfg = startConfig(s, c);
+  const perLevel = c.LEGACY.perLevel * perkMod(s, 'legacyPerLevel', c);
+  return {
+    unlocked: s.run.tier >= c.LEGACY.minTier || m.rebuilds > 0, minTier: c.LEGACY.minTier,
+    level: m.earned, fragments: m.fragments, rebuilds: m.rebuilds, lastRebuildAt: m.lastRebuildAt || 0,
+    perLevel, bonus: m.earned * perLevel, // produção ×(1 + bonus)
+    allTime: total, runLifetime: s.run.resources.compute.lifetime,
+    pending, canRebuild: !rebuildError(s, c), reason: rebuildError(s, c),
+    nextLeft: Math.max(0, computeFor(nextN, c) - total), // Compute que falta para o próximo fragmento
+    // Progresso do próximo fragmento (0–100), entre o anterior e o próximo.
+    nextPct: Math.min(100, Math.max(0, (total - computeFor(nextN - 1, c)) / (computeFor(nextN, c) - computeFor(nextN - 1, c)) * 100)),
+    start: {
+      compute: cfg.compute, tier: cfg.tier, petLevel: cfg.petLevel, shields: cfg.shields,
+      gens: Object.entries(cfg.gens).map(([id, n]) => ({ name: (c.gen[id] || { name: id }).name, n })),
+      items: Object.entries(cfg.items).map(([id, n]) => ({ name: (c.consumable[id] || { name: id }).name, n })),
+      keep: cfg.keep,
+    },
+    branches: c.BRANCHES.map((b) => ({ ...b })),
+    perks: c.PERKS.map((k) => {
+      const status = perkStatus(s, k);
+      const parents = k.requires || k.requiresAny || [];
+      return {
+        id: k.id, branch: k.branch, name: k.name, description: k.description, cost: k.cost, status,
+        affordable: status === 'available' && m.fragments >= k.cost,
+        requires: parents.map((id) => (c.perk[id] || { name: id }).name), any: !!k.requiresAny,
+      };
+    }),
   };
 }
 

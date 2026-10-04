@@ -731,6 +731,47 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   .dc-villain { transition: none; }
 }
 
+/* Legado (Rebuild + Árvore de perks) */
+.dc-legacy { display: flex; flex-direction: column; gap: 12px; }
+.dc-legacy__top { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 8px; }
+.dc-legacy__stat, .dc-legacy__rebuild { display: flex; flex-direction: column; gap: 4px; padding: 12px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-bg); font-size: 11.5px; color: var(--tk-text-3); }
+.dc-legacy__stat b { display: inline-flex; align-items: center; gap: 6px; font: 600 24px/1.1 var(--tk-font-mono); color: var(--tk-text); }
+.dc-legacy__rebuild { gap: 6px; }
+.dc-legacy__rebuild .tk-btn { align-self: flex-start; }
+.dc-legacy__pending { font-size: 12.5px; color: var(--tk-text-2); }
+.dc-legacy__pending b { color: var(--tk-accent-text); font-family: var(--tk-font-mono); }
+.dc-legacy__next { font: 400 11px var(--tk-font-mono); }
+.dc-legacy__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0; }
+.dc-legacy__cols .tk-menu__heading { padding-left: 0; }
+.dc-tree { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+.dc-tree__row { display: flex; justify-content: center; }
+.dc-tree__row .dc-perk { width: min(280px, 100%); }
+.dc-tree__branches { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.dc-tree__branch { display: flex; flex-direction: column; gap: 10px; }
+.dc-tree__label { display: flex; align-items: center; gap: 6px; font: 500 10.5px var(--tk-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--tk-text-3); }
+.dc-perk {
+  position: relative; display: flex; flex-direction: column; gap: 4px; padding: 9px 10px; text-align: left; cursor: default;
+  border: 1px dashed var(--tk-border-strong); border-radius: var(--tk-radius-md); background: transparent; color: var(--tk-text-3); font: inherit;
+}
+/* Conector com o perk de cima (ramos lineares). */
+.dc-tree__branch .dc-perk + .dc-perk::before { content: ''; position: absolute; left: 50%; top: -11px; height: 10px; border-left: 1px solid var(--tk-border-strong); }
+.dc-perk.is-available { border-style: solid; color: var(--tk-text-2); background: var(--tk-bg); }
+.dc-perk.is-affordable { border-color: var(--tk-accent); cursor: pointer; box-shadow: 0 0 0 1px color-mix(in srgb, var(--tk-accent) 30%, transparent); }
+.dc-perk.is-affordable:hover { background: color-mix(in srgb, var(--tk-accent) 8%, var(--tk-bg)); }
+.dc-perk.is-affordable:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+.dc-perk.is-owned { border-style: solid; border-color: color-mix(in srgb, var(--tk-accent) 55%, var(--tk-border)); color: var(--tk-text-2); background: color-mix(in srgb, var(--tk-accent) 10%, var(--tk-bg)); }
+.dc-perk.is-owned .dc-perk__head .lucide, .dc-perk.is-owned .dc-perk__head svg { color: var(--tk-accent-text); }
+.dc-tree__branch .dc-perk.is-owned + .dc-perk::before { border-color: var(--tk-accent); }
+.dc-perk__head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.dc-perk__name { font-size: 12.5px; font-weight: 600; color: var(--tk-text); }
+.dc-perk.is-locked .dc-perk__name { color: var(--tk-text-3); }
+.dc-perk__cost { display: inline-flex; align-items: center; gap: 3px; font: 500 11px var(--tk-font-mono); color: var(--tk-accent-text); }
+.dc-perk.is-locked .dc-perk__cost { color: var(--tk-text-3); }
+.dc-perk__desc { font-size: 11.5px; line-height: 1.4; }
+@media (max-width: 760px) {
+  .dc-legacy__top, .dc-tree__branches { grid-template-columns: 1fr 1fr; }
+}
+
 /* Versões anteriores (modal): lista à esquerda, diff à direita. */
 .nts-history { display: grid; grid-template-columns: 240px 1fr; gap: 12px; height: min(62vh, 560px); min-height: 280px; }
 .nts-history:has(.tk-empty), .nts-history:has(> .nts-list__msg) { display: flex; align-items: center; justify-content: center; }

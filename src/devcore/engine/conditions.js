@@ -11,6 +11,7 @@
  *   { stationed:[petIds] }    → algum desses DevPets está em estação
  *   { questsDone:n }          → n missões diárias concluídas na vida
  *   { petQuests:{pet,n} }     → n missões diárias concluídas do tema de um DevPet
+ *   { rebuilds:n }            → n Rebuilds feitos (Legado)
  *   { all:[…] } · { any:[…] }
  */
 const { CONTENT } = require('../content/index.js');
@@ -31,6 +32,7 @@ function check(cond, s) {
   if (cond.stationed) return cond.stationed.some((id) => s.run.pets[id] && s.run.pets[id].station);
   if (cond.questsDone != null) return s.quests.total >= cond.questsDone;
   if (cond.petQuests) return (s.quests.byPet[cond.petQuests.pet] || 0) >= cond.petQuests.n;
+  if (cond.rebuilds != null) return (s.meta.rebuilds || 0) >= cond.rebuilds;
   if (cond.anyPetMaxed) return Object.entries(s.run.pets).some(([id, p]) => CONTENT.pet[id] && p.level >= CONTENT.RARITY[CONTENT.pet[id].rarity].maxLevel);
   return false;
 }

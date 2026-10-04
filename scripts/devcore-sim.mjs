@@ -1,7 +1,7 @@
 // Linha do tempo de balanceamento do DevCore: npm run devcore:sim
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { simulate, PROFILES, incidentLoss } = require('../src/devcore/sim.js');
+const { simulate, simulateLegacy, PROFILES, incidentLoss } = require('../src/devcore/sim.js');
 const { formatNum, formatDuration } = require('../src/devcore/engine/format.js');
 
 const fmt = (ms) => (ms == null ? '—' : ms < 86400e3 ? formatDuration(ms) : (ms / 86400e3).toFixed(1) + ' dias');
@@ -33,4 +33,15 @@ for (const strategy of ['passive', 'prepared']) {
   console.log(`  ${(m.parts / days).toFixed(1)} peças/dia (drops) · 1º Mk II: ${fmt(m.firstMk2)} · 1º Mk III: ${fmt(m.firstMk3)}`);
   const g = m.state.run.generators['terminal-worker'];
   console.log(`  Tier 3: ${fmt(m.t3)} · Terminal: ${g.owned} un. · Mk ${Object.entries(m.state.run.blueprints).map(([k, v]) => k.split('-')[0] + ' ' + v.mk).join(', ') || '—'} · sucata ${m.state.run.scrap}`);
+}
+
+// Legado: runs de 7 dias (casual preparado), Rebuild no fim de cada uma e perks mais baratos primeiro.
+{
+  const days = 7;
+  console.log(`
+== legado (casual, runs de ${days} dias, Rebuild ao fim de cada uma)`);
+  simulateLegacy({ ...PROFILES.casual, days }, 4).forEach((r, i) => {
+    console.log(`  run ${i + 1}: T2 ${fmt(r.t2)} · T3 ${fmt(r.t3)} · ${formatNum(r.final)} Compute · ${formatNum(r.rate, { rate: true })}/s` +
+      (r.error ? ` · ${r.error}` : ` → +${r.gained} fragmentos (nível ${r.level}) · perks: ${r.perks.length}`));
+  });
 }

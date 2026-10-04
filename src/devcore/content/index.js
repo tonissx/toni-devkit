@@ -14,12 +14,14 @@ const { INCIDENTS } = require('./incidents.js');
 const { CONSUMABLES } = require('./consumables.js');
 const { BLUEPRINTS } = require('./blueprints.js');
 const { QUESTS } = require('./quests.js');
+const { LEGACY, BRANCHES, PERKS } = require('./legacy.js');
 
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 
 const CONTENT = {
   BALANCE, RESOURCES, CATEGORIES, TIERS, GENERATORS, UPGRADES, PETS, RARITY, ABILITIES, SYNERGIES, DISCOVERIES, STAGES, SKINS,
-  INCIDENTS, CONSUMABLES, BLUEPRINTS, QUESTS,
+  INCIDENTS, CONSUMABLES, BLUEPRINTS, QUESTS, LEGACY, BRANCHES, PERKS,
+  perk: byId(PERKS), branch: byId(BRANCHES),
   quest: byId(QUESTS),
   gen: byId(GENERATORS), upgrade: byId(UPGRADES), pet: byId(PETS), ability: byId(ABILITIES),
   category: byId(CATEGORIES), discovery: byId(DISCOVERIES), synergy: byId(SYNERGIES), skin: byId(SKINS),
@@ -93,6 +95,26 @@ function validate(c = CONTENT) {
       if (!(l.mult > 1) || !(l.costDiv >= 1)) errors.push(`blueprint ${b.gen} mk${l.mk}: mult > 1 e costDiv ≥ 1`);
     });
   }
+  uniq('perks', c.PERKS);
+  for (const k of c.PERKS) {
+    if (!c.branch[k.branch]) errors.push(`perk ${k.id}: ramo ${k.branch}`);
+    if (!(k.cost > 0)) errors.push(`perk ${k.id}: custo`);
+    for (const id of [...(k.requires || []), ...(k.requiresAny || [])]) if (!c.perk[id]) errors.push(`perk ${k.id}: requisito ${id}`);
+    for (const e of k.effects || []) if (e.target) checkTarget('perk ' + k.id, e.target);
+    for (const id of Object.keys((k.start && k.start.gens) || {})) if (!c.gen[id]) errors.push(`perk ${k.id}: gerador ${id}`);
+    for (const id of Object.keys((k.start && k.start.items) || {})) if (!c.consumable[id]) errors.push(`perk ${k.id}: item ${id}`);
+  }
+  // Árvore: todo perk alcançável a partir das raízes (sem requisito), sem ciclos.
+  const reach = new Set(c.PERKS.filter((k) => !k.requires && !k.requiresAny).map((k) => k.id));
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const k of c.PERKS) {
+      if (reach.has(k.id)) continue;
+      const ok = k.requires ? k.requires.every((id) => reach.has(id)) : (k.requiresAny || []).some((id) => reach.has(id));
+      if (ok) { reach.add(k.id); changed = true; }
+    }
+  }
+  for (const k of c.PERKS) if (!reach.has(k.id)) errors.push(`perk ${k.id}: inalcançável na árvore`);
   for (const d of c.DISCOVERIES) {
     for (const r of d.rewards) if (r.pet && !c.pet[r.pet]) errors.push(`discovery ${d.id}: pet ${r.pet}`);
     if (d.finder && !c.pet[d.finder]) errors.push(`discovery ${d.id}: finder ${d.finder}`);

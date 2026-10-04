@@ -65,6 +65,7 @@ function plan(pets, stations, t, reactions = [], opts = {}) {
       if (e.type === 'refactor' && spot !== -1 && stations[spot] && stations[spot].id === e.category) { activity = 'celebrate'; line = 'refactored! Mk ' + (e.mk === 3 ? 'III' : 'II'); break; }
       if (e.type === 'purchase' && spot !== -1 && stations[spot] && stations[spot].id === e.category) { activity = 'celebrate'; line = 'new worker online!'; break; }
       if ((e.type === 'upgrade' || e.type === 'tier') && (i + seg) % 2 === 0) { activity = 'celebrate'; line = e.type === 'tier' ? 'new tier!' : 'upgrade deployed!'; break; }
+      if (e.type === 'rebuild') { activity = 'celebrate'; line = 'fresh start!'; break; }
       if (e.type === 'welcome') { activity = 'celebrate'; line = 'welcome back!'; break; }
     }
     return { id: p.id, spot, activity, line };
