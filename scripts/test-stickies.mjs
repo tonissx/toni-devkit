@@ -16,7 +16,7 @@ test('normalizeState descarta inválidos, repetidos e o excesso', () => {
   const raw = {
     hidden: true,
     stickies: [
-      { noteId: 'a', bounds: { x: 10, y: 20, width: 50, height: 400 }, color: 'string', onTop: true },
+      { noteId: 'a', bounds: { x: 10, y: 20, width: 50, height: 400 }, color: 'string', onTop: true }, // onTop: campo antigo, some
       { noteId: 'a', bounds: null },
       { noteId: '../etc', bounds: null },
       { noteId: 'b', color: 'rosa', collapsed: 1 },
@@ -26,8 +26,8 @@ test('normalizeState descarta inválidos, repetidos e o excesso', () => {
   const st = S.normalizeState(raw);
   assert.equal(st.hidden, true);
   assert.equal(st.stickies.length, S.MAX_STICKIES);
-  assert.deepEqual(st.stickies[0], { noteId: 'a', bounds: { x: 10, y: 20, width: S.MIN_SIZE.width, height: 400 }, color: 'string', onTop: true, collapsed: false });
-  assert.deepEqual(st.stickies[1], { noteId: 'b', bounds: null, color: 'accent', onTop: false, collapsed: false });
+  assert.deepEqual(st.stickies[0], { noteId: 'a', bounds: { x: 10, y: 20, width: S.MIN_SIZE.width, height: 400 }, color: 'string', collapsed: false });
+  assert.deepEqual(st.stickies[1], { noteId: 'b', bounds: null, color: 'accent', collapsed: false });
   assert.deepEqual(S.normalizeState('lixo'), { v: 1, hidden: false, stickies: [] });
 });
 
@@ -58,12 +58,11 @@ function fakeWindows() {
   const createWindow = (noteId, opts) => {
     const handlers = {};
     const w = {
-      noteId, opts, bounds: { ...opts.bounds }, onTop: opts.onTop, visible: false, destroyed: false, resizable: true,
+      noteId, opts, bounds: { ...opts.bounds }, visible: false, destroyed: false, resizable: true,
       on: (evt, fn) => { (handlers[evt] = handlers[evt] || []).push(fn); },
       emit: (evt) => (handlers[evt] || []).forEach((fn) => fn()),
       getBounds: () => ({ ...w.bounds }),
       setBounds: (b) => { w.bounds = { ...b }; },
-      setAlwaysOnTop: (v) => { w.onTop = v; },
       setResizable: (v) => { w.resizable = v; },
       show: () => { w.visible = true; }, hide: () => { w.visible = false; }, focus: () => {},
       isVisible: () => w.visible,
@@ -103,8 +102,6 @@ test('serviço: abrir, limite, fechar e persistir', async () => {
     assert.equal(fw.created.length, 1);
     assert.equal(fw.created[0].visible, true);
     assert.deepEqual(a.bounds, S.cascadeBounds([], MAIN));
-    assert.equal(a.onTop, true); // nasce sempre por cima
-    assert.equal(fw.created[0].opts.onTop, true);
     assert.equal(events.at(-1).noteId, 'nota-a');
     // Abrir de novo só traz para frente.
     await svc.open('nota-a');
@@ -146,7 +143,6 @@ test('serviço: mover/redimensionar grava; reabre no mesmo lugar ao reiniciar', 
     assert.equal(fw.created.length, 1);
     assert.deepEqual(fw.created[0].opts.bounds, { x: 50, y: 60, width: 320, height: 300 });
     assert.equal(svc.get('x').color, 'bool');
-    assert.equal(fw.created[0].opts.onTop, true);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -163,15 +159,14 @@ test('serviço: Alt+F4 (fechar a janela por fora) tira da tela', async () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('serviço: cor, sempre por cima e recolher', async () => {
+test('serviço: cor e recolher', async () => {
   const dir = tmp();
   try {
     const { svc, fw } = setup(dir);
     await svc.init();
     await svc.open('z');
     const w = fw.created[0];
-    await svc.set('z', { color: 'number', onTop: true });
-    assert.equal(w.onTop, true);
+    await svc.set('z', { color: 'number' });
     assert.equal(svc.get('z').color, 'number');
     await svc.set('z', { color: 'inexistente' });
     assert.equal(svc.get('z').color, 'number');
@@ -186,7 +181,7 @@ test('serviço: cor, sempre por cima e recolher', async () => {
     await svc.set('z', { collapsed: false });
     assert.deepEqual(w.getBounds(), { ...open, x: 10, y: 10 });
     assert.equal(w.resizable, true);
-    await assert.rejects(svc.set('nao-existe', { onTop: true }), /não está mais na tela/);
+    await assert.rejects(svc.set('nao-existe', { color: 'bool' }), /não está mais na tela/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -241,6 +236,5 @@ test('serviço: monitor desconectado — sticky volta para um monitor existente'
     await svc.init();
     svc.restore();
     assert.deepEqual(fw.created[0].opts.bounds, { x: 1620, y: 100, width: 300, height: 260 });
-    assert.equal(fw.created[0].opts.onTop, false); // salva sem "por cima" continua assim (o padrão novo vale só ao fixar)
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

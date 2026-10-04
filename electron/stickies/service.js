@@ -7,7 +7,7 @@
  * As regras de formato e geometria estão em src/stickies/sticky.js.
  *
  * Dependências injetadas (os testes usam versões falsas):
- *   createWindow(noteId, { bounds, onTop, collapsed }) → janela com on/getBounds/setBounds/setAlwaysOnTop/setResizable/
+ *   createWindow(noteId, { bounds, collapsed }) → janela (sempre por cima) com on/getBounds/setBounds/setResizable/
  *     show/hide/focus/destroy/isDestroyed/isVisible
  *   workAreas() → [{ x, y, width, height }] dos monitores · cursorWorkArea() → monitor do cursor
  */
@@ -52,7 +52,7 @@ function createStickiesService({ file, createWindow, workAreas, cursorWorkArea, 
   function openWindow(s) {
     if (alive(wins.get(s.noteId))) return wins.get(s.noteId);
     s.bounds = fitBounds(s.bounds || cascadeBounds(state.stickies.map((x) => x.bounds), cursorWorkArea()), workAreas());
-    const w = createWindow(s.noteId, { bounds: s.collapsed ? { ...s.bounds, height: COLLAPSED_HEIGHT } : s.bounds, onTop: s.onTop, collapsed: s.collapsed });
+    const w = createWindow(s.noteId, { bounds: s.collapsed ? { ...s.bounds, height: COLLAPSED_HEIGHT } : s.bounds, collapsed: s.collapsed });
     wins.set(s.noteId, w);
     // Mover: guarda a posição. Redimensionar: guarda o tamanho (recolhida, a altura é a do cabeçalho — não conta).
     const track = () => {
@@ -88,8 +88,7 @@ function createStickiesService({ file, createWindow, workAreas, cursorWorkArea, 
     let s = find(noteId);
     if (!s) {
       if (state.stickies.length >= MAX_STICKIES) throw new Error(`Máximo de ${MAX_STICKIES} sticky notes — feche uma antes`);
-      // Nasce "sempre por cima": a sticky existe para ficar à vista sobre o programa em que se está trabalhando.
-      s = { noteId, bounds: null, color: COLORS.includes(color) ? color : COLORS[state.stickies.length % COLORS.length], onTop: true, collapsed: false };
+      s = { noteId, bounds: null, color: COLORS.includes(color) ? color : COLORS[state.stickies.length % COLORS.length], collapsed: false };
       state.stickies.push(s);
     }
     if (state.hidden) { state.hidden = false; restore(); }
@@ -112,16 +111,12 @@ function createStickiesService({ file, createWindow, workAreas, cursorWorkArea, 
     return had;
   }
 
-  /** Cor, "sempre por cima" ou recolhida. */
+  /** Cor ou recolhida. */
   async function set(noteId, patch = {}) {
     const s = find(noteId);
     if (!s) throw new Error('Essa sticky não está mais na tela');
     const w = wins.get(noteId);
     if (patch.color !== undefined && COLORS.includes(patch.color)) s.color = patch.color;
-    if (patch.onTop !== undefined) {
-      s.onTop = !!patch.onTop;
-      if (alive(w)) w.setAlwaysOnTop(s.onTop);
-    }
     if (patch.collapsed !== undefined && !!patch.collapsed !== s.collapsed) {
       if (alive(w)) {
         const b = w.getBounds();

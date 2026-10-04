@@ -3,7 +3,8 @@
  * Sticky notes — regras puras (sem Electron), testadas em scripts/test-stickies.mjs.
  * Uma sticky é uma nota existente fixada na tela; aqui ficam só o formato do estado e a geometria das janelas.
  * Estado (por computador, %APPDATA%\Toni Devkit\stickies.json):
- *   { v: 1, hidden: false, stickies: [{ noteId, bounds: { x, y, width, height }, color, onTop, collapsed }] }
+ *   { v: 1, hidden: false, stickies: [{ noteId, bounds: { x, y, width, height }, color, collapsed }] }
+ * Toda sticky fica sempre por cima (é para isso que ela existe); para sair da frente: recolher, ocultar todas ou ✕.
  */
 
 const MAX_STICKIES = 6;
@@ -26,14 +27,13 @@ function normBounds(b) {
   return { x, y, width: Math.max(MIN_SIZE.width, width), height: Math.max(MIN_SIZE.height, height) };
 }
 
-/** Uma sticky válida (ou null): noteId seguro, bounds numéricos, cor conhecida, flags booleanas. */
+/** Uma sticky válida (ou null): noteId seguro, bounds numéricos, cor conhecida. Campos antigos (onTop) somem. */
 function normalizeSticky(s) {
   if (!s || typeof s.noteId !== 'string' || !ID_RE.test(s.noteId)) return null;
   return {
     noteId: s.noteId,
     bounds: normBounds(s.bounds),
     color: COLORS.includes(s.color) ? s.color : COLORS[0],
-    onTop: s.onTop === true,
     collapsed: s.collapsed === true,
   };
 }

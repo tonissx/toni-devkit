@@ -504,7 +504,8 @@ let stickiesReady = null;
 const stickyByContents = new Map(); // webContents.id → noteId (a janela da sticky só mexe na própria nota)
 const broadcastStickies = (evt) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('stickies:changed', evt); };
 
-function createStickyWindow(noteId, { bounds, onTop, collapsed }) {
+// Sempre por cima: a sticky existe para ficar à vista sobre o programa em que se está trabalhando.
+function createStickyWindow(noteId, { bounds, collapsed }) {
   const win = new BrowserWindow({
     ...bounds,
     minWidth: 200,
@@ -516,7 +517,7 @@ function createStickyWindow(noteId, { bounds, onTop, collapsed }) {
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: true,
-    alwaysOnTop: !!onTop,
+    alwaysOnTop: true,
     backgroundColor: '#141417',
     title: 'Devkit — Sticky note',
     icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'),

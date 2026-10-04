@@ -89,7 +89,7 @@ function StickyBody({ initial, editing, setEditing, setTitle, flushRef }) {
  * Visualizar (checklists clicáveis) ou Editar (Ctrl+E / duplo clique). As alterações gravam na própria nota.
  */
 export function Sticky() {
-  const [me, setMe] = React.useState(null);        // { noteId, color, onTop, collapsed }
+  const [me, setMe] = React.useState(null);        // { noteId, color, collapsed }
   const [initial, setInitial] = React.useState(undefined); // undefined = carregando · null = nota não existe
   const [editing, setEditing] = React.useState(false);
   const [title, setTitle] = React.useState('');
@@ -106,7 +106,7 @@ export function Sticky() {
       setInitial(n || null);
       if (n) { setTitle(displayTitle(n)); if (!String(n.content || '').trim()) setEditing(true); }
     });
-    // Cor/"por cima" mudados por outra janela (ou pela bandeja): acompanha.
+    // Cor/recolhida mudadas por outra janela: acompanha.
     return api.onChanged((evt) => { if (evt && evt.sticky) setMe((m) => (m && m.noteId === evt.noteId ? { ...m, ...evt.sticky } : m)); });
   }, []);
 
@@ -143,7 +143,6 @@ export function Sticky() {
             )}
           </div>
           {initial && <HeadButton icon={editing ? 'eye' : 'pencil'} label={editing ? 'Visualizar (Ctrl+E)' : 'Editar (Ctrl+E)'} onClick={() => { if (editing) flushRef.current(); setEditing(!editing); }} />}
-          <HeadButton icon="pin" label={me && me.onTop ? 'Deixar de ficar por cima' : 'Sempre por cima'} active={!!(me && me.onTop)} onClick={() => set({ onTop: !(me && me.onTop) })} />
           {initial && <HeadButton icon="external-link" label="Abrir no Devkit" onClick={openInApp} />}
           <HeadButton icon="x" label="Tirar da tela (a nota continua)" onClick={close} />
         </div>
