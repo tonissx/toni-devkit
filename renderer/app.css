@@ -925,3 +925,24 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .home-chip.is-vault { --hue: var(--tk-syn-bool); }
 .home-chip.is-notes svg, .home-chip.is-vault svg { color: var(--hue); }
 .home-chip.is-notes:hover, .home-chip.is-vault:hover { border-color: color-mix(in srgb, var(--hue) 50%, var(--tk-border)); }
+
+/* Início: seletor de tema (as miniaturas usam o data-theme de cada tema, ver ThemeSwatch) */
+.home-theme { position: relative; }
+.home-theme__btn { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 6px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md);
+  background: var(--tk-surface-2); color: var(--tk-text-2); font: 500 12.5px var(--tk-font-sans); cursor: pointer; }
+.home-theme__btn:hover, .home-theme__btn[aria-expanded="true"] { border-color: var(--tk-border-strong); color: var(--tk-text); }
+.home-theme__pop { position: absolute; z-index: 20; top: calc(100% + 6px); right: 0; width: 250px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: var(--tk-surface-popover, var(--tk-surface-2)); border: 1px solid var(--tk-border-strong); border-radius: var(--tk-radius-lg); box-shadow: var(--tk-shadow-pop); }
+.home-theme__opt { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 0; border-radius: var(--tk-radius-sm); background: none;
+  color: var(--tk-text-2); font: 400 13px var(--tk-font-sans); text-align: left; cursor: pointer; }
+.home-theme__opt:hover { background: var(--tk-surface-hover, var(--tk-surface-3)); color: var(--tk-text); }
+.home-theme__opt.is-on { color: var(--tk-text); }
+.home-theme__opt.is-on > svg:last-child { color: var(--tk-accent); }
+.home-theme__name { flex: 1; }
+.home-theme__sw { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 22px; flex-shrink: 0;
+  border-radius: 6px; background: var(--tk-bg); border: 1px solid var(--tk-border-strong); }
+.home-theme__card { display: inline-flex; gap: 2px; padding: 3px 4px; border-radius: 3px; background: var(--tk-surface-2); }
+.home-theme__card i { display: block; width: 4px; height: 8px; border-radius: 1px; }
+/* "dark" é o :root do DS (sem bloco próprio): dentro de outro tema, a miniatura repõe os valores dele. */
+.home-theme__sw[data-theme="dark"] { --tk-bg: #050506; --tk-surface-2: #141417; --tk-border-strong: #2E2E35; --tk-accent: #3DDC84;
+  --tk-syn-keyword: #6E8BFF; --tk-syn-string: #F5C542; --tk-syn-number: #9B7BFF; }

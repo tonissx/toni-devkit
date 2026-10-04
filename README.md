@@ -130,6 +130,7 @@ muda.
 - **Links rápidos**: favoritos abrem com um clique; links com `{q}` têm um campo para o valor e os últimos valores usados
 - **DevCore**: Compute, tier, missões do dia e o incidente ativo ou previsto (só consulta o DevCore com o painel visível)
 - **Ferramentas**: a grade de sempre, com favoritas primeiro
+- **Tema** (botão no cabeçalho): lista os temas com uma miniatura das cores de cada um; trocar vale para o app todo
 - **Personalizar** esconde ou mostra cada painel (fica salvo)
 
 As regras do painel (agenda, rótulos de prazo, resumo) ficam em `src/home/dashboard.js` (`npm run test:home`).

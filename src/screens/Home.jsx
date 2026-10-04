@@ -1,6 +1,7 @@
 import { DS, mod } from '../lib/ds.js';
 import { usePersisted } from '../lib/store.js';
 import { TOOLS } from '../tools/registry.js';
+import { THEMES, resolveTheme } from '../lib/themes.js';
 import { isoDate } from '../notes/edit.js';
 import { cleanError, shortTime } from '../notes/client.js';
 import { needsValue } from '../links/link.js';
@@ -30,6 +31,57 @@ function useMinute() {
     return () => clearInterval(id);
   }, []);
   return now;
+}
+
+/* ─────────────── Tema ─────────────── */
+
+/**
+ * Miniatura de um tema: o próprio data-theme no elemento aplica os tokens daquele tema só ali dentro,
+ * então fundo, cartão e pontos de cor são os de verdade (o padrão "dark" é :root e tem fallback no app.css).
+ */
+function ThemeSwatch({ value }) {
+  return (
+    <span className="home-theme__sw" data-theme={resolveTheme(value)} aria-hidden="true">
+      <span className="home-theme__card">
+        <i style={{ background: 'var(--tk-accent)' }} /><i style={{ background: 'var(--tk-syn-keyword)' }} />
+        <i style={{ background: 'var(--tk-syn-string)' }} /><i style={{ background: 'var(--tk-syn-number)' }} />
+      </span>
+    </span>
+  );
+}
+
+function ThemePicker({ theme, setTheme }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  const cur = THEMES.find((t) => t.value === theme) || THEMES[0];
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const click = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const key = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', click);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('mousedown', click); document.removeEventListener('keydown', key); };
+  }, [open]);
+  return (
+    <div className="home-theme" ref={ref}>
+      <button type="button" className="home-theme__btn" onClick={() => setOpen((v) => !v)} aria-haspopup="listbox" aria-expanded={open} title="Mudar o tema">
+        <ThemeSwatch value={cur.value} /> <span>{cur.label.replace(' (padrão)', '')}</span> <Icon name="chevron-down" size={13} />
+      </button>
+      {open && (
+        <div className="home-theme__pop" role="listbox" aria-label="Tema">
+          {THEMES.map((t) => (
+            <button type="button" key={t.value} role="option" aria-selected={t.value === cur.value}
+              className={'home-theme__opt' + (t.value === cur.value ? ' is-on' : '')} onClick={() => { setTheme(t.value); setOpen(false); }}>
+              <ThemeSwatch value={t.value} />
+              <span className="home-theme__name">{t.label}</span>
+              {t.value === 'system' && <Icon name="monitor" size={12} />}
+              {t.value === cur.value && <Icon name="check" size={14} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─────────────── Faixa de status ─────────────── */
@@ -246,7 +298,7 @@ function DevCorePanel({ snap, now, go }) {
  * resumo do DevCore e as ferramentas. Tudo atualiza sozinho pelos eventos "changed" dos serviços; os painéis
  * podem ser escondidos em Personalizar (lista em src/home/dashboard.js).
  */
-export function Home({ go, open, openPalette, updater, toast }) {
+export function Home({ go, open, openPalette, updater, toast, theme, setTheme }) {
   const [fav, setFav] = usePersisted('favorites', { ids: [] });
   const [layout, setLayout] = usePersisted('home', { hidden: [] });
   const [editing, setEditing] = React.useState(false);
@@ -298,6 +350,7 @@ export function Home({ go, open, openPalette, updater, toast }) {
       <PageHeader icon="layout-dashboard" title={greeting(now)}
         subtitle={<span className="home-sub">{longDate(now)}{summary.map((p) => <React.Fragment key={p.tone}><span className="home-sub__sep">·</span><span className={'home-sub__part is-' + p.tone}>{p.text}</span></React.Fragment>)}</span>}
         actions={<>
+          <ThemePicker theme={theme} setTheme={setTheme} />
           <Button variant="ghost" icon="sliders-horizontal" onClick={() => setEditing((v) => !v)} aria-pressed={editing}>Personalizar</Button>
           <Button variant="secondary" icon="search" kbd={mod('K')} onClick={openPalette}>Buscar</Button>
         </>} />

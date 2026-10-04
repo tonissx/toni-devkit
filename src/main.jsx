@@ -107,7 +107,8 @@ function App() {
 
   const tool = findTool(route);
   const Screen = tool && tool.component;
-  const screen = route === 'home' ? <Home go={go} open={open} openPalette={openPalette} updater={updater} toast={toast} />
+  const screen = route === 'home' ? <Home go={go} open={open} openPalette={openPalette} updater={updater} toast={toast}
+      theme={prefs.theme} setTheme={(theme) => setPrefs((p) => ({ ...p, theme }))} />
     : route === 'settings' ? <Settings prefs={prefs} setPrefs={setPrefs} info={info} sqlVersion={sqlVersion} updater={updater} toast={toast} />
     : <Screen toast={toast} request={request && request.route === route ? request : undefined} />;
 
