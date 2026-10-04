@@ -124,7 +124,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .home-row:hover .home-row__title { color: var(--tk-accent-text); }
 .home-row__sub { font-size: 11.5px; color: var(--tk-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .home-row__aside { flex-shrink: 0; font: 11px var(--tk-font-mono); color: var(--tk-text-3); }
-.home-pinned { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; border-top: 1px solid var(--tk-border); }
+.home-pinned { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--tk-border); }
 .home-pinned__list { display: flex; flex-wrap: wrap; gap: 6px; }
 .home-pill { display: inline-flex; align-items: center; gap: 4px; max-width: 220px; height: 24px; padding: 0 9px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-pill);
   background: var(--tk-surface-2); color: var(--tk-text-2); font: 400 12px var(--tk-font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }

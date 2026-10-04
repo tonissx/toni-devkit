@@ -127,7 +127,7 @@ function repoStatusChip(rows) {
 /** Painéis do Início, na ordem em que aparecem. O usuário pode esconder qualquer um (Personalizar). */
 const PANELS = [
   { id: 'tasks', name: 'Tarefas' },
-  { id: 'notes', name: 'Notas recentes' },
+  { id: 'notes', name: 'Notas' },
   { id: 'git', name: 'Repositórios git' },
   { id: 'links', name: 'Links rápidos' },
   { id: 'devcore', name: 'DevCore' },

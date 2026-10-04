@@ -198,7 +198,7 @@ muda.
   outro app ocupa `Ctrl+Alt+Space` e a atualização disponível/baixada (um clique baixa ou reinicia já na versão nova)
 - **Tarefas**: vencidas, de hoje e dos próximos 7 dias, mais as sem prazo que têm prioridade. Marcar grava na nota;
   clicar no texto abre a nota; o campo no topo captura uma tarefa no **Inbox** (`@hoje`/`@amanha` viram a data)
-- **Notas recentes** (editadas e vistas) e as **fixadas**; **Nova** abre uma nota em branco; o ícone que aparece ao passar o
+- **Notas**: as **fixadas** em cima (sempre no mesmo lugar) e as **recentes** (editadas e vistas) embaixo; **Nova** abre uma nota em branco; o ícone que aparece ao passar o
   mouse fixa a nota na tela como sticky note
 - **Repositórios** (da ferramenta Git): branch e o que está pendente em cada um — conflito/merge em andamento (vermelho),
   mudanças, commits para enviar, stashes —, os que pedem atenção primeiro; clicar abre o Git no repositório e na aba certa.
@@ -343,7 +343,7 @@ Qualquer nota pode ficar **fixada na tela** como uma janelinha flutuante — par
 os parâmetros de uma consulta enquanto você trabalha em outro programa. Não é outro tipo de nota: é a própria nota, então
 o que você muda ali grava no `.md`, aparece no Início/Tarefas e entra no histórico.
 
-- **Fixar**: botão de sticky na barra do editor, ícone ao passar o mouse em "Notas recentes" no Início, ou
+- **Fixar**: botão de sticky na barra do editor, ícone ao passar o mouse numa nota recente no Início, ou
   **Nova sticky note** na palette (cria uma nota e já fixa; dentro de Notes, `Alt+S`)
 - **Na sticky**: abre em **Visualizar** (checklists clicáveis, código com Copiar, cartão do Vault); **Editar** com o
   botão, `Ctrl+E` ou duplo clique no texto (`Esc` volta), com os atalhos do editor (`Enter` continua a lista, `Ctrl+L`,

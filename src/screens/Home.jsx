@@ -197,9 +197,24 @@ function TasksPanel({ tasks, today, open, toast }) {
 
 function NotesPanel({ recent, pinned, open, toast }) {
   const list = recentNotes(recent, 6);
+  const hasPinned = pinned && pinned.length > 0;
   return (
-    <Card className="home-panel is-notes" padding={16} icon="notebook-pen" title="Notas recentes"
+    <Card className="home-panel is-notes" padding={16} icon="notebook-pen" title="Notas"
       actions={<Button size="sm" variant="ghost" icon="file-plus" onClick={() => open('notes', { new: true })}>Nova</Button>}>
+      {/* Fixadas primeiro: são as escolhidas de propósito, ficam sempre no mesmo lugar; as recentes mudam o tempo todo. */}
+      {hasPinned && (
+        <div className="home-pinned">
+          <span className="home-section__title">Fixadas</span>
+          <div className="home-pinned__list">
+            {pinned.slice(0, 8).map((n) => (
+              <button type="button" key={n.id} className="home-pill" onClick={() => open('notes', { id: n.id })} title={n.title}>
+                <Icon name="pin" size={11} /> {n.title}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {hasPinned && list.length > 0 && <span className="home-section__title">Recentes</span>}
       {!recent && <div className="home-msg"><Spinner size={14} /> Carregando…</div>}
       {recent && list.length === 0 && <div className="home-msg">Nenhuma nota ainda. Capture uma com a Quick Note: Ctrl+Alt+Space → Q.</div>}
       <div className="home-list">
@@ -220,18 +235,6 @@ function NotesPanel({ recent, pinned, open, toast }) {
           </div>
         ))}
       </div>
-      {pinned && pinned.length > 0 && (
-        <div className="home-pinned">
-          <span className="home-section__title">Fixadas</span>
-          <div className="home-pinned__list">
-            {pinned.slice(0, 8).map((n) => (
-              <button type="button" key={n.id} className="home-pill" onClick={() => open('notes', { id: n.id })} title={n.title}>
-                <Icon name="pin" size={11} /> {n.title}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </Card>
   );
 }
