@@ -126,7 +126,8 @@ muda.
   outro app ocupa `Ctrl+Alt+Space` e a atualização disponível/baixada (um clique baixa ou reinicia já na versão nova)
 - **Tarefas**: vencidas, de hoje e dos próximos 7 dias, mais as sem prazo que têm prioridade. Marcar grava na nota;
   clicar no texto abre a nota; o campo no topo captura uma tarefa no **Inbox** (`@hoje`/`@amanha` viram a data)
-- **Notas recentes** (editadas e vistas) e as **fixadas**; **Nova** abre uma nota em branco
+- **Notas recentes** (editadas e vistas) e as **fixadas**; **Nova** abre uma nota em branco; o ícone que aparece ao passar o
+  mouse fixa a nota na tela como sticky note
 - **Links rápidos**: favoritos abrem com um clique; links com `{q}` têm um campo para o valor e os últimos valores usados
 - **DevCore**: Compute, tier, missões do dia e o incidente ativo ou previsto (só consulta o DevCore com o painel visível)
 - **Ferramentas**: a grade de sempre, com favoritas primeiro
@@ -260,6 +261,23 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
     (criada se não existir) · comando **Tarefas** abre o filtro
 - **Auto-save** em todo lugar, sem botão Salvar: grava ao digitar, ao perder o foco, ao trocar de nota, no `Esc`
   e antes de o app sair. Se o disco falhar, o texto continua no editor e num backup local, com "Tentar de novo"
+
+### Sticky notes
+
+Qualquer nota pode ficar **fixada na tela** como uma janelinha flutuante — para deixar à vista um checklist de deploy ou
+os parâmetros de uma consulta enquanto você trabalha em outro programa. Não é outro tipo de nota: é a própria nota, então
+o que você muda ali grava no `.md`, aparece no Início/Tarefas e entra no histórico.
+
+- **Fixar**: botão de sticky na barra do editor, ícone ao passar o mouse em "Notas recentes" no Início, ou
+  **Nova sticky note** na palette (cria uma nota e já fixa)
+- **Na sticky**: abre em **Visualizar** (checklists clicáveis, código com Copiar, cartão do Vault); **Editar** com o
+  botão, `Ctrl+E` ou duplo clique no texto (`Esc` volta), com os atalhos do editor (`Enter` continua a lista, `Ctrl+L`,
+  `@hoje`, `Ctrl+B`/`I`). Cabeçalho: arrastar move · duplo clique recolhe · **cor** da faixa (5 cores do tema atual) ·
+  **sempre por cima** (desligado por padrão) · **abrir no Devkit** · **✕** tira da tela (a nota continua)
+- **Mostrar/ocultar todas**: palette, menu da bandeja ou um Smart Bind. Elas voltam ao lugar quando o Devkit inicia
+- **Tema**: acompanha o do app na hora. Excluir a nota fecha a sticky dela. Máximo de 6 ao mesmo tempo
+- **Onde fica**: posição, tamanho e cor por computador em `%APPDATA%\Toni Devkit\stickies.json` (cada PC tem seus
+  monitores; uma sticky de um monitor desconectado volta para um que existe)
 
 ### Armazenamento
 

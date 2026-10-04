@@ -233,6 +233,8 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
           <span className={'nts-status is-' + status} role="status">{statusLabel(status)}</span>
           <IconButton size="sm" className="nts-pin" icon="pin" label={note.pinned ? 'Desafixar' : 'Fixar (Pinned)'} active={note.pinned} onClick={() => update({ pinned: !note.pinned })} />
           <IconButton size="sm" className="nts-fav" icon="star" label={note.favorite ? 'Remover dos favoritos' : 'Favoritar'} active={note.favorite} onClick={() => update({ favorite: !note.favorite })} />
+          <IconButton size="sm" icon="sticky-note" label="Fixar na tela (sticky note)" disabled={isNew && status === 'idle'}
+            onClick={async () => { await flush(); window.devkit.stickies.open(note.id).catch((e) => toast('Não foi possível fixar na tela', cleanError(e), 'error')); }} />
           <IconButton size="sm" icon="history" label="Versões anteriores" onClick={() => setShowHistory(true)} disabled={isNew && status === 'idle'} />
           <IconButton size="sm" icon="trash-2" label="Excluir (vai para a lixeira)" onClick={async () => { await flush(); onDelete(note); }} disabled={isNew && status === 'idle'} />
         </div>

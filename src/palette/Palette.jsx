@@ -274,6 +274,7 @@ export function Palette() {
       quit: () => d.app.quit(),
       notes: d.notes,
       links: d.links,
+      stickies: d.stickies,
       openNote: (payload) => d.notes.open(payload),
       palette: { unlock: (p) => { setError(null); setPw(''); setPwd(p); }, quickNote: startQuick, enter: enterScope, enterLink, search: (text) => { setLinkId(null); setScope(null); setQuery(text); setHi(0); } },
     };

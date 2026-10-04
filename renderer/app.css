@@ -945,3 +945,13 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 /* "dark" é o :root do DS (sem bloco próprio): dentro de outro tema, a miniatura repõe os valores dele. */
 .home-theme__sw[data-theme="dark"] { --tk-bg: #050506; --tk-surface-2: #141417; --tk-border-strong: #2E2E35; --tk-accent: #3DDC84;
   --tk-syn-keyword: #6E8BFF; --tk-syn-string: #F5C542; --tk-syn-number: #9B7BFF; }
+
+/* Início: botão "fixar na tela" (sticky note) que aparece ao passar o mouse na nota */
+.home-row-wrap { position: relative; }
+.home-row-wrap .home-row { padding-right: 40px; }
+.home-row__stick { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0; border: 1px solid var(--tk-border); border-radius: 6px; background: var(--tk-surface-2); color: var(--tk-text-3);
+  cursor: pointer; opacity: 0; transition: opacity var(--tk-dur-fast) var(--tk-ease); }
+.home-row-wrap:hover .home-row__stick, .home-row__stick:focus-visible { opacity: 1; }
+.home-row-wrap:hover .home-row__aside { visibility: hidden; }
+.home-row__stick:hover { color: var(--hue); border-color: var(--hue); }

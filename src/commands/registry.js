@@ -13,6 +13,7 @@
  *     ctx.clipboard / ctx.sql / ctx.storage / ctx.quit()
  *     ctx.notes (API de Notes) · ctx.openNote({ id } | { new: true, title? }) · ctx.devcore (API do DevCore)
  *     ctx.vault (API do Vault — só metadados; copy() grava no clipboard pelo processo principal)
+ *     ctx.stickies (sticky notes: open(noteId), toggleAll())
  *     ctx.openApp(route, params?) — params chega à ferramenta (ex.: { tab: 'pets' })
  *     ctx.palette.quickNote(texto?) / ctx.palette.enter(escopo)   (comandos keepOpen: a palette continua aberta)
  *   O 3º argumento traz { ctrl } (Ctrl+Enter).
@@ -272,6 +273,26 @@ const noteCommands = [
     description: 'Todas as tarefas “- [ ]” das notas — capture uma com “task: texto”',
     keywords: ['tasks', 'todo', 'tarefas', 'checklist', 'pendencias', 'afazeres'],
     run: (ctx) => ctx.openApp('notes', { view: 'tasks' }),
+  },
+  {
+    id: 'stickies:new', name: 'Nova sticky note', icon: 'sticky-note',
+    description: 'Cria uma nota e fixa na tela — para fixar uma que já existe, use o botão no editor ou no Início',
+    keywords: ['sticky', 'post-it', 'postit', 'lembrete', 'fixar na tela', 'nota na tela', 'flutuante', 'note'],
+    run: async (ctx) => {
+      const d = new Date();
+      const p = (n) => String(n).padStart(2, '0');
+      const n = await ctx.notes.create({ title: `Sticky ${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}` });
+      await ctx.stickies.open(n.id);
+    },
+  },
+  {
+    id: 'stickies:toggle', name: 'Mostrar/ocultar sticky notes', icon: 'eye-off',
+    description: 'Esconde as notas fixadas na tela (continuam fixadas) ou mostra de novo',
+    keywords: ['sticky', 'post-it', 'esconder', 'ocultar', 'mostrar', 'notas na tela', 'note'],
+    run: async (ctx) => {
+      const r = await ctx.stickies.toggleAll();
+      return !r.stickies.length ? 'Nenhuma sticky note fixada' : r.hidden ? 'Sticky notes ocultas' : 'Sticky notes na tela';
+    },
   },
   {
     id: 'notes:folder', name: 'Abrir pasta das notas', icon: 'folder-open',

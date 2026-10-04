@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, globalShortcut, Tray, Menu, nativeImage, protocol, net, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, globalShortcut, Tray, Menu, nativeImage, protocol, net, powerMonitor, screen } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const fs = require('node:fs/promises');
@@ -15,6 +15,7 @@ const { createDevCoreService } = require('./devcore/service');
 const { createUpdaterService } = require('./updater/service');
 const { createLinksService } = require('./links/service');
 const { createVaultService } = require('./vault/service');
+const { createStickiesService } = require('./stickies/service');
 
 // Event Bus: as features anunciam o que aconteceu; módulos (DevCore) escutam sem acoplamento.
 const bus = createBus();
@@ -168,6 +169,7 @@ function buildTrayMenu() {
     bound('clipboard:xml', 'Formatar XML do clipboard'),
     { type: 'separator' },
     { label: 'Bloquear cofre', click: () => { if (vault) vault.lock('tray'); } },
+    { label: 'Mostrar/ocultar sticky notes', click: () => { if (stickies) stickies.toggleAll().catch(() => {}); } },
     { type: 'separator' },
     { label: 'Sair', click: () => { quitting = true; app.quit(); } },
   ]));
@@ -207,6 +209,8 @@ ipcMain.handle('theme:set', (_e, theme) => {
   // Qualquer tema que não seja claro/sistema é uma variante escura (hacking, dracula, etc.) —
   // o chrome nativo da janela só entende claro/escuro/sistema.
   nativeTheme.themeSource = theme === 'light' ? 'light' : theme === 'system' ? 'system' : 'dark';
+  // As outras janelas (sticky notes) trocam de tema na hora.
+  for (const w of BrowserWindow.getAllWindows()) if (w.webContents !== _e.sender) w.webContents.send('theme:changed', theme);
   return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
 });
 
@@ -369,7 +373,10 @@ ipcMain.handle('devcore:items', async () => { await devcoreReady; return devcore
 // Um .md por nota em Documentos\Devkit Notes (DEVKIT_NOTES_DIR sobrescreve — usado nos testes).
 let notes = null;
 let notesReady = null;
-const broadcastNotes = (evt) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:changed', evt); };
+const broadcastNotes = (evt) => {
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:changed', evt);
+  if (evt && evt.type === 'removed' && stickies) stickies.noteRemoved(evt.id); // nota excluída sai da tela
+};
 
 const notesDir = () => process.env.DEVKIT_NOTES_DIR || path.join(app.getPath('documents'), 'Devkit Notes');
 
@@ -490,6 +497,70 @@ ipcMain.handle('vault:export', async (e) => {
   return vault.exportTo(r.filePath);
 });
 
+/* ─────────────── Sticky notes (notas fixadas na tela) ─────────────── */
+// %APPDATA%/Toni Devkit/stickies.json — posição/cor de cada janela, por computador (ver electron/stickies/service.js).
+let stickies = null;
+let stickiesReady = null;
+const stickyByContents = new Map(); // webContents.id → noteId (a janela da sticky só mexe na própria nota)
+const broadcastStickies = (evt) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('stickies:changed', evt); };
+
+function createStickyWindow(noteId, { bounds, onTop, collapsed }) {
+  const win = new BrowserWindow({
+    ...bounds,
+    minWidth: 200,
+    minHeight: 38,
+    show: false,
+    frame: false,
+    resizable: !collapsed,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: !!onTop,
+    backgroundColor: '#141417',
+    title: 'Devkit — Sticky note',
+    icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+    },
+  });
+  const id = win.webContents.id;
+  stickyByContents.set(id, noteId);
+  win.on('closed', () => stickyByContents.delete(id));
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.once('ready-to-show', () => { if (!stickies.list().hidden) win.showInactive(); });
+  win.loadFile(path.join(__dirname, '..', 'renderer', 'sticky.html'), { query: { id: noteId } });
+  return win;
+}
+
+function initStickies() {
+  stickies = createStickiesService({
+    file: path.join(app.getPath('userData'), 'stickies.json'),
+    createWindow: createStickyWindow,
+    workAreas: () => screen.getAllDisplays().map((d) => d.workArea),
+    cursorWorkArea: () => screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea,
+    broadcast: broadcastStickies,
+  });
+  stickiesReady = stickies.init().then(() => stickies.restore()).catch((e) => { console.error('[stickies]', e); });
+}
+
+const stickyOf = (e) => stickyByContents.get(e.sender.id);
+ipcMain.handle('stickies:list', async () => { await stickiesReady; return stickies.list(); });
+ipcMain.handle('stickies:open', async (_e, noteId, opts) => { await stickiesReady; return stickies.open(String(noteId || ''), opts && typeof opts === 'object' ? opts : {}); });
+ipcMain.handle('stickies:toggleAll', async () => { await stickiesReady; return stickies.toggleAll(); });
+// Chamados pela própria janela da sticky: valem só para a nota dela.
+ipcMain.handle('stickies:self', async (e) => { await stickiesReady; const id = stickyOf(e); return id ? { noteId: id, ...stickies.get(id) } : null; });
+ipcMain.handle('stickies:set', async (e, patch) => { await stickiesReady; return stickies.set(stickyOf(e), patch && typeof patch === 'object' ? patch : {}); });
+ipcMain.handle('stickies:close', async (e) => { await stickiesReady; return stickies.close(stickyOf(e)); });
+
 /* ─────────────── Atualização ─────────────── */
 // Windows instalado (NSIS) e Linux: electron-updater troca os arquivos sozinho. macOS e Windows
 // portátil (não conseguem se auto-substituir em disco): só avisam e abrem a release no navegador.
@@ -538,6 +609,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     initNotes();
+    initStickies();
     initLinks();
     initVault();
     registerNotesProtocol();
@@ -562,6 +634,7 @@ if (!app.requestSingleInstanceLock()) {
   let notesFlushed = false;
   app.on('before-quit', (e) => {
     quitting = true;
+    if (stickies) stickies.setQuitting(); // as janelas fecham, mas as stickies voltam na próxima vez
     if (notesFlushed || !notes) return;
     e.preventDefault();
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:flush');
@@ -570,6 +643,7 @@ if (!app.requestSingleInstanceLock()) {
       if (devcore) await devcore.flush().catch(() => {});
       if (links) await links.flush().catch(() => {});
       if (vault) await vault.flush().catch(() => {});
+      if (stickies) await stickies.flush().catch(() => {});
       notesFlushed = true;
       app.quit();
     }, 300);

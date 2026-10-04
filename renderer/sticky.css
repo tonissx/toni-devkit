@@ -1,0 +1,45 @@
+/* Janela de uma sticky note — só tokens do DS. A cor da faixa vem da paleta do tema (--tk-accent / --tk-syn-*),
+   então acompanha Hacking, Dracula, Claro etc. (ver COLORS em src/stickies/sticky.js). */
+html, body, #root { height: 100%; margin: 0; overflow: hidden; background: var(--tk-surface-2); }
+
+.stk { --hue: var(--tk-accent); display: flex; flex-direction: column; height: 100%; box-sizing: border-box;
+  border: 1px solid var(--tk-border-strong); border-top: 0; color: var(--tk-text); font: 400 13px var(--tk-font-sans); }
+.stk.is-keyword { --hue: var(--tk-syn-keyword); }
+.stk.is-string { --hue: var(--tk-syn-string); }
+.stk.is-bool { --hue: var(--tk-syn-bool); }
+.stk.is-number { --hue: var(--tk-syn-number); }
+
+.stk-head { position: relative; display: flex; align-items: center; gap: 6px; height: 37px; flex-shrink: 0; padding: 3px 4px 0 12px;
+  border-top: 3px solid var(--hue); background: var(--tk-surface-2); -webkit-app-region: drag; user-select: none; cursor: default; }
+.stk:not(.is-collapsed) .stk-head { border-bottom: 1px solid var(--tk-border); }
+.stk-title { flex: 1; min-width: 0; font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stk-actions { display: flex; align-items: center; gap: 1px; -webkit-app-region: no-drag; opacity: .55; transition: opacity var(--tk-dur-fast) var(--tk-ease); }
+.stk:hover .stk-actions, .stk-actions:focus-within { opacity: 1; }
+.stk-btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 6px;
+  background: none; color: var(--tk-text-3); cursor: pointer; }
+.stk-btn:hover { background: var(--tk-surface-3); color: var(--tk-text); }
+.stk-btn.is-on { color: var(--hue); }
+.stk-dot i { display: block; width: 11px; height: 11px; border-radius: 50%; background: var(--hue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--hue) 25%, transparent); }
+
+.stk-colors { position: relative; }
+.stk-menu { position: absolute; z-index: 5; top: 30px; right: 0; display: flex; gap: 6px; padding: 7px; border-radius: 8px;
+  background: var(--tk-surface-popover, var(--tk-surface-3)); border: 1px solid var(--tk-border-strong); box-shadow: var(--tk-shadow-pop); }
+.stk-swatch { width: 18px; height: 18px; padding: 0; border: 2px solid transparent; border-radius: 50%; background: var(--sw); cursor: pointer; }
+.stk-swatch:hover { transform: scale(1.12); }
+.stk-swatch.is-on { border-color: var(--tk-text); }
+.stk-swatch.is-accent { --sw: var(--tk-accent); }
+.stk-swatch.is-keyword { --sw: var(--tk-syn-keyword); }
+.stk-swatch.is-string { --sw: var(--tk-syn-string); }
+.stk-swatch.is-bool { --sw: var(--tk-syn-bool); }
+.stk-swatch.is-number { --sw: var(--tk-syn-number); }
+
+.stk-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.stk-view { flex: 1; min-height: 0; overflow: auto; padding: 10px 14px 14px; }
+.stk-view .md-preview { font-size: 13px; }
+.stk-view .md-preview > :first-child { margin-top: 0; }
+.stk-view .md-preview input.md-task { accent-color: var(--hue); }
+.stk-text { flex: 1; min-height: 0; resize: none; margin: 0; padding: 10px 14px; border: 0; outline: 0; background: var(--tk-surface-input);
+  color: var(--tk-text); font: 12.5px/1.55 var(--tk-font-mono); }
+.stk-msg { display: flex; align-items: center; gap: 8px; padding: 14px; color: var(--tk-text-3); font-size: 12.5px; }
+.stk-error { padding: 6px 12px; font-size: 12px; color: var(--tk-red); background: var(--tk-red-a12); }
+.stk-error button { border: 0; background: none; color: inherit; text-decoration: underline; cursor: pointer; }

@@ -186,7 +186,7 @@ function TasksPanel({ tasks, today, open, toast }) {
 
 /* ─────────────── Notas ─────────────── */
 
-function NotesPanel({ recent, pinned, open }) {
+function NotesPanel({ recent, pinned, open, toast }) {
   const list = recentNotes(recent, 6);
   return (
     <Card className="home-panel is-notes" padding={16} icon="notebook-pen" title="Notas recentes"
@@ -195,14 +195,20 @@ function NotesPanel({ recent, pinned, open }) {
       {recent && list.length === 0 && <div className="home-msg">Nenhuma nota ainda. Capture uma com a Quick Note: Ctrl+Alt+Space → Q.</div>}
       <div className="home-list">
         {list.map((n) => (
-          <button type="button" key={n.id} className="home-row" onClick={() => open('notes', { id: n.id })}>
-            <Icon name={n.type === 'snippet' ? 'braces' : n.pinned ? 'pin' : 'file-text'} size={14} />
-            <span className="home-row__main">
-              <span className="home-row__title">{n.title}</span>
-              {(n.folder || n.preview) && <span className="home-row__sub">{n.folder ? n.folder + ' · ' : ''}{n.preview}</span>}
-            </span>
-            <span className="home-row__aside">{shortTime(n.viewedAt && !recent.edited.some((e) => e.id === n.id) ? n.viewedAt : n.updated)}</span>
-          </button>
+          <div key={n.id} className="home-row-wrap">
+            <button type="button" className="home-row" onClick={() => open('notes', { id: n.id })}>
+              <Icon name={n.type === 'snippet' ? 'braces' : n.pinned ? 'pin' : 'file-text'} size={14} />
+              <span className="home-row__main">
+                <span className="home-row__title">{n.title}</span>
+                {(n.folder || n.preview) && <span className="home-row__sub">{n.folder ? n.folder + ' · ' : ''}{n.preview}</span>}
+              </span>
+              <span className="home-row__aside">{shortTime(n.viewedAt && !recent.edited.some((e) => e.id === n.id) ? n.viewedAt : n.updated)}</span>
+            </button>
+            <button type="button" className="home-row__stick" title="Fixar na tela (sticky note)" aria-label={'Fixar na tela: ' + n.title}
+              onClick={() => window.devkit.stickies.open(n.id).catch((e) => toast('Não foi possível fixar na tela', cleanError(e), 'error'))}>
+              <Icon name="sticky-note" size={13} />
+            </button>
+          </div>
         ))}
       </div>
       {pinned && pinned.length > 0 && (
@@ -367,7 +373,7 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
 
       <div className="home-dash">
         {shows('tasks') && <TasksPanel tasks={tasks} today={today} open={open} toast={toast} />}
-        {shows('notes') && <NotesPanel recent={recent} pinned={pinned} open={open} />}
+        {shows('notes') && <NotesPanel recent={recent} pinned={pinned} open={open} toast={toast} />}
         {shows('links') && <LinksPanel links={links} go={go} toast={toast} />}
         {showDc && <DevCorePanel snap={dc} now={tick} go={go} />}
       </div>

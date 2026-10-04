@@ -15,7 +15,15 @@ contextBridge.exposeInMainWorld('devkit', {
       return () => ipcRenderer.removeListener('win:state', h);
     },
   },
-  theme: { set: (t) => ipcRenderer.invoke('theme:set', t) },
+  theme: {
+    set: (t) => ipcRenderer.invoke('theme:set', t),
+    /** Outra janela trocou o tema (as sticky notes acompanham na hora). */
+    onChanged: (cb) => {
+      const h = (_e, t) => cb(t);
+      ipcRenderer.on('theme:changed', h);
+      return () => ipcRenderer.removeListener('theme:changed', h);
+    },
+  },
   clipboard: {
     write: (text) => ipcRenderer.invoke('clipboard:write', text),
     read: () => ipcRenderer.invoke('clipboard:read'),
@@ -210,6 +218,23 @@ contextBridge.exposeInMainWorld('devkit', {
       const h = (_e, evt) => cb(evt);
       ipcRenderer.on('vault:changed', h);
       return () => ipcRenderer.removeListener('vault:changed', h);
+    },
+  },
+  /**
+   * Sticky notes — notas fixadas na tela (ver electron/stickies/service.js). open/list/toggleAll valem de qualquer janela;
+   * self/set/close só na janela da própria sticky (o processo principal sabe de qual nota ela é).
+   */
+  stickies: {
+    open: (noteId, opts) => ipcRenderer.invoke('stickies:open', noteId, opts),
+    list: () => ipcRenderer.invoke('stickies:list'),
+    toggleAll: () => ipcRenderer.invoke('stickies:toggleAll'),
+    self: () => ipcRenderer.invoke('stickies:self'),
+    set: (patch) => ipcRenderer.invoke('stickies:set', patch),
+    close: () => ipcRenderer.invoke('stickies:close'),
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('stickies:changed', h);
+      return () => ipcRenderer.removeListener('stickies:changed', h);
     },
   },
   /** Atualização automática (ver electron/updater/service.js). */
