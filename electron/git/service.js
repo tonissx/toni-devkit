@@ -295,6 +295,8 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     for (const b of list) b.worktree = inWorktree.get(b.name) || null;
     await Promise.all(list.map(async (b) => {
       b.merged = b.name !== base && merged.has(b.name);
+      // Outras branches que já têm todos os commits desta (excluí-la não perde nada, mesmo sem merge na base).
+      b.containedIn = (await git(repo, ['for-each-ref', '--format=%(refname:short)', '--contains', b.hash, 'refs/heads'])).stdout.split('\n').filter((n) => n && n !== b.name);
       if (!base || b.name === base) return;
       const c = (await git(repo, ['rev-list', '--left-right', '--count', `${base}...${b.name}`])).stdout.trim().split(/\s+/);
       b.baseBehind = +c[0]; b.baseAhead = +c[1];

@@ -166,6 +166,10 @@ test('ops: argumentos, risco e validação', () => {
   assert.equal(c.display, 'git commit --amend -m Título');
   assert.deepEqual(O.buildOp({ op: 'branch.create', name: 'feat/x', from: 'main', checkout: true }).args, ['switch', '-c', 'feat/x', 'main']);
   assert.equal(O.buildOp({ op: 'branch.delete', name: 'x', force: true }).risk, 'discard');
+  // Sem merge na base, mas com todos os commits noutra branch: precisa do -D, só que nada se perde.
+  const contained = O.buildOp({ op: 'branch.delete', name: 'release/lote-1', force: true, contained: ['release/lote-2'] });
+  assert.deepEqual([contained.args, contained.risk], [['branch', '-D', 'release/lote-1'], 'safe']);
+  assert.match(contained.explain, /continuam em release\/lote-2/);
   assert.equal(O.buildOp({ op: 'reset', to: 'HEAD~2', mode: 'hard' }).risk, 'discard');
   assert.equal(O.buildOp({ op: 'discard', paths: ['a'] }).backup, true);
 

@@ -114,13 +114,20 @@ const OPS = {
     args: ['branch', '-m', branch(from), branch(to)], risk: 'safe', title: 'Renomear branch',
     explain: `Renomeia “${from}” para “${to}”. Os commits não mudam.`,
   }),
-  'branch.delete': ({ name, force }) => ({
-    args: ['branch', force ? '-D' : '-d', branch(name)], risk: force ? 'discard' : 'safe', backup: true, backupRef: name,
-    title: force ? 'Excluir branch (mesmo sem merge)' : 'Excluir branch',
-    explain: force
-      ? `Exclui “${name}” mesmo com commits que não estão em outra branch. O Devkit guarda a ponta dela num ponto de volta.`
-      : `Exclui “${name}”. O git só deixa se os commits dela já estiverem em outra branch.`,
-  }),
+  // contained: outras branches que já têm todos os commits desta — o -D é preciso (o git só olha a atual e o upstream),
+  // mas nada se perde.
+  'branch.delete': ({ name, force, contained }) => {
+    const safeForce = force && Array.isArray(contained) && contained.length > 0;
+    return {
+      args: ['branch', force ? '-D' : '-d', branch(name)], risk: force && !safeForce ? 'discard' : 'safe', backup: true, backupRef: name,
+      title: force && !safeForce ? 'Excluir branch (mesmo sem merge)' : 'Excluir branch',
+      explain: safeForce
+        ? `Exclui “${name}”. Todos os commits dela continuam em ${contained.slice(0, 3).join(', ')} — nada se perde. O Devkit ainda guarda um ponto de volta.`
+        : force
+          ? `Exclui “${name}” mesmo com commits que não estão em nenhuma outra branch. O Devkit guarda a ponta dela num ponto de volta.`
+          : `Exclui “${name}”. O git só deixa se os commits dela já estiverem na branch atual ou no upstream.`,
+    };
+  },
   'stash.push': ({ message, untracked, paths: p }) => {
     const args = ['stash', 'push', ...(untracked ? ['-u'] : [])];
     if (message) args.push('-m', String(message).slice(0, 200));
