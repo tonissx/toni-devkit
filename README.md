@@ -22,7 +22,7 @@ Outros comandos úteis:
 
 ```bash
 npm run dev        # como o start, mas com DevTools abertas
-npm test           # testa os motores SQL e XML no Node (sem Electron)
+npm test           # todos os testes no Node (motores, serviços, palette, DevCore; sem Electron)
 npm run dist       # gera instalador Windows (NSIS) + portable em dist/
 npm run dist:mac   # gera .dmg (macOS)
 npm run dist:linux # gera AppImage (Linux)
@@ -36,6 +36,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **XML Formatter**: formata nos moldes do vscode-xml (LemMinX) | ✅ |
 | **Diff Checker**: compara dois textos nos moldes do diffchecker.com | ✅ |
 | **JSON Visualizer**: edita, formata e explora JSON como grafo (estilo JSON Crack), árvore, YAML ou CSV | ✅ |
+| **Git**: repositórios locais com grafo do histórico, stage por trecho, merge com prévia, conflitos, rebase visual, blame, bisect e desfazer qualquer coisa | ✅ |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
 | **Vault**: cofre de senhas, tokens e credenciais de banco, com senha mestra e cópia que se apaga | ✅ |
 | **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
@@ -116,6 +117,101 @@ o documento como **grafo de nós** (esquerda → direita). Tudo em JS puro e sem
 Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar a visão atual · `Ctrl+O` abrir .json · `Ctrl+S` salvar a visão atual ·
 `Ctrl+6` JSON Visualizer.
 
+### Git
+
+Uma interface visual para os repositórios do computador (`Ctrl+8`), pensada para quem usa o básico do git e trava nas
+operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nada de fetch/pull/push por enquanto).
+
+- **Repositórios**: **Adicionar pasta** (se a pasta não for um repositório, procura os que estão dentro dela) ou **Procurar
+  no PC** (Documentos, `source\repos`, pasta do usuário). Cada um mostra a branch e as mudanças pendentes; abre no
+  Explorer, no VS Code ou num terminal. A lista fica em `%APPDATA%\Toni Devkit\git-repos.json`
+- **Visão geral**: números, mapa de atividade dos últimos 90 dias, quem mais commitou, arquivos mais alterados, último commit
+- **Mudanças**: preparadas, modificadas, novas e em conflito; o diff mostra o que mudou dentro da linha e cada **trecho**
+  tem **Preparar** / **Tirar do stage** / **Descartar** (o `git add -p` sem decorar nada). Caixa de commit com contador da
+  1ª linha, `Ctrl+Enter` e **corrigir o último commit** (amend)
+- **Histórico**: **grafo** dos commits com raias nas cores do tema, branches e tags, filtros por mensagem e autor; o
+  commit escolhido mostra mensagem, arquivos e diff, e permite **criar uma branch ali** ou **voltar a branch para lá**
+  (mantendo as mudanças no stage, nos arquivos, ou jogando fora)
+- **Branches**: à frente/atrás da base (main), **mesclada**, upstream; criar, **trocar** (com mudanças pendentes pergunta:
+  guardar num stash ou levar junto), renomear, excluir e **comparar duas branches** (o que cada uma tem, o ancestral comum,
+  os arquivos e o diff)
+- **Stash**: guardar com nome (inclusive arquivos novos), ver o conteúdo, aplicar, aplicar e remover, descartar
+- **Máquina do tempo**: os pontos de volta do Devkit e o **reflog** em português ("Trocou de main para feature", "Corrigiu o
+  último commit"…), com **recuperar como branch** e **voltar para cá**
+- **Aprender**: passar o mouse em qualquer ação mostra o **comando git equivalente**; operações que reescrevem o histórico
+  ou descartam trabalho pedem confirmação com a explicação, o comando e o **nível de risco**; depois de executar, a barra
+  de baixo mostra o comando que rodou, "O que isso fez?" e **Desfazer**
+- **Nada se perde**: antes de descartar, corrigir commit, voltar a branch, excluir branch ou stash, o Devkit grava um
+  ponto de volta em `refs/devkit/backup/…` (as mudanças via `git stash create`) e cópias de arquivos novos apagados em
+  `.git\devkit\` — os 30 mais recentes. O próprio Desfazer também vira um ponto de volta
+
+**Operações guiadas (fase 2)**
+
+- **Mesclar com prévia** (Branches → ícone de merge na linha, ou "Atualizar minha branch com a main"): antes de mexer em
+  qualquer coisa mostra os commits que entram, se dá para só avançar (fast-forward) e **quais arquivos vão conflitar**
+  (`git merge-tree`). Automático ou sempre com commit de merge
+- **Conflitos**: merge, cherry-pick e rebase que param em conflito não são erro — a tela vai para Mudanças e cada arquivo
+  em conflito abre o **editor**: a sua versão e a deles lado a lado (e como era antes, quando o git sabe), com **Meu /
+  Deles / Os dois / Os dois (deles primeiro) / Editar** por bloco, "todos os blocos" de um lado, ou o arquivo inteiro de um
+  lado; conflitos de exclusão e binários têm as opções próprias. **Marcar como resolvido** só libera sem marcadores.
+  A faixa do topo mostra **Continuar** e **Cancelar o merge/rebase/cherry-pick**. No rebase os rótulos se invertem
+  ("base" e "seu commit"), como o git
+- **Cherry-pick**: no Histórico, um commit que não está na branch atual tem **Trazer para a branch atual**
+- **Reorganizar (rebase interativo visual)**: os últimos N commits, do mais antigo ao mais novo; arraste (ou ↑/↓) para
+  reordenar e escolha **Manter / Mudar mensagem / Juntar ao de cima / Juntar sem a mensagem / Remover**. A prévia mostra
+  como a branch vai ficar; avisa quando mexe em commits já enviados e recusa intervalos com merges. Roda o `git rebase -i
+  --autostash` com o plano gravado pelo Devkit (sem abrir editor)
+- **Quero…**: receitas em linguagem comum — desfazer o último commit, mudar a mensagem, **commitei na branch errada** (move
+  os últimos commits para uma branch nova), **juntar meus últimos commits**, reorganizar, trazer um commit ou **um arquivo
+  de outra branch**, atualizar com a main, mesclar, descartar tudo, guardar para trocar de assunto, commitar só parte,
+  comparar branches, recuperar algo, resolver conflitos. Cada uma leva à aba, ao assistente ou à operação certa. Também na
+  palette: `Ctrl+Alt+Space` → "git juntar", "git branch errada"…
+
+**Investigar, manter e integrar (fase 3)**
+
+- **Investigar**:
+  - **Quem mudou cada linha** (blame): o arquivo em blocos coloridos por commit, com mensagem, autor e data; clicar abre o
+    commit no Histórico
+  - **Quando um texto apareceu**: commits em que o texto apareceu ou sumiu (`git log -S`) — "quem removeu aquela
+    validação?" — ou que casam uma expressão regular (`-G`), com os arquivos de cada um
+  - **Histórico de um arquivo**: todas as versões (segue renomeações), com o diff de cada uma
+  - **Achar o commit de um bug** (bisect guiado): escolha uma versão que funcionava; o Devkit leva o repositório a commits
+    no meio do caminho e você responde **Funciona / Está quebrado / Pular** até ele apontar o culpado. A faixa do topo
+    lembra que há uma caça em andamento; **Encerrar** volta para a branch
+- **Manutenção**: **tags** (criar simples ou anotada no commit atual, excluir com ponto de volta) · **branches já
+  mescladas** (marcadas, exclui de uma vez, recuperáveis; as abertas num worktree aparecem bloqueadas) · **worktrees**
+  (as pastas extras do repositório, como as de `.claude/worktrees`; remover libera a branch) · **arquivos e pastas não versionados** (o que um
+  `git clean` apagaria, com escolha e cópia antes) · **.gitignore** (ver e acrescentar padrões). Em Mudanças, o ícone de
+  olho riscado num arquivo novo sugere padrões (este arquivo, a extensão, a pasta…) — inclusive para pastas com outro
+  repositório dentro
+- **Ritmo** na Visão geral: dias da semana × horas dos commits dos últimos 180 dias
+- **Integrações**: no detalhe do commit, **salvar como nota** (mensagem, arquivos e diff numa nota com tag `git`) e, por
+  arquivo, **abrir no Diff Checker** (antes × depois). A palette lista cada repositório ("Git: <nome>") e as receitas; o
+  uso conta no DevCore
+
+## Início
+
+O painel do dia, aberto ao clicar em **Início** na sidebar. Tudo se atualiza sozinho quando uma nota, um link ou o cofre
+muda.
+
+- **Cabeçalho**: saudação conforme a hora do dia, a data e o resumo do que vence ("1 tarefa vencida · 2 tarefas para hoje")
+- **Status**: quantidade de notas, estado do cofre (aberto → clique bloqueia; bloqueado → abre o Vault), aviso quando
+  outro app ocupa `Ctrl+Alt+Space` e a atualização disponível/baixada (um clique baixa ou reinicia já na versão nova)
+- **Tarefas**: vencidas, de hoje e dos próximos 7 dias, mais as sem prazo que têm prioridade. Marcar grava na nota;
+  clicar no texto abre a nota; o campo no topo captura uma tarefa no **Inbox** (`@hoje`/`@amanha` viram a data)
+- **Notas**: as **fixadas** em cima (sempre no mesmo lugar) e as **recentes** (editadas e vistas) embaixo; **Nova** abre uma nota em branco; o ícone que aparece ao passar o
+  mouse fixa a nota na tela como sticky note
+- **Repositórios** (da ferramenta Git): branch e o que está pendente em cada um — conflito/merge em andamento (vermelho),
+  mudanças, commits para enviar, stashes —, os que pedem atenção primeiro; clicar abre o Git no repositório e na aba certa.
+  A faixa de status avisa "N repositórios com mudanças" ou "em conflito"
+- **Links rápidos**: favoritos abrem com um clique; links com `{q}` têm um campo para o valor e os últimos valores usados
+- **DevCore**: Compute, tier, missões do dia e o incidente ativo ou previsto (só consulta o DevCore com o painel visível)
+- **Ferramentas**: a grade de sempre, com favoritas primeiro
+- **Tema** (botão no cabeçalho): lista os temas com uma miniatura das cores de cada um; trocar vale para o app todo
+- **Personalizar** esconde ou mostra cada painel (fica salvo)
+
+As regras do painel (agenda, rótulos de prazo, resumo) ficam em `src/home/dashboard.js` (`npm run test:home`).
+
 ## Command Palette
 
 O centro de interação do Devkit. **`Ctrl+Alt+Space`** é o único atalho global: abre a palette de qualquer lugar —
@@ -184,7 +280,7 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
 - **Recuperar**: `Ctrl+Alt+Space` e digite o que você lembra. A busca geral da palette já traz notas e snippets
   (título, conteúdo, tags, aliases e tipo; sem acento; tolera 1 erro de digitação) com o trecho que casou
 - **Categoria Notes na palette** (`Alt+N`): digitar busca só nas notas · `Alt+Q` Quick Note · `Alt+N` New Note ·
-  `Alt+P` Pinned · `Alt+R` Recentes
+  `Alt+P` Pinned · `Alt+R` Recentes · `Alt+S` Nova sticky note
 - **Snippets**: na palette, `Enter` **copia** o código e `Ctrl+Enter` abre. No editor, cartão com [Copiar] e
   `Ctrl+Shift+C`
 - **Editor** (ferramenta Notes, `Ctrl+4`): Markdown com modos Editar / Lado a lado / Visualizar (`Ctrl+E`),
@@ -237,10 +333,28 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   - Aba **Tarefas** (no topo da área principal): todas as tarefas de todas as notas, agrupadas em Vencidas · Hoje · Próximas ·
     Sem data (aba Concluídas à parte); marcar ali grava na nota de origem, clicar no texto abre a nota. A lista
     de notas mostra o progresso (`☑ 3/7`)
-  - Na palette: `task: revisar PR #42` (também `tarefa:` e `t:`) acrescenta `- [ ] revisar PR #42` à nota **Inbox**
+  - Na palette: `task: revisar PR #42` (também `tarefa:` e `t:`) acrescenta `- [ ] revisar PR #42` à nota **Inbox** (`@hoje`/`@amanha` já viram a data)
     (criada se não existir) · comando **Tarefas** abre o filtro
 - **Auto-save** em todo lugar, sem botão Salvar: grava ao digitar, ao perder o foco, ao trocar de nota, no `Esc`
   e antes de o app sair. Se o disco falhar, o texto continua no editor e num backup local, com "Tentar de novo"
+
+### Sticky notes
+
+Qualquer nota pode ficar **fixada na tela** como uma janelinha flutuante — para deixar à vista um checklist de deploy ou
+os parâmetros de uma consulta enquanto você trabalha em outro programa. Não é outro tipo de nota: é a própria nota, então
+o que você muda ali grava no `.md`, aparece no Início/Tarefas e entra no histórico.
+
+- **Fixar**: botão de sticky na barra do editor, ícone ao passar o mouse numa nota recente no Início, ou
+  **Nova sticky note** na palette (cria uma nota e já fixa; dentro de Notes, `Alt+S`)
+- **Na sticky**: abre em **Visualizar** (checklists clicáveis, código com Copiar, cartão do Vault); **Editar** com o
+  botão, `Ctrl+E` ou duplo clique no texto (`Esc` volta), com os atalhos do editor (`Enter` continua a lista, `Ctrl+L`,
+  `@hoje`, `Ctrl+B`/`I`). Cabeçalho: arrastar move · duplo clique recolhe · **cor** da faixa (5 cores do tema atual) ·
+  **abrir no Devkit** · **✕** tira da tela (a nota continua). Ficam sempre por cima dos outros programas; para sair da
+  frente, recolha, oculte todas ou tire da tela
+- **Mostrar/ocultar todas**: palette, menu da bandeja ou um Smart Bind. Elas voltam ao lugar quando o Devkit inicia
+- **Tema**: acompanha o do app na hora. Excluir a nota fecha a sticky dela. Máximo de 6 ao mesmo tempo
+- **Onde fica**: posição, tamanho e cor por computador em `%APPDATA%\Toni Devkit\stickies.json` (cada PC tem seus
+  monitores; uma sticky de um monitor desconectado volta para um que existe)
 
 ### Armazenamento
 

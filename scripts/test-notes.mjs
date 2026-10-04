@@ -792,6 +792,39 @@ test('service: tasks aggregate (order, filters), toggleTask and appendTask to th
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('edit: expandDueWords troca @hoje/@amanha soltos pela data', () => {
+  const now = new Date(2026, 11, 31, 10);
+  assert.equal(E.expandDueWords('pagar @hoje !1', now), 'pagar @2026-12-31 !1');
+  assert.equal(E.expandDueWords('@amanhã revisar e @AMANHA', now), '@2027-01-01 revisar e @2027-01-01');
+  assert.equal(E.expandDueWords('email a@hoje.com @hojeX', now), 'email a@hoje.com @hojeX');
+});
+
+test('service: appendTask já grava @hoje como data', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    await svc.appendTask('ligar @hoje');
+    assert.equal(svc.get(svc.resolveLink('Inbox')).content, `- [ ] ligar @${E.isoDate()}\n`);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('service: toggleTask e appendTask simultâneos na mesma nota não perdem edição', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    // Sem Inbox: duas capturas ao mesmo tempo criam uma Inbox só, com as duas tarefas.
+    await Promise.all([svc.appendTask('um'), svc.appendTask('dois')]);
+    assert.equal(svc.list().filter((n) => n.title === 'Inbox').length, 1);
+    const id = svc.resolveLink('Inbox');
+    assert.equal(svc.get(id).content, '- [ ] um\n- [ ] dois\n');
+    // Marcar (Início/Tarefas) e capturar (palette) sem esperar um pelo outro.
+    await Promise.all([svc.toggleTask(id, 0), svc.appendTask('três'), svc.toggleTask(id, 1)]);
+    assert.equal(svc.get(id).content, '- [x] um\n- [x] dois\n- [ ] três\n');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('service: folders — create, new note in folder, move, rename/move folder, remove + undo, filter', async () => {
   const dir = tmp();
   try {

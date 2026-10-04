@@ -92,7 +92,7 @@ test('registry: unique ids, valid categories, required fields', () => {
   }
   assert.deepEqual(CATEGORIES.map((c) => c.key), ['t', 'a', 'n']);
   const noteKeys = COMMANDS.filter((c) => c.category === 'notes' && c.key).map((c) => c.key);
-  assert.deepEqual(noteKeys, ['q', 'n', 'p', 'r']);
+  assert.deepEqual(noteKeys, ['q', 'n', 'p', 'r', 's']);
 });
 
 test('web search commands encode the query, or open the home page', () => {
@@ -142,6 +142,7 @@ test('paletteKey: letters are text; Alt+letter navigates; Ctrl stays with the in
   assert.deepEqual(k('KeyR', {}, 'notes:pinned'), { type: 'command', id: 'notes:recent' });
   assert.equal(k('KeyP'), null); // Pinned só dentro de Notes
   assert.equal(k('KeyS'), null); // não existe mais Search como categoria
+  assert.deepEqual(k('KeyS', {}, 'notes'), { type: 'command', id: 'stickies:new' }); // dentro de Notes: nova sticky
   assert.equal(paletteKey({ code: 'KeyA', ctrlKey: true }, null), null); // Ctrl+A = selecionar tudo
   assert.equal(k('KeyT', { ctrlKey: true }), null); // Ctrl+Alt (AltGr) não é atalho
   assert.equal(k('KeyT', { shiftKey: true }), null);

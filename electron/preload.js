@@ -15,7 +15,15 @@ contextBridge.exposeInMainWorld('devkit', {
       return () => ipcRenderer.removeListener('win:state', h);
     },
   },
-  theme: { set: (t) => ipcRenderer.invoke('theme:set', t) },
+  theme: {
+    set: (t) => ipcRenderer.invoke('theme:set', t),
+    /** Outra janela trocou o tema (as sticky notes acompanham na hora). */
+    onChanged: (cb) => {
+      const h = (_e, t) => cb(t);
+      ipcRenderer.on('theme:changed', h);
+      return () => ipcRenderer.removeListener('theme:changed', h);
+    },
+  },
   clipboard: {
     write: (text) => ipcRenderer.invoke('clipboard:write', text),
     read: () => ipcRenderer.invoke('clipboard:read'),
@@ -210,6 +218,79 @@ contextBridge.exposeInMainWorld('devkit', {
       const h = (_e, evt) => cb(evt);
       ipcRenderer.on('vault:changed', h);
       return () => ipcRenderer.removeListener('vault:changed', h);
+    },
+  },
+  /**
+   * Sticky notes — notas fixadas na tela (ver electron/stickies/service.js). open/list/toggleAll valem de qualquer janela;
+   * self/set/close só na janela da própria sticky (o processo principal sabe de qual nota ela é).
+   */
+  stickies: {
+    open: (noteId, opts) => ipcRenderer.invoke('stickies:open', noteId, opts),
+    list: () => ipcRenderer.invoke('stickies:list'),
+    toggleAll: () => ipcRenderer.invoke('stickies:toggleAll'),
+    self: () => ipcRenderer.invoke('stickies:self'),
+    set: (patch) => ipcRenderer.invoke('stickies:set', patch),
+    close: () => ipcRenderer.invoke('stickies:close'),
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('stickies:changed', h);
+      return () => ipcRenderer.removeListener('stickies:changed', h);
+    },
+  },
+  /**
+   * Git — repositórios locais (ver electron/git/service.js). Escritas só por exec({ op, ... }) — operações tipadas de
+   * src/git/ops.js; a tela nunca manda linha de comando.
+   */
+  git: {
+    version: () => ipcRenderer.invoke('git:version'),
+    list: () => ipcRenderer.invoke('git:list'),
+    add: (dir) => ipcRenderer.invoke('git:add', dir),
+    remove: (repo) => ipcRenderer.invoke('git:remove', repo),
+    scan: (root, depth) => ipcRenderer.invoke('git:scan', root, depth),
+    scanDefault: () => ipcRenderer.invoke('git:scan-default'),
+    pick: () => ipcRenderer.invoke('git:pick'),
+    open: (repo) => ipcRenderer.invoke('git:open', repo),
+    openIn: (repo, where) => ipcRenderer.invoke('git:open-in', repo, where),
+    summaries: () => ipcRenderer.invoke('git:summaries'),
+    status: (repo) => ipcRenderer.invoke('git:status', repo),
+    log: (repo, opts) => ipcRenderer.invoke('git:log', repo, opts),
+    commit: (repo, hash) => ipcRenderer.invoke('git:commit', repo, hash),
+    diff: (repo, opts) => ipcRenderer.invoke('git:diff', repo, opts),
+    branches: (repo) => ipcRenderer.invoke('git:branches', repo),
+    compare: (repo, a, b) => ipcRenderer.invoke('git:compare', repo, a, b),
+    stashes: (repo) => ipcRenderer.invoke('git:stashes', repo),
+    stashFiles: (repo, ref) => ipcRenderer.invoke('git:stashFiles', repo, ref),
+    reflog: (repo, limit) => ipcRenderer.invoke('git:reflog', repo, limit),
+    overview: (repo) => ipcRenderer.invoke('git:overview', repo),
+    backups: (repo) => ipcRenderer.invoke('git:backups', repo),
+    exec: (repo, op) => ipcRenderer.invoke('git:exec', repo, op),
+    restoreBackup: (repo, id) => ipcRenderer.invoke('git:restoreBackup', repo, id),
+    /** Antes de mesclar: commits que entram, avanço direto e arquivos que vão conflitar (sem mexer em nada). */
+    mergePreview: (repo, branch) => ipcRenderer.invoke('git:mergePreview', repo, branch),
+    /** Arquivo em conflito: { base, ours, theirs, merged, code, deletedBy, binary }. */
+    conflictFile: (repo, path) => ipcRenderer.invoke('git:conflictFile', repo, path),
+    /** Commits para reorganizar: { onto, ontoSubject, commits, hasMerges, pushed }. opts: { count } | { base } */
+    rebaseInfo: (repo, opts) => ipcRenderer.invoke('git:rebaseInfo', repo, opts),
+    /** Arquivos de uma revisão. */
+    files: (repo, ref) => ipcRenderer.invoke('git:files', repo, ref),
+    /** Quem mudou cada linha: { lines: [{ n, hash, text }], commits: { hash → { author, time, summary } }, groups }. */
+    blame: (repo, path, rev) => ipcRenderer.invoke('git:blame', repo, path, rev),
+    /** Commits em que um texto apareceu/sumiu (-S) ou casou a regex (-G). opts: { regex, file } */
+    searchText: (repo, text, opts) => ipcRenderer.invoke('git:searchText', repo, text, opts),
+    bisectState: (repo) => ipcRenderer.invoke('git:bisectState', repo),
+    tags: (repo) => ipcRenderer.invoke('git:tags', repo),
+    cleanPreview: (repo) => ipcRenderer.invoke('git:cleanPreview', repo),
+    gitignore: (repo) => ipcRenderer.invoke('git:gitignore', repo),
+    /** Commits por dia da semana × hora (180 dias). */
+    rhythm: (repo) => ipcRenderer.invoke('git:rhythm', repo),
+    /** Antes/depois de um arquivo num commit (para o Diff Checker). */
+    fileVersions: (repo, hash, path) => ipcRenderer.invoke('git:fileVersions', repo, hash, path),
+    /** Worktrees além do principal: { path, name, branch, exists, dirty, locked }. */
+    worktrees: (repo) => ipcRenderer.invoke('git:worktrees', repo),
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('git:changed', h);
+      return () => ipcRenderer.removeListener('git:changed', h);
     },
   },
   /** Atualização automática (ver electron/updater/service.js). */

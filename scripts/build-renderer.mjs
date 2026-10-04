@@ -1,4 +1,5 @@
-// Compila src/**/*.jsx → renderer/dist/app.js (janela principal) e renderer/dist/palette.js (command palette)
+// Compila src/**/*.jsx → renderer/dist/app.js (janela principal), renderer/dist/palette.js (command palette)
+// e renderer/dist/sticky.js (sticky notes)
 // e copia React UMD para renderer/vendor.
 // React/ReactDOM e o DS são globais (window.React, window.ReactDOM, window.ToniDevkitDesignSystem_*).
 import * as esbuild from 'esbuild';
@@ -19,6 +20,7 @@ const opts = {
   entryPoints: {
     app: path.join(root, 'src', 'main.jsx'),
     palette: path.join(root, 'src', 'palette.jsx'),
+    sticky: path.join(root, 'src', 'sticky.jsx'),
   },
   outdir: path.join(root, 'renderer', 'dist'),
   bundle: true,

@@ -17,6 +17,7 @@ const BINDABLE = [
   { id: 'theme:toggle', name: 'Alternar tema claro/escuro' },
   { id: 'snippets:paste', name: 'Colar snippet em qualquer programa' },
   { id: 'vault:lock', name: 'Bloquear o cofre (Vault)' },
+  { id: 'stickies:toggle', name: 'Mostrar/ocultar sticky notes' },
 ];
 const BINDABLE_IDS = BINDABLE.map((b) => b.id);
 // Exceção à regra "sem UI": estes mostram a palette (lista de snippets) em vez de rodar com ela oculta.

@@ -1,6 +1,6 @@
 import { DS } from '../lib/ds.js';
 import { resolveTheme } from '../lib/themes.js';
-import { CATEGORIES, COMMANDS, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands } from '../commands/registry.js';
+import { CATEGORIES, COMMANDS, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands, gitRepoCommands } from '../commands/registry.js';
 import { parseCapture, needsValue, sameAlias, shortUrl, buildUrl } from '../links/link.js';
 import { formatDuration } from '../devcore/engine/format.js';
 import { rank, loadRecent, pushRecent, normalize } from '../commands/search.js';
@@ -239,6 +239,7 @@ export function Palette() {
   const [abilities, setAbilities] = React.useState([]); // habilidades dos DevPets (dinâmicas)
   const [items, setItems] = React.useState([]);         // consumíveis em estoque (dinâmicos)
   const [links, setLinks] = React.useState([]);         // links rápidos (alias → URL com {q})
+  const [repos, setRepos] = React.useState([]);         // repositórios da ferramenta Git
   const [linkId, setLinkId] = React.useState(null);     // link com o chip fixado (o texto vira o {q})
   const [vaultList, setVaultList] = React.useState(null); // entradas do cofre: metadados (aberto) ou { locked } só com nome/tags (trancado)
   const [pwd, setPwd] = React.useState(null);           // { name, then }: pedindo a senha mestra para copiar uma entrada trancada
@@ -274,6 +275,7 @@ export function Palette() {
       quit: () => d.app.quit(),
       notes: d.notes,
       links: d.links,
+      stickies: d.stickies,
       openNote: (payload) => d.notes.open(payload),
       palette: { unlock: (p) => { setError(null); setPw(''); setPwd(p); }, quickNote: startQuick, enter: enterScope, enterLink, search: (text) => { setLinkId(null); setScope(null); setQuery(text); setHi(0); } },
     };
@@ -303,7 +305,7 @@ export function Palette() {
   }, [ndKey]);
   React.useEffect(() => window.devkit.notes.onChanged(() => setNotesTick((t) => t + 1)), []);
 
-  const abilityCmds = React.useMemo(() => [...abilityCommands(abilities, formatDuration), ...itemCommands(items), ...vaultCommands(vaultList), ...linkCommands(links)], [abilities, items, vaultList, links]);
+  const abilityCmds = React.useMemo(() => [...abilityCommands(abilities, formatDuration), ...itemCommands(items), ...vaultCommands(vaultList), ...linkCommands(links), ...gitRepoCommands(repos)], [abilities, items, vaultList, links, repos]);
   // Cofre: aberto, as entradas vêm completas (metadados); trancado, list() devolve null e a busca usa o índice
   // público (nome/tipo/tags) — Enter nelas pede a senha.
   const loadVault = () => window.devkit.vault.list().then(
@@ -324,6 +326,7 @@ export function Palette() {
     window.devkit.devcore.abilities().then(setAbilities, () => setAbilities([]));
     window.devkit.devcore.items().then(setItems, () => setItems([]));
     loadLinks();
+    window.devkit.git.list().then((l) => setRepos(l.repos), () => setRepos([]));
     setLinkId(null);
     loadVault();
     // Smart Bind "Colar snippet": abre direto na lista de snippets.
@@ -623,7 +626,7 @@ export function Palette() {
             {/* Um "Alt" seguido das letras cabe na largura: Alt + T A N */}
             {link ? null
               : !scope && !q ? <><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">T</Kbd><Kbd size="sm">A</Kbd><Kbd size="sm">N</Kbd> categorias</span><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">Q</Kbd> Quick Note</span></>
-              : scope === 'notes' && !q ? <><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">Q</Kbd><Kbd size="sm">N</Kbd><Kbd size="sm">P</Kbd><Kbd size="sm">R</Kbd></span><span><Kbd size="sm">⌫</Kbd> voltar</span></>
+              : scope === 'notes' && !q ? <><span><Kbd size="sm">Alt</Kbd>+<Kbd size="sm">Q</Kbd><Kbd size="sm">N</Kbd><Kbd size="sm">P</Kbd><Kbd size="sm">R</Kbd><Kbd size="sm">S</Kbd></span><span><Kbd size="sm">⌫</Kbd> voltar</span></>
               : scope && !q ? <span><Kbd size="sm">⌫</Kbd> voltar</span> : null}
             {(link || !(!q && (!scope || scope === 'notes'))) && <span><Kbd size="sm">↑</Kbd><Kbd size="sm">↓</Kbd> navegar</span>}
             {pwd

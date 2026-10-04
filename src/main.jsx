@@ -30,6 +30,8 @@ function App() {
   const route = prefs.route === 'home' || prefs.route === 'settings' || findTool(prefs.route) ? prefs.route : 'home';
 
   const go = (r) => setPrefs((p) => ({ ...p, route: r }));
+  /** Navega levando um pedido para a ferramenta (ex.: abrir nota, aba Tarefas) — o mesmo caminho da palette. */
+  const open = (r, params) => { setRequest({ route: r, ...params, nonce: Date.now() }); go(r); };
   const toggleSidebar = () => setPrefs((p) => ({ ...p, collapsed: !p.collapsed }));
   const toast = (title, description, variant = 'ok') => {
     const id = Math.random();
@@ -105,7 +107,8 @@ function App() {
 
   const tool = findTool(route);
   const Screen = tool && tool.component;
-  const screen = route === 'home' ? <Home go={go} openPalette={openPalette} />
+  const screen = route === 'home' ? <Home go={go} open={open} openPalette={openPalette} updater={updater} toast={toast}
+      theme={prefs.theme} setTheme={(theme) => setPrefs((p) => ({ ...p, theme }))} />
     : route === 'settings' ? <Settings prefs={prefs} setPrefs={setPrefs} info={info} sqlVersion={sqlVersion} updater={updater} toast={toast} />
     : <Screen toast={toast} request={request && request.route === route ? request : undefined} />;
 

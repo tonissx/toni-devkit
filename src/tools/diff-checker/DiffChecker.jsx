@@ -98,7 +98,7 @@ function DropPane({ onFile, children }) {
   );
 }
 
-export function DiffChecker({ toast }) {
+export function DiffChecker({ toast, request }) {
   const [opts, setOpts] = usePersisted('diff.options', DEFAULT_DIFF_OPTIONS);
   const [draft, setDraft] = usePersisted('diff.draft', { left: SAMPLE_LEFT, right: SAMPLE_RIGHT, leftFile: null, rightFile: null });
   const set = (k) => (v) => setOpts((o) => ({ ...o, [k]: v }));
@@ -107,6 +107,12 @@ export function DiffChecker({ toast }) {
   // Textos efetivamente comparados: acompanham o rascunho com debounce (ao vivo) ou no "Comparar".
   const [cmp, setCmp] = React.useState({ left: draft.left, right: draft.right });
   const compare = () => setCmp({ left: draft.left, right: draft.right });
+  // Textos vindos de outra ferramenta (Git: "Abrir no Diff Checker"): viram o Original e o Alterado e já comparam.
+  React.useEffect(() => {
+    if (!request || typeof request.left !== 'string' || typeof request.right !== 'string') return;
+    setDraft({ left: request.left, right: request.right, leftFile: request.leftFile || null, rightFile: request.rightFile || null });
+    setCmp({ left: request.left, right: request.right });
+  }, [request && request.nonce]);
   React.useEffect(() => {
     if (!opts.live) return;
     const t = setTimeout(compare, 200);
