@@ -142,7 +142,8 @@ export function GitScreen({ toast, request }) {
     return () => { off(); clearTimeout(t); };
   }, []);
   React.useEffect(() => { if (repo) api.open(repo).catch(() => {}); setLast(null); }, [repo]);
-  React.useEffect(() => { if (request && request.tab) setUi((u) => ({ ...u, tab: request.tab })); }, [request && request.nonce]);
+  // Pedido de fora (Início, palette): repositório e/ou aba.
+  React.useEffect(() => { if (request) setUi((u) => ({ ...u, ...(request.tab ? { tab: request.tab } : {}), ...(request.repo ? { repo: request.repo } : {}) })); }, [request && request.nonce]);
 
   const status = useRepoData(repo, (r) => api.status(r));
   const s = status.data && status.data.path === repo ? status.data : null;

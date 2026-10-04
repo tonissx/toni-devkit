@@ -160,6 +160,9 @@ muda.
   clicar no texto abre a nota; o campo no topo captura uma tarefa no **Inbox** (`@hoje`/`@amanha` viram a data)
 - **Notas recentes** (editadas e vistas) e as **fixadas**; **Nova** abre uma nota em branco; o ícone que aparece ao passar o
   mouse fixa a nota na tela como sticky note
+- **Repositórios** (da ferramenta Git): branch e o que está pendente em cada um — conflito/merge em andamento (vermelho),
+  mudanças, commits para enviar, stashes —, os que pedem atenção primeiro; clicar abre o Git no repositório e na aba certa.
+  A faixa de status avisa "N repositórios com mudanças" ou "em conflito"
 - **Links rápidos**: favoritos abrem com um clique; links com `{q}` têm um campo para o valor e os últimos valores usados
 - **DevCore**: Compute, tier, missões do dia e o incidente ativo ou previsto (só consulta o DevCore com o painel visível)
 - **Ferramentas**: a grade de sempre, com favoritas primeiro

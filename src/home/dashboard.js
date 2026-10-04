@@ -92,13 +92,46 @@ function dashboardLinks(links, limit = 6) {
     .slice(0, limit);
 }
 
+/**
+ * Repositórios git (resumos do serviço) → linhas do painel, os que pedem atenção primeiro.
+ * level: 'conflict' (conflito ou merge/rebase em andamento) · 'changes' · 'ahead' (commits para enviar) · 'stash' · 'clean'
+ * tab: a aba da ferramenta Git que resolve aquilo. notes: os avisos da linha, em português.
+ */
+function repoAttention(summaries) {
+  const LEVELS = ['conflict', 'changes', 'ahead', 'stash', 'clean', 'error'];
+  const TAB = { conflict: 'changes', changes: 'changes', ahead: 'history', stash: 'stash', clean: 'overview', error: 'overview' };
+  return (summaries || []).map((r) => {
+    const conflict = r.conflicts > 0 || !!r.operation;
+    const level = r.error ? 'error' : conflict ? 'conflict' : r.changes > 0 ? 'changes' : r.ahead > 0 ? 'ahead' : r.stashes > 0 ? 'stash' : 'clean';
+    const notes = [];
+    if (r.error) notes.push(r.error);
+    if (r.operation) notes.push(`${r.operation} em andamento`);
+    if (r.conflicts) notes.push(r.conflicts === 1 ? '1 arquivo em conflito' : `${r.conflicts} arquivos em conflito`);
+    const pending = r.changes - (r.conflicts || 0);
+    if (pending > 0) notes.push(pending === 1 ? '1 mudança' : `${pending} mudanças`);
+    if (r.ahead > 0) notes.push(`↑${r.ahead} para enviar`);
+    if (r.stashes > 0) notes.push(r.stashes === 1 ? '1 stash' : `${r.stashes} stashes`);
+    return { ...r, level, tab: TAB[level], notes };
+  }).sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level) || String(a.name).localeCompare(String(b.name), 'pt-BR'));
+}
+
+/** Item da faixa de status: conflitos (vermelho) têm prioridade sobre mudanças pendentes. null quando está tudo limpo. */
+function repoStatusChip(rows) {
+  const conflict = rows.filter((r) => r.level === 'conflict').length;
+  if (conflict) return { tone: 'error', text: conflict === 1 ? '1 repositório em conflito' : `${conflict} repositórios em conflito` };
+  const changes = rows.filter((r) => r.level === 'changes').length;
+  if (changes) return { tone: 'git', text: changes === 1 ? '1 repositório com mudanças' : `${changes} repositórios com mudanças` };
+  return null;
+}
+
 /** Painéis do Início, na ordem em que aparecem. O usuário pode esconder qualquer um (Personalizar). */
 const PANELS = [
   { id: 'tasks', name: 'Tarefas' },
   { id: 'notes', name: 'Notas recentes' },
+  { id: 'git', name: 'Repositórios git' },
   { id: 'links', name: 'Links rápidos' },
   { id: 'devcore', name: 'DevCore' },
   { id: 'tools', name: 'Ferramentas' },
 ];
 
-module.exports = { greeting, longDate, daysBetween, dueLabel, agenda, daySummary, daySummaryParts, recentNotes, dashboardLinks, PANELS };
+module.exports = { greeting, longDate, daysBetween, dueLabel, agenda, daySummary, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, PANELS };

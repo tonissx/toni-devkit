@@ -925,6 +925,19 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .home-chip.is-notes svg, .home-chip.is-vault svg { color: var(--hue); }
 .home-chip.is-notes:hover, .home-chip.is-vault:hover { border-color: color-mix(in srgb, var(--hue) 50%, var(--tk-border)); }
 
+/* Início: painel de repositórios git — cada linha tingida pelo que pede atenção */
+.home-panel.is-git { --hue: var(--tk-syn-key); }
+.home-chip.is-git { color: var(--tk-amber); border-color: color-mix(in srgb, var(--tk-amber) 30%, transparent); background: color-mix(in srgb, var(--tk-amber) 10%, transparent); }
+.home-repo > svg { color: var(--tk-text-3); }
+.home-repo.is-conflict > svg, .home-repo.is-error > svg { color: var(--tk-red); }
+.home-repo.is-conflict .home-row__sub { color: var(--tk-red); }
+.home-repo.is-changes > svg { color: var(--tk-amber); }
+.home-repo.is-ahead > svg { color: var(--tk-syn-keyword); }
+.home-repo.is-stash > svg { color: var(--tk-syn-string); }
+.home-repo.is-clean > svg { color: var(--tk-accent-text); }
+.home-repo.is-clean .home-row__title { color: var(--tk-text-2); font-weight: 400; }
+.home-repo__branch { display: inline-flex; align-items: center; gap: 3px; font-family: var(--tk-font-mono); }
+
 /* Início: seletor de tema (as miniaturas usam o data-theme de cada tema, ver ThemeSwatch) */
 .home-theme { position: relative; }
 .home-theme__btn { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 6px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md);

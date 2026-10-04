@@ -87,6 +87,34 @@ test('dashboardLinks põe os usados primeiro e depois ordena por alias', () => {
   assert.equal(H.dashboardLinks(links, 2).length, 2);
 });
 
+test('repoAttention: conflito > mudanças > para enviar > stash > limpo, com a aba certa', () => {
+  const rows = H.repoAttention([
+    { name: 'limpo', changes: 0, conflicts: 0, ahead: 0, stashes: 0 },
+    { name: 'stash', changes: 0, conflicts: 0, ahead: 0, stashes: 2 },
+    { name: 'mudou', changes: 3, conflicts: 0, ahead: 1, stashes: 0 },
+    { name: 'enviar', changes: 0, conflicts: 0, ahead: 4, stashes: 0 },
+    { name: 'conflito', changes: 2, conflicts: 1, ahead: 0, stashes: 0, operation: 'merge' },
+    { name: 'sumiu', error: 'A pasta não existe mais' },
+  ]);
+  assert.deepEqual(rows.map((r) => [r.name, r.level, r.tab]), [
+    ['conflito', 'conflict', 'changes'], ['mudou', 'changes', 'changes'], ['enviar', 'ahead', 'history'],
+    ['stash', 'stash', 'stash'], ['limpo', 'clean', 'overview'], ['sumiu', 'error', 'overview'],
+  ]);
+  assert.deepEqual(rows[0].notes, ['merge em andamento', '1 arquivo em conflito', '1 mudança']);
+  assert.deepEqual(rows[1].notes, ['3 mudanças', '↑1 para enviar']);
+  assert.deepEqual(rows[3].notes, ['2 stashes']);
+  assert.deepEqual(rows[4].notes, []);
+  assert.deepEqual(H.repoAttention(null), []);
+});
+
+test('repoStatusChip: conflito tem prioridade; limpo não mostra nada', () => {
+  const chip = (list) => H.repoStatusChip(H.repoAttention(list));
+  assert.deepEqual(chip([{ name: 'a', changes: 1 }, { name: 'b', changes: 2 }]), { tone: 'git', text: '2 repositórios com mudanças' });
+  assert.deepEqual(chip([{ name: 'a', changes: 1 }, { name: 'b', conflicts: 1, changes: 1 }]), { tone: 'error', text: '1 repositório em conflito' });
+  assert.equal(chip([{ name: 'a', changes: 0, ahead: 2 }]), null);
+  assert.equal(chip([]), null);
+});
+
 test('PANELS tem ids únicos', () => {
   const ids = H.PANELS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length);

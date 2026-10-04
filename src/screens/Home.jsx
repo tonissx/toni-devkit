@@ -6,7 +6,7 @@ import { isoDate } from '../notes/edit.js';
 import { cleanError, shortTime } from '../notes/client.js';
 import { needsValue } from '../links/link.js';
 import { formatNum } from '../devcore/engine/format.js';
-import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, PANELS } from '../home/dashboard.js';
+import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, PANELS } from '../home/dashboard.js';
 
 const { PageHeader, ToolCard, Button, Card, Icon, Badge, Checkbox, EmptyState, Spinner } = DS;
 
@@ -94,7 +94,7 @@ function StatusChip({ icon, tone, children, title, onClick }) {
   );
 }
 
-function StatusStrip({ noteCount, vault, palette, updater, go }) {
+function StatusStrip({ noteCount, vault, palette, updater, go, open, repos }) {
   const up = updater && updater.mode !== 'unsupported' ? updater : null;
   return (
     <div className="home-status" role="status">
@@ -103,6 +103,15 @@ function StatusStrip({ noteCount, vault, palette, updater, go }) {
           {noteCount === 1 ? '1 nota' : `${noteCount} notas`}
         </StatusChip>
       )}
+      {repos && (() => {
+        const chip = repoStatusChip(repos);
+        const first = chip && repos[0];
+        return chip && (
+          <StatusChip icon={chip.tone === 'error' ? 'git-merge' : 'git-branch'} tone={chip.tone} title="Abrir a ferramenta Git" onClick={() => open('git', { repo: first.path, tab: first.tab })}>
+            {chip.text}
+          </StatusChip>
+        );
+      })()}
       {vault && (vault.unlocked
         ? <StatusChip icon="lock-open" tone="warn" title="Cofre aberto — clique para bloquear" onClick={() => window.devkit.vault.lock()}>
             Cofre aberto{vault.count != null ? ` · ${vault.count} ${vault.count === 1 ? 'entrada' : 'entradas'}` : ''}
@@ -227,6 +236,36 @@ function NotesPanel({ recent, pinned, open, toast }) {
   );
 }
 
+/* ─────────────── Repositórios git ─────────────── */
+
+const LEVEL_ICON = { conflict: 'triangle-alert', changes: 'file-diff', ahead: 'arrow-up-circle', stash: 'archive', clean: 'circle-check', error: 'circle-x' };
+
+/** Repositórios da ferramenta Git com o que pede atenção primeiro; clicar abre o Git no repositório e na aba certa. */
+function GitPanel({ repos, open }) {
+  if (!repos || !repos.length) return null;
+  const pending = repos.filter((r) => r.level !== 'clean').length;
+  return (
+    <Card className="home-panel is-git" padding={16} icon="git-branch" title="Repositórios"
+      subtitle={pending ? `${pending} com algo pendente` : 'Tudo commitado'}
+      actions={<Button size="sm" variant="ghost" onClick={() => open('git', {})}>Abrir Git</Button>}>
+      <div className="home-list">
+        {repos.slice(0, 6).map((r) => (
+          <button type="button" key={r.path} className={'home-row home-repo is-' + r.level} onClick={() => open('git', { repo: r.path, tab: r.tab })} title={r.path}>
+            <Icon name={LEVEL_ICON[r.level]} size={14} />
+            <span className="home-row__main">
+              <span className="home-row__title">{r.name}</span>
+              <span className="home-row__sub">
+                <span className="home-repo__branch"><Icon name="git-branch" size={10} /> {r.detached ? 'HEAD solto' : r.branch || '—'}</span>
+                {r.notes.length ? ' · ' + r.notes.join(' · ') : ' · tudo commitado'}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 /* ─────────────── Links rápidos ─────────────── */
 
 function LinkRow({ link, toast }) {
@@ -319,6 +358,7 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
   const [vault, setVault] = React.useState(null);
   const [palette, setPalette] = React.useState(null);
   const [dc, setDc] = React.useState(null);
+  const [repos, setRepos] = React.useState(null);
   const [tick, setTick] = React.useState(() => Date.now());
 
   const notes = window.devkit.notes;
@@ -329,6 +369,15 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
     notes.info().then((i) => setNoteCount(i.count), () => {});
   }, notes.onChanged);
   useLive(() => window.devkit.links.list().then(setLinks, () => setLinks([])), window.devkit.links.onChanged);
+  // Repositórios git: o serviço avisa das mudanças feitas pelo Devkit e no repositório aberto; o que muda por fora
+  // (terminal, VS Code) aparece ao voltar para a janela e a cada minuto.
+  const loadRepos = () => window.devkit.git.summaries().then((s) => setRepos(repoAttention(s)), () => setRepos([]));
+  useLive(loadRepos, window.devkit.git.onChanged, 400);
+  React.useEffect(() => {
+    window.addEventListener('focus', loadRepos);
+    const id = setInterval(loadRepos, 60e3);
+    return () => { window.removeEventListener('focus', loadRepos); clearInterval(id); };
+  }, []);
   useLive(() => window.devkit.vault.status().then(setVault, () => {}), window.devkit.vault.onChanged, 0);
   React.useEffect(() => { window.devkit.palette.status().then(setPalette, () => {}); }, []);
 
@@ -369,11 +418,12 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
         </div>
       )}
 
-      <StatusStrip noteCount={noteCount} vault={vault} palette={palette} updater={updater} go={go} />
+      <StatusStrip noteCount={noteCount} vault={vault} palette={palette} updater={updater} go={go} open={open} repos={shows('git') ? repos : null} />
 
       <div className="home-dash">
         {shows('tasks') && <TasksPanel tasks={tasks} today={today} open={open} toast={toast} />}
         {shows('notes') && <NotesPanel recent={recent} pinned={pinned} open={open} toast={toast} />}
+        {shows('git') && <GitPanel repos={repos} open={open} />}
         {shows('links') && <LinksPanel links={links} go={go} toast={toast} />}
         {showDc && <DevCorePanel snap={dc} now={tick} go={go} />}
       </div>
