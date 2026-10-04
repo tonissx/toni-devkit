@@ -220,6 +220,62 @@ const OPS = {
     explain: 'Joga fora todas as mudanças dos arquivos acompanhados pelo git (arquivos novos ficam). O Devkit guarda um ponto de volta antes.',
   }),
 
+  /* ─────────────── Fase 3: tags, bisect, limpeza, .gitignore ─────────────── */
+
+  'tag.create': ({ name, at, message }) => {
+    need(validBranchName(name), `Nome de tag inválido: “${name}”`);
+    const msg = String(message || '').trim();
+    return {
+      args: msg ? ['tag', '-a', name, '-m', msg.slice(0, 2000), rev(at || 'HEAD')] : ['tag', name, rev(at || 'HEAD')],
+      risk: 'safe', title: `Criar a tag ${name}`,
+      explain: `Marca ${at ? 'o commit ' + String(at).slice(0, 7) : 'o commit atual'} com o nome “${name}” (ex.: uma versão). ${msg ? 'Tag anotada, com a mensagem.' : 'Tag simples.'}`,
+    };
+  },
+  'tag.delete': ({ name }) => {
+    need(validBranchName(name), 'Tag inválida');
+    return {
+      args: ['tag', '-d', name], risk: 'safe', backup: true, backupTag: name, title: `Excluir a tag ${name}`,
+      explain: `Remove a tag “${name}” deste repositório (o commit continua). O Devkit guarda um ponto de volta.`,
+    };
+  },
+  'branch.deleteMany': ({ names }) => {
+    need(Array.isArray(names) && names.length > 0 && names.length <= 200, 'Escolha as branches');
+    names.forEach(branch);
+    return {
+      args: ['branch', '-d', ...names], risk: 'safe', backup: true, backupRef: names,
+      title: names.length === 1 ? `Excluir a branch ${names[0]}` : `Excluir ${names.length} branches já mescladas`,
+      explain: 'Exclui branches cujos commits já estão em outra branch (o git confere). O Devkit guarda a ponta de cada uma num ponto de volta.',
+    };
+  },
+  cleanFiles: ({ paths: p }) => ({
+    args: ['clean', '-f', '-d', '-q', '--', ...paths(p)], risk: 'discard', backup: true, backupFiles: p,
+    title: p.length === 1 ? `Apagar ${p[0]}` : `Apagar ${p.length} itens não versionados`,
+    explain: 'Apaga arquivos e pastas que o git não acompanha (não os ignorados). O Devkit guarda uma cópia em .git/devkit antes.',
+  }),
+  'ignore.add': ({ pattern }) => {
+    need(typeof pattern === 'string' && pattern.trim() && !/[\r\n\0]/.test(pattern) && !pattern.trim().startsWith('#'), 'Padrão inválido para o .gitignore');
+    return {
+      args: [], appendIgnore: pattern.trim(), risk: 'safe', title: `Ignorar ${pattern.trim()}`,
+      explain: 'Acrescenta o padrão ao .gitignore da raiz: o git deixa de listar o que casar com ele. O que já está versionado continua.',
+      display: `echo "${pattern.trim()}" >> .gitignore`,
+    };
+  },
+  'bisect.start': ({ bad, good }) => ({
+    args: ['bisect', 'start', rev(bad || 'HEAD', 'Versão quebrada'), rev(good, 'Versão boa')], risk: 'safe', title: 'Começar a caçar o commit do bug (bisect)',
+    explain: 'O git vai pulando para commits no meio do caminho entre a versão boa e a quebrada; você testa cada um e diz se funciona. Em poucos passos ele aponta o commit que introduziu o problema.',
+  }),
+  'bisect.mark': ({ verdict }) => {
+    need(['good', 'bad', 'skip'].includes(verdict), 'Resposta inválida');
+    return {
+      args: ['bisect', verdict], risk: 'safe', title: verdict === 'good' ? 'Este funciona' : verdict === 'bad' ? 'Este está quebrado' : 'Pular este commit',
+      explain: verdict === 'skip' ? 'Não dá para testar este commit (não compila, por exemplo): o git escolhe outro perto.' : 'O git anota a resposta e pula para o próximo commit a testar.',
+    };
+  },
+  'bisect.reset': () => ({
+    args: ['bisect', 'reset'], risk: 'safe', title: 'Encerrar o bisect',
+    explain: 'Termina a caça e volta para a branch em que você estava.',
+  }),
+
   reset: ({ to, mode }) => {
     need(['soft', 'mixed', 'hard'].includes(mode), 'Modo inválido');
     return {

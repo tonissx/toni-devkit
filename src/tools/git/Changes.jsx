@@ -4,11 +4,32 @@ import { DS, isMod } from '../../lib/ds.js';
 import { gitApi, useRepoData, FilePath, KindBadge, OpButton, preview, RiskBadge } from './shared.jsx';
 import { GitDiff } from './GitDiff.jsx';
 import { ConflictEditor } from './Conflicts.jsx';
+import { suggestions } from '../../git/ignore.js';
 
 const { Icon, Spinner, Checkbox } = DS;
 
+/** Menu "Ignorar…": padrões sugeridos para o .gitignore a partir do caminho. */
+function IgnoreMenu({ path, run, onClose }) {
+  React.useEffect(() => {
+    const h = (e) => { if (!e.target.closest('.gt-ignore')) onClose(); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+  return (
+    <div className="gt-ignore" role="menu" onClick={(e) => e.stopPropagation()}>
+      <div className="gt-ignore__head">Acrescentar ao .gitignore</div>
+      {suggestions(path).map((s) => (
+        <button type="button" key={s.pattern} role="menuitem" className="gt-ignore__item" onClick={() => { onClose(); run({ op: 'ignore.add', pattern: s.pattern }); }}>
+          <code>{s.pattern}</code><span>{s.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function FileRow({ f, area, selected, onSelect, run, unborn }) {
   const p = [f.path];
+  const [ignoring, setIgnoring] = React.useState(false);
   return (
     <div className={'gt-file' + (selected ? ' is-sel' : '')} onClick={() => onSelect({ area, path: f.path })} role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onSelect({ area, path: f.path }); }}>
@@ -17,11 +38,13 @@ function FileRow({ f, area, selected, onSelect, run, unborn }) {
       {f.orig && <span className="gt-file__orig" title={'Antes: ' + f.orig}>← {f.orig.split('/').pop()}</span>}
       <span className="gt-file__actions">
         {area === 'unstaged' && <OpButton op={{ op: 'discard', paths: p }} run={run} icon="undo-2" variant="danger" />}
+        {area === 'untracked' && <button type="button" className={'gt-op is-ghost is-sm' + (ignoring ? ' is-on' : '')} title="Ignorar (.gitignore)" onClick={(e) => { e.stopPropagation(); setIgnoring((v) => !v); }}><Icon name="eye-off" size={13} /></button>}
         {area === 'untracked' && f.kind !== 'nested' && <OpButton op={{ op: 'removeUntracked', paths: p }} run={run} icon="trash-2" variant="danger" />}
         {(area === 'unstaged' || (area === 'untracked' && f.kind !== 'nested')) && <OpButton op={{ op: 'stage', paths: p }} run={run} icon="plus" variant="accent" />}
         {area === 'staged' && <OpButton op={{ op: 'unstage', paths: p }} run={run} icon="minus" ctx={{ unborn }} />}
         {area === 'conflicts' && <OpButton op={{ op: 'stage', paths: p }} run={run} icon="check">Resolvido</OpButton>}
       </span>
+      {ignoring && <IgnoreMenu path={f.path} run={run} onClose={() => setIgnoring(false)} />}
     </div>
   );
 }

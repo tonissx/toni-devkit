@@ -36,7 +36,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **XML Formatter**: formata nos moldes do vscode-xml (LemMinX) | ✅ |
 | **Diff Checker**: compara dois textos nos moldes do diffchecker.com | ✅ |
 | **JSON Visualizer**: edita, formata e explora JSON como grafo (estilo JSON Crack), árvore, YAML ou CSV | ✅ |
-| **Git**: repositórios locais com grafo do histórico, stage por trecho, merge com prévia, conflitos, rebase visual e desfazer qualquer coisa | ✅ (fases 1 e 2) |
+| **Git**: repositórios locais com grafo do histórico, stage por trecho, merge com prévia, conflitos, rebase visual, blame, bisect e desfazer qualquer coisa | ✅ |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
 | **Vault**: cofre de senhas, tokens e credenciais de banco, com senha mestra e cópia que se apaga | ✅ |
 | **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
@@ -167,8 +167,26 @@ operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nad
   comparar branches, recuperar algo, resolver conflitos. Cada uma leva à aba, ao assistente ou à operação certa. Também na
   palette: `Ctrl+Alt+Space` → "git juntar", "git branch errada"…
 
-Próxima fase (planejada): blame, "quando este texto apareceu", histórico de arquivo, bisect guiado, tags, limpeza de
-branches mescladas, `.gitignore`, insights e integração com palette/Notes.
+**Investigar, manter e integrar (fase 3)**
+
+- **Investigar**:
+  - **Quem mudou cada linha** (blame): o arquivo em blocos coloridos por commit, com mensagem, autor e data; clicar abre o
+    commit no Histórico
+  - **Quando um texto apareceu**: commits em que o texto apareceu ou sumiu (`git log -S`) — "quem removeu aquela
+    validação?" — ou que casam uma expressão regular (`-G`), com os arquivos de cada um
+  - **Histórico de um arquivo**: todas as versões (segue renomeações), com o diff de cada uma
+  - **Achar o commit de um bug** (bisect guiado): escolha uma versão que funcionava; o Devkit leva o repositório a commits
+    no meio do caminho e você responde **Funciona / Está quebrado / Pular** até ele apontar o culpado. A faixa do topo
+    lembra que há uma caça em andamento; **Encerrar** volta para a branch
+- **Manutenção**: **tags** (criar simples ou anotada no commit atual, excluir com ponto de volta) · **branches já
+  mescladas** (todas marcadas, exclui de uma vez, recuperáveis) · **arquivos e pastas não versionados** (o que um
+  `git clean` apagaria, com escolha e cópia antes) · **.gitignore** (ver e acrescentar padrões). Em Mudanças, o ícone de
+  olho riscado num arquivo novo sugere padrões (este arquivo, a extensão, a pasta…) — inclusive para pastas com outro
+  repositório dentro
+- **Ritmo** na Visão geral: dias da semana × horas dos commits dos últimos 180 dias
+- **Integrações**: no detalhe do commit, **salvar como nota** (mensagem, arquivos e diff numa nota com tag `git`) e, por
+  arquivo, **abrir no Diff Checker** (antes × depois). A palette lista cada repositório ("Git: <nome>") e as receitas; o
+  uso conta no DevCore
 
 ## Início
 

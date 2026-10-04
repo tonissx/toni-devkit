@@ -15,10 +15,13 @@ import { TimeMachine } from './TimeMachine.jsx';
 import { Rebase } from './Rebase.jsx';
 import { Recipes } from './Recipes.jsx';
 import { MergeModal } from './Merge.jsx';
+import { Investigate } from './Investigate.jsx';
+import { Maintenance } from './Maintenance.jsx';
+import { emit } from '../../lib/events.js';
 
 const { Icon, Spinner, Tabs, Modal, Button, EmptyState, Checkbox } = DS;
 
-const PANELS = { overview: Overview, changes: Changes, history: History, branches: Branches, stash: Stash, rebase: Rebase, time: TimeMachine, recipes: Recipes };
+const PANELS = { overview: Overview, changes: Changes, history: History, branches: Branches, stash: Stash, rebase: Rebase, investigate: Investigate, maintenance: Maintenance, time: TimeMachine, recipes: Recipes };
 
 /* ─────────────── Repositórios ─────────────── */
 
@@ -187,6 +190,7 @@ export function GitScreen({ toast, request }) {
     }
     try {
       const r = await api.exec(repo, op);
+      emit('tool.used', { tool: 'git' }); // DevCore: uso da ferramenta (o bus limita a 1×/min)
       if (r.stopped) {
         // Parou em conflito: não é erro — leva para Mudanças, onde está o editor de conflitos.
         setLast({ title: r.title, display: r.display, risk: r.risk, explain: p.explain, backup: r.backup, stopped: `O ${r.operation || 'git'} parou: ${r.conflicts} arquivo(s) em conflito. Resolva em Mudanças e use Continuar — ou Cancelar para voltar como estava.` });
@@ -214,15 +218,18 @@ export function GitScreen({ toast, request }) {
   }
 
   const counts = s ? { changes: s.staged.length + s.unstaged.length + s.untracked.length + s.conflicts.length, stash: s.stashes } : {};
+  // Só texto: com 10 abas, os ícones não cabem na largura da janela.
   const tabs = [
-    { value: 'overview', label: 'Visão geral', icon: 'layout-dashboard' },
-    { value: 'changes', label: 'Mudanças', icon: 'file-diff', count: counts.changes || undefined },
-    { value: 'history', label: 'Histórico', icon: 'git-commit-horizontal' },
-    { value: 'branches', label: 'Branches', icon: 'git-branch' },
-    { value: 'stash', label: 'Stash', icon: 'archive', count: counts.stash || undefined },
-    { value: 'rebase', label: 'Reorganizar', icon: 'list-ordered' },
-    { value: 'time', label: 'Máquina do tempo', icon: 'life-buoy' },
-    { value: 'recipes', label: 'Quero…', icon: 'sparkles' },
+    { value: 'overview', label: 'Visão geral' },
+    { value: 'recipes', label: 'Quero…' },
+    { value: 'changes', label: 'Mudanças', count: counts.changes || undefined },
+    { value: 'history', label: 'Histórico' },
+    { value: 'branches', label: 'Branches' },
+    { value: 'stash', label: 'Stash', count: counts.stash || undefined },
+    { value: 'rebase', label: 'Reorganizar' },
+    { value: 'investigate', label: 'Investigar' },
+    { value: 'maintenance', label: 'Manutenção' },
+    { value: 'time', label: 'Máquina do tempo' },
   ];
   const props = { repo, status: s, run, go, undo, focus, openMerge: setMerging };
   const Panel = PANELS[ui.tab] || Overview;
@@ -260,7 +267,10 @@ export function GitScreen({ toast, request }) {
               {s && s.operation && (
                 <div className="gt-opalert">
                   <Icon name="triangle-alert" size={14} />
-                  <span>Há um <b>{s.operation}</b> em andamento. {s.conflicts.length ? `${s.conflicts.length} arquivo(s) em conflito — resolva em Mudanças e depois continue.` : 'Conflitos resolvidos — é só continuar.'}</span>
+                  {s.operation === 'bisect'
+                    ? <span>Há uma <b>caça ao commit do bug (bisect)</b> em andamento — os arquivos estão numa versão antiga. Responda em Investigar.</span>
+                    : <span>Há um <b>{s.operation}</b> em andamento. {s.conflicts.length ? `${s.conflicts.length} arquivo(s) em conflito — resolva em Mudanças e depois continue.` : 'Conflitos resolvidos — é só continuar.'}</span>}
+                  {s.operation === 'bisect' && ui.tab !== 'investigate' && <button type="button" className="gt-op is-accent is-sm" onClick={() => go('investigate')}><Icon name="search-code" size={13} /><span>Ir para Investigar</span></button>}
                   {s.operation !== 'bisect' && <>
                     {!s.conflicts.length && <OpButton op={{ op: 'continue', operation: s.operation }} run={run} icon="play" variant="accent">Continuar</OpButton>}
                     {s.conflicts.length > 0 && ui.tab !== 'changes' && <button type="button" className="gt-op is-accent is-sm" onClick={() => go('changes')}><Icon name="file-diff" size={13} /><span>Resolver</span></button>}

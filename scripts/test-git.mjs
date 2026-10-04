@@ -260,6 +260,60 @@ test('ops da fase 2', () => {
   assert.throws(() => O.buildOp({ op: 'moveToNewBranch', name: 'x', count: 0 }), /Quantidade/);
 });
 
+/* ─────────────── Fase 3: blame, busca, bisect, .gitignore ─────────────── */
+
+const IG = require('../src/git/ignore.js');
+
+test('parseBlame agrupa linhas seguidas do mesmo commit', () => {
+  const A = 'a'.repeat(40), B = 'b'.repeat(40);
+  const out = [
+    `${A} 1 1 2`, 'author Ana', 'author-time 100', 'summary inicial', 'boundary', 'filename f', '\tum',
+    `${A} 2 2`, '\tdois\r',
+    `${B} 3 3 1`, 'author Bia', 'author-time 200', 'summary muda', 'filename f', '\tTRES',
+    `${A} 4 4 1`, 'filename f', '\tquatro',
+  ].join('\n');
+  const b = P.parseBlame(out);
+  assert.deepEqual(b.lines.map((l) => [l.n, l.hash[0], l.text]), [[1, 'a', 'um'], [2, 'a', 'dois'], [3, 'b', 'TRES'], [4, 'a', 'quatro']]);
+  assert.deepEqual(b.commits[A], { author: 'Ana', time: 100, summary: 'inicial', boundary: true });
+  assert.deepEqual(b.groups.map((g) => [g.hash[0], g.start, g.end]), [['a', 1, 2], ['b', 3, 3], ['a', 4, 4]]);
+});
+
+test('parsePickaxe, parseBisectLog e parseCleanPreview', () => {
+  const pk = P.parsePickaxe('\x1eh1\x1fmuda B\x1fAna\x1f100\n\nf.txt\nsrc/x.js\n\x1eh2\x1finicial\x1fBia\x1f50\n\nf.txt\n');
+  assert.deepEqual(pk, [{ hash: 'h1', subject: 'muda B', author: 'Ana', time: 100, files: ['f.txt', 'src/x.js'] }, { hash: 'h2', subject: 'inicial', author: 'Bia', time: 50, files: ['f.txt'] }]);
+  const H = 'c'.repeat(40), G = 'd'.repeat(40);
+  const bl = P.parseBisectLog(`# bad: [${H}] dois\n# good: [${G}] um\ngit bisect start\n# first bad commit: [${H}] dois\n`);
+  assert.deepEqual(bl, { found: H, good: [G], bad: H, skipped: [] });
+  assert.deepEqual(P.parseCleanPreview('Would remove a.txt\nWould remove build/\n'), ['a.txt', 'build/']);
+});
+
+test('.gitignore: sugestões e acréscimo sem duplicar', () => {
+  assert.deepEqual(IG.suggestions('src/logs/app.log').map((s) => s.pattern), ['/src/logs/app.log', '*.log', 'app.log', '/src/logs/', '/src/']);
+  assert.deepEqual(IG.suggestions('.claude/worktrees/feat-x/').map((s) => s.pattern), ['/.claude/worktrees/feat-x/', 'feat-x/', '/.claude/worktrees/', '/.claude/']);
+  assert.deepEqual(IG.suggestions('.env').map((s) => s.pattern), ['/.env', '.env']);
+  assert.deepEqual(IG.appendPattern('node_modules/\r\ndist/', '*.log'), { content: 'node_modules/\r\ndist/\r\n*.log\r\n', added: true });
+  assert.deepEqual(IG.appendPattern('', '/.claude/'), { content: '/.claude/\n', added: true });
+  assert.equal(IG.appendPattern('*.log\n', '*.log').added, false);
+  assert.throws(() => IG.appendPattern('', 'a\nb'), /inválido/);
+  assert.throws(() => IG.appendPattern('', '# comentário'), /inválido/);
+});
+
+test('ops da fase 3', () => {
+  assert.deepEqual(O.buildOp({ op: 'tag.create', name: 'v1.2.0', at: 'abc1234', message: 'Versão 1.2' }).args, ['tag', '-a', 'v1.2.0', '-m', 'Versão 1.2', 'abc1234']);
+  assert.deepEqual(O.buildOp({ op: 'tag.create', name: 'marco' }).args, ['tag', 'marco', 'HEAD']);
+  assert.equal(O.buildOp({ op: 'tag.delete', name: 'v1' }).backupTag, 'v1');
+  assert.deepEqual(O.buildOp({ op: 'branch.deleteMany', names: ['a', 'b'] }).backupRef, ['a', 'b']);
+  assert.deepEqual(O.buildOp({ op: 'cleanFiles', paths: ['build/', 'x.tmp'] }).args, ['clean', '-f', '-d', '-q', '--', 'build/', 'x.tmp']);
+  const ig = O.buildOp({ op: 'ignore.add', pattern: ' *.log ' });
+  assert.deepEqual([ig.args, ig.appendIgnore, ig.display], [[], '*.log', 'echo "*.log" >> .gitignore']);
+  assert.deepEqual(O.buildOp({ op: 'bisect.start', good: 'v1.0' }).args, ['bisect', 'start', 'HEAD', 'v1.0']);
+  assert.deepEqual(O.buildOp({ op: 'bisect.mark', verdict: 'skip' }).args, ['bisect', 'skip']);
+  assert.throws(() => O.buildOp({ op: 'bisect.mark', verdict: 'run rm' }), /inválida/);
+  assert.throws(() => O.buildOp({ op: 'tag.create', name: '-d' }), /inválido/);
+  assert.throws(() => O.buildOp({ op: 'branch.deleteMany', names: ['ok', '--force'] }), /inválido/);
+  assert.throws(() => O.buildOp({ op: 'ignore.add', pattern: 'a\nb' }), /inválido/);
+});
+
 /* ─────────────── serviço (repositórios temporários reais) ─────────────── */
 
 const { createGitService } = require('../electron/git/service.js');
@@ -713,5 +767,123 @@ test('serviço: mover commits para branch nova, trazer arquivo de outra branch, 
     await t.svc.exec(repo, { op: 'discardAll' });
     assert.match(read(dir, 'config.txt'), /valor = 3/);
     assert.equal(existsSync(path.join(dir, 'pendente.txt')), true); // arquivos novos ficam
+  } finally { t.done(); }
+});
+
+/* ─────────────── serviço: fase 3 ─────────────── */
+
+/** Histórico de 6 commits em calc.js; o 4º introduz o "bug" (BUG). */
+function bugRepo(root) {
+  const dir = makeRepo(root);
+  const steps = ['soma', 'subtrai', 'multiplica', 'divide // BUG', 'potencia', 'raiz'];
+  let body = '';
+  for (const s of steps) {
+    body += `function ${s.split(' ')[0]}() {} ${s.includes('BUG') ? '// BUG' : ''}\n`;
+    write(dir, 'calc.js', body);
+    sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'adiciona ' + s.split(' ')[0]);
+  }
+  return dir;
+}
+
+test('serviço: blame, busca no histórico e versões de um arquivo', async () => {
+  const t = await setup();
+  try {
+    const dir = bugRepo(t.root);
+    const repo = await t.svc.add(dir);
+    const b = await t.svc.blame(repo, 'calc.js');
+    assert.equal(b.lines.length, 6);
+    assert.equal(b.commits[b.lines[3].hash].summary, 'adiciona divide');
+    assert.equal(b.groups.length, 6);
+    const found = await t.svc.searchText(repo, 'BUG');
+    assert.deepEqual(found.map((c) => c.subject), ['adiciona divide']);
+    assert.deepEqual(found[0].files, ['calc.js']);
+    assert.deepEqual((await t.svc.searchText(repo, 'pot[ea]ncia', { regex: true })).map((c) => c.subject), ['adiciona potencia']);
+    await assert.rejects(t.svc.searchText(repo, '  '), /Digite/);
+    const hist = await t.svc.log(repo, { file: 'calc.js', ref: 'HEAD' });
+    assert.equal(hist.length, 6);
+    const v = await t.svc.fileVersions(repo, found[0].hash, 'calc.js');
+    assert.doesNotMatch(v.before, /BUG/);
+    assert.match(v.after, /BUG/);
+  } finally { t.done(); }
+});
+
+test('serviço: bisect guiado acha o commit do bug', async () => {
+  const t = await setup();
+  try {
+    const dir = bugRepo(t.root);
+    const repo = await t.svc.add(dir);
+    const first = sh(dir, 'rev-list', '--max-parents=0', 'HEAD').trim();
+    assert.equal((await t.svc.bisectState(repo)).active, false);
+    await t.svc.exec(repo, { op: 'bisect.start', bad: 'HEAD', good: first });
+    let st = await t.svc.bisectState(repo);
+    assert.equal(st.active, true);
+    assert.ok(st.candidates > 0);
+    // Responde como um "testador": quebrado se o arquivo tem BUG.
+    for (let i = 0; i < 10 && !st.found; i++) {
+      const broken = read(dir, 'calc.js').includes('BUG');
+      await t.svc.exec(repo, { op: 'bisect.mark', verdict: broken ? 'bad' : 'good' });
+      st = await t.svc.bisectState(repo);
+    }
+    assert.equal(st.found.subject, 'adiciona divide');
+    await t.svc.exec(repo, { op: 'bisect.reset' });
+    assert.equal((await t.svc.bisectState(repo)).active, false);
+    assert.equal((await t.svc.status(repo)).branch.head, 'main');
+  } finally { t.done(); }
+});
+
+test('serviço: tags — criar simples e anotada, excluir e recuperar', async () => {
+  const t = await setup();
+  try {
+    const dir = bugRepo(t.root);
+    const repo = await t.svc.add(dir);
+    await t.svc.exec(repo, { op: 'tag.create', name: 'v1.0', at: 'HEAD~2', message: 'Primeira versão' });
+    await t.svc.exec(repo, { op: 'tag.create', name: 'marco' });
+    const tags = await t.svc.tags(repo);
+    const v1 = tags.find((x) => x.name === 'v1.0');
+    assert.equal(v1.annotated, true);
+    assert.equal(v1.message, 'Primeira versão');
+    assert.equal(v1.commit, sh(dir, 'rev-parse', 'HEAD~2').trim());
+    assert.equal(v1.subject, 'adiciona potencia'.replace('potencia', 'divide'));
+    assert.equal(tags.find((x) => x.name === 'marco').annotated, false);
+    const del = await t.svc.exec(repo, { op: 'tag.delete', name: 'v1.0' });
+    assert.ok(!(await t.svc.tags(repo)).some((x) => x.name === 'v1.0'));
+    await t.svc.restoreBackup(repo, del.backup);
+    const back = (await t.svc.tags(repo)).find((x) => x.name === 'v1.0');
+    assert.equal(back.annotated, true);
+    assert.equal(back.message, 'Primeira versão');
+  } finally { t.done(); }
+});
+
+test('serviço: limpar branches mescladas, arquivos não versionados e .gitignore', async () => {
+  const t = await setup();
+  try {
+    const dir = bugRepo(t.root);
+    const repo = await t.svc.add(dir);
+    sh(dir, 'branch', 'velha1', 'HEAD~1'); sh(dir, 'branch', 'velha2', 'HEAD~3');
+    const del = await t.svc.exec(repo, { op: 'branch.deleteMany', names: ['velha1', 'velha2'] });
+    assert.deepEqual((await t.svc.branches(repo)).branches.map((b) => b.name), ['main']);
+    const res = await t.svc.restoreBackup(repo, del.backup);
+    assert.match(res.message, /2 branches/);
+    assert.equal((await t.svc.branches(repo)).branches.length, 3);
+
+    write(dir, 'build/saida.js', 'x\n');
+    write(dir, 'tmp.log', 'log\n');
+    write(dir, '.gitignore', 'node_modules/\n');
+    write(dir, 'node_modules/pkg/index.js', 'ignorado\n');
+    sh(dir, 'add', '.gitignore'); sh(dir, 'commit', '-q', '-m', 'gitignore');
+    assert.deepEqual((await t.svc.cleanPreview(repo)).sort(), ['build/', 'tmp.log']);
+    const cl = await t.svc.exec(repo, { op: 'cleanFiles', paths: ['build/', 'tmp.log'] });
+    assert.equal(existsSync(path.join(dir, 'build')), false);
+    assert.equal(existsSync(path.join(dir, 'node_modules/pkg/index.js')), true); // ignorados ficam
+    await t.svc.restoreBackup(repo, cl.backup);
+    assert.equal(read(dir, 'build/saida.js'), 'x\n');
+
+    await t.svc.exec(repo, { op: 'ignore.add', pattern: '*.log' });
+    await t.svc.exec(repo, { op: 'ignore.add', pattern: '*.log' }); // não duplica
+    assert.equal((await t.svc.gitignore(repo)).replace(/\r/g, ''), 'node_modules/\n*.log\n');
+    assert.ok(!(await t.svc.status(repo)).untracked.includes('tmp.log'));
+    const rh = await t.svc.rhythm(repo);
+    assert.equal(rh.total, 8); // inicial + 6 + .gitignore
+    assert.equal(rh.grid.length, 7);
   } finally { t.done(); }
 });

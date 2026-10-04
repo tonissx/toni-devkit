@@ -1,6 +1,6 @@
 import { DS } from '../lib/ds.js';
 import { resolveTheme } from '../lib/themes.js';
-import { CATEGORIES, COMMANDS, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands } from '../commands/registry.js';
+import { CATEGORIES, COMMANDS, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands, gitRepoCommands } from '../commands/registry.js';
 import { parseCapture, needsValue, sameAlias, shortUrl, buildUrl } from '../links/link.js';
 import { formatDuration } from '../devcore/engine/format.js';
 import { rank, loadRecent, pushRecent, normalize } from '../commands/search.js';
@@ -239,6 +239,7 @@ export function Palette() {
   const [abilities, setAbilities] = React.useState([]); // habilidades dos DevPets (dinâmicas)
   const [items, setItems] = React.useState([]);         // consumíveis em estoque (dinâmicos)
   const [links, setLinks] = React.useState([]);         // links rápidos (alias → URL com {q})
+  const [repos, setRepos] = React.useState([]);         // repositórios da ferramenta Git
   const [linkId, setLinkId] = React.useState(null);     // link com o chip fixado (o texto vira o {q})
   const [vaultList, setVaultList] = React.useState(null); // entradas do cofre: metadados (aberto) ou { locked } só com nome/tags (trancado)
   const [pwd, setPwd] = React.useState(null);           // { name, then }: pedindo a senha mestra para copiar uma entrada trancada
@@ -304,7 +305,7 @@ export function Palette() {
   }, [ndKey]);
   React.useEffect(() => window.devkit.notes.onChanged(() => setNotesTick((t) => t + 1)), []);
 
-  const abilityCmds = React.useMemo(() => [...abilityCommands(abilities, formatDuration), ...itemCommands(items), ...vaultCommands(vaultList), ...linkCommands(links)], [abilities, items, vaultList, links]);
+  const abilityCmds = React.useMemo(() => [...abilityCommands(abilities, formatDuration), ...itemCommands(items), ...vaultCommands(vaultList), ...linkCommands(links), ...gitRepoCommands(repos)], [abilities, items, vaultList, links, repos]);
   // Cofre: aberto, as entradas vêm completas (metadados); trancado, list() devolve null e a busca usa o índice
   // público (nome/tipo/tags) — Enter nelas pede a senha.
   const loadVault = () => window.devkit.vault.list().then(
@@ -325,6 +326,7 @@ export function Palette() {
     window.devkit.devcore.abilities().then(setAbilities, () => setAbilities([]));
     window.devkit.devcore.items().then(setItems, () => setItems([]));
     loadLinks();
+    window.devkit.git.list().then((l) => setRepos(l.repos), () => setRepos([]));
     setLinkId(null);
     loadVault();
     // Smart Bind "Colar snippet": abre direto na lista de snippets.

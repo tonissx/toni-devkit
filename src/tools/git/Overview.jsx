@@ -60,6 +60,31 @@ function Bars({ items, label, value, onClick }) {
   );
 }
 
+const DAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
+/** Quando os commits acontecem: dias da semana × horas (180 dias). */
+function Rhythm({ repo }) {
+  const { data } = useRepoData(repo, (r) => gitApi().rhythm(r));
+  if (!data || !data.total) return null;
+  const max = Math.max(1, ...data.grid.flat());
+  const peak = data.grid.flatMap((row, d) => row.map((n, h) => ({ n, d, h }))).sort((a, b) => b.n - a.n)[0];
+  return (
+    <section className="gt-card is-wide">
+      <h3><Icon name="clock" size={14} /> Ritmo (últimos 180 dias)</h3>
+      <div className="gt-rhythm">
+        <div className="gt-rhythm__hours">{Array.from({ length: 24 }, (_, h) => <span key={h}>{h % 3 === 0 ? h + 'h' : ''}</span>)}</div>
+        {data.grid.map((row, d) => (
+          <div key={d} className="gt-rhythm__row">
+            <span className="gt-rhythm__day">{DAYS[d]}</span>
+            {row.map((n, h) => <span key={h} className={'gt-heat__cell l' + (n === 0 ? 0 : Math.min(4, Math.ceil((n / max) * 4)))} title={`${DAYS[d]} ${h}h: ${n} commit${n === 1 ? '' : 's'}`} />)}
+          </div>
+        ))}
+      </div>
+      <div className="gt-heat__foot"><span>{data.total} commits · mais comum: {DAYS[peak.d]} às {peak.h}h</span></div>
+    </section>
+  );
+}
+
 export function Overview({ repo, status, go, run }) {
   const { data: ov, error } = useRepoData(repo, (r) => gitApi().overview(r));
   if (error) return <div className="gt-msg is-error">{error}</div>;
@@ -101,6 +126,7 @@ export function Overview({ repo, status, go, run }) {
               </div>
             </section>
           )}
+          <Rhythm repo={repo} />
           <section className="gt-card">
             <h3><Icon name="users" size={14} /> Quem mais commitou</h3>
             <Bars items={ov.authors} label={(a) => a.name} value={(a) => a.n} />

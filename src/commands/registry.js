@@ -458,8 +458,17 @@ const gitCommands = RECIPES.map((r) => ({
   run: (ctx) => ctx.openApp('git', { tab: 'recipes', recipe: r.id }),
 }));
 
+/** Um comando por repositório da ferramenta Git (lista dinâmica, carregada quando a palette abre). */
+function gitRepoCommands(repos) {
+  return (repos || []).map((r) => ({
+    id: 'git:repo:' + r.path, name: 'Git: ' + r.name, category: 'actions', icon: 'folder-git-2', dynamic: true,
+    description: r.path, keywords: ['git', 'repositorio', 'repo', 'abrir'],
+    run: (ctx) => ctx.openApp('git', { repo: r.path, tab: 'overview' }),
+  }));
+}
+
 const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands, ...gitCommands];
 
 const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : id === 'vault' ? 'Vault' : id === 'links' ? 'Link' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
 
-module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands, detectClipboardKind };
+module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands, gitRepoCommands, detectClipboardKind };

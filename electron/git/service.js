@@ -18,6 +18,7 @@ const { atomicWrite, createQueue } = require('../lib/fsx');
 const P = require('../../src/git/parse.js');
 const { buildOp, validRev, validBranchName, validPath } = require('../../src/git/ops.js');
 const { validatePlan, buildTodo } = require('../../src/git/rebase.js');
+const { appendPattern } = require('../../src/git/ignore.js');
 
 const MAX_BACKUPS = 30;
 const MAX_DIFF = 3 * 1024 * 1024;
@@ -352,9 +353,22 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     let kind = 'state';
     const meta = {};
     if (op.backupRef) {
+      // Uma ou várias branches que vão ser excluídas: guarda a ponta de cada uma.
       kind = 'branch';
-      const tip = (await run(r.top, ['rev-parse', '--verify', '-q', `refs/heads/${op.backupRef}`], { ok: [0, 1] })).stdout.trim();
-      if (tip) { await run(r.top, ['update-ref', ref('branch'), tip], { read: false }); refs.branch = tip; meta.branchName = op.backupRef; }
+      meta.branchNames = [];
+      for (const name of [].concat(op.backupRef)) {
+        const tip = (await run(r.top, ['rev-parse', '--verify', '-q', `refs/heads/${name}`], { ok: [0, 1] })).stdout.trim();
+        if (!tip) continue;
+        const k = 'branch-' + meta.branchNames.length;
+        await run(r.top, ['update-ref', ref(k), tip], { read: false });
+        refs[k] = tip;
+        meta.branchNames.push(name);
+      }
+    }
+    if (op.backupTag) {
+      kind = 'tag';
+      const obj = (await run(r.top, ['rev-parse', '--verify', '-q', `refs/tags/${op.backupTag}`], { ok: [0, 1] })).stdout.trim();
+      if (obj) { await run(r.top, ['update-ref', ref('tag'), obj], { read: false }); refs.tag = obj; meta.tagName = op.backupTag; }
     }
     if (op.backupStash) {
       kind = 'stash';
@@ -369,7 +383,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       for (const f of op.backupFiles) {
         const src = path.join(r.top, f);
         if (!src.startsWith(r.top)) continue;
-        try { await fs.mkdir(path.dirname(path.join(dest, f)), { recursive: true }); await fs.copyFile(src, path.join(dest, f)); } catch { /* sumiu: nada a guardar */ }
+        try { await fs.mkdir(path.dirname(path.join(dest, f)), { recursive: true }); await fs.cp(src, path.join(dest, f), { recursive: true }); } catch { /* sumiu: nada a guardar */ }
       }
       meta.files = op.backupFiles;
     }
@@ -396,11 +410,23 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       const ref = (k) => `refs/devkit/backup/${b.id}/${k}`;
       let message;
       if (b.kind === 'branch') {
-        const exists = (await run(r.top, ['rev-parse', '--verify', '-q', `refs/heads/${b.branchName}`], { ok: [0, 1] })).code === 0;
-        const name = exists ? `${b.branchName}-restaurada` : b.branchName;
-        if (!validBranchName(name)) throw new Error('Nome de branch inválido');
-        await run(r.top, ['branch', name, ref('branch')], { read: false });
-        message = `Branch “${name}” recriada`;
+        // Pontos antigos guardavam uma branch só (branchName + refs.branch).
+        const list = b.branchNames ? b.branchNames.map((n, i) => [n, ref('branch-' + i)]) : [[b.branchName, ref('branch')]];
+        const made = [];
+        for (const [orig, from] of list) {
+          const exists = (await run(r.top, ['rev-parse', '--verify', '-q', `refs/heads/${orig}`], { ok: [0, 1] })).code === 0;
+          const name = exists ? `${orig}-restaurada` : orig;
+          if (!validBranchName(name)) throw new Error('Nome de branch inválido');
+          await run(r.top, ['branch', name, from], { read: false });
+          made.push(name);
+        }
+        message = made.length === 1 ? `Branch “${made[0]}” recriada` : `${made.length} branches recriadas`;
+      } else if (b.kind === 'tag') {
+        const exists = (await run(r.top, ['rev-parse', '--verify', '-q', `refs/tags/${b.tagName}`], { ok: [0, 1] })).code === 0;
+        const name = exists ? `${b.tagName}-restaurada` : b.tagName;
+        if (!validBranchName(name)) throw new Error('Nome de tag inválido');
+        await run(r.top, ['update-ref', `refs/tags/${name}`, ref('tag')], { read: false });
+        message = `Tag “${name}” recriada`;
       } else if (b.kind === 'stash') {
         await run(r.top, ['stash', 'store', '-m', b.stashMessage || 'Stash recuperado pelo Devkit', ref('stash')], { read: false });
         message = 'Stash recuperado';
@@ -410,7 +436,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
           const to = path.join(r.top, f);
           if (!to.startsWith(r.top)) continue;
           await fs.mkdir(path.dirname(to), { recursive: true });
-          await fs.copyFile(path.join(src, f), to).catch(() => {});
+          await fs.cp(path.join(src, f), to, { recursive: true }).catch(() => {});
         }
         message = 'Arquivos recuperados';
       } else {
@@ -445,6 +471,13 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       const env = op.plan ? await prepareRebase(r, op) : undefined;
       const backup = op.backup && !unborn ? await createBackup(r, op) : op.backupFiles ? await createBackup(r, op) : null;
       try {
+        if (op.appendIgnore) {
+          const file = path.join(r.top, '.gitignore');
+          const cur = await fs.readFile(file, 'utf8').catch(() => '');
+          const next = appendPattern(cur, op.appendIgnore);
+          if (next.added) await fs.writeFile(file, next.content);
+        }
+        if (!op.args.length) return { ok: true, title: op.title, display: op.display, risk: op.risk, backup: backup ? backup.id : null, output: '' };
         if (op.writeFile) {
           const abs = path.join(r.top, op.writeFile.path);
           if (!validPath(op.writeFile.path) || !abs.startsWith(r.top)) throw new Error('Caminho inválido');
@@ -559,6 +592,83 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     };
   }
 
+  /* ─────────────── Fase 3: investigar e manter ─────────────── */
+
+  /** Quem mudou cada linha: `git blame` do arquivo (em HEAD ou numa revisão). Arquivos enormes são cortados. */
+  async function blame(repo, p, rev) {
+    const r = await repoOf(repo);
+    if (!validPath(p)) throw new Error('Caminho inválido');
+    if (rev && !validRev(rev)) throw new Error('Revisão inválida');
+    const out = (await run(r.top, ['blame', '--porcelain', '-w', ...(rev ? [rev] : []), '--', p])).stdout;
+    const b = P.parseBlame(out);
+    const truncated = b.lines.length > 6000;
+    if (truncated) { b.lines = b.lines.slice(0, 6000); b.groups = b.groups.filter((g) => g.start <= 6000); }
+    return { path: p, ...b, truncated };
+  }
+
+  /** "Quando este texto apareceu/sumiu?": commits que mudaram a quantidade de ocorrências (-S) ou casaram a regex (-G). */
+  async function searchText(repo, text, { regex = false, file: f } = {}) {
+    const t = String(text || '');
+    if (!t.trim() || t.length > 300 || /[\r\n\0]/.test(t)) throw new Error('Digite um texto (uma linha)');
+    const args = ['log', '--branches', '--tags', `--format=${P.PICKAXE_FORMAT}`, '--name-only', '--max-count=200', regex ? '-G' + t : '-S' + t];
+    if (f) { if (!validPath(f)) throw new Error('Caminho inválido'); args.push('--', f); }
+    return P.parsePickaxe((await git(repo, args)).stdout);
+  }
+
+  /** Estado do bisect: em andamento?, commit em teste, quantos candidatos faltam, o culpado (se achado). */
+  async function bisectState(repo) {
+    const r = await repoOf(repo);
+    if ((await inProgress(r.gitDir)) !== 'bisect') return { active: false };
+    const log = P.parseBisectLog((await run(r.top, ['bisect', 'log'], { ok: [0, 1] })).stdout);
+    const goods = (await run(r.top, ['for-each-ref', '--format=%(refname)', 'refs/bisect/good-*'])).stdout.split('\n').filter(Boolean);
+    let left = null;
+    if (log.bad && goods.length && !log.found) {
+      left = +(await run(r.top, ['rev-list', '--count', 'refs/bisect/bad', '--not', ...goods])).stdout.trim();
+    }
+    const [current] = P.parseLog((await run(r.top, ['log', '-1', `--format=${P.LOG_FORMAT}`, 'HEAD'])).stdout);
+    const found = log.found ? P.parseLog((await run(r.top, ['log', '-1', `--format=${P.LOG_FORMAT}`, log.found])).stdout)[0] : null;
+    return { active: true, current, found, candidates: left, steps: left ? Math.ceil(Math.log2(left + 1)) : 0, tested: log.good.length + (log.bad ? 1 : 0) + log.skipped.length };
+  }
+
+  /** Tags, mais novas primeiro: nome, commit, anotada?, mensagem, data. */
+  async function tags(repo) {
+    const out = (await git(repo, ['for-each-ref', '--sort=-creatordate', `--format=%(refname:short)${P.US}%(objecttype)${P.US}%(*objectname)%(objectname)${P.US}%(contents:subject)${P.US}%(creatordate:unix)${P.US}%(*subject)`, 'refs/tags'])).stdout;
+    return out.split('\n').filter(Boolean).map((l) => {
+      const [name, type, ids, message, time, commitSubject] = l.split(P.US);
+      const annotated = type === 'tag';
+      return { name, annotated, commit: annotated ? ids.slice(0, 40) : ids, message: annotated ? message : '', subject: annotated ? commitSubject : message, time: +time };
+    });
+  }
+
+  /** O que um `git clean` apagaria (arquivos e pastas não versionados, sem os ignorados). */
+  async function cleanPreview(repo) {
+    return P.parseCleanPreview((await git(repo, ['clean', '-n', '-d'])).stdout);
+  }
+
+  /** O .gitignore da raiz (texto, ou '' se não existir). */
+  async function gitignore(repo) {
+    const r = await repoOf(repo);
+    return fs.readFile(path.join(r.top, '.gitignore'), 'utf8').catch(() => '');
+  }
+
+  /** Ritmo dos últimos 180 dias: commits por dia da semana × hora, e por autor por mês. */
+  async function rhythm(repo) {
+    if (!(await hasHead(repo))) return { grid: Array.from({ length: 7 }, () => Array(24).fill(0)), total: 0 };
+    const out = (await git(repo, ['log', '--since=180.days.ago', '--format=%at', 'HEAD'])).stdout;
+    const grid = Array.from({ length: 7 }, () => Array(24).fill(0));
+    let total = 0;
+    for (const t of out.split('\n').filter(Boolean)) { const d = new Date(+t * 1000); grid[d.getDay()][d.getHours()]++; total++; }
+    return { grid, total };
+  }
+
+  /** As duas versões de um arquivo num commit (antes/depois), para abrir no Diff Checker. */
+  async function fileVersions(repo, hash, p) {
+    const r = await repoOf(repo);
+    if (!validRev(hash) || !validPath(p)) throw new Error('Arquivo inválido');
+    const show = async (spec) => { const x = await run(r.top, ['show', spec], { ok: [0, 128] }); return x.code === 0 ? x.stdout : ''; };
+    return { before: await show(`${hash}~1:${p}`), after: await show(`${hash}:${p}`) };
+  }
+
   /** Arquivos de uma revisão (para "trazer arquivo de outra branch"). */
   async function files(repo, ref) {
     if (!validRev(ref)) throw new Error('Revisão inválida');
@@ -595,6 +705,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     init, version, list, add, remove, scan, open, summaries,
     status, log, commit, diff, branches, compare, stashes, stashFiles, reflog, overview, backups,
     exec, restoreBackup, mergePreview, conflictFile, rebaseInfo, files,
+    blame, searchText, bisectState, tags, cleanPreview, gitignore, rhythm, fileVersions,
     unwatch, top: async (repo) => (await repoOf(repo)).top,
     flush: () => queue.flush(),
   };

@@ -273,6 +273,18 @@ contextBridge.exposeInMainWorld('devkit', {
     rebaseInfo: (repo, opts) => ipcRenderer.invoke('git:rebaseInfo', repo, opts),
     /** Arquivos de uma revisão. */
     files: (repo, ref) => ipcRenderer.invoke('git:files', repo, ref),
+    /** Quem mudou cada linha: { lines: [{ n, hash, text }], commits: { hash → { author, time, summary } }, groups }. */
+    blame: (repo, path, rev) => ipcRenderer.invoke('git:blame', repo, path, rev),
+    /** Commits em que um texto apareceu/sumiu (-S) ou casou a regex (-G). opts: { regex, file } */
+    searchText: (repo, text, opts) => ipcRenderer.invoke('git:searchText', repo, text, opts),
+    bisectState: (repo) => ipcRenderer.invoke('git:bisectState', repo),
+    tags: (repo) => ipcRenderer.invoke('git:tags', repo),
+    cleanPreview: (repo) => ipcRenderer.invoke('git:cleanPreview', repo),
+    gitignore: (repo) => ipcRenderer.invoke('git:gitignore', repo),
+    /** Commits por dia da semana × hora (180 dias). */
+    rhythm: (repo) => ipcRenderer.invoke('git:rhythm', repo),
+    /** Antes/depois de um arquivo num commit (para o Diff Checker). */
+    fileVersions: (repo, hash, path) => ipcRenderer.invoke('git:fileVersions', repo, hash, path),
     onChanged: (cb) => {
       const h = (_e, evt) => cb(evt);
       ipcRenderer.on('git:changed', h);

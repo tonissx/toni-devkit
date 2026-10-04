@@ -224,7 +224,66 @@ function hunkPatch(file, hunk) {
   return [...file.header, hunk.header, ...raw].join('\n') + '\n';
 }
 
+/* ─────────────── Fase 3: blame, busca no histórico, bisect, clean ─────────────── */
+
+/**
+ * `blame --porcelain` → { commits: { hash → { author, time, summary, boundary } }, lines: [{ n, hash, text }],
+ * groups: [{ hash, start, end }] } — grupos = linhas seguidas do mesmo commit (para a coluna de autoria).
+ */
+function parseBlame(out) {
+  const commits = {};
+  const lines = [];
+  let cur = null;
+  for (const line of String(out || '').split('\n')) {
+    const h = /^([0-9a-f]{40}) (\d+) (\d+)(?: \d+)?$/.exec(line);
+    if (h) { cur = { hash: h[1], n: +h[3] }; if (!commits[cur.hash]) commits[cur.hash] = { author: '', time: 0, summary: '', boundary: false }; continue; }
+    if (!cur) continue;
+    if (line.startsWith('\t')) { lines.push({ n: cur.n, hash: cur.hash, text: line.slice(1).replace(/\r$/, '') }); continue; }
+    const c = commits[cur.hash];
+    if (line.startsWith('author ')) c.author = line.slice(7);
+    else if (line.startsWith('author-time ')) c.time = +line.slice(12);
+    else if (line.startsWith('summary ')) c.summary = line.slice(8);
+    else if (line === 'boundary') c.boundary = true;
+  }
+  const groups = [];
+  for (const l of lines) {
+    const g = groups[groups.length - 1];
+    if (g && g.hash === l.hash && g.end === l.n - 1) g.end = l.n;
+    else groups.push({ hash: l.hash, start: l.n, end: l.n });
+  }
+  return { commits, lines, groups };
+}
+
+/** Formato para buscas com arquivos (`--name-only`): cada registro começa com RS. */
+const PICKAXE_FORMAT = '%x1e' + ['%H', '%s', '%an', '%at'].join('%x1f');
+
+/** `log -S/-G --name-only` → [{ hash, subject, author, time, files }] */
+function parsePickaxe(out) {
+  return String(out || '').split(RS).filter((r) => r.trim()).map((r) => {
+    const [head, ...rest] = r.split('\n');
+    const [hash, subject, author, time] = head.split(US);
+    return { hash, subject, author, time: +time, files: rest.map((l) => l.trim()).filter(Boolean) };
+  });
+}
+
+/** `bisect log` → { found: hash|null, good: [hash], bad: hash|null, skipped: [hash] } */
+function parseBisectLog(out) {
+  const r = { found: null, good: [], bad: null, skipped: [] };
+  for (const line of String(out || '').split('\n')) {
+    let m;
+    if ((m = /^# first bad commit: \[([0-9a-f]{40})\]/.exec(line))) r.found = m[1];
+    else if ((m = /^# bad: \[([0-9a-f]{40})\]/.exec(line))) r.bad = m[1];
+    else if ((m = /^# good: \[([0-9a-f]{40})\]/.exec(line))) r.good.push(m[1]);
+    else if ((m = /^# skip: \[([0-9a-f]{40})\]/.exec(line))) r.skipped.push(m[1]);
+  }
+  return r;
+}
+
+/** `clean -n -d` → [caminho] (pastas terminam em "/"). */
+const parseCleanPreview = (out) => String(out || '').split('\n').map((l) => /^Would remove (.+)$/.exec(l.trim())).filter(Boolean).map((m) => m[1]);
+
 module.exports = {
+  parseBlame, PICKAXE_FORMAT, parsePickaxe, parseBisectLog, parseCleanPreview,
   US, RS, LOG_FORMAT, BRANCH_FORMAT, REFLOG_FORMAT, STASH_FORMAT,
   parseStatus, parseDecorations, parseLog, parseBranches, describeReflog, parseReflog, parseStashes, parseNumstat,
   parsePatch, hunkPatch,

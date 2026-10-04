@@ -43,6 +43,16 @@ function Graph({ layout, commits, headHash }) {
   );
 }
 
+/** O commit como nota (mensagem, arquivos e o diff, cortado se for enorme). */
+async function saveAsNote(repo, c) {
+  const d = await gitApi().diff(repo, { area: 'commit', hash: c.hash });
+  const patch = d.patch.length > 60000 ? d.patch.slice(0, 60000) + '\n… (diff cortado)' : d.patch;
+  const repoName = repo.split(/[\\/]/).pop();
+  const files = c.files.map((f) => `- \`${f.path}\` (+${f.added} −${f.deleted})`).join('\n');
+  const content = `${c.message}\n\n**Commit** \`${c.hash}\` · ${c.author} · ${fullDate(c.time)} · repositório ${repoName}\n\n### Arquivos\n${files}\n\n### Diff\n\`\`\`diff\n${patch.replace(/\`\`\`/g, "'''")}\n\`\`\`\n`;
+  return window.devkit.notes.create({ title: `Commit ${short(c.hash)}: ${c.message.split('\n')[0]}`.slice(0, 120), content, tags: ['git', repoName.toLowerCase().replace(/[^\w-]+/g, '-')], type: 'note', source: 'git' });
+}
+
 function CommitDetail({ repo, hash, run, onPick }) {
   const { data: c, error } = useRepoData(repo, (r) => gitApi().commit(r, hash), [hash]);
   const [file, setFile] = React.useState(null);
@@ -65,6 +75,7 @@ function CommitDetail({ repo, hash, run, onPick }) {
           <span title={fullDate(c.time)}><Icon name="clock" size={12} /> {ago(c.time)}</span>
           <button type="button" className="gt-hash" title="Copiar o hash completo" onClick={() => window.devkit.clipboard.write(c.hash)}><Icon name="copy" size={11} /> {short(c.hash)}</button>
           {c.parents.length > 1 && <span className="gt-detail__merge" title="Commit de merge: junta duas linhas de história"><Icon name="git-merge" size={12} /> merge</span>}
+          <button type="button" className="gt-hash" title="Cria uma nota com a mensagem, os arquivos e o diff deste commit" onClick={() => saveAsNote(repo, c).then((n) => window.devkit.notes.open({ id: n.id }))}><Icon name="notebook-pen" size={11} /> salvar como nota</button>
         </div>
         {c.parents.length > 0 && (
           <div className="gt-detail__parents">Pai{c.parents.length > 1 ? 's' : ''}: {c.parents.map((p) => <button type="button" key={p} className="gt-hash" onClick={() => onPick(p)}>{short(p)}</button>)}</div>
@@ -100,6 +111,15 @@ function CommitDetail({ repo, hash, run, onPick }) {
           </div>
         ))}
       </div>
+      {file && (
+        <div className="gt-fh__actions">
+          <button type="button" className="gt-op is-ghost is-sm" title="Abre o antes e o depois deste arquivo no Diff Checker" onClick={async () => {
+            const v = await gitApi().fileVersions(repo, hash, file);
+            const name = file.split('/').pop();
+            window.devkit.app.command({ type: 'go', route: 'diff', params: { left: v.before, right: v.after, leftFile: `${name} (antes de ${short(hash)})`, rightFile: `${name} (${short(hash)})` } });
+          }}><Icon name="git-compare" size={13} /><span>Abrir no Diff Checker</span></button>
+        </div>
+      )}
       {file && (diff.data ? <GitDiff patch={diff.data.patch} truncated={diff.data.truncated} /> : <div className="gt-msg"><Spinner size={14} /> Carregando…</div>)}
     </div>
   );
