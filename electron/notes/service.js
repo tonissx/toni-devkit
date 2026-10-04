@@ -14,6 +14,7 @@ const { validFolderPath, validFolderName, normFolder, folderOf, baseName, parent
 const { normalize } = require('../../src/commands/search.js');
 const { templateVars, applyTemplate, isTemplateFolder } = require('../../src/notes/templates.js');
 const { buildGraph } = require('../../src/notes/graph.js');
+const { expandDueWords } = require('../../src/notes/edit.js');
 
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
 const VIEWED_MAX = 20;
@@ -555,25 +556,30 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     },
 
     /** Marca/desmarca a n-ésima tarefa (índice de tasks()) da nota. */
-    async toggleTask(id, index) {
-      const n = notes.get(id);
-      if (!n) throw new Error('Nota não encontrada');
-      const content = toggleTaskAt(n.content, index);
-      if (content === n.content) return this.get(id);
-      return this.save({ id, content });
+    // Lê e grava dentro da fila (serial): duas edições seguidas da mesma nota (marcar + capturar) não se sobrescrevem.
+    toggleTask(id, index) {
+      return serial(async () => {
+        const n = notes.get(id);
+        if (!n) throw new Error('Nota não encontrada');
+        const content = toggleTaskAt(n.content, index);
+        if (content === n.content) return this.get(id);
+        return this._save({ id, content });
+      });
     },
 
     /** Captura rápida: acrescenta "- [ ] texto" à nota "Inbox" (criada se não existir). */
     async appendTask(text) {
-      const line = String(text || '').replace(/\s*\n\s*/g, ' ').trim();
+      const line = expandDueWords(String(text || '').replace(/\s*\n\s*/g, ' ').trim());
       if (!line) throw new Error('Tarefa vazia');
-      const id = this.resolveLink(INBOX_TITLE);
-      const prev = id && notes.get(id);
       const item = '- [ ] ' + line;
-      if (!prev) return this.create({ title: INBOX_TITLE, content: item + '\n' });
-      const body = String(prev.content || '');
-      const sep = !body || body.endsWith('\n') ? '' : '\n';
-      return this.save({ id: prev.id, content: body + sep + item + '\n' });
+      return serial(async () => {
+        const id = this.resolveLink(INBOX_TITLE);
+        const prev = id && notes.get(id);
+        if (!prev) return this._save(createNote({ title: INBOX_TITLE, content: item + '\n' }));
+        const body = String(prev.content || '');
+        const sep = !body || body.endsWith('\n') ? '' : '\n';
+        return this._save({ id: prev.id, content: body + sep + item + '\n' });
+      });
     },
 
     /**

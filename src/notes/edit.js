@@ -197,4 +197,9 @@ function completeVar(value, start, pos, name) {
   return { value: value.slice(0, start) + ins + rest, start: start + ins.length, end: start + ins.length };
 }
 
-module.exports = { continueList, toggleTaskLines, expandOnSpace, isoDate, insertBlock, linkQueryAt, completeLink, inFence, varQueryAt, completeVar };
+/** Texto inteiro (captura rápida): cada @hoje / @amanha / @amanhã solto vira a data — o mesmo que o editor faz ao digitar. */
+function expandDueWords(text, now = new Date()) {
+  return String(text || '').replace(/(^|\s)@(hoje|amanha|amanhã)(?=\s|$)/gi, (_, sp, w) => `${sp}@${isoDate(now, /^h/i.test(w) ? 0 : 1)}`);
+}
+
+module.exports = { continueList, expandDueWords, toggleTaskLines, expandOnSpace, isoDate, insertBlock, linkQueryAt, completeLink, inFence, varQueryAt, completeVar };
