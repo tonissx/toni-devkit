@@ -415,6 +415,22 @@ test('serviço: excluir arquivo novo guarda cópia e recupera', async () => {
   } finally { t.done(); }
 });
 
+test('serviço: pasta com outro repositório dentro (worktree/clone) não quebra o diff', async () => {
+  const t = await setup();
+  try {
+    const dir = makeRepo(t.root);
+    const repo = await t.svc.add(dir);
+    makeRepo(path.join(dir, '.claude', 'worktrees'), 'feat-x');
+    const s = await t.svc.status(repo);
+    assert.deepEqual(s.untracked, ['.claude/worktrees/feat-x/']);
+    const d = await t.svc.diff(repo, { area: 'untracked', path: '.claude/worktrees/feat-x/' });
+    assert.deepEqual(d, { patch: '', truncated: false, nested: true });
+    // Repositório apagado/movido: a mensagem diz isso (não "Git não encontrado").
+    rmSync(dir, { recursive: true, force: true });
+    await assert.rejects(t.svc.status(repo), /não existe mais/);
+  } finally { t.done(); }
+});
+
 test('serviço: repositório sem commits e visão geral', async () => {
   const t = await setup();
   try {

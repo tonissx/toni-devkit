@@ -339,3 +339,8 @@
 .gt-tl__meta code { font-family: var(--tk-font-mono); }
 .gt-tl__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .gt-tl__actions .gt-inline { min-width: 260px; }
+.gt-nested { margin: 0 16px; padding: 12px 14px; border-radius: var(--tk-radius-md); background: color-mix(in srgb, var(--tk-syn-keyword) 8%, var(--tk-surface-2)); border: 1px solid var(--tk-border); font-size: 12.5px; line-height: 1.55; color: var(--tk-text-2); }
+.gt-nested p { margin: 0 0 8px; }
+.gt-nested p:last-child { margin: 0; }
+.gt-nested b { color: var(--tk-text); }
+.gt-nested code { font: 12px var(--tk-font-mono); color: var(--tk-syn-string); }

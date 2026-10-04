@@ -34,7 +34,12 @@ function defaultRun(cwd, args, { stdin, ok = [0], read = true, timeout = 120e3 }
       cwd, env, maxBuffer: 256 * 1024 * 1024, windowsHide: true, timeout, encoding: 'utf8',
     }, (err, stdout, stderr) => {
       const code = err ? (typeof err.code === 'number' ? err.code : -1) : 0;
-      if (err && err.code === 'ENOENT') return reject(Object.assign(new Error('Git não encontrado — instale o Git para Windows (git-scm.com)'), { code: 'NOGIT' }));
+      // ENOENT vem tanto de git ausente quanto de pasta (cwd) que não existe mais — repositório movido ou apagado.
+      if (err && err.code === 'ENOENT') {
+        return reject(fss.existsSync(cwd)
+          ? Object.assign(new Error('Git não encontrado — instale o Git para Windows (git-scm.com)'), { code: 'NOGIT' })
+          : new Error(`A pasta não existe mais: ${cwd} — o repositório foi movido ou apagado`));
+      }
       if (!ok.includes(code)) {
         const msg = String(stderr || stdout || (err && err.message) || 'erro').split('\n').map((l) => l.trim()).filter((l) => l && !/^hint:/.test(l)).slice(0, 6).join('\n');
         return reject(Object.assign(new Error(msg.replace(/^(fatal|error): /, '')), { gitCode: code, stderr }));
@@ -220,6 +225,8 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       // Arquivo novo: monta o patch "tudo adicionado" (git diff --no-index varia entre plataformas).
       const abs = path.join(r.top, String(p));
       if (!abs.startsWith(r.top)) throw new Error('Caminho inválido');
+      // Pasta com outro repositório dentro (worktree, clone, submódulo não registrado): o git não entra nela.
+      if ((await fs.stat(abs)).isDirectory()) return { patch: '', truncated: false, nested: true };
       const buf = await fs.readFile(abs);
       const head = `diff --git a/${p} b/${p}\nnew file mode 100644\n`;
       if (buf.subarray(0, 8000).includes(0)) return { patch: head + `Binary files /dev/null and b/${p} differ\n`, truncated: false, binary: true };

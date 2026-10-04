@@ -71,6 +71,7 @@ export const KIND = {
   renamed: { l: 'R', label: 'Renomeado', tone: 'ren' },
   copied: { l: 'C', label: 'Copiado', tone: 'ren' },
   untracked: { l: 'U', label: 'Novo (fora do git)', tone: 'new' },
+  nested: { l: 'G', label: 'Pasta com outro repositório git dentro', tone: 'ren' },
   conflict: { l: '!', label: 'Em conflito', tone: 'conf' },
 };
 export const KindBadge = ({ kind }) => { const k = KIND[kind] || KIND.modified; return <span className={'gt-kind is-' + k.tone} title={k.label}>{k.l}</span>; };

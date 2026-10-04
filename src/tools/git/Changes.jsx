@@ -11,13 +11,13 @@ function FileRow({ f, area, selected, onSelect, run, unborn }) {
   return (
     <div className={'gt-file' + (selected ? ' is-sel' : '')} onClick={() => onSelect({ area, path: f.path })} role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onSelect({ area, path: f.path }); }}>
-      <KindBadge kind={area === 'untracked' ? 'untracked' : area === 'conflicts' ? 'conflict' : f.kind} />
+      <KindBadge kind={area === 'untracked' ? f.kind : area === 'conflicts' ? 'conflict' : f.kind} />
       <FilePath path={f.path} />
       {f.orig && <span className="gt-file__orig" title={'Antes: ' + f.orig}>← {f.orig.split('/').pop()}</span>}
       <span className="gt-file__actions">
         {area === 'unstaged' && <OpButton op={{ op: 'discard', paths: p }} run={run} icon="undo-2" variant="danger" />}
-        {area === 'untracked' && <OpButton op={{ op: 'removeUntracked', paths: p }} run={run} icon="trash-2" variant="danger" />}
-        {(area === 'unstaged' || area === 'untracked') && <OpButton op={{ op: 'stage', paths: p }} run={run} icon="plus" variant="accent" />}
+        {area === 'untracked' && f.kind !== 'nested' && <OpButton op={{ op: 'removeUntracked', paths: p }} run={run} icon="trash-2" variant="danger" />}
+        {(area === 'unstaged' || (area === 'untracked' && f.kind !== 'nested')) && <OpButton op={{ op: 'stage', paths: p }} run={run} icon="plus" variant="accent" />}
         {area === 'staged' && <OpButton op={{ op: 'unstage', paths: p }} run={run} icon="minus" ctx={{ unborn }} />}
         {area === 'conflicts' && <OpButton op={{ op: 'stage', paths: p }} run={run} icon="check">Resolvido</OpButton>}
       </span>
@@ -84,7 +84,8 @@ function CommitBox({ status, run, repo }) {
 export function Changes({ repo, status, run }) {
   const [sel, setSel] = React.useState(null); // { area, path }
   const s = status;
-  const untracked = React.useMemo(() => s.untracked.map((p) => ({ path: p, kind: 'untracked' })), [s.untracked]);
+  // Caminho terminado em "/" = pasta com outro repositório dentro (ex.: worktree): não dá para preparar nem excluir daqui.
+  const untracked = React.useMemo(() => s.untracked.map((p) => ({ path: p, kind: p.endsWith('/') ? 'nested' : 'untracked' })), [s.untracked]);
   const all = { staged: s.staged, unstaged: s.unstaged, untracked, conflicts: s.conflicts };
   // Seleção some (arquivo commitado/descartado)? Vai para o próximo disponível.
   React.useEffect(() => {
@@ -106,7 +107,7 @@ export function Changes({ repo, status, run }) {
               title={{ conflicts: 'Em conflito', staged: 'Preparadas para o commit', unstaged: 'Modificadas', untracked: 'Novas (fora do git)' }[area]}
               hint={{ conflicts: 'Arquivos com conflito: edite, resolva e marque como resolvido', staged: 'Área de preparação (stage): o que entra no próximo commit', unstaged: 'Mudanças que ainda não vão para o commit', untracked: 'Arquivos que o git ainda não acompanha' }[area]}
               actions={area === 'staged' ? <OpButton op={{ op: 'unstageAll' }} ctx={{ unborn: s.unborn }} run={run} icon="minus">Tirar tudo</OpButton>
-                : area === 'unstaged' || area === 'untracked' ? <OpButton op={{ op: 'stage', paths: all[area].map((f) => f.path) }} run={run} icon="plus" variant="accent">Preparar todos</OpButton> : null}
+                : area === 'unstaged' || area === 'untracked' ? <OpButton op={{ op: 'stage', paths: all[area].filter((f) => f.kind !== 'nested').map((f) => f.path) }} disabled={!all[area].some((f) => f.kind !== 'nested')} run={run} icon="plus" variant="accent">Preparar todos</OpButton> : null}
             />
           ))}
         </div>
@@ -115,8 +116,13 @@ export function Changes({ repo, status, run }) {
       <div className="gt-changes__diff tk-scroll">
         {sel ? (
           <>
-            <div className="gt-diffhead"><FilePath path={sel.path} /><span className="gt-diffhead__area">{{ staged: 'preparado', unstaged: 'não preparado', untracked: 'arquivo novo', conflicts: 'em conflito' }[sel.area]}</span></div>
-            {diff.data ? <GitDiff patch={diff.data.patch} truncated={diff.data.truncated} mode={sel.area === 'conflicts' ? 'readonly' : sel.area} run={run} />
+            <div className="gt-diffhead"><FilePath path={sel.path} /><span className="gt-diffhead__area">{sel.path.endsWith('/') ? 'outro repositório' : { staged: 'preparado', unstaged: 'não preparado', untracked: 'arquivo novo', conflicts: 'em conflito' }[sel.area]}</span></div>
+            {diff.data && diff.data.nested ? (
+              <div className="gt-nested">
+                <p><b>Esta pasta tem outro repositório git dentro</b> — por exemplo um <i>worktree</i> (como os que o Claude Code cria em <code>.claude/worktrees</code>), um clone ou um submódulo não registrado. O git não olha o conteúdo dela; por isso não há diff.</p>
+                <p>Normalmente o certo é <b>ignorá-la</b>: acrescente <code>{sel.path}</code> (ou a pasta-mãe) ao <code>.gitignore</code>. Preparar a pasta a registraria como um repositório embutido, o que quase nunca é o que se quer.</p>
+              </div>
+            ) : diff.data ? <GitDiff patch={diff.data.patch} truncated={diff.data.truncated} mode={sel.area === 'conflicts' ? 'readonly' : sel.area} run={run} />
               : diff.error ? <div className="gt-msg is-error">{diff.error}</div> : <div className="gt-msg"><Spinner size={14} /> Carregando o diff…</div>}
           </>
         ) : <div className="gt-msg">Escolha um arquivo para ver o que mudou.</div>}
