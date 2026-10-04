@@ -74,7 +74,7 @@ function Compare({ repo, branches, initial }) {
   );
 }
 
-export function Branches({ repo, status, run }) {
+export function Branches({ repo, status, run, openMerge }) {
   const { data, error } = useRepoData(repo, (r) => gitApi().branches(r));
   const [creating, setCreating] = React.useState(false);
   const [name, setName] = React.useState('');
@@ -139,6 +139,7 @@ export function Branches({ repo, status, run }) {
               <td className="gt-btable__up">{b.upstream ? <span title="Comparado com o que o git sabe da remota (último fetch)">{b.upstream} {b.ahead ? `↑${b.ahead}` : ''} {b.behind ? `↓${b.behind}` : ''}</span> : <span className="gt-hint">só local</span>}</td>
               <td className="gt-btable__actions">
                 {!b.current && <OpButton op={{ op: 'branch.switch', name: b.name }} run={() => switchTo(b.name)} icon="log-in">Trocar</OpButton>}
+                {!b.current && current && <button type="button" className="gt-op is-ghost is-sm" title={`Mesclar ${b.name} em ${current} (com prévia)`} onClick={() => openMerge(b.name)}><Icon name="git-merge" size={13} /></button>}
                 <button type="button" className="gt-op is-ghost is-sm" title="Comparar com a base" onClick={() => setCmp({ a: base, b: b.name })} disabled={b.name === base}><Icon name="arrow-left-right" size={13} /></button>
                 <button type="button" className="gt-op is-ghost is-sm" title="Renomear" onClick={() => setRenaming({ from: b.name, to: b.name })}><Icon name="pencil" size={13} /></button>
                 {!b.current && <OpButton op={{ op: 'branch.delete', name: b.name, force: !b.merged }} run={run} icon="trash-2" variant="danger" />}

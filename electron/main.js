@@ -574,7 +574,7 @@ function initGit() {
   gitReady = gitSvc.init().catch((e) => { console.error('[git]', e); });
 }
 
-const GIT_API = ['version', 'list', 'add', 'remove', 'scan', 'open', 'summaries', 'status', 'log', 'commit', 'diff', 'branches', 'compare', 'stashes', 'stashFiles', 'reflog', 'overview', 'backups', 'exec', 'restoreBackup'];
+const GIT_API = ['version', 'list', 'add', 'remove', 'scan', 'open', 'summaries', 'status', 'log', 'commit', 'diff', 'branches', 'compare', 'stashes', 'stashFiles', 'reflog', 'overview', 'backups', 'exec', 'restoreBackup', 'mergePreview', 'conflictFile', 'rebaseInfo', 'files'];
 for (const fn of GIT_API) {
   ipcMain.handle('git:' + fn, async (_e, ...args) => { await gitReady; return gitSvc[fn](...args); });
 }

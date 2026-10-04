@@ -16,19 +16,21 @@ const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { atomicWrite, createQueue } = require('../lib/fsx');
 const P = require('../../src/git/parse.js');
-const { buildOp, validRev, validBranchName } = require('../../src/git/ops.js');
+const { buildOp, validRev, validBranchName, validPath } = require('../../src/git/ops.js');
+const { validatePlan, buildTodo } = require('../../src/git/rebase.js');
 
 const MAX_BACKUPS = 30;
 const MAX_DIFF = 3 * 1024 * 1024;
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'out', 'target', 'bin', 'obj', 'vendor', '.venv', 'venv', '__pycache__', 'AppData']);
 
 /** Roda o git. Resolve { stdout, stderr, code }; rejeita com a mensagem do git se o código não for aceito. */
-function defaultRun(cwd, args, { stdin, ok = [0], read = true, timeout = 120e3 } = {}) {
+function defaultRun(cwd, args, { stdin, ok = [0], read = true, timeout = 120e3, env: extraEnv } = {}) {
   return new Promise((resolve, reject) => {
     const env = {
       ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', LANG: 'C', GIT_PAGER: 'cat',
       GIT_EDITOR: 'true', GIT_SEQUENCE_EDITOR: 'true', GIT_MERGE_AUTOEDIT: 'no',
       ...(read ? { GIT_OPTIONAL_LOCKS: '0' } : {}),
+      ...(extraEnv || {}),
     };
     const child = execFile('git', ['-c', 'core.quotepath=false', '-c', 'color.ui=false', '-c', 'core.pager=cat', ...args], {
       cwd, env, maxBuffer: 256 * 1024 * 1024, windowsHide: true, timeout, encoding: 'utf8',
@@ -205,8 +207,10 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     const ns = ps.length
       ? await git(repo, ['diff', '--numstat', '-z', '-M', ps[0], h])
       : await git(repo, ['diff-tree', '-r', '--root', '--no-commit-id', '--numstat', '-z', '-M', h]);
+    // Já está na branch atual? (Senão, a tela oferece trazê-lo com cherry-pick.)
+    const inHead = (await git(repo, ['merge-base', '--is-ancestor', h, 'HEAD'], { ok: [0, 1] })).code === 0;
     return {
-      hash: h, parents: ps, author, email, time: +time, committer, committerTime: +ctime, refs: P.parseDecorations(deco),
+      hash: h, parents: ps, author, email, time: +time, committer, committerTime: +ctime, refs: P.parseDecorations(deco), inHead,
       message: body.join(P.US).replace(/\n+$/, ''), files: P.parseNumstat(ns.stdout),
     };
   }
@@ -341,7 +345,8 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     const cur = P.parseStatus((await run(r.top, ['status', '--porcelain=v2', '--branch', '-z'])).stdout).branch;
     if (cur.oid) { await run(r.top, ['update-ref', ref('head'), cur.oid], { read: false }); refs.head = cur.oid; }
     if (cur.oid) {
-      const wip = (await run(r.top, ['stash', 'create'], { read: false })).stdout.trim();
+      // Com conflito no índice o git não consegue criar o stash: segue só com o HEAD.
+      const wip = (await run(r.top, ['stash', 'create'], { read: false }).catch(() => ({ stdout: '' }))).stdout.trim();
       if (wip) { await run(r.top, ['update-ref', ref('wip'), wip], { read: false }); refs.wip = wip; }
     }
     let kind = 'state';
@@ -437,14 +442,127 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
         const cur = P.parseStatus((await run(r.top, ['status', '--porcelain=v2', '--branch', '-z'])).stdout).branch.head || 'HEAD';
         await run(r.top, ['stash', 'push', '-u', '-m', `Devkit: guardado ao trocar de ${cur} para ${input.name}`], { read: false });
       }
+      const env = op.plan ? await prepareRebase(r, op) : undefined;
       const backup = op.backup && !unborn ? await createBackup(r, op) : op.backupFiles ? await createBackup(r, op) : null;
       try {
-        const res = await run(r.top, op.args, { stdin: op.stdin, read: false });
-        return { ok: true, title: op.title, display: op.display, risk: op.risk, backup: backup ? backup.id : null, output: (res.stdout + res.stderr).trim().slice(0, 4000) };
+        if (op.writeFile) {
+          const abs = path.join(r.top, op.writeFile.path);
+          if (!validPath(op.writeFile.path) || !abs.startsWith(r.top)) throw new Error('Caminho inválido');
+          await fs.writeFile(abs, op.writeFile.content);
+        }
+        // Merge, cherry-pick e rebase podem parar no meio com conflito (código 1): não é erro, é a vez do usuário.
+        const res = await run(r.top, op.args, { stdin: op.stdin, read: false, env, ok: op.mayConflict ? [0, 1] : [0] });
+        let output = res.stdout + res.stderr;
+        if (res.code !== 0) {
+          const st = await status(r.path);
+          if (!st.conflicts.length && !st.operation) {
+            const msg = String(res.stderr || res.stdout).split('\n').map((l) => l.trim()).filter((l) => l && !/^hint:/.test(l)).slice(0, 6).join('\n');
+            throw new Error(msg.replace(/^(fatal|error): /, '') || 'O git recusou a operação');
+          }
+          return { ok: true, stopped: true, conflicts: st.conflicts.length, operation: st.operation, title: op.title, display: op.display, risk: op.risk, backup: backup ? backup.id : null, output: output.trim().slice(0, 4000) };
+        }
+        for (const extra of op.then || []) output += (await run(r.top, extra, { read: false })).stdout;
+        return { ok: true, title: op.title, display: op.display, risk: op.risk, backup: backup ? backup.id : null, output: output.trim().slice(0, 4000) };
       } finally {
         broadcast({ type: 'changed', repo: r.path });
       }
     });
+  }
+
+  /**
+   * Rebase com o plano da tela: confere o plano contra os commits do intervalo, grava o todo e as mensagens novas em
+   * .git/devkit/rebase/ e devolve o ambiente que faz o git usar esse todo (GIT_SEQUENCE_EDITOR copia o arquivo).
+   */
+  async function prepareRebase(r, op) {
+    const info = await rebaseRange(r, op.args[op.args.length - 1]);
+    if (info.hasMerges) throw new Error('Há commits de merge no intervalo — o rebase interativo os desfaria. Escolha um intervalo sem merges.');
+    validatePlan(op.plan, info.commits);
+    const dir = path.join(r.gitDir, 'devkit', 'rebase');
+    await fs.rm(dir, { recursive: true, force: true });
+    await fs.mkdir(dir, { recursive: true });
+    const slash = (f) => f.replace(/\\/g, '/');
+    const msgFile = (i) => slash(path.join(dir, `msg-${i}.txt`));
+    for (let i = 0; i < op.plan.length; i++) {
+      const m = String(op.plan[i].message || '').trim();
+      if (m && (op.plan[i].action === 'reword' || op.plan[i].action === 'squash')) await fs.writeFile(path.join(dir, `msg-${i}.txt`), m + '\n');
+    }
+    const todo = path.join(dir, 'todo.txt');
+    await fs.writeFile(todo, buildTodo(op.plan, msgFile));
+    return { GIT_SEQUENCE_EDITOR: `cp "${slash(todo)}"` };
+  }
+
+  /** Commits de onto..HEAD (do mais antigo ao mais novo) e se há merges no meio. */
+  async function rebaseRange(r, onto) {
+    if (!validRev(onto)) throw new Error('Base inválida');
+    const out = (await run(r.top, ['log', '--reverse', `--format=%H${P.US}%s${P.US}%an${P.US}%at${P.RS}`, `${onto}..HEAD`])).stdout;
+    const commits = out.split(P.RS).map((x) => x.replace(/^\n/, '')).filter(Boolean).map((x) => { const [hash, subject, author, time] = x.split(P.US); return { hash, subject, author, time: +time }; });
+    const merges = (await run(r.top, ['rev-list', '--merges', '--count', `${onto}..HEAD`])).stdout.trim();
+    return { commits, hasMerges: +merges > 0 };
+  }
+
+  /**
+   * Para a tela de reorganizar commits: os últimos `count` commits da branch (ou desde o ancestral comum com `base`),
+   * a base (onto) e quais já estão no upstream (enviados).
+   */
+  async function rebaseInfo(repo, { count = 10, base } = {}) {
+    const r = await repoOf(repo);
+    let onto;
+    if (base) {
+      if (!validRev(base)) throw new Error('Base inválida');
+      onto = (await run(r.top, ['merge-base', base, 'HEAD'])).stdout.trim();
+    } else {
+      const n = Math.max(1, Math.min(50, count | 0));
+      const total = +(await run(r.top, ['rev-list', '--count', '--first-parent', 'HEAD'])).stdout.trim();
+      if (total <= 1) return { onto: null, commits: [], hasMerges: false, pushed: [], reason: 'Só há um commit — nada para reorganizar.' };
+      onto = (await run(r.top, ['rev-parse', `HEAD~${Math.min(n, total - 1)}`])).stdout.trim();
+    }
+    const { commits, hasMerges } = await rebaseRange(r, onto);
+    const up = await run(r.top, ['rev-list', `${onto}..@{u}`], { ok: [0, 128] });
+    const inUp = new Set(up.code === 0 ? up.stdout.split('\n').filter(Boolean) : []);
+    const ontoSubject = (await run(r.top, ['log', '-1', '--format=%s', onto])).stdout.trim();
+    return { onto, ontoSubject, commits, hasMerges, pushed: commits.filter((c) => inUp.has(c.hash)).map((c) => c.hash) };
+  }
+
+  /** Antes de mesclar: o que entra, se dá para só avançar e quais arquivos vão conflitar (git merge-tree, sem mexer em nada). */
+  async function mergePreview(repo, branchName) {
+    const r = await repoOf(repo);
+    if (!validRev(branchName)) throw new Error('Branch inválida');
+    const isAnc = async (a, b) => (await run(r.top, ['merge-base', '--is-ancestor', a, b], { ok: [0, 1] })).code === 0;
+    const upToDate = await isAnc(branchName, 'HEAD');
+    const ff = !upToDate && await isAnc('HEAD', branchName);
+    const commits = P.parseLog((await run(r.top, ['log', `--format=${P.LOG_FORMAT}`, '--max-count=100', `HEAD..${branchName}`])).stdout);
+    const changed = P.parseNumstat((await run(r.top, ['diff', '--numstat', '-z', '-M', `HEAD...${branchName}`])).stdout);
+    let conflicts = [];
+    if (!upToDate && !ff) {
+      const mt = await run(r.top, ['merge-tree', '--write-tree', '--name-only', '--no-messages', 'HEAD', branchName], { ok: [0, 1] });
+      conflicts = mt.code === 1 ? mt.stdout.split('\n').slice(1).map((l) => l.trim()).filter(Boolean) : [];
+    }
+    const st = await status(r.path);
+    return { branch: branchName, upToDate, ff, commits, files: changed, conflicts, dirty: st.staged.length + st.unstaged.length, operation: st.operation };
+  }
+
+  /** As três versões de um arquivo em conflito (base, minha, deles) e o arquivo como está agora, com os marcadores. */
+  async function conflictFile(repo, p) {
+    const r = await repoOf(repo);
+    if (!validPath(p)) throw new Error('Caminho inválido');
+    const st = await status(r.path);
+    const c = st.conflicts.find((x) => x.path === p);
+    if (!c) throw new Error('Este arquivo não está mais em conflito');
+    const stage = async (n) => { const x = await run(r.top, ['show', `:${n}:${p}`], { ok: [0, 128] }); return x.code === 0 ? x.stdout : null; };
+    const merged = await fs.readFile(path.join(r.top, p)).then((b) => (b.subarray(0, 8000).includes(0) ? { binary: true } : { text: b.toString('utf8') }), () => null);
+    // Códigos: UU ambos mudaram · AA ambos criaram · DU eu excluí · UD eles excluíram · AU/UA só um lado criou.
+    return {
+      path: p, code: c.code, base: await stage(1), ours: await stage(2), theirs: await stage(3),
+      merged: merged && merged.text != null ? merged.text : null, binary: !!(merged && merged.binary),
+      deletedBy: c.code === 'DU' || c.code === 'DD' ? 'us' : c.code === 'UD' ? 'them' : null,
+      operation: st.operation,
+    };
+  }
+
+  /** Arquivos de uma revisão (para "trazer arquivo de outra branch"). */
+  async function files(repo, ref) {
+    if (!validRev(ref)) throw new Error('Revisão inválida');
+    return (await git(repo, ['ls-tree', '-r', '--name-only', '-z', ref])).stdout.split('\0').filter(Boolean).slice(0, 20000);
   }
 
   /* ─────────────── Watcher ─────────────── */
@@ -476,7 +594,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
   return {
     init, version, list, add, remove, scan, open, summaries,
     status, log, commit, diff, branches, compare, stashes, stashFiles, reflog, overview, backups,
-    exec, restoreBackup,
+    exec, restoreBackup, mergePreview, conflictFile, rebaseInfo, files,
     unwatch, top: async (repo) => (await repoOf(repo)).top,
     flush: () => queue.flush(),
   };

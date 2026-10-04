@@ -36,7 +36,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **XML Formatter**: formata nos moldes do vscode-xml (LemMinX) | ✅ |
 | **Diff Checker**: compara dois textos nos moldes do diffchecker.com | ✅ |
 | **JSON Visualizer**: edita, formata e explora JSON como grafo (estilo JSON Crack), árvore, YAML ou CSV | ✅ |
-| **Git**: repositórios locais com grafo do histórico, stage por trecho, branches, stash e desfazer qualquer coisa | ✅ (fase 1) |
+| **Git**: repositórios locais com grafo do histórico, stage por trecho, merge com prévia, conflitos, rebase visual e desfazer qualquer coisa | ✅ (fases 1 e 2) |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
 | **Vault**: cofre de senhas, tokens e credenciais de banco, com senha mestra e cópia que se apaga | ✅ |
 | **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
@@ -145,8 +145,30 @@ operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nad
   ponto de volta em `refs/devkit/backup/…` (as mudanças via `git stash create`) e cópias de arquivos novos apagados em
   `.git\devkit\` — os 30 mais recentes. O próprio Desfazer também vira um ponto de volta
 
-Próximas fases (planejadas): merge com prévia de conflitos, editor de conflitos, cherry-pick, rebase interativo visual,
-receitas "Quero…"; depois blame, bisect guiado, tags, limpeza de branches e integração com Início/palette/Notes.
+**Operações guiadas (fase 2)**
+
+- **Mesclar com prévia** (Branches → ícone de merge na linha, ou "Atualizar minha branch com a main"): antes de mexer em
+  qualquer coisa mostra os commits que entram, se dá para só avançar (fast-forward) e **quais arquivos vão conflitar**
+  (`git merge-tree`). Automático ou sempre com commit de merge
+- **Conflitos**: merge, cherry-pick e rebase que param em conflito não são erro — a tela vai para Mudanças e cada arquivo
+  em conflito abre o **editor**: a sua versão e a deles lado a lado (e como era antes, quando o git sabe), com **Meu /
+  Deles / Os dois / Os dois (deles primeiro) / Editar** por bloco, "todos os blocos" de um lado, ou o arquivo inteiro de um
+  lado; conflitos de exclusão e binários têm as opções próprias. **Marcar como resolvido** só libera sem marcadores.
+  A faixa do topo mostra **Continuar** e **Cancelar o merge/rebase/cherry-pick**. No rebase os rótulos se invertem
+  ("base" e "seu commit"), como o git
+- **Cherry-pick**: no Histórico, um commit que não está na branch atual tem **Trazer para a branch atual**
+- **Reorganizar (rebase interativo visual)**: os últimos N commits, do mais antigo ao mais novo; arraste (ou ↑/↓) para
+  reordenar e escolha **Manter / Mudar mensagem / Juntar ao de cima / Juntar sem a mensagem / Remover**. A prévia mostra
+  como a branch vai ficar; avisa quando mexe em commits já enviados e recusa intervalos com merges. Roda o `git rebase -i
+  --autostash` com o plano gravado pelo Devkit (sem abrir editor)
+- **Quero…**: receitas em linguagem comum — desfazer o último commit, mudar a mensagem, **commitei na branch errada** (move
+  os últimos commits para uma branch nova), **juntar meus últimos commits**, reorganizar, trazer um commit ou **um arquivo
+  de outra branch**, atualizar com a main, mesclar, descartar tudo, guardar para trocar de assunto, commitar só parte,
+  comparar branches, recuperar algo, resolver conflitos. Cada uma leva à aba, ao assistente ou à operação certa. Também na
+  palette: `Ctrl+Alt+Space` → "git juntar", "git branch errada"…
+
+Próxima fase (planejada): blame, "quando este texto apareceu", histórico de arquivo, bisect guiado, tags, limpeza de
+branches mescladas, `.gitignore`, insights e integração com palette/Notes.
 
 ## Início
 

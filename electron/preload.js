@@ -265,6 +265,14 @@ contextBridge.exposeInMainWorld('devkit', {
     backups: (repo) => ipcRenderer.invoke('git:backups', repo),
     exec: (repo, op) => ipcRenderer.invoke('git:exec', repo, op),
     restoreBackup: (repo, id) => ipcRenderer.invoke('git:restoreBackup', repo, id),
+    /** Antes de mesclar: commits que entram, avanço direto e arquivos que vão conflitar (sem mexer em nada). */
+    mergePreview: (repo, branch) => ipcRenderer.invoke('git:mergePreview', repo, branch),
+    /** Arquivo em conflito: { base, ours, theirs, merged, code, deletedBy, binary }. */
+    conflictFile: (repo, path) => ipcRenderer.invoke('git:conflictFile', repo, path),
+    /** Commits para reorganizar: { onto, ontoSubject, commits, hasMerges, pushed }. opts: { count } | { base } */
+    rebaseInfo: (repo, opts) => ipcRenderer.invoke('git:rebaseInfo', repo, opts),
+    /** Arquivos de uma revisão. */
+    files: (repo, ref) => ipcRenderer.invoke('git:files', repo, ref),
     onChanged: (cb) => {
       const h = (_e, evt) => cb(evt);
       ipcRenderer.on('git:changed', h);

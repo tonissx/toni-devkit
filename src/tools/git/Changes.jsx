@@ -3,6 +3,7 @@
 import { DS, isMod } from '../../lib/ds.js';
 import { gitApi, useRepoData, FilePath, KindBadge, OpButton, preview, RiskBadge } from './shared.jsx';
 import { GitDiff } from './GitDiff.jsx';
+import { ConflictEditor } from './Conflicts.jsx';
 
 const { Icon, Spinner, Checkbox } = DS;
 
@@ -39,7 +40,7 @@ function Section({ title, hint, files, area, actions, sel, ...rest }) {
   );
 }
 
-function CommitBox({ status, run, repo }) {
+function CommitBox({ status, run, repo, focus }) {
   const [msg, setMsg] = React.useState(() => { try { return localStorage.getItem('tk.git.draft:' + repo) || ''; } catch { return ''; } });
   const [amend, setAmend] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -55,12 +56,14 @@ function CommitBox({ status, run, repo }) {
     if (ok) { setMsg(''); setAmend(false); }
   };
   // Amend: traz a mensagem do último commit para editar.
-  const toggleAmend = async (on) => {
+  const toggleAmend = async (on, force) => {
     setAmend(on);
-    if (on && !msg.trim()) {
+    if (on && (force || !msg.trim())) {
       try { const [c] = await gitApi().log(repo, { limit: 1, ref: 'HEAD' }); if (c) { const d = await gitApi().commit(repo, c.hash); setMsg(d.message); } } catch { /* sem commit */ }
     }
   };
+  // Receita "mudar a mensagem do último commit": chega com { amend: true }.
+  React.useEffect(() => { if (focus && focus.amend && !status.unborn) toggleAmend(true, true); }, [focus && focus.nonce]);
   return (
     <div className="gt-commit">
       <textarea className="gt-commit__msg" value={msg} onChange={(e) => setMsg(e.target.value)} rows={3}
@@ -81,7 +84,7 @@ function CommitBox({ status, run, repo }) {
   );
 }
 
-export function Changes({ repo, status, run }) {
+export function Changes({ repo, status, run, focus }) {
   const [sel, setSel] = React.useState(null); // { area, path }
   const s = status;
   // Caminho terminado em "/" = pasta com outro repositório dentro (ex.: worktree): não dá para preparar nem excluir daqui.
@@ -93,8 +96,7 @@ export function Changes({ repo, status, run }) {
     const first = ['conflicts', 'unstaged', 'untracked', 'staged'].map((a) => all[a][0] && { area: a, path: all[a][0].path }).find(Boolean);
     setSel(first || null);
   }, [s]);
-  const diffArea = sel ? (sel.area === 'conflicts' ? 'unstaged' : sel.area) : null;
-  const diff = useRepoData(repo, (r) => (sel ? gitApi().diff(r, { area: diffArea, path: sel.path }) : null), [sel && sel.area, sel && sel.path, s]);
+  const diff = useRepoData(repo, (r) => (sel && sel.area !== 'conflicts' ? gitApi().diff(r, { area: sel.area, path: sel.path }) : null), [sel && sel.area, sel && sel.path, s]);
   const total = s.staged.length + s.unstaged.length + untracked.length + s.conflicts.length;
 
   return (
@@ -111,10 +113,10 @@ export function Changes({ repo, status, run }) {
             />
           ))}
         </div>
-        <CommitBox status={s} run={run} repo={repo} />
+        <CommitBox status={s} run={run} repo={repo} focus={focus} />
       </div>
       <div className="gt-changes__diff tk-scroll">
-        {sel ? (
+        {sel && sel.area === 'conflicts' ? <ConflictEditor repo={repo} path={sel.path} operation={s.operation} run={run} /> : sel ? (
           <>
             <div className="gt-diffhead"><FilePath path={sel.path} /><span className="gt-diffhead__area">{sel.path.endsWith('/') ? 'outro repositório' : { staged: 'preparado', unstaged: 'não preparado', untracked: 'arquivo novo', conflicts: 'em conflito' }[sel.area]}</span></div>
             {diff.data && diff.data.nested ? (

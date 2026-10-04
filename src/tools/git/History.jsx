@@ -77,9 +77,11 @@ function CommitDetail({ repo, hash, run, onPick }) {
           <input value={branch} onChange={(e) => setBranch(e.target.value.replace(/\s/g, '-'))} placeholder="nova-branch a partir daqui" aria-label="Nome da nova branch" />
           <OpButton op={{ op: 'branch.create', name: branch || 'x', from: c.hash }} run={() => validBranchName(branch) && run({ op: 'branch.create', name: branch, from: c.hash }).then((ok) => ok && setBranch(''))} disabled={!validBranchName(branch)}>Criar</OpButton>
         </form>
-        <button type="button" className={'gt-op is-ghost is-sm' + (advanced ? ' is-on' : '')} onClick={() => setAdvanced((v) => !v)}><Icon name="history" size={13} /><span>Voltar a branch para cá…</span></button>
+        {c.inHead
+          ? <button type="button" className={'gt-op is-ghost is-sm' + (advanced ? ' is-on' : '')} onClick={() => setAdvanced((v) => !v)}><Icon name="history" size={13} /><span>Voltar a branch para cá…</span></button>
+          : <OpButton op={{ op: 'cherry-pick', hashes: [c.hash] }} run={run} icon="cherry" variant="accent">Trazer para a branch atual</OpButton>}
       </div>
-      {advanced && (
+      {advanced && c.inHead && (
         <div className="gt-resetbox">
           <p>A branch atual passa a apontar para <code>{short(c.hash)}</code>. Os commits depois dele saem da branch (o Devkit guarda um ponto de volta). O que fazer com as mudanças deles?</p>
           <OpButton op={{ op: 'reset', to: c.hash, mode: 'soft' }} run={run} icon="package">Manter no stage (soft)</OpButton>

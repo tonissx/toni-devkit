@@ -187,6 +187,79 @@ test('validBranchName segue as regras do git', () => {
   for (const bad of ['', 'com espaço', '-x', 'a..b', 'a/', 'x.lock', 'a@{1}', '@', 'a//b', '.oculta', 'a/.b', 'a~1', 'a^', 'a:b', 'a?', 'a*', 'a[b', 'a\\b']) assert.ok(!O.validBranchName(bad), bad);
 });
 
+/* ─────────────── Fase 2: conflitos, rebase, receitas, novas operações ─────────────── */
+
+const C = require('../src/git/conflict.js');
+const RB = require('../src/git/rebase.js');
+const { RECIPES } = require('../src/git/recipes.js');
+
+test('parseConflicts/resolveConflicts: blocos, diff3, CRLF e escolhas', () => {
+  const text = ['a', '<<<<<<< HEAD', 'meu', '=======', 'deles', '>>>>>>> outra', 'b', '<<<<<<< HEAD', 'x', '||||||| base', 'orig', '=======', 'y1', 'y2', '>>>>>>> outra', 'c', ''].join('\r\n');
+  const p = C.parseConflicts(text);
+  assert.equal(p.eol, '\r\n');
+  assert.equal(C.conflictCount(p), 2);
+  assert.deepEqual(p.parts[1], { type: 'conflict', ours: ['meu'], base: null, theirs: ['deles'], oursLabel: 'HEAD', theirsLabel: 'outra' });
+  assert.deepEqual(p.parts[3].base, ['orig']);
+  assert.equal(C.resolveConflicts(p, ['ours', 'theirs']), ['a', 'meu', 'b', 'y1', 'y2', 'c', ''].join('\r\n'));
+  assert.equal(C.resolveConflicts(p, ['both', 'both-rev']), ['a', 'meu', 'deles', 'b', 'y1', 'y2', 'x', 'c', ''].join('\r\n'));
+  assert.equal(C.resolveConflicts(p, [{ text: 'feito à mão' }, { text: '' }]), ['a', 'feito à mão', 'b', 'c', ''].join('\r\n'));
+  // Sem escolha: os marcadores continuam (e hasMarkers acusa).
+  const kept = C.resolveConflicts(p, ['ours']);
+  assert.ok(C.hasMarkers(kept));
+  assert.ok(!C.hasMarkers(C.resolveConflicts(p, ['ours', 'theirs'])));
+  // "<<<<<<<" sem fim é texto comum.
+  const broken = C.parseConflicts('x\n<<<<<<< HEAD\ny\n');
+  assert.equal(C.conflictCount(broken), 0);
+  assert.equal(C.resolveConflicts(broken, []), 'x\n<<<<<<< HEAD\ny\n');
+});
+
+test('rebase: validação do plano, todo e prévia', () => {
+  const commits = [{ hash: 'a1', subject: 'primeiro' }, { hash: 'b2', subject: 'ajuste' }, { hash: 'c3', subject: 'terceiro' }];
+  const plan = [{ hash: 'a1', action: 'pick' }, { hash: 'b2', action: 'fixup' }, { hash: 'c3', action: 'reword', message: 'Terceiro, melhor' }];
+  assert.ok(RB.validatePlan(plan, commits));
+  assert.equal(RB.buildTodo(plan, (i) => `C:/r/.git/devkit/msg-${i}.txt`), 'pick a1\nfixup b2\npick c3\nexec git commit --amend -q --allow-empty -F "C:/r/.git/devkit/msg-2.txt"\n');
+  assert.deepEqual(RB.previewPlan(plan, { a1: commits[0], b2: commits[1], c3: commits[2] }), [
+    { subject: 'Terceiro, melhor', from: ['c3'], changed: true }, { subject: 'primeiro', from: ['a1', 'b2'], changed: false },
+  ]);
+  assert.throws(() => RB.validatePlan([{ hash: 'a1', action: 'squash' }, { hash: 'b2', action: 'pick' }, { hash: 'c3', action: 'pick' }], commits), /primeiro commit mantido/);
+  assert.throws(() => RB.validatePlan(plan.slice(0, 2), commits), /todos os commits/);
+  assert.throws(() => RB.validatePlan([...plan.slice(0, 2), { hash: 'zz', action: 'pick' }], commits), /não está no intervalo/);
+  assert.throws(() => RB.validatePlan(commits.map((c) => ({ hash: c.hash, action: 'drop' })), commits), /remove todos/);
+  assert.throws(() => RB.validatePlan([{ hash: 'a1', action: 'reword', message: ' ' }, plan[1], plan[2]], commits), /nova mensagem/);
+  assert.throws(() => RB.validatePlan([{ hash: 'a1', action: 'exec rm -rf' }, plan[1], plan[2]], commits), /Ação inválida/);
+});
+
+test('receitas: ids únicos e ações válidas', () => {
+  const ids = RECIPES.map((r) => r.id);
+  assert.equal(new Set(ids).size, ids.length);
+  const tabs = ['changes', 'history', 'branches', 'stash', 'time', 'rebase'];
+  for (const r of RECIPES) {
+    assert.ok(r.title && r.when && r.how && r.cmd, r.id);
+    const a = r.action;
+    assert.ok((a.tab && tabs.includes(a.tab)) || a.wizard || (a.op && O.buildOp(a.op)), r.id);
+  }
+});
+
+test('ops da fase 2', () => {
+  assert.deepEqual(O.buildOp({ op: 'merge', branch: 'main', mode: 'noff' }).args, ['merge', '--no-edit', '--no-ff', 'main']);
+  assert.equal(O.buildOp({ op: 'merge', branch: 'main' }).mayConflict, true);
+  assert.deepEqual(O.buildOp({ op: 'cherry-pick', hashes: ['abc1234', 'def5678'] }).args, ['cherry-pick', 'abc1234', 'def5678']);
+  assert.deepEqual(O.buildOp({ op: 'continue', operation: 'rebase' }).args, ['rebase', '--continue']);
+  assert.equal(O.buildOp({ op: 'abort', operation: 'merge' }).risk, 'discard');
+  const take = O.buildOp({ op: 'conflict.take', path: 'a.js', side: 'theirs' });
+  assert.deepEqual([take.args, take.then], [['checkout', '--theirs', '--', 'a.js'], [['add', '--', 'a.js']]]);
+  const save = O.buildOp({ op: 'conflict.save', path: 'a.js', content: 'x\n' });
+  assert.deepEqual(save.writeFile, { path: 'a.js', content: 'x\n' });
+  const mv = O.buildOp({ op: 'moveToNewBranch', name: 'feat/y', count: 2 });
+  assert.deepEqual([mv.args, mv.then, mv.risk], [['branch', 'feat/y'], [['reset', '--keep', 'HEAD~2']], 'rewrite']);
+  assert.deepEqual(O.buildOp({ op: 'file.fromBranch', branch: 'dev', path: 'src/a.js' }).args, ['restore', '--source', 'dev', '--staged', '--worktree', '--', 'src/a.js']);
+  assert.throws(() => O.buildOp({ op: 'continue', operation: 'push' }), /Nada para continuar/);
+  assert.throws(() => O.buildOp({ op: 'merge', branch: '--abort' }), /inválida/);
+  assert.throws(() => O.buildOp({ op: 'cherry-pick', hashes: ['-n'] }), /inválida/);
+  assert.throws(() => O.buildOp({ op: 'conflict.take', path: '../x', side: 'ours' }), /inválido/);
+  assert.throws(() => O.buildOp({ op: 'moveToNewBranch', name: 'x', count: 0 }), /Quantidade/);
+});
+
 /* ─────────────── serviço (repositórios temporários reais) ─────────────── */
 
 const { createGitService } = require('../electron/git/service.js');
@@ -458,5 +531,187 @@ test('serviço: repositório sem commits e visão geral', async () => {
     const sum = await t.svc.summaries();
     assert.equal(sum[0].branch, 'main');
     assert.equal(sum[0].changes, 0);
+  } finally { t.done(); }
+});
+
+/* ─────────────── serviço: fase 2 ─────────────── */
+
+/** main e outra mudam a mesma linha de config.txt; outra também cria novo.txt. */
+function forkRepo(root) {
+  const dir = makeRepo(root);
+  write(dir, 'config.txt', 'nome = x\nvalor = 1\nfim\n');
+  sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'config');
+  sh(dir, 'switch', '-q', '-c', 'outra');
+  write(dir, 'config.txt', 'nome = x\nvalor = 2\nfim\n');
+  write(dir, 'novo.txt', 'novo\n');
+  sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'outra muda valor');
+  sh(dir, 'switch', '-q', 'main');
+  write(dir, 'config.txt', 'nome = x\nvalor = 3\nfim\n');
+  sh(dir, 'commit', '-q', '-am', 'main muda valor');
+  return dir;
+}
+
+test('serviço: prévia de merge aponta o conflito sem mexer em nada', async () => {
+  const t = await setup();
+  try {
+    const dir = forkRepo(t.root);
+    const repo = await t.svc.add(dir);
+    const head = sh(dir, 'rev-parse', 'HEAD').trim();
+    const pv = await t.svc.mergePreview(repo, 'outra');
+    assert.equal(pv.ff, false);
+    assert.equal(pv.upToDate, false);
+    assert.deepEqual(pv.conflicts, ['config.txt']);
+    assert.deepEqual(pv.commits.map((c) => c.subject), ['outra muda valor']);
+    assert.deepEqual(pv.files.map((f) => f.path).sort(), ['config.txt', 'novo.txt']);
+    assert.equal(sh(dir, 'rev-parse', 'HEAD').trim(), head);
+    assert.equal((await t.svc.status(repo)).operation, null);
+    // Branch já contida: nada a fazer. Branch à frente: avanço direto.
+    sh(dir, 'branch', 'atras', 'HEAD~1');
+    assert.equal((await t.svc.mergePreview(repo, 'atras')).upToDate, true);
+    sh(dir, 'switch', '-q', '-c', 'frente'); sh(dir, 'commit', '-q', '--allow-empty', '-m', 'f'); sh(dir, 'switch', '-q', 'main');
+    const ff = await t.svc.mergePreview(repo, 'frente');
+    assert.equal(ff.ff, true);
+    assert.deepEqual(ff.conflicts, []);
+  } finally { t.done(); }
+});
+
+test('serviço: merge com conflito → resolver no editor → continuar', async () => {
+  const t = await setup();
+  try {
+    const dir = forkRepo(t.root);
+    const repo = await t.svc.add(dir);
+    const r = await t.svc.exec(repo, { op: 'merge', branch: 'outra' });
+    assert.equal(r.stopped, true);
+    assert.equal(r.conflicts, 1);
+    assert.equal(r.operation, 'merge');
+    assert.ok(r.backup);
+    const cf = await t.svc.conflictFile(repo, 'config.txt');
+    assert.equal(cf.code, 'UU');
+    assert.match(cf.ours, /valor = 3/);
+    assert.match(cf.theirs, /valor = 2/);
+    assert.match(cf.base, /valor = 1/);
+    const parsed = C.parseConflicts(cf.merged);
+    assert.equal(C.conflictCount(parsed), 1);
+    await t.svc.exec(repo, { op: 'conflict.save', path: 'config.txt', content: C.resolveConflicts(parsed, ['theirs']) });
+    let s = await t.svc.status(repo);
+    assert.equal(s.conflicts.length, 0);
+    assert.equal(s.operation, 'merge');
+    await t.svc.exec(repo, { op: 'continue', operation: 'merge' });
+    s = await t.svc.status(repo);
+    assert.equal(s.operation, null);
+    assert.equal(read(dir, 'config.txt').replace(/\r/g, ''), 'nome = x\nvalor = 2\nfim\n');
+    const [c] = await t.svc.log(repo, { limit: 1, ref: 'HEAD' });
+    assert.equal(c.parents.length, 2);
+  } finally { t.done(); }
+});
+
+test('serviço: merge com conflito → ficar com a minha versão, ou abortar', async () => {
+  const t = await setup();
+  try {
+    const dir = forkRepo(t.root);
+    const repo = await t.svc.add(dir);
+    await t.svc.exec(repo, { op: 'merge', branch: 'outra' });
+    await t.svc.exec(repo, { op: 'conflict.take', path: 'config.txt', side: 'ours' });
+    assert.equal((await t.svc.status(repo)).conflicts.length, 0);
+    assert.match(read(dir, 'config.txt'), /valor = 3/);
+    await t.svc.exec(repo, { op: 'abort', operation: 'merge' });
+    const s = await t.svc.status(repo);
+    assert.equal(s.operation, null);
+    assert.equal(existsSync(path.join(dir, 'novo.txt')), false);
+    // Merge que o git recusa (mudança local no arquivo) vira erro, não "parou em conflito".
+    write(dir, 'config.txt', 'mexido\n');
+    await assert.rejects(t.svc.exec(repo, { op: 'merge', branch: 'outra' }), /overwritten|would be/);
+  } finally { t.done(); }
+});
+
+test('serviço: cherry-pick e commit fora da branch atual', async () => {
+  const t = await setup();
+  try {
+    const dir = forkRepo(t.root);
+    const repo = await t.svc.add(dir);
+    sh(dir, 'switch', '-q', 'outra');
+    write(dir, 'fix.txt', 'correção\n');
+    sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'correção importante');
+    const fix = sh(dir, 'rev-parse', 'HEAD').trim();
+    sh(dir, 'switch', '-q', 'main');
+    assert.equal((await t.svc.commit(repo, fix)).inHead, false);
+    const r = await t.svc.exec(repo, { op: 'cherry-pick', hashes: [fix] });
+    assert.ok(!r.stopped);
+    assert.equal(read(dir, 'fix.txt'), 'correção\n');
+    assert.equal((await t.svc.log(repo, { limit: 1, ref: 'HEAD' }))[0].subject, 'correção importante');
+    // Commit que já está na branch atual.
+    assert.equal((await t.svc.commit(repo, sh(dir, 'rev-parse', 'HEAD~1').trim())).inHead, true);
+  } finally { t.done(); }
+});
+
+test('serviço: rebase interativo com plano — juntar, reescrever, remover, reordenar', async () => {
+  const t = await setup();
+  try {
+    const dir = makeRepo(t.root);
+    const repo = await t.svc.add(dir);
+    for (const [f, m] of [['1.txt', 'um'], ['2.txt', 'ajuste do um'], ['3.txt', 'tres'], ['4.txt', 'lixo']]) {
+      write(dir, f, f + '\n'); sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', m);
+    }
+    const info = await t.svc.rebaseInfo(repo, { count: 4 });
+    assert.deepEqual(info.commits.map((c) => c.subject), ['um', 'ajuste do um', 'tres', 'lixo']);
+    assert.equal(info.ontoSubject, 'inicial');
+    assert.equal(info.hasMerges, false);
+    const [um, aj, tres, lixo] = info.commits.map((c) => c.hash);
+    const plan = [
+      { hash: tres, action: 'reword', message: 'Três (reescrito)' },
+      { hash: um, action: 'pick' },
+      { hash: aj, action: 'fixup' },
+      { hash: lixo, action: 'drop' },
+    ];
+    const r = await t.svc.exec(repo, { op: 'rebase.plan', onto: info.onto, plan });
+    assert.ok(!r.stopped);
+    assert.ok(r.backup);
+    assert.deepEqual((await t.svc.log(repo, { ref: 'HEAD' })).map((c) => c.subject), ['um', 'Três (reescrito)', 'inicial']);
+    assert.equal(existsSync(path.join(dir, '4.txt')), false);
+    assert.equal(existsSync(path.join(dir, '2.txt')), true);
+    // Desfazer volta tudo.
+    await t.svc.restoreBackup(repo, r.backup);
+    assert.deepEqual((await t.svc.log(repo, { ref: 'HEAD' })).map((c) => c.subject), ['lixo', 'tres', 'ajuste do um', 'um', 'inicial']);
+    // Plano inválido não roda.
+    await assert.rejects(t.svc.exec(repo, { op: 'rebase.plan', onto: info.onto, plan: plan.slice(0, 2) }), /todos os commits/);
+  } finally { t.done(); }
+});
+
+test('serviço: rebase que para em conflito e é abortado', async () => {
+  const t = await setup();
+  try {
+    const dir = makeRepo(t.root);
+    const repo = await t.svc.add(dir);
+    write(dir, 'a.txt', 'A\n'); sh(dir, 'commit', '-q', '-am', 'A');
+    write(dir, 'a.txt', 'B\n'); sh(dir, 'commit', '-q', '-am', 'B');
+    const info = await t.svc.rebaseInfo(repo, { count: 2 });
+    const [a, b] = info.commits.map((c) => c.hash);
+    const r = await t.svc.exec(repo, { op: 'rebase.plan', onto: info.onto, plan: [{ hash: b, action: 'pick' }, { hash: a, action: 'pick' }] });
+    assert.equal(r.stopped, true);
+    assert.equal(r.operation, 'rebase');
+    await t.svc.exec(repo, { op: 'abort', operation: 'rebase' });
+    assert.equal((await t.svc.status(repo)).operation, null);
+    assert.deepEqual((await t.svc.log(repo, { ref: 'HEAD' })).map((c) => c.subject), ['B', 'A', 'inicial']);
+  } finally { t.done(); }
+});
+
+test('serviço: mover commits para branch nova, trazer arquivo de outra branch, descartar tudo', async () => {
+  const t = await setup();
+  try {
+    const dir = forkRepo(t.root);
+    const repo = await t.svc.add(dir);
+    write(dir, 'w.txt', 'w\n'); sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'devia estar noutra branch');
+    write(dir, 'pendente.txt', 'fica\n');
+    await t.svc.exec(repo, { op: 'moveToNewBranch', name: 'feat/w', count: 1 });
+    assert.equal((await t.svc.log(repo, { limit: 1, ref: 'HEAD' }))[0].subject, 'main muda valor');
+    assert.equal((await t.svc.log(repo, { limit: 1, ref: 'feat/w' }))[0].subject, 'devia estar noutra branch');
+    assert.equal(read(dir, 'pendente.txt'), 'fica\n');
+    assert.deepEqual((await t.svc.files(repo, 'outra')).sort(), ['a.txt', 'config.txt', 'novo.txt']);
+    await t.svc.exec(repo, { op: 'file.fromBranch', branch: 'outra', path: 'config.txt' });
+    assert.match(read(dir, 'config.txt'), /valor = 2/);
+    assert.deepEqual((await t.svc.status(repo)).staged.map((f) => f.path), ['config.txt']);
+    await t.svc.exec(repo, { op: 'discardAll' });
+    assert.match(read(dir, 'config.txt'), /valor = 3/);
+    assert.equal(existsSync(path.join(dir, 'pendente.txt')), true); // arquivos novos ficam
   } finally { t.done(); }
 });

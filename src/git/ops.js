@@ -140,6 +140,86 @@ const OPS = {
     args: ['reset', '--soft', 'HEAD~1'], risk: 'rewrite', backup: true, title: 'Desfazer o último commit',
     explain: 'Tira o último commit da branch, mas mantém as mudanças dele no stage — prontas para ajustar e commitar de novo.',
   }),
+  /* ─────────────── Fase 2: merge, cherry-pick, conflitos, rebase, receitas ─────────────── */
+
+  merge: ({ branch: b, mode = 'auto' }) => {
+    need(['auto', 'noff', 'ffonly'].includes(mode), 'Modo de merge inválido');
+    return {
+      args: ['merge', '--no-edit', ...(mode === 'noff' ? ['--no-ff'] : mode === 'ffonly' ? ['--ff-only'] : []), rev(b, 'Branch')],
+      risk: 'safe', backup: true, mayConflict: true, title: `Mesclar ${b} na branch atual`,
+      explain: `Traz para a branch atual tudo o que ${b} tem e ela não tem.${mode === 'noff' ? ' Sempre cria um commit de merge, mesmo quando daria para só avançar.' : mode === 'ffonly' ? ' Só se der para só avançar (sem commit de merge).' : ' Se der, só avança a branch; senão, cria um commit de merge.'} Se houver conflito, o git para e você resolve arquivo por arquivo.`,
+    };
+  },
+  'cherry-pick': ({ hashes }) => {
+    need(Array.isArray(hashes) && hashes.length > 0 && hashes.length <= 100, 'Escolha os commits');
+    return {
+      args: ['cherry-pick', ...hashes.map((h) => rev(h, 'Commit'))], risk: 'safe', backup: true, mayConflict: true,
+      title: hashes.length === 1 ? 'Trazer este commit (cherry-pick)' : `Trazer ${hashes.length} commits (cherry-pick)`,
+      explain: 'Copia as mudanças desse(s) commit(s) para a branch atual, como commit(s) novo(s). A branch de origem não muda.',
+    };
+  },
+  continue: ({ operation }) => {
+    need(['merge', 'rebase', 'cherry-pick', 'revert'].includes(operation), 'Nada para continuar');
+    return {
+      args: [operation, '--continue'], risk: 'safe', mayConflict: true, title: `Continuar o ${operation}`,
+      explain: operation === 'merge' ? 'Cria o commit de merge com os conflitos já resolvidos.' : `Grava o passo atual com os conflitos resolvidos e segue o ${operation} — pode parar de novo se o próximo passo também conflitar.`,
+    };
+  },
+  abort: ({ operation }) => {
+    need(['merge', 'rebase', 'cherry-pick', 'revert'].includes(operation), 'Nada para cancelar');
+    return {
+      args: [operation, '--abort'], risk: 'discard', title: `Cancelar o ${operation}`,
+      explain: `Desiste do ${operation} e volta o repositório exatamente ao estado de antes de ele começar. O que você já resolveu nos conflitos é perdido.`,
+    };
+  },
+  'conflict.take': ({ path: p, side }) => {
+    need(side === 'ours' || side === 'theirs', 'Lado inválido');
+    return {
+      args: ['checkout', '--' + side, '--', ...paths([p])], then: [['add', '--', p]], risk: 'safe',
+      title: side === 'ours' ? 'Ficar com a minha versão' : 'Ficar com a versão deles',
+      explain: `Resolve o conflito usando o arquivo inteiro ${side === 'ours' ? 'da branch em que você está' : 'que está entrando'} e marca como resolvido.`,
+      display: `git checkout --${side} -- ${p} && git add -- ${p}`,
+    };
+  },
+  'conflict.save': ({ path: p, content }) => {
+    need(typeof content === 'string' && content.length < 50e6, 'Conteúdo inválido');
+    return {
+      args: ['add', '--', ...paths([p])], writeFile: { path: p, content }, risk: 'safe', title: 'Marcar como resolvido',
+      explain: 'Grava o arquivo como ficou na tela e marca o conflito como resolvido (git add).',
+    };
+  },
+  'conflict.delete': ({ path: p }) => ({
+    args: ['rm', '-q', '--', ...paths([p])], risk: 'safe', title: 'Resolver excluindo o arquivo',
+    explain: 'Um lado excluiu o arquivo e o outro mudou. Isto aceita a exclusão.',
+  }),
+  'rebase.plan': ({ onto, plan }) => {
+    need(Array.isArray(plan) && plan.length > 0 && plan.length <= 200, 'Plano vazio');
+    return {
+      args: ['rebase', '-i', '--autostash', rev(onto, 'Base')], plan, risk: 'rewrite', backup: true, mayConflict: true,
+      title: 'Reorganizar commits (rebase interativo)',
+      explain: 'Refaz os commits na ordem e do jeito que você montou (juntando, removendo, mudando mensagens). Os commits viram outros (hashes novos) — se já foram enviados (push), evite.',
+      display: `git rebase -i ${onto}  (com o plano montado na tela)`,
+    };
+  },
+  moveToNewBranch: ({ name, count }) => {
+    need(Number.isInteger(count) && count > 0 && count <= 100, 'Quantidade inválida');
+    return {
+      args: ['branch', branch(name)], then: [['reset', '--keep', `HEAD~${count}`]], risk: 'rewrite', backup: true,
+      title: `Mover ${count} commit${count === 1 ? '' : 's'} para a branch ${name}`,
+      explain: `Cria a branch “${name}” com os últimos ${count} commit(s) e tira esses commits da branch atual. As mudanças não commitadas ficam onde estão.`,
+      display: `git branch ${name} && git reset --keep HEAD~${count}`,
+    };
+  },
+  'file.fromBranch': ({ branch: b, path: p }) => ({
+    args: ['restore', '--source', rev(b, 'Branch'), '--staged', '--worktree', '--', ...paths([p])], risk: 'discard', backup: true,
+    title: `Trazer ${p} de ${b}`,
+    explain: `Substitui o arquivo pela versão que está em ${b} (já preparado para o commit). O Devkit guarda um ponto de volta antes.`,
+  }),
+  discardAll: () => ({
+    args: ['reset', '--hard', 'HEAD'], risk: 'discard', backup: true, title: 'Descartar tudo e voltar ao último commit',
+    explain: 'Joga fora todas as mudanças dos arquivos acompanhados pelo git (arquivos novos ficam). O Devkit guarda um ponto de volta antes.',
+  }),
+
   reset: ({ to, mode }) => {
     need(['soft', 'mixed', 'hard'].includes(mode), 'Modo inválido');
     return {

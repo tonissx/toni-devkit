@@ -33,6 +33,7 @@ const { DEFAULT_XML_OPTIONS } = require('../tools/xml-formatter/defaults.js');
 const { formatXml } = require('../tools/xml-formatter/engine.js');
 const { needsValue, shortUrl } = require('../links/link.js');
 const { kindOf, summary, primaryIndex, isDbLike } = require('../vault/entry.js');
+const { RECIPES } = require('../git/recipes.js');
 
 const CATEGORIES = [
   { id: 'tools', name: 'Tools', key: 't', icon: 'wrench', description: 'Abrir uma ferramenta do Devkit' },
@@ -445,7 +446,19 @@ function vaultCommands(list) {
   return out;
 }
 
-const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands];
+/* ─────────────── Git: receitas "Quero…" ─────────────── */
+// Abrem a ferramenta Git no último repositório já com a receita começada (ver src/tools/git/Recipes.jsx).
+const gitCommands = RECIPES.map((r) => ({
+  id: 'git:recipe:' + r.id,
+  name: 'Git: ' + r.title,
+  description: r.when,
+  category: 'actions',
+  icon: r.icon,
+  keywords: ['git', 'quero', ...(r.keywords || [])],
+  run: (ctx) => ctx.openApp('git', { tab: 'recipes', recipe: r.id }),
+}));
+
+const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands, ...gitCommands];
 
 const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : id === 'vault' ? 'Vault' : id === 'links' ? 'Link' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
 

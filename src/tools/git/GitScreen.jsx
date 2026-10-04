@@ -5,15 +5,20 @@
 import { DS } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { RISK_LABEL } from '../../git/ops.js';
-import { gitApi, useRepoData, errText, preview, RiskBadge } from './shared.jsx';
+import { gitApi, useRepoData, errText, preview, RiskBadge, OpButton } from './shared.jsx';
 import { Overview } from './Overview.jsx';
 import { Changes } from './Changes.jsx';
 import { History } from './History.jsx';
 import { Branches } from './Branches.jsx';
 import { Stash } from './Stash.jsx';
 import { TimeMachine } from './TimeMachine.jsx';
+import { Rebase } from './Rebase.jsx';
+import { Recipes } from './Recipes.jsx';
+import { MergeModal } from './Merge.jsx';
 
 const { Icon, Spinner, Tabs, Modal, Button, EmptyState, Checkbox } = DS;
+
+const PANELS = { overview: Overview, changes: Changes, history: History, branches: Branches, stash: Stash, rebase: Rebase, time: TimeMachine, recipes: Recipes };
 
 /* ─────────────── Repositórios ─────────────── */
 
@@ -81,6 +86,22 @@ function RepoRail({ repos, current, onOpen, onAddDone, toast }) {
   );
 }
 
+/** Um erro numa aba não derruba o Devkit: mostra a mensagem e deixa tentar de novo. */
+class TabBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidUpdate(prev) { if (prev.resetKey !== this.props.resetKey && this.state.error) this.setState({ error: null }); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="gt-msg is-error">
+        Algo deu errado nesta aba: {String(this.state.error.message || this.state.error)}
+        <button type="button" className="gt-op is-ghost is-sm" onClick={() => this.setState({ error: null })}><span>Tentar de novo</span></button>
+      </div>
+    );
+  }
+}
+
 /* ─────────────── Confirmação e última ação ─────────────── */
 
 function ConfirmModal({ c, onClose }) {
@@ -112,6 +133,7 @@ function LastAction({ last, onUndo, onClose }) {
       {last.display && <code className="gt-last-bar__cmd" title="Copiar" onClick={() => window.devkit.clipboard.write(last.display)}>{last.display}</code>}
       {last.error && <span className="gt-last-bar__err">{last.error}</span>}
       {last.message && <span>{last.message}</span>}
+      {last.stopped && <span className="gt-last-bar__stop">{last.stopped}</span>}
       <span className="gt-last-bar__spacer" />
       {last.explain && <button type="button" className="gt-op is-ghost is-sm" onClick={() => setWhy((v) => !v)}><Icon name="circle-help" size={13} /><span>O que isso fez?</span></button>}
       {last.backup && <button type="button" className="gt-op is-accent is-sm" onClick={() => onUndo(last.backup)}><Icon name="undo-2" size={13} /><span>Desfazer</span></button>}
@@ -130,7 +152,8 @@ export function GitScreen({ toast, request }) {
   const [ui, setUi] = usePersisted('git.ui', { tab: 'overview', repo: null });
   const [last, setLast] = React.useState(null);
   const [confirm, setConfirm] = React.useState(null);
-  const [focus, setFocus] = React.useState(null); // { hash, nonce } para o Histórico
+  const [focus, setFocus] = React.useState(null); // pedido para a aba aberta: { hash } · { amend } · { squash } · { recipe } + nonce
+  const [merging, setMerging] = React.useState(null); // branch sendo mesclada (painel com prévia)
   const repo = repos && repos.some((r) => r.path === ui.repo) ? ui.repo : repos && repos[0] ? repos[0].path : null;
 
   const loadRepos = React.useCallback(() => api.summaries().then(setRepos, () => setRepos([])), []);
@@ -143,23 +166,33 @@ export function GitScreen({ toast, request }) {
   }, []);
   React.useEffect(() => { if (repo) api.open(repo).catch(() => {}); setLast(null); }, [repo]);
   // Pedido de fora (Início, palette): repositório e/ou aba.
-  React.useEffect(() => { if (request) setUi((u) => ({ ...u, ...(request.tab ? { tab: request.tab } : {}), ...(request.repo ? { repo: request.repo } : {}) })); }, [request && request.nonce]);
+  React.useEffect(() => {
+    if (!request) return;
+    setUi((u) => ({ ...u, ...(request.tab ? { tab: request.tab } : {}), ...(request.repo ? { repo: request.repo } : {}) }));
+    if (request.recipe) setFocus({ recipe: request.recipe, nonce: Date.now() });
+  }, [request && request.nonce]);
 
   const status = useRepoData(repo, (r) => api.status(r));
   const s = status.data && status.data.path === repo ? status.data : null;
 
-  const go = (tab, opts) => { setUi((u) => ({ ...u, tab })); if (opts && opts.hash) setFocus({ hash: opts.hash, nonce: Date.now() }); };
+  const go = (tab, opts) => { setUi((u) => ({ ...u, tab })); if (opts) setFocus({ ...opts, nonce: Date.now() }); };
 
   /** Executa uma operação: confirma se arriscada, roda, registra o resultado. Resolve true se deu certo. */
-  const run = React.useCallback(async (op) => {
+  const run = React.useCallback(async (op, opts = {}) => {
     const p = preview(op, { unborn: s && s.unborn });
     if (p.error) { toast('Não dá para fazer isso', p.error, 'error'); return false; }
-    if (p.risk !== 'safe') {
+    if (p.risk !== 'safe' && !opts.confirmed) {
       const ok = await new Promise((resolve) => setConfirm({ p, resolve }));
       if (!ok) return false;
     }
     try {
       const r = await api.exec(repo, op);
+      if (r.stopped) {
+        // Parou em conflito: não é erro — leva para Mudanças, onde está o editor de conflitos.
+        setLast({ title: r.title, display: r.display, risk: r.risk, explain: p.explain, backup: r.backup, stopped: `O ${r.operation || 'git'} parou: ${r.conflicts} arquivo(s) em conflito. Resolva em Mudanças e use Continuar — ou Cancelar para voltar como estava.` });
+        setUi((u) => ({ ...u, tab: 'changes' }));
+        return true;
+      }
       setLast({ title: r.title, display: r.display, risk: r.risk, explain: p.explain, backup: r.backup });
       return true;
     } catch (e) {
@@ -187,9 +220,12 @@ export function GitScreen({ toast, request }) {
     { value: 'history', label: 'Histórico', icon: 'git-commit-horizontal' },
     { value: 'branches', label: 'Branches', icon: 'git-branch' },
     { value: 'stash', label: 'Stash', icon: 'archive', count: counts.stash || undefined },
+    { value: 'rebase', label: 'Reorganizar', icon: 'list-ordered' },
     { value: 'time', label: 'Máquina do tempo', icon: 'life-buoy' },
+    { value: 'recipes', label: 'Quero…', icon: 'sparkles' },
   ];
-  const props = { repo, status: s, run, go, undo, focus };
+  const props = { repo, status: s, run, go, undo, focus, openMerge: setMerging };
+  const Panel = PANELS[ui.tab] || Overview;
 
   return (
     <div className="gt">
@@ -224,25 +260,25 @@ export function GitScreen({ toast, request }) {
               {s && s.operation && (
                 <div className="gt-opalert">
                   <Icon name="triangle-alert" size={14} />
-                  <span>Há um <b>{s.operation}</b> em andamento neste repositório. {s.conflicts.length ? `${s.conflicts.length} arquivo(s) em conflito — resolva em Mudanças.` : ''}</span>
-                  <code title="Copiar" onClick={() => window.devkit.clipboard.write(`git ${s.operation} --abort`)}>git {s.operation} --abort</code>
+                  <span>Há um <b>{s.operation}</b> em andamento. {s.conflicts.length ? `${s.conflicts.length} arquivo(s) em conflito — resolva em Mudanças e depois continue.` : 'Conflitos resolvidos — é só continuar.'}</span>
+                  {s.operation !== 'bisect' && <>
+                    {!s.conflicts.length && <OpButton op={{ op: 'continue', operation: s.operation }} run={run} icon="play" variant="accent">Continuar</OpButton>}
+                    {s.conflicts.length > 0 && ui.tab !== 'changes' && <button type="button" className="gt-op is-accent is-sm" onClick={() => go('changes')}><Icon name="file-diff" size={13} /><span>Resolver</span></button>}
+                    <OpButton op={{ op: 'abort', operation: s.operation }} run={run} icon="x" variant="danger">Cancelar o {s.operation}</OpButton>
+                  </>}
                 </div>
               )}
               <Tabs items={tabs} value={ui.tab} onChange={(tab) => setUi((u) => ({ ...u, tab }))} className="gt-tabs" />
               <div className="gt-body">
                 {status.error && !s ? <div className="gt-msg is-error">{status.error}</div>
                   : !s ? <div className="gt-msg"><Spinner size={14} /> Lendo o repositório…</div>
-                    : ui.tab === 'changes' ? <Changes {...props} />
-                      : ui.tab === 'history' ? <History {...props} />
-                        : ui.tab === 'branches' ? <Branches {...props} />
-                          : ui.tab === 'stash' ? <Stash {...props} />
-                            : ui.tab === 'time' ? <TimeMachine {...props} />
-                              : <Overview {...props} />}
+                    : <TabBoundary resetKey={repo + ':' + ui.tab}><Panel {...props} /></TabBoundary>}
               </div>
               <LastAction last={last} onUndo={undo} onClose={() => setLast(null)} />
             </>
           )}
       </div>
+      {merging && s && <MergeModal repo={repo} branch={merging} current={s.branch.head || 'HEAD'} run={run} onClose={() => setMerging(null)} />}
       {confirm && <ConfirmModal c={confirm} onClose={(ok) => { confirm.resolve(ok); setConfirm(null); }} />}
     </div>
   );
