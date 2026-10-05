@@ -223,6 +223,16 @@ export function GitScreen({ toast, request }) {
       setLast({ title: 'Desfeito', message: r.message, risk: 'safe' });
     } catch (e) { setLast({ title: 'Não foi possível desfazer', error: errText(e) }); }
   };
+  // Fetch/pull/push demoram (rede): trava os botões de rede enquanto uma está em andamento.
+  const [netBusy, setNetBusy] = React.useState(null);
+  const net = React.useCallback(async (op) => {
+    setNetBusy(op.op);
+    try { return await run(op); } finally { setNetBusy(null); }
+  }, [run]);
+
+  // Sem upstream: "Publicar branch" cria a branch no remoto (push -u). Sem remoto nenhum, não há o que enviar.
+  const pushOp = s && (s.branch.upstream ? { op: 'push' } : s.remote && s.branch.head ? { op: 'push', setUpstream: true, remote: s.remote, branch: s.branch.head } : null);
+  const pushWhy = !s ? '' : netBusy ? 'Aguarde a operação em andamento' : !pushOp ? 'Este repositório não tem remoto — adicione um com git remote add' : s.branch.behind > 0 ? 'O remoto tem commits novos: receba antes de enviar' : '';
 
   if (ver && !ver.available) {
     return <EmptyState title="Git não encontrado" animate="none"
@@ -265,11 +275,27 @@ export function GitScreen({ toast, request }) {
                       <Icon name="git-branch" size={12} /> {s.branch.detached ? `HEAD solto em ${String(s.branch.oid).slice(0, 7)}` : s.branch.head}
                     </button>
                   )}
-                  {s && s.branch.upstream && (s.branch.ahead || s.branch.behind) ? (
-                    <span className="gt-hint" title={`Comparado com ${s.branch.upstream} como estava no último fetch`}>{s.branch.ahead ? `↑${s.branch.ahead} para enviar` : ''} {s.branch.behind ? `↓${s.branch.behind} para receber` : ''}</span>
-                  ) : null}
                 </div>
                 <div className="gt-head__actions">
+                  {s && (
+                    <div className="gt-sync">
+                      <OpButton op={{ op: 'fetch' }} run={net} icon="refresh-cw" disabled={!!netBusy} className={netBusy === 'fetch' ? 'is-busy' : ''}>Buscar</OpButton>
+                      {!s.branch.detached && (
+                        <>
+                          <OpButton op={{ op: 'pull' }} run={net} icon="arrow-down-to-line" disabled={!!netBusy || !s.branch.upstream}
+                            className={(s.branch.behind ? 'is-pending ' : '') + (netBusy === 'pull' ? 'is-busy' : '')}>{s.branch.behind ? `Receber ↓${s.branch.behind}` : 'Receber'}</OpButton>
+                          <OpButton op={pushOp} run={net} icon="arrow-up-from-line" disabled={!!netBusy || !pushOp || s.branch.behind > 0} reason={pushWhy}
+                            className={(s.branch.ahead || !s.branch.upstream ? 'is-pending ' : '') + (netBusy === 'push' ? 'is-busy' : '')}>{s.branch.ahead ? `Enviar ↑${s.branch.ahead}` : s.branch.upstream ? 'Enviar' : 'Publicar branch'}</OpButton>
+                          {s.branch.upstream && s.branch.ahead > 0 && s.branch.behind > 0 && (
+                            <>
+                              <OpButton op={{ op: 'pull', mode: 'merge' }} run={net} icon="git-merge" disabled={!!netBusy}>Receber com merge</OpButton>
+                              <OpButton op={{ op: 'push', force: true }} run={net} icon="triangle-alert" variant="danger" disabled={!!netBusy}>Enviar à força</OpButton>
+                            </>
+                          )}
+                        </>
+                      )}
+                                          </div>
+                  )}
                   <button type="button" className="gt-op is-ghost is-sm" title="Abrir no Explorer" onClick={() => api.openIn(repo, 'explorer')}><Icon name="folder-open" size={14} /></button>
                   <button type="button" className="gt-op is-ghost is-sm" title="Abrir no VS Code" onClick={() => api.openIn(repo, 'vscode')}><Icon name="code" size={14} /></button>
                   <button type="button" className="gt-op is-ghost is-sm" title="Abrir um terminal na pasta" onClick={() => api.openIn(repo, 'terminal')}><Icon name="terminal" size={14} /></button>

@@ -59,6 +59,10 @@
 .gt-head__title { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; color: var(--tk-accent-text); }
 .gt-head__title b { font: 600 16px var(--tk-font-sans); color: var(--tk-text); }
 .gt-head__actions { display: flex; gap: 2px; }
+.gt-sync { display: flex; align-items: center; gap: 2px; margin-right: 6px; padding-right: 6px; border-right: 1px solid var(--tk-border); }
+.gt-sync .gt-op.is-pending { color: var(--tk-text-1); font-weight: 600; }
+.gt-sync .gt-op.is-busy svg { animation: gt-spin 1s linear infinite; }
+@keyframes gt-spin { to { transform: rotate(360deg); } }
 .gt-branchchip { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--tk-accent) 35%, transparent);
   border-radius: var(--tk-radius-pill); background: color-mix(in srgb, var(--tk-accent) 10%, transparent); color: var(--tk-accent-text); font: 500 12px var(--tk-font-mono); cursor: pointer; }
 .gt-opalert { display: flex; align-items: center; gap: 8px; margin: 4px 20px; padding: 8px 12px; border-radius: var(--tk-radius-md); background: color-mix(in srgb, var(--tk-amber) 12%, transparent); color: var(--tk-amber); font-size: 12.5px; }
