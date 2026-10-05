@@ -916,6 +916,25 @@ test('serviço: branch recém-criada na ponta da base é "mesclada" mas sem comm
   } finally { t.done(); }
 });
 
+test('serviço: branch com commits já mesclada por merge commit continua "mesclada"', async () => {
+  const t = await setup();
+  try {
+    const dir = bugRepo(t.root);
+    const repo = await t.svc.add(dir);
+    sh(dir, 'checkout', '-q', '-b', 'feat/pr');
+    write(dir, 'pr.txt', 'trabalho\n');
+    sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'feat: trabalho');
+    sh(dir, 'checkout', '-q', 'main');
+    sh(dir, 'merge', '-q', '--no-ff', 'feat/pr', '-m', 'Merge pull request #1913');
+    sh(dir, 'branch', 'vazia');
+    const br = (await t.svc.branches(repo)).branches;
+    const pr = br.find((x) => x.name === 'feat/pr');
+    assert.equal(pr.merged, true);
+    assert.equal(pr.noOwnCommits, false);
+    assert.equal(br.find((x) => x.name === 'vazia').noOwnCommits, true);
+  } finally { t.done(); }
+});
+
 test('serviço: branch em uso por worktree — exclusão parcial, desfazer sem duplicar, remover worktree', async () => {
   const t = await setup();
   try {
