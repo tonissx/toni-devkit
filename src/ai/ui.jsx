@@ -30,8 +30,8 @@ export function useAiMode() {
 /**
  * Executa uma tarefa da IA. start(gather): gather() → entrada (pode ser async). Na Nuvem, pede confirmação até a
  * pessoa dispensar. Callbacks opcionais: onStart(), onChunk(pedaço), onDone(resultado), onFail(mensagem).
- * → { st, busy, start, cancel, close, confirm, toggleReq, cfg }
- *   st: null | { phase: 'confirm'|'busy'|'done'|'error', req, input, text, data, ms, model, error, showReq }
+ * → { st, busy, start, cancel, close, confirm, toggleReq, toggleCollapsed, cfg }
+ *   st: null | { phase: 'confirm'|'busy'|'done'|'error', req, input, text, data, ms, model, error, showReq, collapsed }
  */
 export function useAiTask(task, cfg, callbacks = {}) {
   const [st, setSt] = React.useState(null);
@@ -81,6 +81,7 @@ export function useAiTask(task, cfg, callbacks = {}) {
   const cancel = () => { if (reqId.current) api().cancel(reqId.current); };
   const close = () => { cancel(); setSt(null); };
   const toggleReq = () => setSt((s) => (s ? { ...s, showReq: !s.showReq } : s));
+  const toggleCollapsed = () => setSt((s) => (s ? { ...s, collapsed: !s.collapsed } : s));
   const busy = !!st && st.phase === 'busy';
   React.useEffect(() => {
     if (!busy) return undefined;
@@ -88,7 +89,7 @@ export function useAiTask(task, cfg, callbacks = {}) {
     window.addEventListener('keydown', h, true);
     return () => window.removeEventListener('keydown', h, true);
   }, [busy]);
-  return { st, busy, start, cancel, close, confirm, toggleReq, cfg };
+  return { st, busy, start, cancel, close, confirm, toggleReq, toggleCollapsed, cfg };
 }
 
 /** Markdown da resposta (HTML cru escapado pelo renderMarkdown). onLink(título) para os [[links]]. */
@@ -129,24 +130,31 @@ export function AiPanel({ ai, body = 'markdown', actions = [], extraLinks = [], 
   const { req } = st;
   const dest = aiDest(ai.cfg);
   const icon = st.phase === 'error' ? 'circle-alert' : ai.cfg && ai.cfg.mode === 'local' ? 'cpu' : 'cloud';
-  const showBody = (st.phase === 'busy' || st.phase === 'done') && body !== 'none';
+  // Recolhido: só a linha de status (a resposta continua guardada; expandir mostra de novo). A confirmação não recolhe.
+  const folded = !!st.collapsed && st.phase !== 'confirm';
+  const showBody = !folded && (st.phase === 'busy' || st.phase === 'done') && body !== 'none';
   return (
-    <div className={'ai-panel is-' + st.phase + ' ' + className}>
+    <div className={'ai-panel is-' + st.phase + (folded ? ' is-folded' : '') + ' ' + className}>
       <div className="ai-panel__line">
         <Icon name={icon} size={13} />
-        <span className="ai-panel__text">
+        <span className="ai-panel__text" onClick={st.phase !== 'confirm' ? ai.toggleCollapsed : undefined} title={st.phase !== 'confirm' ? (folded ? 'Expandir a resposta' : 'Recolher a resposta') : undefined}>
           {st.phase === 'confirm' && <>Enviar para a <b>{dest}</b>?{req && req.files ? ` Vão ${req.files.length} arquivo${req.files.length === 1 ? '' : 's'} do diff${req.omitted && req.omitted.length ? ` (${req.omitted.length} só pelo nome)` : ''}.` : ''} Confira em “Ver o que é enviado”.</>}
           {st.phase === 'busy' && <>{req ? req.label : 'Gerando'} com {dest}… <span className="ai-panel__muted">Esc para parar</span></>}
           {st.phase === 'done' && <>{req ? req.label : 'Pronto'} · {st.model} · {secs(st.ms)} <span className="ai-panel__muted">— revise antes de usar</span></>}
           {st.phase === 'error' && st.error}
         </span>
-        {req && <button type="button" className="ai-panel__link" onClick={ai.toggleReq}>{st.showReq ? 'Ocultar pedido' : 'Ver o que é enviado'}</button>}
-        {st.phase === 'done' && extraLinks.map((l) => <button key={l.label} type="button" className="ai-panel__link" onClick={l.onClick}>{l.label}</button>)}
+        {req && !folded && <button type="button" className="ai-panel__link" onClick={ai.toggleReq}>{st.showReq ? 'Ocultar pedido' : 'Ver o que é enviado'}</button>}
+        {st.phase === 'done' && !folded && extraLinks.map((l) => <button key={l.label} type="button" className="ai-panel__link" onClick={l.onClick}>{l.label}</button>)}
+        {st.phase !== 'confirm' && (
+          <button type="button" className="ai-panel__x" title={folded ? 'Expandir' : 'Recolher'} aria-expanded={!folded} onClick={ai.toggleCollapsed}>
+            <Icon name={folded ? 'chevron-down' : 'chevron-up'} size={13} />
+          </button>
+        )}
         {st.phase === 'busy'
           ? <button type="button" className="ai-panel__link" onClick={ai.cancel}>Parar</button>
           : st.phase !== 'confirm' && <button type="button" className="ai-panel__x" title="Fechar" onClick={ai.close}><Icon name="x" size={12} /></button>}
       </div>
-      {req && req.cloudHint && ai.cfg && ai.cfg.mode === 'local' && st.phase !== 'error' && (
+      {!folded && req && req.cloudHint && ai.cfg && ai.cfg.mode === 'local' && st.phase !== 'error' && (
         <div className="ai-panel__hint"><Icon name="info" size={12} /> O modelo local pode errar nesta tarefa; a Nuvem (Claude) vai melhor. Revise com cuidado.</div>
       )}
       {st.phase === 'confirm' && (
@@ -161,7 +169,7 @@ export function AiPanel({ ai, body = 'markdown', actions = [], extraLinks = [], 
           {typeof body === 'function' ? body(st) : st.text ? <AiMarkdown text={st.text} onLink={onLink} resolve={resolve} /> : <span className="ai-panel__muted"><Spinner size={11} /> pensando…</span>}
         </div>
       )}
-      {st.phase === 'done' && actions.some((a) => !a.hidden) && (
+      {!folded && st.phase === 'done' && actions.some((a) => !a.hidden) && (
         <div className="ai-panel__actions">
           {actions.filter((a) => !a.hidden).map((a) => (
             <button key={a.label} type="button" className={'ai-act' + (a.primary ? ' is-primary' : '')} disabled={a.disabled} onClick={a.onClick}>
@@ -170,7 +178,7 @@ export function AiPanel({ ai, body = 'markdown', actions = [], extraLinks = [], 
           ))}
         </div>
       )}
-      {req && st.showReq && (
+      {!folded && req && st.showReq && (
         <div className="ai-panel__req tk-scroll">
           <div className="ai-panel__reqhead">Destino: {dest}{req.truncated ? ' · conteúdo cortado no limite de tamanho' : ''}</div>
           <div className="ai-panel__reqlabel">Instruções (system)</div>

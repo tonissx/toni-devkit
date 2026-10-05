@@ -65,3 +65,8 @@
 .pl-ai__cmd:hover, .pl-ai__cmd:focus-visible { background: var(--tk-surface-3, var(--tk-surface-2)); outline: 0; }
 .pl-ai__cmd span { flex: 1; }
 .pl-ai__cmd svg { color: var(--tk-text-3); }
+
+/* Recolher/expandir: clicar na linha de status também alterna */
+.ai-panel__text { cursor: pointer; }
+.ai-panel.is-confirm .ai-panel__text { cursor: default; }
+.ai-panel.is-folded { gap: 0; }
