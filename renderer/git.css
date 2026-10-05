@@ -573,28 +573,8 @@
 .gt-rhythm__hours { padding-left: 37px; grid-template-columns: repeat(24, 15px); font-size: 10px; color: var(--tk-text-3); }
 .gt-rhythm__day { font-size: 11px; color: var(--tk-text-3); }
 
-/* ── IA: "Sugerir mensagem" ── */
+/* ── IA: "Sugerir mensagem" (o botão e o painel vêm de renderer/ai.css) ── */
 
-.gt-ai__btn.is-on { border-color: var(--tk-accent); }
-.gt-ai { display: flex; flex-direction: column; gap: 6px; padding: 7px 9px; border: 1px solid var(--tk-border); border-left: 2px solid var(--tk-accent); border-radius: var(--tk-radius-sm); background: var(--tk-surface); font-size: 11.5px; color: var(--tk-text-2); }
-.gt-ai.is-error { border-left-color: var(--tk-red); color: var(--tk-red); }
-.gt-ai__line { display: flex; align-items: center; gap: 7px; min-width: 0; }
-.gt-ai__line > svg { flex-shrink: 0; color: var(--tk-accent); }
-.gt-ai.is-error .gt-ai__line > svg { color: var(--tk-red); }
-.gt-ai__text { flex: 1; min-width: 0; line-height: 1.45; }
-.gt-ai__text b { color: var(--tk-text); font-weight: 600; }
-.gt-ai__muted { color: var(--tk-text-3); }
-.gt-ai__link { flex-shrink: 0; border: 0; background: none; padding: 0; color: var(--tk-accent); font: inherit; cursor: pointer; }
-.gt-ai__link:hover { text-decoration: underline; }
-.gt-ai__x { flex-shrink: 0; display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 4px; background: none; color: var(--tk-text-3); cursor: pointer; }
-.gt-ai__x:hover { background: var(--tk-surface-2); color: var(--tk-text); }
-.gt-ai__actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.gt-ai__req { max-height: 220px; overflow: auto; padding: 6px 8px; border-radius: 4px; background: var(--tk-surface-input); color: var(--tk-text-2); }
-.gt-ai__req pre { margin: 2px 0 8px; white-space: pre-wrap; word-break: break-word; font: 11px/1.45 var(--tk-font-mono); }
-.gt-ai__reqhead { font-weight: 600; color: var(--tk-text); margin-bottom: 4px; }
-.gt-ai__reqlabel { font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--tk-text-3); }
 .gt-commit__msgwrap { position: relative; display: flex; flex-direction: column; }
 .gt-commit__msg.has-ai { padding-bottom: 28px; }
-.gt-ai__btn { position: absolute; right: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border: 1px solid var(--tk-border); border-radius: 11px; background: var(--tk-surface-2); color: var(--tk-accent); font: 500 11px var(--tk-font-sans, inherit); cursor: pointer; }
-.gt-ai__btn:hover:not(:disabled) { border-color: var(--tk-accent); }
-.gt-ai__btn:disabled { opacity: .45; cursor: default; }
+.gt-commit__ai { position: absolute; right: 6px; bottom: 6px; height: 22px; }

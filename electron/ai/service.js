@@ -7,7 +7,7 @@
  * Também faz a instalação guiada do Ollama no Windows: baixa o instalador oficial (endereço fixo), confere a
  * assinatura digital (tem de ser da Ollama) e só então executa; depois baixa o modelo pela API do próprio Ollama.
  * Configuração em %APPDATA%\Toni Devkit\ai.json (modo, modelos, id da entrada do Vault — nunca a chave).
- * Os prompts (o que é enviado) estão em src/ai/prompts.js; a tela mostra o mesmo texto antes de enviar.
+ * Os prompts (o que é enviado) estão em src/ai/tasks.js; a tela mostra o mesmo texto antes de enviar.
  */
 const fs = require('node:fs/promises');
 const fss = require('node:fs');
@@ -15,7 +15,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFile, spawn: nodeSpawn } = require('node:child_process');
 const { atomicWrite } = require('../lib/fsx');
-const { prepareDiff, commitMessagePrompt, cleanCommitMessage, CLOUD_MODELS, validModelName, pullProgress } = require('../../src/ai/prompts.js');
+const { CLOUD_MODELS, validModelName, pullProgress } = require('../../src/ai/prompts.js');
+const { TASKS } = require('../../src/ai/tasks.js');
 
 const OLLAMA_INSTALLER_URL = 'https://ollama.com/download/OllamaSetup.exe';
 const DEFAULTS = { mode: 'off', endpoint: 'http://127.0.0.1:11434', localModel: 'qwen2.5-coder:3b', cloudModel: CLOUD_MODELS[0].id, vaultEntryId: null };
@@ -157,10 +158,10 @@ function createAiService({ file, getApiKey = async () => null, fetch: f = global
     return { ok: true };
   }
 
-  async function localChat({ system, user }, onChunk, signal) {
+  async function localChat({ system, user, maxTokens }, onChunk, signal) {
     const res = await ollama('/api/chat', {
       method: 'POST', signal,
-      body: JSON.stringify({ model: config.localModel, stream: true, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], options: { temperature: 0.2, num_ctx: 8192 } }),
+      body: JSON.stringify({ model: config.localModel, stream: true, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], options: { temperature: 0.2, num_ctx: 8192, num_predict: maxTokens || 1024 } }),
     });
     let text = '';
     let error = null;
@@ -176,14 +177,14 @@ function createAiService({ file, getApiKey = async () => null, fetch: f = global
 
   /* ─────────────── Claude ─────────────── */
 
-  async function cloudChat({ system, user }, onChunk, signal) {
+  async function cloudChat({ system, user, maxTokens }, onChunk, signal) {
     const key = await getApiKey(config.vaultEntryId);
     if (!key) throw new Error('Escolha nas Configurações a entrada do Vault com a chave da API (e desbloqueie o cofre)');
     const Sdk = Anthropic || require('@anthropic-ai/sdk').default;
     const client = new Sdk({ apiKey: key, maxRetries: 1, timeout: 60e3 });
     // Fallback no servidor: se o modelo recusar por política, a própria API refaz com outro modelo adequado.
     const stream = client.beta.messages.stream({
-      model: config.cloudModel, max_tokens: 1024,
+      model: config.cloudModel, max_tokens: maxTokens || 1024,
       betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
       ...(config.cloudModel === 'claude-haiku-4-5' ? {} : { output_config: { effort: 'low' } }),
       system, messages: [{ role: 'user', content: user }],
@@ -209,27 +210,28 @@ function createAiService({ file, getApiKey = async () => null, fetch: f = global
 
   /* ─────────────── Tarefas ─────────────── */
 
-  /** O que será enviado (system + user) e para onde — a tela mostra isto antes. */
+  /** O que será enviado (system + user) — a tela mostra isto antes. Tarefas em src/ai/tasks.js. */
   function buildRequest(task, input = {}) {
-    if (task !== 'commitMessage') throw new Error('Tarefa desconhecida');
-    const d = prepareDiff(input.diff);
-    if (!d.files.length) throw new Error('Nada preparado para o commit');
-    return { ...commitMessagePrompt({ diff: d.text, recent: input.recent, branch: input.branch }), files: d.files, omitted: d.omitted, truncated: d.truncated };
+    const t = Object.prototype.hasOwnProperty.call(TASKS, task) && TASKS[task];
+    if (!t) throw new Error('Tarefa desconhecida');
+    return { ...t.build(input || {}), task, label: t.label, maxTokens: t.maxTokens, cloudHint: !!t.cloudHint };
   }
 
   /**
    * Executa uma tarefa. onChunk(texto) a cada pedaço (para escrever aos poucos na tela).
-   * → { text, provider, model, ms }
+   * → { text, data, provider, model, ms } — data é a resposta interpretada (quando a tarefa tem parse).
    */
   async function generate(requestId, task, input, onChunk = () => {}) {
     if (config.mode === 'off') throw new Error('A IA está desligada (Configurações → IA)');
     const req = buildRequest(task, input);
+    const t = TASKS[task];
     const ctrl = new AbortController();
     running.set(requestId, ctrl);
     const t0 = Date.now();
     try {
       const raw = config.mode === 'local' ? await localChat(req, onChunk, ctrl.signal) : await cloudChat(req, onChunk, ctrl.signal);
-      return { text: task === 'commitMessage' ? cleanCommitMessage(raw) : raw, provider: config.mode, model: config.mode === 'local' ? config.localModel : config.cloudModel, ms: Date.now() - t0 };
+      const text = t.clean ? t.clean(raw) : raw;
+      return { text, data: t.parse ? t.parse(text, input || {}) : null, provider: config.mode, model: config.mode === 'local' ? config.localModel : config.cloudModel, ms: Date.now() - t0 };
     } catch (e) {
       if (ctrl.signal.aborted) throw new Error('Cancelado');
       throw e;

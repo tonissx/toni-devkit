@@ -637,7 +637,13 @@ function initAi() {
 
 ipcMain.handle('ai:status', async () => { await aiReady; return ai.status(); });
 ipcMain.handle('ai:config', async () => { await aiReady; return ai.getConfig(); });
-ipcMain.handle('ai:setConfig', async (_e, patch) => { await aiReady; return ai.setConfig(patch && typeof patch === 'object' ? patch : {}); });
+// Mudou a configuração: avisa todas as janelas (a palette e as stickies são outras janelas).
+ipcMain.handle('ai:setConfig', async (_e, patch) => {
+  await aiReady;
+  const cfg = await ai.setConfig(patch && typeof patch === 'object' ? patch : {});
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('ai:changed', cfg);
+  return cfg;
+});
 ipcMain.handle('ai:buildRequest', async (_e, task, input) => { await aiReady; return ai.buildRequest(task, input); });
 // Progresso e pedaços de texto vão só para a janela que pediu.
 ipcMain.handle('ai:installOllama', async (e) => { await aiReady; return ai.installOllama((p) => e.sender.send('ai:progress', { kind: 'install', ...p })); });

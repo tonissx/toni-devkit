@@ -309,6 +309,7 @@ contextBridge.exposeInMainWorld('devkit', {
     cancel: (requestId) => ipcRenderer.invoke('ai:cancel', requestId),
     onProgress: (cb) => { const h = (_e, p) => cb(p); ipcRenderer.on('ai:progress', h); return () => ipcRenderer.removeListener('ai:progress', h); },
     onChunk: (cb) => { const h = (_e, p) => cb(p); ipcRenderer.on('ai:chunk', h); return () => ipcRenderer.removeListener('ai:chunk', h); },
+    onChanged: (cb) => { const h = (_e, c) => cb(c); ipcRenderer.on('ai:changed', h); return () => ipcRenderer.removeListener('ai:changed', h); },
   },
   /** Atualização automática (ver electron/updater/service.js). */
   updater: {
