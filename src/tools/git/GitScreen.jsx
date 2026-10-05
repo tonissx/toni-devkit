@@ -39,7 +39,7 @@ function AddModal({ found, onClose, onAdd }) {
   );
 }
 
-function RepoRail({ repos, current, onOpen, onAddDone, toast }) {
+function RepoRail({ repos, current, onOpen, onAddDone, onRemove, toast }) {
   const [busy, setBusy] = React.useState(false);
   const [found, setFound] = React.useState(null);
   const api = gitApi();
@@ -68,15 +68,18 @@ function RepoRail({ repos, current, onOpen, onAddDone, toast }) {
       </div>
       <div className="gt-rail__list tk-scroll">
         {repos && repos.map((r) => (
-          <button type="button" key={r.path} className={'gt-repo' + (r.path === current ? ' is-sel' : '')} onClick={() => onOpen(r.path)} title={r.path}>
-            <Icon name="folder-git-2" size={15} />
-            <span className="gt-repo__main">
-              <span className="gt-repo__name">{r.name}</span>
-              <span className="gt-repo__branch">{r.error ? <span className="gt-err">{r.error}</span> : <><Icon name="git-branch" size={10} /> {r.detached ? 'HEAD solto' : r.branch || '—'}{r.operation ? ` · ${r.operation} em andamento` : ''}</>}</span>
-            </span>
-            {r.conflicts > 0 ? <span className="gt-repo__badge is-conf" title="Arquivos em conflito">{r.conflicts}</span>
-              : r.changes > 0 ? <span className="gt-repo__badge" title="Mudanças pendentes">{r.changes}</span> : null}
-          </button>
+          <div key={r.path} className="gt-repo-wrap">
+            <button type="button" className={'gt-repo' + (r.path === current ? ' is-sel' : '')} onClick={() => onOpen(r.path)} title={r.path}>
+              <Icon name="folder-git-2" size={15} />
+              <span className="gt-repo__main">
+                <span className="gt-repo__name">{r.name}</span>
+                <span className="gt-repo__branch">{r.error ? <span className="gt-err">{r.error}</span> : <><Icon name="git-branch" size={10} /> {r.detached ? 'HEAD solto' : r.branch || '—'}{r.operation ? ` · ${r.operation} em andamento` : ''}</>}</span>
+              </span>
+              {r.conflicts > 0 ? <span className="gt-repo__badge is-conf" title="Arquivos em conflito">{r.conflicts}</span>
+                : r.changes > 0 ? <span className="gt-repo__badge" title="Mudanças pendentes">{r.changes}</span> : null}
+            </button>
+            <button type="button" className="gt-repo__rm" title="Remover da lista (não apaga nada do disco)" aria-label={`Remover ${r.name} da lista`} onClick={() => onRemove(r)}><Icon name="x" size={13} /></button>
+          </div>
         ))}
         {repos && !repos.length && <div className="gt-msg">Nenhum repositório ainda.</div>}
       </div>
@@ -160,6 +163,14 @@ export function GitScreen({ toast, request }) {
   const repo = repos && repos.some((r) => r.path === ui.repo) ? ui.repo : repos && repos[0] ? repos[0].path : null;
 
   const loadRepos = React.useCallback(() => api.summaries().then(setRepos, () => setRepos([])), []);
+  const removeRepo = async (r) => {
+    try {
+      await api.remove(r.path);
+      setUi((u) => (u.repo === r.path ? { ...u, repo: null } : u));
+      loadRepos();
+      toast('Removido da lista', `${r.name} — nada foi apagado do disco. Dá para adicionar de novo quando quiser.`);
+    } catch (e) { toast('Não foi possível remover', errText(e), 'error'); }
+  };
   React.useEffect(() => {
     api.version().then(setVer);
     loadRepos();
@@ -237,7 +248,7 @@ export function GitScreen({ toast, request }) {
 
   return (
     <div className="gt">
-      <RepoRail repos={repos} current={repo} onOpen={(p) => setUi((u) => ({ ...u, repo: p }))} onAddDone={(p) => { setUi((u) => ({ ...u, repo: p, tab: 'overview' })); loadRepos(); }} toast={toast} />
+      <RepoRail repos={repos} current={repo} onOpen={(p) => setUi((u) => ({ ...u, repo: p }))} onAddDone={(p) => { setUi((u) => ({ ...u, repo: p, tab: 'overview' })); loadRepos(); }} onRemove={removeRepo} toast={toast} />
       <div className="gt-main">
         {!repos ? <div className="gt-msg"><Spinner size={14} /> Carregando…</div>
           : !repo ? (
@@ -262,7 +273,7 @@ export function GitScreen({ toast, request }) {
                   <button type="button" className="gt-op is-ghost is-sm" title="Abrir no Explorer" onClick={() => api.openIn(repo, 'explorer')}><Icon name="folder-open" size={14} /></button>
                   <button type="button" className="gt-op is-ghost is-sm" title="Abrir no VS Code" onClick={() => api.openIn(repo, 'vscode')}><Icon name="code" size={14} /></button>
                   <button type="button" className="gt-op is-ghost is-sm" title="Abrir um terminal na pasta" onClick={() => api.openIn(repo, 'terminal')}><Icon name="terminal" size={14} /></button>
-                  <button type="button" className="gt-op is-ghost is-sm" title="Tirar da lista (não apaga nada do disco)" onClick={() => api.remove(repo).then(loadRepos)}><Icon name="x" size={14} /></button>
+                  <button type="button" className="gt-op is-ghost is-sm" title="Remover da lista (não apaga nada do disco)" onClick={() => removeRepo(repos.find((r) => r.path === repo))}><Icon name="x" size={14} /><span>Remover</span></button>
                 </div>
               </header>
               {s && s.operation && (

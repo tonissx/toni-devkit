@@ -291,8 +291,10 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     const base = ['main', 'master', 'develop'].find((b) => list.some((x) => x.name === b)) || (list.find((x) => x.current) || list[0] || {}).name || null;
     const merged = base ? new Set((await git(repo, ['branch', '--format=%(refname:short)', '--merged', base])).stdout.split('\n').filter(Boolean)) : new Set();
     // Branch aberta noutro worktree: o git não deixa excluir nem trocar para ela daqui.
-    const inWorktree = new Map((await worktreeList(await repoOf(repo))).filter((w) => !w.main && w.branch).map((w) => [w.branch, w.path]));
-    for (const b of list) b.worktree = inWorktree.get(b.name) || null;
+    const wts = (await worktrees(repo)).filter((w) => w.branch);
+    const inWorktree = new Map(wts.map((w) => [w.branch, w.path]));
+    const dirtyWt = new Map(wts.map((w) => [w.branch, w.dirty || 0]));
+    for (const b of list) { b.worktree = inWorktree.get(b.name) || null; b.worktreeDirty = dirtyWt.get(b.name) || 0; }
     await Promise.all(list.map(async (b) => {
       b.merged = b.name !== base && merged.has(b.name);
       // Outras branches que já têm todos os commits desta (excluí-la não perde nada, mesmo sem merge na base).
@@ -300,6 +302,8 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       if (!base || b.name === base) return;
       const c = (await git(repo, ['rev-list', '--left-right', '--count', `${base}...${b.name}`])).stdout.trim().split(/\s+/);
       b.baseBehind = +c[0]; b.baseAhead = +c[1];
+      // "mesclada" (--merged) só olha commits: branch sem commit próprio também cai aí, mesmo com trabalho ainda não commitado.
+      b.noOwnCommits = b.baseAhead === 0;
     }));
     return { base, branches: list };
   }

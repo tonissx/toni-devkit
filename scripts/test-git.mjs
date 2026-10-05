@@ -899,6 +899,23 @@ test('parseWorktrees', () => {
   ]);
 });
 
+test('serviço: branch recém-criada na ponta da base é "mesclada" mas sem commits próprios', async () => {
+  const t = await setup();
+  try {
+    const dir = bugRepo(t.root);
+    const repo = await t.svc.add(dir);
+    sh(dir, 'checkout', '-q', '-b', 'feat/nova');
+    write(dir, 'novo.txt', 'trabalho não commitado\n');
+    let b = (await t.svc.branches(repo)).branches.find((x) => x.name === 'feat/nova');
+    assert.equal(b.merged, true);
+    assert.equal(b.noOwnCommits, true);
+    sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'trabalho');
+    b = (await t.svc.branches(repo)).branches.find((x) => x.name === 'feat/nova');
+    assert.equal(b.merged, false);
+    assert.equal(b.noOwnCommits, false);
+  } finally { t.done(); }
+});
+
 test('serviço: branch em uso por worktree — exclusão parcial, desfazer sem duplicar, remover worktree', async () => {
   const t = await setup();
   try {
