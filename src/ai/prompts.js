@@ -69,10 +69,7 @@ function cleanCommitMessage(text) {
   return t.replace(/\n{3,}/g, '\n\n');
 }
 
-/**
- * Modelos sugeridos para o modo Local (Ollama), do mais leve ao melhor.
- * O primeiro é o padrão: roda bem só na CPU (testado num Ryzen 5 5600G sem placa de vídeo, ~1-2 s por sugestão).
- */
+/** Modelos sugeridos para o modo Local (Ollama), do mais leve ao melhor. */
 const LOCAL_MODELS = [
   { id: 'qwen2.5-coder:3b', label: 'Leve — Qwen2.5 Coder 3B', size: '~1,9 GB', note: 'rápido mesmo sem placa de vídeo' },
   { id: 'qwen2.5-coder:7b', label: 'Melhor — Qwen2.5 Coder 7B', size: '~4,7 GB', note: 'mais preciso, mais lento na CPU' },
