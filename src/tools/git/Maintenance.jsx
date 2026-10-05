@@ -139,7 +139,9 @@ function Worktrees({ repo, run }) {
               <b>{w.name}{w.branch ? <span className="gt-mono"> · {w.branch}</span> : ' · HEAD solto'}</b>
               <small>{w.path}{!w.exists ? ' · a pasta não existe mais' : w.dirty ? ` · ${w.dirty} mudança(s) não commitada(s)` : ' · sem mudanças'}{w.locked ? ' · travado' : ''}</small>
             </span>
-            {w.exists && <OpButton op={{ op: 'worktree.remove', path: w.path }} run={run} disabled={w.dirty > 0 || w.locked} icon="trash-2" variant="danger">Remover</OpButton>}
+            {w.exists && (w.dirty > 0
+              ? <OpButton op={{ op: 'worktree.removeForce', path: w.path }} run={run} disabled={w.locked} icon="trash-2" variant="danger">Remover mesmo assim</OpButton>
+              : <OpButton op={{ op: 'worktree.remove', path: w.path }} run={run} disabled={w.locked} icon="trash-2" variant="danger">Remover</OpButton>)}
           </div>
         ))}
       </div>

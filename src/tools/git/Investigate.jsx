@@ -1,6 +1,7 @@
 // Git — Investigar: quem mudou cada linha (blame), quando um texto apareceu ou sumiu (git log -S/-G), o histórico de
 // um arquivo, e o bisect guiado para achar o commit que introduziu um bug.
 import { DS } from '../../lib/ds.js';
+import { usePersisted } from '../../lib/store.js';
 import { normalize } from '../../commands/search.js';
 import { gitApi, useRepoData, ago, fullDate, short, FilePath, OpButton, laneColor } from './shared.jsx';
 import { GitDiff } from './GitDiff.jsx';
@@ -13,6 +14,42 @@ const MODES = [
   { value: 'file', label: 'Histórico de um arquivo' },
   { value: 'bisect', label: 'Achar o commit de um bug' },
 ];
+
+const SIDE_MIN = 220, SIDE_MAX = 900, SIDE_DEFAULT = 320;
+
+/** Coluna lateral com largura ajustável (arrastar a borda, setas no teclado, duplo clique volta ao padrão); a largura fica guardada. */
+function ResizableSide({ children }) {
+  const [width, setWidth] = usePersisted('git.inv.sideWidth', SIDE_DEFAULT);
+  const ref = React.useRef(null);
+  const clamp = (w) => {
+    // Nunca deixa a coluna comer a área principal: no máximo 70% do espaço disponível.
+    const room = ref.current && ref.current.parentElement ? ref.current.parentElement.clientWidth * 0.7 : SIDE_MAX;
+    return Math.round(Math.max(SIDE_MIN, Math.min(SIDE_MAX, room, w)));
+  };
+  const w = Number.isFinite(width) ? width : SIDE_DEFAULT;
+  const onDown = (e) => {
+    e.preventDefault();
+    const x0 = e.clientX, w0 = ref.current.getBoundingClientRect().width;
+    const move = (ev) => setWidth(clamp(w0 + ev.clientX - x0));
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); document.body.classList.remove('gt-resizing'); };
+    document.body.classList.add('gt-resizing');
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  const onKey = (e) => {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); setWidth(clamp(w - 24)); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); setWidth(clamp(w + 24)); }
+    else if (e.key === 'Home') { e.preventDefault(); setWidth(SIDE_MIN); }
+    else if (e.key === 'End') { e.preventDefault(); setWidth(clamp(SIDE_MAX)); }
+  };
+  return (
+    <aside className="gt-inv__side" ref={ref} style={{ width: w }}>
+      {children}
+      <div className="gt-inv__grip" role="separator" aria-orientation="vertical" aria-label="Largura da lista de arquivos" aria-valuenow={w} aria-valuemin={SIDE_MIN} aria-valuemax={SIDE_MAX}
+        tabIndex={0} title="Arraste para alargar ou estreitar · duplo clique restaura" onPointerDown={onDown} onKeyDown={onKey} onDoubleClick={() => setWidth(SIDE_DEFAULT)} />
+    </aside>
+  );
+}
 
 /** Escolher um arquivo do repositório (os versionados em HEAD), filtrando por texto. */
 function FilePicker({ repo, value, onPick }) {
@@ -39,7 +76,7 @@ function Blame({ repo, go }) {
   const colorOf = React.useMemo(() => { const m = new Map(); return (h) => { if (!m.has(h)) m.set(h, m.size); return laneColor(m.get(h)); }; }, [b]);
   return (
     <div className="gt-inv">
-      <aside className="gt-inv__side"><FilePicker repo={repo} value={file} onPick={setFile} /></aside>
+      <ResizableSide><FilePicker repo={repo} value={file} onPick={setFile} /></ResizableSide>
       <section className="gt-inv__main tk-scroll">
         {!file && <div className="gt-msg"><Icon name="info" size={14} /> Escolha um arquivo para ver quem escreveu cada linha e em qual commit.</div>}
         {error && <div className="gt-msg is-error">{error}</div>}
@@ -114,7 +151,7 @@ function FileHistory({ repo, go }) {
   const diff = useRepoData(repo, (r) => (sel ? gitApi().diff(r, { area: 'commit', hash: sel, path: file }) : null), [sel, file]);
   return (
     <div className="gt-inv">
-      <aside className="gt-inv__side"><FilePicker repo={repo} value={file} onPick={(f) => { setFile(f); setSel(null); }} /></aside>
+      <ResizableSide><FilePicker repo={repo} value={file} onPick={(f) => { setFile(f); setSel(null); }} /></ResizableSide>
       <section className="gt-inv__main tk-scroll">
         {!file && <div className="gt-msg"><Icon name="info" size={14} /> Escolha um arquivo para ver todas as versões dele (segue renomeações).</div>}
         {file && !commits && <div className="gt-msg"><Spinner size={14} /></div>}

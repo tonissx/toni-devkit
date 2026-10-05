@@ -276,6 +276,14 @@ const OPS = {
       explain: 'Apaga a pasta desse worktree (uma segunda cópia de trabalho do repositório). Os commits e a branch continuam; depois a branch pode ser excluída. O git recusa se a pasta tiver mudanças não commitadas.',
     };
   },
+  'worktree.removeForce': ({ path: p }) => {
+    need(typeof p === 'string' && p.length > 0 && p.length < 1024 && !p.startsWith('-') && !/[\0\r\n]/.test(p), 'Worktree inválido');
+    return {
+      args: ['worktree', 'remove', '--force', p], risk: 'discard', backup: true, backupWorktree: p, worktreePath: p, title: 'Remover o worktree descartando as mudanças',
+      explain: 'Apaga a pasta desse worktree mesmo com mudanças não commitadas (inclusive arquivos novos). O Devkit guarda tudo isso num stash de segurança antes — desfazer traz de volta como stash. Arquivos ignorados pelo git não entram. Os commits e a branch continuam.',
+      display: 'git worktree remove --force  (depois de guardar as mudanças)',
+    };
+  },
   'worktree.prune': () => ({
     args: ['worktree', 'prune'], risk: 'safe', title: 'Esquecer worktrees apagados',
     explain: 'Remove do registro do git os worktrees cuja pasta não existe mais.',
