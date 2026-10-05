@@ -2,6 +2,8 @@ import { DS, mod, isMod } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { DEFAULT_SQL_OPTIONS } from './defaults.js';
 import { emit } from '../../lib/events.js';
+import { useAiMode } from '../../ai/ui.jsx';
+import { SqlAssist } from './SqlAssist.jsx';
 
 const {
   PageHeader, SplitView, CodeEditor, SegmentedControl, Select, Toggle, Button,
@@ -55,6 +57,7 @@ export function SqlFormatter({ toast }) {
   const [out, setOut] = React.useState({ text: '', ms: 0, error: null, busy: false, jsConcat: null });
   const reqId = React.useRef(0);
   const set = (k) => (v) => setOpts((o) => ({ ...o, [k]: v }));
+  const cfg = useAiMode();
 
   // Aquece o motor (Pyodide + sqlparse) e descobre a versão.
   React.useEffect(() => {
@@ -178,6 +181,7 @@ export function SqlFormatter({ toast }) {
             Aspas e operadores <code>+</code> removidos; {out.jsConcat.vars.length} variável(is) declarada(s) no topo com <code>DECLARE</code> e referenciada(s) como {out.jsConcat.vars.map((v) => '@' + v).join(', ')}
           </Alert>
         )}
+        <SqlAssist sql={input} cfg={cfg} setSql={setInput} />
         <div className="sqlf__split">
           <SplitView
             leftTitle={draft.file ? 'Entrada · ' + draft.file : 'Entrada'}

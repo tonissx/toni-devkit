@@ -63,6 +63,28 @@ function guessPrefix(description, prefixes) {
   return prefixes.find((p) => /^(feat|feature)$/.test(p)) || prefixes[0] || 'feat';
 }
 
+/** Nomes declarados (interface/type/class), na ordem. */
+const declNames = (code) => [...String(code || '').matchAll(/\b(?:interface|type|class)\s+([A-Za-z_]\w*)/g)].map((m) => m[1]);
+
+/**
+ * Renomeia os tipos do código original com os nomes que o modelo deu (pareados pela ordem das declarações).
+ * Devolve null se não der para parear com segurança (contagem diferente, nome inválido ou repetido).
+ */
+function renameTypes(original, suggested) {
+  const from = declNames(original), to = declNames(suggested);
+  if (!from.length || from.length !== to.length || new Set(to).size !== to.length) return null;
+  const map = new Map(from.map((n, k) => [n, to[k]]).filter(([a, b]) => a !== b));
+  if (!map.size) return null;
+  const re = new RegExp(`\\b(${[...map.keys()].join('|')})\\b`, 'g');
+  // Só onde o nome é TIPO: fora de aspas ("Root" como chave fica), e não como nome de propriedade — em TS a chave vem
+  // antes de ":" / "?:"; em C# o nome da propriedade vem antes de "{ get".
+  const swap = (part) => part.replace(re, (m, _g, at, all) => (/^\s*\??:|^\s*\{\s*get\b/.test(all.slice(at + m.length)) ? m : map.get(m)));
+  let out = String(original).split(/("(?:[^"\\]|\\.)*")/).map((part, k) => (k % 2 ? part : swap(part))).join('');
+  // C#: membro com o mesmo nome da classe não compila — a propriedade ganha "Value" (como o gerador já faz).
+  out = out.replace(/public class (\w+)\s*\{[\s\S]*?\n\}/g, (block, cls) => block.replace(new RegExp(`(public [\\w<>?,\\s]+? )${cls}( \\{ get)`, 'g'), `$1${cls}Value$2`));
+  return out;
+}
+
 /** Prefixos usados nas branches do repositório (feat/, fix/…), os mais comuns primeiro. */
 function branchPrefixes(names = []) {
   const n = {};
@@ -221,7 +243,9 @@ const TASKS = {
       };
     },
     clean: tidy,
-    parse: (text) => lastFence(text),
+    // Da resposta só se aproveitam os NOVOS NOMES dos tipos (na ordem das declarações); a troca é feita aqui, no código
+    // original — assim propriedades e estrutura nunca mudam, mesmo que o modelo mexa nelas.
+    parse: (text, input = {}) => renameTypes(input.code, lastFence(text) || text),
   },
 
   jsonError: {
@@ -359,4 +383,4 @@ function sniffKind(text) {
   return 'text';
 }
 
-module.exports = { TASKS, clip, lastFence, validBranch, slugBranch, branchPrefixes, trimContext, guessPrefix, looseJson, cmdRefs, noteRefs, sniffKind };
+module.exports = { TASKS, clip, lastFence, validBranch, slugBranch, branchPrefixes, trimContext, guessPrefix, renameTypes, looseJson, cmdRefs, noteRefs, sniffKind };

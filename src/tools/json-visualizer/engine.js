@@ -90,6 +90,67 @@ function parseJson(text) {
   }
 }
 
+/**
+ * Conserta os erros mais comuns de "quase JSON" (JS, JSON5, Python): comentários, vírgula sobrando antes de } ou ],
+ * aspas simples, chaves sem aspas, True/False/None, NaN/Infinity/undefined. Não adivinha nada além disso.
+ * → { ok, text, changes: [descrição] } — ok só se o resultado for JSON válido.
+ */
+function repairJson(text) {
+  const src = String(text || '');
+  const n = { comment: 0, comma: 0, quote: 0, key: 0, py: 0, special: 0 };
+  let out = '';
+  let i = 0;
+  const lastSig = () => { let j = out.length - 1; while (j >= 0 && /\s/.test(out[j])) j--; return j; };
+  const nextSig = (k) => { while (k < src.length && /\s/.test(src[k])) k++; return src[k]; };
+  while (i < src.length) {
+    const c = src[i];
+    if (c === '"' || c === "'") {
+      // String: copia (aspas simples viram duplas, escapando as duplas de dentro).
+      let j = i + 1; let s = '';
+      while (j < src.length && src[j] !== c) {
+        if (src[j] === '\\' && j + 1 < src.length) { s += c === "'" && src[j + 1] === "'" ? "'" : src[j] + src[j + 1]; j += 2; continue; }
+        s += c === "'" && src[j] === '"' ? '\\"' : src[j] === '\n' ? '\\n' : src[j];
+        j++;
+      }
+      if (c === "'") n.quote++;
+      out += '"' + s + '"';
+      i = j + 1;
+      continue;
+    }
+    if (c === '/' && src[i + 1] === '/') { while (i < src.length && src[i] !== '\n') i++; n.comment++; continue; }
+    if (c === '/' && src[i + 1] === '*') { const e = src.indexOf('*/', i + 2); i = e < 0 ? src.length : e + 2; n.comment++; continue; }
+    if (c === '}' || c === ']') {
+      const j = lastSig();
+      if (j >= 0 && out[j] === ',') { out = out.slice(0, j) + out.slice(j + 1); n.comma++; }
+      out += c; i++;
+      continue;
+    }
+    const m = /^-?[A-Za-z_$][\w$]*/.exec(src.slice(i, i + 200));
+    if (m && !/^-?\d/.test(m[0])) {
+      const word = m[0];
+      const prev = out[lastSig()];
+      if ((prev === '{' || prev === ',') && nextSig(i + word.length) === ':' && !word.startsWith('-')) { out += JSON.stringify(word); n.key++; }
+      else if (word === 'True' || word === 'False' || word === 'None') { out += word === 'None' ? 'null' : word.toLowerCase(); n.py++; }
+      else if (['NaN', 'Infinity', '-Infinity', 'undefined'].includes(word)) { out += 'null'; n.special++; }
+      else out += word;
+      i += word.length;
+      continue;
+    }
+    out += c; i++;
+  }
+  const changes = [
+    n.comment && `${n.comment} comentário${n.comment > 1 ? 's' : ''} removido${n.comment > 1 ? 's' : ''}`,
+    n.comma && `${n.comma} vírgula${n.comma > 1 ? 's' : ''} sobrando removida${n.comma > 1 ? 's' : ''}`,
+    n.quote && `${n.quote} texto${n.quote > 1 ? 's' : ''} com aspas simples → duplas`,
+    n.key && `${n.key} chave${n.key > 1 ? 's' : ''} sem aspas`,
+    n.py && `${n.py} True/False/None → true/false/null`,
+    n.special && `${n.special} NaN/Infinity/undefined → null`,
+  ].filter(Boolean);
+  let ok = false;
+  try { JSON.parse(out); ok = true; } catch { /* continua inválido */ }
+  return { ok, text: out, changes };
+}
+
 // ── Formatação ───────────────────────────────────────────────────────────────
 
 function sortKeysDeep(v) {
@@ -350,5 +411,5 @@ function toCsv(value) {
 }
 
 module.exports = {
-  parseJson, formatJson, minifyJson, buildGraph, layoutTree, toJsonPath, query, toYaml, toCsv, LAYOUT: L,
+  parseJson, repairJson, formatJson, minifyJson, buildGraph, layoutTree, toJsonPath, query, toYaml, toCsv, LAYOUT: L,
 };

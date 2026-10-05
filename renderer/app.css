@@ -990,3 +990,31 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .ai-test pre { margin: 0 0 6px; white-space: pre-wrap; font: 12px/1.5 var(--tk-font-mono); color: var(--tk-text); }
 .ai-test small { font-size: 11px; color: var(--tk-text-3); }
 .ai-where { padding-top: 12px; }
+
+/* ── JSON: Tipos e Consertar ── */
+.jsv__types { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.jsv__types-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--tk-border); }
+.jsv__types-hint { font-size: 11.5px; color: var(--tk-text-3); margin-right: auto; }
+.jsv__types-ai { margin: 8px 10px 0; }
+.jsv__types-code { flex: 1; min-height: 0; }
+.jsv__fix { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-family: var(--tk-font-sans); }
+.jsv__fix-msg { font-size: 12px; color: var(--tk-text-2); }
+.jsv__fix-ai { flex-basis: 100%; }
+
+/* ── SQL: riscos e IA ── */
+.sqla { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; max-height: 45%; overflow: auto; }
+.sqla__bar { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.sqla__risks { flex: 1; min-width: 260px; display: flex; flex-direction: column; gap: 4px; }
+.sqla__risk { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; line-height: 1.45; color: var(--tk-text-2); }
+.sqla__risk svg { flex-shrink: 0; margin-top: 2px; }
+.sqla__risk.is-danger svg { color: var(--tk-red); }
+.sqla__risk.is-warn svg { color: var(--tk-amber); }
+.sqla__risk.is-info svg { color: var(--tk-blue, var(--tk-text-3)); }
+.sqla__ai { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.sqla__compose { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sqla__compose input { flex: 1; min-width: 260px; height: 30px; padding: 0 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm); background: var(--tk-surface-input); color: var(--tk-text); font: 12.5px var(--tk-font-sans); outline: 0; }
+.sqla__compose input:focus, .sqla__compose textarea:focus { border-color: var(--tk-accent); }
+.sqla__compose textarea { flex-basis: 100%; padding: 8px 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm); background: var(--tk-surface-input); color: var(--tk-text); font: 12px/1.5 var(--tk-font-mono); resize: vertical; outline: 0; }
+.sqla__sql { margin: 0; white-space: pre-wrap; font: 12px/1.5 var(--tk-font-mono); color: var(--tk-text); }
+.dfc-ai { margin: 8px 12px; flex-shrink: 0; }
+.dfc-ai .ai-panel__body { max-height: 260px; }

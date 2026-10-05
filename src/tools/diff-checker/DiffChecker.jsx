@@ -1,6 +1,7 @@
 import { DS, mod, isMod } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
-import { diffLines, applyHunk } from './engine.js';
+import { diffLines, applyHunk, unifiedDiff } from './engine.js';
+import { useAiMode, useAiTask, aiOn, AiButton, AiPanel } from '../../ai/ui.jsx';
 import { detectLanguage } from './syntax.js';
 import { DiffView } from './DiffView.jsx';
 import { emit } from '../../lib/events.js';
@@ -102,10 +103,13 @@ export function DiffChecker({ toast, request }) {
   const [opts, setOpts] = usePersisted('diff.options', DEFAULT_DIFF_OPTIONS);
   const [draft, setDraft] = usePersisted('diff.draft', { left: SAMPLE_LEFT, right: SAMPLE_RIGHT, leftFile: null, rightFile: null });
   const set = (k) => (v) => setOpts((o) => ({ ...o, [k]: v }));
+  const cfg = useAiMode();
+  const sum = useAiTask('diffSummary', cfg);
   const setSide = (side, text, file = null) => setDraft((d) => ({ ...d, [side]: text, [side + 'File']: file }));
 
   // Textos efetivamente comparados: acompanham o rascunho com debounce (ao vivo) ou no "Comparar".
   const [cmp, setCmp] = React.useState({ left: draft.left, right: draft.right });
+  React.useEffect(() => { sum.close(); }, [cmp.left, cmp.right]); // o resumo é do par comparado
   const compare = () => setCmp({ left: draft.left, right: draft.right });
   // Textos vindos de outra ferramenta (Git: "Abrir no Diff Checker"): viram o Original e o Alterado e já comparam.
   React.useEffect(() => {
@@ -271,9 +275,12 @@ export function DiffChecker({ toast, request }) {
                 <IconButton size="sm" icon="chevron-up" label="Mudança anterior (Alt+↑)" onClick={() => nav(-1)} />
                 <IconButton size="sm" icon="chevron-down" label="Próxima mudança (Alt+↓)" onClick={() => nav(1)} />
               </>}
+              {aiOn(cfg) && !sum.st && <AiButton ai={sum} label="Resumir diferenças" disabled={!hunks} reason="Sem diferenças"
+                onClick={() => sum.start(() => ({ patch: unifiedDiff(result, { leftName: draft.leftFile || 'Original', rightName: draft.rightFile || 'Alterado' }), leftName: draft.leftFile, rightName: draft.rightFile }))} />}
               <Button variant="ghost" size="sm" icon="copy" disabled={!draft.right} onClick={copyRight}>Copiar Alterado</Button>
             </div>
           </div>
+          {aiOn(cfg) && <AiPanel ai={sum} className="dfc-ai" />}
           {body}
         </div>
       </div>

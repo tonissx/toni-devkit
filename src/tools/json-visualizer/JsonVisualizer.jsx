@@ -1,7 +1,9 @@
 import { DS, mod, isMod } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { emit } from '../../lib/events.js';
-import { parseJson, formatJson, minifyJson, buildGraph, layoutTree, query, toYaml, toCsv } from './engine.js';
+import { parseJson, repairJson, formatJson, minifyJson, buildGraph, layoutTree, query, toYaml, toCsv } from './engine.js';
+import { generateTypes, LANGS } from './types.js';
+import { useAiMode, useAiTask, aiOn, AiButton, AiPanel } from '../../ai/ui.jsx';
 import { graphToSvg, svgToPng } from './exportImage.js';
 import { DEFAULT_JSON_OPTIONS } from './defaults.js';
 import { GraphView } from './GraphView.jsx';
@@ -21,6 +23,7 @@ const VIEW_OPTIONS = [
   { value: 'tree', label: 'Árvore' },
   { value: 'yaml', label: 'YAML' },
   { value: 'csv', label: 'CSV' },
+  { value: 'types', label: 'Tipos' },
 ];
 
 const SAMPLE = JSON.stringify({
@@ -79,7 +82,59 @@ function computeMatches(search, good, graph) {
   return { ids, count, error: null };
 }
 
+/** Trecho com números de linha em volta do erro (para a IA explicar). */
+function errorExcerpt(text, line, around = 10) {
+  const lines = text.split('\n');
+  const from = Math.max(0, line - 1 - around);
+  return lines.slice(from, line + around).map((l, k) => `${String(from + k + 1).padStart(4)} | ${l}`).join('\n');
+}
+
+/** Visão "Tipos": TypeScript / C# / JSON Schema gerados sem IA; a IA (opcional) só melhora os nomes. */
+function TypesView({ value, lang, setLang, cfg, renamed, setRenamed }) {
+  const code = React.useMemo(() => generateTypes(value, lang), [value, lang]);
+  const ai = useAiTask('jsonNames', cfg);
+  const shown = renamed && renamed.src === code ? renamed.text : code;
+  const go = () => ai.start(() => ({ lang: LANGS.find((l) => l.value === lang).label, code, sample: JSON.stringify(value, null, 1).slice(0, 1500) }));
+  const out = ai.st && ai.st.data;
+  // Gerando: mostra o texto chegando; pronto: o código original com os nomes novos (propriedades intactas).
+  const preview = ai.st && ai.st.phase === 'busy' ? ai.st.text || '' : ai.st && ai.st.phase === 'done' && out ? out : shown;
+  return (
+    <div className="jsv__types">
+      <div className="jsv__types-bar">
+        <SegmentedControl size="sm" options={LANGS} value={lang} onChange={(v) => { setLang(v); ai.close(); }} />
+        <span className="jsv__types-hint">Gerado a partir do JSON, sem IA</span>
+        {aiOn(cfg) && lang !== 'schema' && !ai.st && <AiButton ai={ai} label="Melhorar nomes" onClick={go} />}
+        {renamed && renamed.src === code && !ai.st && <button type="button" className="ai-panel__link" onClick={() => setRenamed(null)}>Voltar aos nomes gerados</button>}
+      </div>
+      {aiOn(cfg) && <AiPanel ai={ai} className="jsv__types-ai" body="none"
+        actions={[{ label: out ? 'Usar estes nomes' : 'Não deu para aproveitar a resposta — tente de novo', icon: 'check', primary: true, disabled: !out, onClick: () => { setRenamed({ src: code, text: out.endsWith('\n') ? out : out + '\n' }); ai.close(); } }]} />}
+      <div className="jsv__types-code">
+        <CodeEditor language={lang === 'schema' ? 'json' : 'js'} value={preview} height="100%" />
+      </div>
+    </div>
+  );
+}
+
+/** JSON inválido: consertar sem IA (vírgulas, aspas, comentários…) e, se não der, a IA explica o erro. */
+function JsonErrorHelp({ input, parsed, cfg, onRepair }) {
+  const ai = useAiTask('jsonError', cfg);
+  const [failed, setFailed] = React.useState(false);
+  React.useEffect(() => { setFailed(false); ai.close(); }, [input]);
+  const repair = () => { const r = repairJson(input); if (r.ok) onRepair(r); else setFailed(true); };
+  return (
+    <div className="jsv__fix">
+      <button type="button" className="ai-act is-primary" onClick={repair}><span>Consertar</span></button>
+      {failed && <span className="jsv__fix-msg">Não deu para consertar sozinho{aiOn(cfg) ? ' — peça uma explicação:' : '.'}</span>}
+      {failed && aiOn(cfg) && !ai.st && <AiButton ai={ai} label="Explicar o erro" onClick={() => ai.start(() => ({ error: parsed.error, line: parsed.line, col: parsed.col, excerpt: errorExcerpt(input, parsed.line) }))} />}
+      {aiOn(cfg) && <AiPanel ai={ai} className="jsv__fix-ai" />}
+    </div>
+  );
+}
+
 export function JsonVisualizer({ toast }) {
+  const cfg = useAiMode();
+  const [renamed, setRenamed] = React.useState(null); // tipos com nomes melhorados pela IA ({ src, text })
+  const [repaired, setRepaired] = React.useState(null); // { before, text, changes } — último conserto, para desfazer
   const [opts, setOpts] = usePersisted('json.options', DEFAULT_JSON_OPTIONS);
   const [draft, setDraft] = usePersisted('json.draft', { text: SAMPLE, file: null });
   const input = draft.text;
@@ -136,9 +191,13 @@ export function JsonVisualizer({ toast }) {
     if (!good) return { text: '', error: null };
     if (view === 'yaml') return { text: toYaml(good.value), error: null };
     if (view === 'csv') { try { return { text: toCsv(good.value), error: null }; } catch (e) { return { text: '', error: errText(e) }; } }
+    if (view === 'types') {
+      const code = generateTypes(good.value, opts.typesLang || 'ts');
+      return { text: renamed && renamed.src === code ? renamed.text : code, error: null };
+    }
     return { text: formatJson(good.value, opts.indent, opts.sortKeys), error: null };
-  }, [good, view, opts.indent, opts.sortKeys]);
-  const EXT = { graph: 'json', tree: 'json', yaml: 'yaml', csv: 'csv' }[view];
+  }, [good, view, opts.indent, opts.sortKeys, opts.typesLang, renamed]);
+  const EXT = view === 'types' ? { ts: 'ts', cs: 'cs', schema: 'schema.json' }[opts.typesLang || 'ts'] : { graph: 'json', tree: 'json', yaml: 'yaml', csv: 'csv' }[view];
 
   const format = () => {
     if (!parsed.ok) { toast('JSON inválido', `Linha ${parsed.line}, coluna ${parsed.col}: ${parsed.error}`, 'error'); return; }
@@ -153,7 +212,7 @@ export function JsonVisualizer({ toast }) {
   const copyOut = async () => {
     if (!viewText.text) return;
     await window.devkit.clipboard.write(viewText.text);
-    toast('Copiado', view === 'yaml' ? 'YAML na área de transferência' : view === 'csv' ? 'CSV na área de transferência' : 'JSON na área de transferência');
+    toast('Copiado', view === 'yaml' ? 'YAML na área de transferência' : view === 'csv' ? 'CSV na área de transferência' : view === 'types' ? 'Tipos na área de transferência' : 'JSON na área de transferência');
   };
   const replaceInput = (text, file) => { setDraft({ text, file }); setSelectedPath(null); setCollapsed(new Set()); touched.current = false; setFitSignal((n) => n + 1); };
   const openFile = async () => {
@@ -246,6 +305,8 @@ export function JsonVisualizer({ toast }) {
         <TreeView key={fitSignal} json={good.value} defaultExpandDepth={2} />
       </div>
     );
+  } else if (view === 'types') {
+    right = <TypesView value={good.value} lang={opts.typesLang || 'ts'} setLang={set('typesLang')} cfg={cfg} renamed={renamed} setRenamed={setRenamed} />;
   } else if (viewText.error) right = empty('Não foi possível converter', viewText.error);
   else right = <CodeEditor language="text" value={viewText.text} height="100%" minimap />;
 
@@ -289,7 +350,16 @@ export function JsonVisualizer({ toast }) {
 
       <div className="sqlf__body">
         {!parsed.ok && input.trim() && (
-          <Alert variant="error" title={`JSON inválido · linha ${parsed.line}, coluna ${parsed.col}`} mono>{parsed.error}</Alert>
+          <Alert variant="error" title={`JSON inválido · linha ${parsed.line}, coluna ${parsed.col}`} mono>
+            {parsed.error}
+            <JsonErrorHelp input={input} parsed={parsed} cfg={cfg} onRepair={(r) => { setRepaired({ before: input, text: r.text, changes: r.changes }); setInput(r.text); }} />
+          </Alert>
+        )}
+        {repaired && repaired.text === input && (
+          <Alert variant="ok" title="JSON consertado" onClose={() => setRepaired(null)}
+            action={<Button variant="ghost" size="sm" icon="undo-2" onClick={() => { setInput(repaired.before); setRepaired(null); }}>Desfazer</Button>}>
+            {repaired.changes.join(' · ')}
+          </Alert>
         )}
         <div className="sqlf__split">
           <SplitView
@@ -297,7 +367,7 @@ export function JsonVisualizer({ toast }) {
             leftMeta={fmtBytes(bytes(input))}
             leftActions={<Button variant="ghost" size="sm" icon="file-code" onClick={() => replaceInput(SAMPLE, null)}>Exemplo</Button>}
             onClear={() => replaceInput('', null)}
-            rightTitle={{ graph: 'Grafo', tree: 'Árvore', yaml: 'YAML', csv: 'CSV' }[view]}
+            rightTitle={{ graph: 'Grafo', tree: 'Árvore', yaml: 'YAML', csv: 'CSV', types: 'Tipos' }[view]}
             rightMeta={good ? <Badge size="sm" variant="ok" dot>{view === 'graph' ? nodeCount + ' nós' : fmtBytes(bytes(viewText.text))}</Badge> : null}
             rightActions={<>
               {view === 'graph' && good && <>

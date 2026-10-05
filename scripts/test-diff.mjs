@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { diffLines, diffInline, applyHunk, pairRows } = require('../src/tools/diff-checker/engine.js');
+const { diffLines, diffInline, applyHunk, pairRows, unifiedDiff } = require('../src/tools/diff-checker/engine.js');
 
 const kinds = (r) => r.ops.map((o) => o.t[0]).join('');
 const changed = (line, segs) => segs.filter((s) => s[2]).map((s) => line.slice(s[0], s[1]));
@@ -114,4 +114,12 @@ test('completely different 3,000-line files still finish', () => {
   const b = Array.from({ length: 3000 }, (_, i) => 'b' + i).join('\n');
   const r = diffLines(a, b);
   assert.deepEqual([r.stats.added, r.stats.removed], [3000, 3000]);
+});
+
+test('unifiedDiff: blocos com contexto, próximos juntos, nomes', () => {
+  const r = diffLines('a\nb\nc\nd\ne\nf\ng\nh\ni\nj', 'a\nB\nc\nd\ne\nf\ng\nh\ni\nj\nk');
+  assert.equal(unifiedDiff(r, { context: 1 }), '--- Original\n+++ Alterado\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c\n@@ -10,1 +10,2 @@\n j\n+k\n');
+  assert.equal(unifiedDiff(r, { context: 3, leftName: 'v1', rightName: 'v2' }).split('@@').length - 1, 4); // 2 blocos
+  assert.equal(unifiedDiff(r, { context: 5 }).match(/^@@/gm).length, 1); // contexto encosta: um bloco só
+  assert.equal(unifiedDiff(diffLines('x', 'x')), '');
 });

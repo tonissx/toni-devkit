@@ -111,3 +111,24 @@ test('nome de branch sem prefixo ganha um', () => {
   assert.equal(T.guessPrefix('tela', []), 'feat');
   assert.deepEqual(TASKS.branchName.parse('calculo-media-vazia\nfix/media', { description: 'corrigir média', existing: ['main', 'feat/relatorio'] }), ['fix/calculo-media-vazia', 'fix/media']);
 });
+
+test('melhorar nomes: só os tipos mudam, propriedades nunca', () => {
+  const orig = 'export interface Root {\n  empresa: string;\n  itens: Item[];\n  "Root": number;\n}\n\nexport interface Item {\n  qtd: number;\n}\n';
+  // o modelo trocou também a propriedade "empresa" — isso é ignorado
+  const resp = '```ts\nexport interface Empresa {\n  nome: string;\n  itens: Produto[];\n}\n\nexport interface Produto {\n  qtd: number;\n}\n```';
+  assert.equal(TASKS.jsonNames.parse(resp, { code: orig }), 'export interface Empresa {\n  empresa: string;\n  itens: Produto[];\n  "Root": number;\n}\n\nexport interface Produto {\n  qtd: number;\n}\n');
+  assert.equal(T.renameTypes(orig, 'interface A {}'), null); // contagem diferente
+  assert.equal(T.renameTypes(orig, 'interface A {} interface A {}'), null); // repetido
+  assert.equal(T.renameTypes(orig, orig), null); // nada mudou
+  assert.match(T.renameTypes('public class Root\n{\n    public List<Item> Itens { get; set; }\n}\n\npublic class Item\n{\n}', 'class Pedido {} class Produto {}'), /public class Pedido[\s\S]*List<Produto> Itens/);
+});
+
+test('melhorar nomes: propriedade com o nome do tipo continua; C# sem membro com o nome da classe', () => {
+  const ts = 'export interface Root {\n  Item: Item;\n  item?: Item[];\n}\n\nexport interface Item {\n  a: number;\n}\n';
+  assert.equal(T.renameTypes(ts, 'interface Pedido {} interface Produto {}'), 'export interface Pedido {\n  Item: Produto;\n  item?: Produto[];\n}\n\nexport interface Produto {\n  a: number;\n}\n');
+  const cs = 'public class Root\n{\n    [JsonPropertyName("empresa")]\n    public string Empresa { get; set; }\n\n    [JsonPropertyName("responsavel")]\n    public Responsavel Responsavel { get; set; }\n}\n\npublic class Responsavel\n{\n    public string Nome { get; set; }\n}';
+  const out = T.renameTypes(cs, 'class Empresa {} class Pessoa {}');
+  assert.match(out, /public class Empresa\n\{[\s\S]*public string EmpresaValue \{ get; set; \}/);
+  assert.match(out, /public Pessoa Responsavel \{ get; set; \}/);
+  assert.match(out, /public class Pessoa\n\{\n {4}public string Nome/);
+});
