@@ -284,6 +284,12 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     }));
   }
 
+  /** O reflog da branch tem só "branch: Created from …" (nenhum commit, merge etc. feito nela). Sem reflog: false. */
+  async function onlyCreated(repo, name) {
+    const lines = (await git(repo, ['reflog', 'show', '--format=%gs', `refs/heads/${name}`], { ok: [0, 128] }).catch(() => ({ stdout: '' }))).stdout.split('\n').filter(Boolean);
+    return lines.length > 0 && lines.every((l) => l.startsWith('branch: Created'));
+  }
+
   /** Branches locais com upstream, à frente/atrás da base (main/master) e se já foram mescladas nela. */
   async function branches(repo) {
     if (!(await hasHead(repo))) return { base: null, branches: [] };
@@ -302,8 +308,9 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       if (!base || b.name === base) return;
       const c = (await git(repo, ['rev-list', '--left-right', '--count', `${base}...${b.name}`])).stdout.trim().split(/\s+/);
       b.baseBehind = +c[0]; b.baseAhead = +c[1];
-      // "mesclada" (--merged) só olha commits: branch sem commit próprio também cai aí, mesmo com trabalho ainda não commitado.
-      b.noOwnCommits = b.baseAhead === 0;
+      // "mesclada" (--merged) só olha commits: uma branch recém-criada na ponta da base (com trabalho ainda não commitado) cai aí também.
+      // Depois de um merge real, baseAhead também é 0; o que distingue é o reflog da branch ter só o registro de criação (e ela não vir de um remoto).
+      b.noOwnCommits = b.merged && !b.upstream && await onlyCreated(repo, b.name);
     }));
     return { base, branches: list };
   }
