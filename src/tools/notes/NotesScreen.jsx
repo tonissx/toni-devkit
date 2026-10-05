@@ -13,6 +13,8 @@ import { FolderRow, useFolderDnD, NOTE_DRAG } from './FolderTree.jsx';
 import { NameModal, DeleteFolderModal, MoveNoteModal } from './FolderDialogs.jsx';
 import { buildTree, flattenTree, joinPath, baseName, isDescendant } from '../../notes/folders.js';
 import { emit } from '../../lib/events.js';
+import { useAiMode, aiOn } from '../../ai/ui.jsx';
+import { AskNotes } from './AskNotes.jsx';
 
 const { PageHeader, Button, IconButton, EmptyState, Icon, Kbd, Spinner, ContextMenu } = DS;
 
@@ -62,6 +64,7 @@ function Excerpt({ ex, fallback }) {
 }
 
 export function NotesScreen({ toast, request }) {
+  const aiCfg = useAiMode();
   const [ui, setUi] = usePersisted('notes.ui', { selectedId: null, mode: 'edit', filter: 'all', tag: null, view: 'note' });
   const [trashCount, setTrashCount] = React.useState(0);
   const [query, setQuery] = React.useState('');
@@ -449,6 +452,7 @@ export function NotesScreen({ toast, request }) {
             />
             <Kbd size="sm">/</Kbd>
           </label>
+          {aiOn(aiCfg) && query.trim().length > 0 && <AskNotes key={query.trim()} cfg={aiCfg} question={query} onOpen={(id) => openNote(id)} />}
           <div className="nts-filters" role="toolbar" aria-label="Filtros">
             {FILTERS.map((f) => (
               <button key={f.id} type="button" className={'nts-chip' + (ui.filter === f.id ? ' is-on' : '')} aria-pressed={ui.filter === f.id}

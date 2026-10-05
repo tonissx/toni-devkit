@@ -132,3 +132,13 @@ test('melhorar nomes: propriedade com o nome do tipo continua; C# sem membro com
   assert.match(out, /public Pessoa Responsavel \{ get; set; \}/);
   assert.match(out, /public class Pessoa\n\{\n {4}public string Nome/);
 });
+
+test('perguntar às notas: palavras-chave e trecho em volta', () => {
+  const N = require('../src/ai/notesContext.js');
+  assert.deepEqual(N.keywords('Como eu configurei o proxy do Fluig?'), ['configurei', 'proxy', 'fluig']);
+  const long = 'x'.repeat(3000) + ' aqui está o PROXY: 10.0.0.1 ' + 'y'.repeat(3000);
+  const ex = N.excerptAround(long, ['proxy'], 600);
+  assert.ok(ex.includes('PROXY: 10.0.0.1'));
+  assert.ok(ex.length <= 602 && ex.startsWith('…') && ex.endsWith('…'));
+  assert.equal(N.excerptAround('curta', ['x']), 'curta');
+});

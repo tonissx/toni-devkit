@@ -178,7 +178,7 @@ export function AiCard({ toast }) {
           {test.error ? test.error : <><pre>{test.text}</pre>{!test.busy && <small>{test.model} · {(test.ms / 1000).toFixed(1).replace('.', ',')} s</small>}</>}
         </div>
       )}
-      {mode !== 'off' && <div className="set-row__hint ai-where">Onde usar: Git → Mudanças → <b>Sugerir mensagem</b> na caixa de commit.</div>}
+      {mode !== 'off' && <div className="set-row__hint ai-where">Onde aparece (botões ✦): <b>Git</b> (mensagem de commit, explicar commit, conflitos, nome de branch, resumo de PR) · <b>SQL</b> (explicar, escrever) · <b>JSON</b> (nomes dos tipos, explicar erro) · <b>Diff</b> (resumir) · <b>Notes</b> (título e tags, resumo, checklist, perguntar às notas) · <b>palette</b> (comece com <code>?</code> para perguntar; “IA: explicar o que está copiado”).</div>}
     </Card>
   );
 }

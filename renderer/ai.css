@@ -53,3 +53,15 @@
 .ai-md pre code { padding: 0; background: none; }
 .ai-md li:has(> .md-task) { list-style: none; margin-left: -1.2em; }
 .ai-md .md-task { margin: 0 6px 0 0; vertical-align: -2px; pointer-events: none; }
+
+/* Palette: resposta da IA no lugar da lista */
+.pl-ai { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px 10px; }
+.pl-ai__title { display: flex; align-items: center; gap: 6px; font: 600 12.5px var(--tk-font-sans); color: var(--tk-text); }
+.pl-ai__title svg { color: var(--tk-accent); }
+.pl-ai__panel .ai-panel__body { max-height: 300px; }
+.pl-ai__src { margin-top: 8px; font-size: 11.5px; color: var(--tk-text-3); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.pl-ai__cmds { display: flex; flex-direction: column; gap: 2px; }
+.pl-ai__cmd { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 0; border-radius: var(--tk-radius-sm); background: none; color: var(--tk-text); font: 13px var(--tk-font-sans); text-align: left; cursor: pointer; }
+.pl-ai__cmd:hover, .pl-ai__cmd:focus-visible { background: var(--tk-surface-3, var(--tk-surface-2)); outline: 0; }
+.pl-ai__cmd span { flex: 1; }
+.pl-ai__cmd svg { color: var(--tk-text-3); }

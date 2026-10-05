@@ -298,7 +298,8 @@ const TASKS = {
     label: 'Resumir nota', maxTokens: 600,
     build(i) {
       return {
-        system: ['Você resume notas de trabalho.', 'Responda no idioma da nota.', 'Até 5 tópicos curtos com o essencial (decisões, números, próximos passos). Só a lista, sem título.'].join('\n'),
+        system: ['Você resume notas de trabalho.', 'Responda no idioma da nota.', 'Até 5 tópicos curtos (uma linha cada) com o essencial: decisões, datas, responsáveis, próximos passos. Só a lista, sem título e sem sub-itens.',
+          'Use SOMENTE o que está escrito na nota: não invente números, quantidades, nomes nem fatos.'].join('\n'),
         user: `${i.title ? `Título: ${i.title}\n\n` : ''}${clip(i.content, 12000)}`,
       };
     },

@@ -12,11 +12,17 @@ import { expandSnippet, templateVars } from '../notes/templates.js';
 import { recoverUnsaved, shortTime, cleanError } from '../notes/client.js';
 import { QuickNote } from './QuickNote.jsx';
 import { emit } from '../lib/events.js';
+import { useAiMode, aiOn } from '../ai/ui.jsx';
+import { PaletteAi } from './PaletteAi.jsx';
 
 const { Icon, Kbd, Spinner } = DS;
 
 const WEB_CMDS = COMMANDS.filter((c) => c.takesQuery);
-const APP_CMDS = COMMANDS.filter((c) => !c.takesQuery);
+const ALL_APP_CMDS = COMMANDS.filter((c) => !c.takesQuery);
+const APP_CMDS_NO_AI = ALL_APP_CMDS.filter((c) => !c.requiresAi);
+const APP_CMDS = ALL_APP_CMDS;
+// O que a IA pode sugerir na pergunta livre ("?…"): ids e nomes dos comandos fixos (nada do Vault além dos comandos genéricos).
+const AI_CMDS = APP_CMDS_NO_AI;
 const NOTE_KEYS = APP_CMDS.filter((c) => c.category === 'notes' && c.key);
 const QUICK = APP_CMDS.find((c) => c.id === 'notes:quick');
 const TASKS = APP_CMDS.find((c) => c.id === 'notes:tasks');
@@ -64,9 +70,10 @@ function linkSections(link, q) {
 }
 
 /** Seções de resultados para o estado atual (comandos + notas vindas do processo principal). */
-function buildSections(scope, query, recent, nd, extra = [], link = null) {
+function buildSections(scope, query, recent, nd, extra = [], link = null, ai = false) {
   const q = query.trim();
   if (link) return linkSections(link, q);
+  const APP_CMDS = ai ? ALL_APP_CMDS : APP_CMDS_NO_AI; // comandos de IA só com a IA ligada
   const opts = { recent, categoryName };
   const cmdItem = (r, arg) => ({ key: r.cmd.id, kind: 'command', cmd: r.cmd, idx: r.idx || [], arg });
   const noteItem = (n, time) => ({ key: 'note:' + n.id + (time || ''), kind: 'note', note: n, time });
@@ -96,6 +103,18 @@ function buildSections(scope, query, recent, nd, extra = [], link = null) {
             run: async (ctx) => { await ctx.notes.appendTask(text); return 'Tarefa adicionada ao Inbox'; },
           },
         })],
+      }];
+    }
+    // "?pergunta": resposta curta da IA, com atalhos do Devkit quando ajudarem.
+    if (ai && q.startsWith('?')) {
+      const question = q.slice(1).trim();
+      return [{
+        title: 'Perguntar à IA', hint: question ? 'Enter envia' : 'Digite a pergunta depois do ?',
+        items: question ? [cmdItem({ cmd: {
+          id: 'ai:ask', name: `Perguntar: ${question}`, description: 'Resposta curta; sugere ações do Devkit quando ajudam',
+          icon: 'sparkles', dynamic: true, keepOpen: true,
+          run: (ctx) => ctx.palette.ai({ task: 'paletteAsk', title: question, input: { question, commands: AI_CMDS.map(({ id, name }) => ({ id, name })) } }),
+        } })] : [],
       }];
     }
     const cap = parseCapture(q);
@@ -153,6 +172,17 @@ function buildSections(scope, query, recent, nd, extra = [], link = null) {
         nd.pinned.length && { title: '📌 Pinned', items: nd.pinned.slice(0, 5).map((n) => noteItem(n)) },
         recentNotes.length && { title: 'Recentes', items: recentNotes.map((n) => noteItem(n, n.time)) },
       ].filter(Boolean);
+    }
+    if (ai && q.startsWith('?')) {
+      const question = q.slice(1).trim();
+      return [{
+        title: 'Perguntar às notas', hint: question ? 'Enter envia · só as notas encontradas pela busca vão para a IA' : 'Digite a pergunta depois do ?',
+        items: question ? [cmdItem({ cmd: {
+          id: 'ai:notes', name: `Perguntar às notas: ${question}`, description: 'Responde com o que está nas suas notas, citando cada uma',
+          icon: 'sparkles', dynamic: true, keepOpen: true,
+          run: (ctx) => ctx.palette.ai({ task: 'notesAsk', title: question, question }),
+        } })] : [],
+      }];
     }
     const cmds = rank(APP_CMDS.filter((c) => c.category === 'notes'), q, opts).map((r) => cmdItem(r));
     const secs = [hits.length && { title: 'Notes', items: hits }, cmds.length && { title: 'Comandos', items: cmds }].filter(Boolean);
@@ -244,6 +274,8 @@ export function Palette() {
   const [vaultList, setVaultList] = React.useState(null); // entradas do cofre: metadados (aberto) ou { locked } só com nome/tags (trancado)
   const [pwd, setPwd] = React.useState(null);           // { name, then }: pedindo a senha mestra para copiar uma entrada trancada
   const [pw, setPw] = React.useState('');               // a senha digitada — fora de `query`, para nunca ir à busca de notas
+  const [aiReq, setAiReq] = React.useState(null);       // resposta da IA em exibição: { task, input?, question?, title, key }
+  const aiCfg = useAiMode();
   const inputRef = React.useRef(null);
   const panelRef = React.useRef(null);
   const listRef = React.useRef(null);
@@ -277,7 +309,7 @@ export function Palette() {
       links: d.links,
       stickies: d.stickies,
       openNote: (payload) => d.notes.open(payload),
-      palette: { unlock: (p) => { setError(null); setPw(''); setPwd(p); }, quickNote: startQuick, enter: enterScope, enterLink, search: (text) => { setLinkId(null); setScope(null); setQuery(text); setHi(0); } },
+      palette: { ai: (r) => { setError(null); setAiReq({ ...r, key: Date.now() }); }, unlock: (p) => { setError(null); setPw(''); setPwd(p); }, quickNote: startQuick, enter: enterScope, enterLink, search: (text) => { setLinkId(null); setScope(null); setQuery(text); setHi(0); } },
     };
   }, []);
 
@@ -313,7 +345,8 @@ export function Palette() {
   ).catch(() => setVaultList(null));
   React.useEffect(() => window.devkit.vault.onChanged(loadVault), []);
   const link = linkId ? links.find((l) => l.id === linkId) || null : null;
-  const sections = React.useMemo(() => buildSections(scope, query, recent, nd, abilityCmds, link), [scope, query, recent, nd, abilityCmds, link]);
+  const aiActive = aiOn(aiCfg);
+  const sections = React.useMemo(() => buildSections(scope, query, recent, nd, abilityCmds, link, aiActive), [scope, query, recent, nd, abilityCmds, link, aiActive]);
   const loadLinks = () => window.devkit.links.list().then(setLinks, () => setLinks([]));
   React.useEffect(() => window.devkit.links.onChanged(loadLinks), []);
   const flat = React.useMemo(() => sections.flatMap((s) => s.items), [sections]);
@@ -328,6 +361,7 @@ export function Palette() {
     loadLinks();
     window.devkit.git.list().then((l) => setRepos(l.repos), () => setRepos([]));
     setLinkId(null);
+    setAiReq(null);
     loadVault();
     // Smart Bind "Colar snippet": abre direto na lista de snippets.
     setScope(info && info.source === 'snippets' ? SNIPPETS : null); setQuery(''); setHi(0); setBusy(null); setError(null); setDone(null); setQuick(null); setPwd(null); setPw('');
@@ -439,6 +473,7 @@ export function Palette() {
 
   const onKeyDown = (e) => {
     if (e.nativeEvent.isComposing) return;
+    if (aiReq && e.key === 'Escape') { e.preventDefault(); setAiReq(null); return; } // Esc volta para a lista (gerando: o painel para antes)
     if (pwd) { // pedindo a senha: só Enter e Esc têm função; o resto é digitação
       if (e.key === 'Enter') { e.preventDefault(); submitUnlock(); }
       else if (e.key === 'Escape') { e.preventDefault(); setPwd(null); setPw(''); setError(null); }
@@ -584,7 +619,7 @@ export function Palette() {
               type={pwd ? 'password' : 'text'}
               autoComplete="off"
               value={pwd ? pw : query}
-              onChange={(e) => { if (pwd) { setPw(e.target.value); setError(null); return; } setQuery(e.target.value); setHi(0); setError(null); }}
+              onChange={(e) => { if (pwd) { setPw(e.target.value); setError(null); return; } setAiReq(null); setQuery(e.target.value); setHi(0); setError(null); }}
               onKeyDown={onKeyDown}
               placeholder={placeholder}
               spellCheck={false}
@@ -601,7 +636,13 @@ export function Palette() {
 
           <div ref={listRef} id="pl-list" className="pl-list tk-scroll" role="listbox" aria-label="Resultados">
             {pwd && <div className="pl-empty"><Icon name="lock" size={16} />Cofre trancado — digite a senha mestra e Enter para copiar “{pwd.name}”.</div>}
-            {!pwd && sections.map((s, si) => (
+            {!pwd && aiReq && (
+              <PaletteAi key={aiReq.key} cfg={aiCfg} req={aiReq} commands={AI_CMDS}
+                runCommand={(c) => { setAiReq(null); run({ kind: 'command', cmd: c }); }}
+                openNote={(id) => { window.devkit.notes.open({ id }); close(); }}
+                onCopy={async (text) => { await window.devkit.clipboard.write(String(text || '')); setDone('Resposta copiada'); }} />
+            )}
+            {!pwd && !aiReq && sections.map((s, si) => (
               <div key={s.title + si} role="group" aria-labelledby={'pl-sec-' + si}>
                 {s.empty && <div className="pl-empty"><Icon name="search-x" size={16} />Nada encontrado para “{q}”{scope ? ' em ' + scopeCat.name : ''}</div>}
                 <div id={'pl-sec-' + si} className="tk-menu__heading">{s.title}{s.hint && <span className="pl-heading-hint"> · {s.hint}</span>}</div>
