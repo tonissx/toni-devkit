@@ -104,11 +104,11 @@ export const RiskBadge = ({ risk }) => (risk ? <Badge size="sm" variant={risk ==
  * Botão de uma operação git: o título mostra o comando equivalente. run(op) vem do GitScreen (confirma, executa,
  * mostra o resultado e o Desfazer).
  */
-export function OpButton({ op, run, icon, children, variant = 'ghost', size = 'sm', className = '', disabled, ctx }) {
-  const p = preview(op, ctx);
+export function OpButton({ op, run, icon, children, variant = 'ghost', size = 'sm', className = '', disabled, ctx, reason }) {
+  const p = op ? preview(op, ctx) : { error: reason };
   return (
     <button type="button" className={'gt-op is-' + variant + ' is-' + size + (p.risk ? ' risk-' + p.risk : '') + ' ' + className}
-      disabled={disabled || !!p.error} title={p.error || `${p.title}\n${p.display}`} onClick={(e) => { e.stopPropagation(); run(op); }}>
+      disabled={disabled || !!p.error} title={(disabled && reason) || p.error || `${p.title}\n${p.display}`} onClick={(e) => { e.stopPropagation(); run(op); }}>
       {icon && <Icon name={icon} size={size === 'sm' ? 13 : 14} />}
       {children && <span>{children}</span>}
     </button>

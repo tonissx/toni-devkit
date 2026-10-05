@@ -223,13 +223,16 @@ export function GitScreen({ toast, request }) {
       setLast({ title: 'Desfeito', message: r.message, risk: 'safe' });
     } catch (e) { setLast({ title: 'Não foi possível desfazer', error: errText(e) }); }
   };
-
   // Fetch/pull/push demoram (rede): trava os botões de rede enquanto uma está em andamento.
   const [netBusy, setNetBusy] = React.useState(null);
   const net = React.useCallback(async (op) => {
     setNetBusy(op.op);
     try { return await run(op); } finally { setNetBusy(null); }
   }, [run]);
+
+  // Sem upstream: "Publicar branch" cria a branch no remoto (push -u). Sem remoto nenhum, não há o que enviar.
+  const pushOp = s && (s.branch.upstream ? { op: 'push' } : s.remote && s.branch.head ? { op: 'push', setUpstream: true, remote: s.remote, branch: s.branch.head } : null);
+  const pushWhy = !s ? '' : netBusy ? 'Aguarde a operação em andamento' : !pushOp ? 'Este repositório não tem remoto — adicione um com git remote add' : s.branch.behind > 0 ? 'O remoto tem commits novos: receba antes de enviar' : '';
 
   if (ver && !ver.available) {
     return <EmptyState title="Git não encontrado" animate="none"
@@ -281,8 +284,8 @@ export function GitScreen({ toast, request }) {
                         <>
                           <OpButton op={{ op: 'pull' }} run={net} icon="arrow-down-to-line" disabled={!!netBusy || !s.branch.upstream}
                             className={(s.branch.behind ? 'is-pending ' : '') + (netBusy === 'pull' ? 'is-busy' : '')}>{s.branch.behind ? `Receber ↓${s.branch.behind}` : 'Receber'}</OpButton>
-                          <OpButton op={{ op: 'push' }} run={net} icon="arrow-up-from-line" disabled={!!netBusy || !s.branch.upstream || s.branch.behind > 0}
-                            className={(s.branch.ahead ? 'is-pending ' : '') + (netBusy === 'push' ? 'is-busy' : '')}>{s.branch.ahead ? `Enviar ↑${s.branch.ahead}` : 'Enviar'}</OpButton>
+                          <OpButton op={pushOp} run={net} icon="arrow-up-from-line" disabled={!!netBusy || !pushOp || s.branch.behind > 0} reason={pushWhy}
+                            className={(s.branch.ahead || !s.branch.upstream ? 'is-pending ' : '') + (netBusy === 'push' ? 'is-busy' : '')}>{s.branch.ahead ? `Enviar ↑${s.branch.ahead}` : s.branch.upstream ? 'Enviar' : 'Publicar branch'}</OpButton>
                           {s.branch.upstream && s.branch.ahead > 0 && s.branch.behind > 0 && (
                             <>
                               <OpButton op={{ op: 'pull', mode: 'merge' }} run={net} icon="git-merge" disabled={!!netBusy}>Receber com merge</OpButton>
@@ -291,8 +294,7 @@ export function GitScreen({ toast, request }) {
                           )}
                         </>
                       )}
-                      {!s.branch.detached && !s.branch.upstream && <span className="gt-hint" title="Esta branch ainda não tem destino no remoto. No terminal: git push -u origin <branch>">sem upstream</span>}
-                    </div>
+                                          </div>
                   )}
                   <button type="button" className="gt-op is-ghost is-sm" title="Abrir no Explorer" onClick={() => api.openIn(repo, 'explorer')}><Icon name="folder-open" size={14} /></button>
                   <button type="button" className="gt-op is-ghost is-sm" title="Abrir no VS Code" onClick={() => api.openIn(repo, 'vscode')}><Icon name="code" size={14} /></button>

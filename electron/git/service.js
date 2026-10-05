@@ -204,7 +204,9 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     const out = await run(r.top, ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=all']);
     const s = P.parseStatus(out.stdout);
     const stashes = await run(r.top, ['stash', 'list', '--format=%gd'], { ok: [0, 1, 128] }).then((x) => x.stdout.split('\n').filter(Boolean).length, () => 0);
-    return { ...s, unborn: !s.branch.oid, stashes, operation: await inProgress(r.gitDir), path: r.path, name: path.basename(r.path) };
+    const remotes = (await run(r.top, ['remote'], { ok: [0, 128] }).then((x) => x.stdout, () => '')).split('\n').map((l) => l.trim()).filter(Boolean);
+    const remote = remotes.includes('origin') ? 'origin' : remotes[0] || null;
+    return { ...s, remote, unborn: !s.branch.oid, stashes, operation: await inProgress(r.gitDir), path: r.path, name: path.basename(r.path) };
   }
 
   /** Resumo leve de cada repositório da lista (para os cartões). */

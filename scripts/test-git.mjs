@@ -1139,3 +1139,32 @@ test('serviço: push sem upstream, falta de credencial e host inexistente viram 
     } finally { rmSync(root, { recursive: true, force: true }); }
   }
 });
+
+test('ops: push com -u cria a branch no remoto e valida remoto/branch', () => {
+  const o = O.buildOp({ op: 'push', setUpstream: true, remote: 'origin', branch: 'feat/x' });
+  assert.deepEqual(o.args, ['push', '-u', 'origin', 'feat/x']);
+  assert.equal(o.risk, 'safe'); assert.equal(o.network, true);
+  assert.match(o.explain, /origin/);
+  assert.throws(() => O.buildOp({ op: 'push', setUpstream: true, remote: '--delete', branch: 'x' }), /remoto/i);
+  assert.throws(() => O.buildOp({ op: 'push', setUpstream: true, remote: 'origin', branch: 'a b' }), /branch/i);
+});
+
+test('serviço: status informa o remoto e push -u dá upstream à branch nova', async () => {
+  const t = await setup();
+  try {
+    const dir = makeRepo(t.root, 'solto');
+    const repo = await t.svc.add(dir);
+    assert.equal((await t.svc.status(repo)).remote, null);
+    const remote = path.join(t.root, 'r.git');
+    sh(t.root, 'init', '-q', '--bare', '-b', 'main', remote);
+    sh(dir, 'remote', 'add', 'upstream', remote);
+    sh(dir, 'remote', 'add', 'origin', remote);
+    sh(dir, 'switch', '-q', '-c', 'feat/nova');
+    let st = await t.svc.status(repo);
+    assert.equal(st.remote, 'origin');
+    assert.equal(st.branch.upstream, null);
+    await t.svc.exec(repo, { op: 'push', setUpstream: true, remote: st.remote, branch: st.branch.head });
+    st = await t.svc.status(repo);
+    assert.equal(st.branch.upstream, 'origin/feat/nova');
+  } finally { t.done(); }
+});

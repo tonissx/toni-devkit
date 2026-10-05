@@ -34,6 +34,7 @@ const paths = (list) => {
   return list;
 };
 const branch = (n) => { need(validBranchName(n), `Nome de branch inválido: “${n}”`); return n; };
+const remoteName = (n) => { need(typeof n === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(n), 'Nome de remoto inválido'); return n; };
 const rev = (r, what = 'Revisão') => { need(validRev(r), `${what} inválida`); return r; };
 const patch = (p) => { need(typeof p === 'string' && /^diff --git /.test(p) && p.length < 20e6, 'Trecho inválido'); return p; };
 
@@ -321,7 +322,10 @@ const OPS = {
       explain: 'Traz os commits novos do remoto e só avança a branch. Se a sua branch também tiver commits novos (divergiu), o git recusa e nada muda.',
     };
   },
-  push: ({ force }) => (force ? {
+  push: ({ force, setUpstream, remote, branch: b }) => (setUpstream ? {
+    args: ['push', '-u', remoteName(remote), branch(b)], risk: 'safe', network: true, title: 'Enviar e criar a branch no remoto',
+    explain: `Cria a branch “${b}” em ${remote} com os seus commits e passa a acompanhá-la (upstream): depois disso Receber e Enviar funcionam direto.`,
+  } : force ? {
     args: ['push', '--force-with-lease'], risk: 'discard', network: true, backup: false, title: 'Enviar à força',
     explain: 'Substitui a branch no remoto pela sua, apagando lá os commits que você não tem. Só recusa se o remoto mudou desde o último fetch. O ponto de volta do Devkit é local e não desfaz o que mudar no remoto.',
   } : {
