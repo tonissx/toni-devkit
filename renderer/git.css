@@ -578,3 +578,16 @@
 .gt-commit__msgwrap { position: relative; display: flex; flex-direction: column; }
 .gt-commit__msg.has-ai { padding-bottom: 28px; }
 .gt-commit__ai { position: absolute; right: 6px; bottom: 6px; height: 22px; }
+.gt-explain { margin-top: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.gt-explain .ai-panel { align-self: stretch; }
+.gt-cf__ai { margin: 8px 10px; }
+.gt-cf__aicode { margin-top: 6px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm); }
+.gt-newbranch__ai { flex-basis: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.gt-newbranch__ai input { font-family: var(--tk-font-sans); }
+.gt-newbranch__ai .ai-panel { flex-basis: 100%; }
+.gt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.gt-chip { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border: 1px solid var(--tk-border); border-radius: 13px; background: var(--tk-surface-2); color: var(--tk-text); font: 12px var(--tk-font-mono); cursor: pointer; }
+.gt-chip:hover { border-color: var(--tk-accent); color: var(--tk-accent-text, var(--tk-accent)); }
+.gt-compare .ai-btn { margin: 4px 0 2px; }
+.gt-compare__ai { margin: 6px 0; }
+.gt-pr__title { font-weight: 600; font-size: 13.5px; color: var(--tk-text); margin-bottom: 6px; }

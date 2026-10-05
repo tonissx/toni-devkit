@@ -4,6 +4,7 @@ import { DS } from '../../lib/ds.js';
 import { validBranchName } from '../../git/ops.js';
 import { gitApi, useRepoData, ago, short, FilePath, OpButton, laneColor } from './shared.jsx';
 import { GitDiff } from './GitDiff.jsx';
+import { useAiMode, useAiTask, aiOn, aiCopy, AiButton, AiPanel, AiMarkdown } from '../../ai/ui.jsx';
 
 const { Icon, Spinner, Modal, Button, Checkbox, Select } = DS;
 
@@ -20,7 +21,45 @@ function Divergence({ behind = 0, ahead = 0 }) {
   );
 }
 
-function Compare({ repo, branches, initial }) {
+/** Nome de branch a partir de uma descrição: 3 sugestões em chips (usa os prefixos que o repositório já usa). */
+function BranchNameAi({ cfg, names, onPick }) {
+  const [desc, setDesc] = React.useState('');
+  const ai = useAiTask('branchName', cfg);
+  const go = () => ai.start(() => ({ description: desc, existing: names }));
+  const list = (ai.st && ai.st.data) || [];
+  return (
+    <div className="gt-newbranch__ai">
+      <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="ou descreva a tarefa (ex.: corrigir login com senha curta)" aria-label="Descrição da tarefa"
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (desc.trim()) go(); } }} />
+      <AiButton ai={ai} label="Sugerir nome" onClick={go} disabled={!desc.trim()} reason="Descreva a tarefa" />
+      <AiPanel ai={ai} body={(st) => (st.phase === 'done' ? (list.length ? (
+        <div className="gt-chips">{list.map((n) => <button type="button" key={n} className="gt-chip" onClick={() => onPick(n)}><Icon name="git-branch" size={12} /> {n}</button>)}</div>
+      ) : <span className="gt-hint">Nenhuma sugestão válida — tente descrever de outro jeito.</span>) : <pre className="gt-cf__code">{st.text}</pre>)} />
+    </div>
+  );
+}
+
+/** Título e descrição de PR a partir dos commits e do diff de b desde o ancestral comum com a. */
+function PrSummaryAi({ repo, cfg, a, b, cmp, toast }) {
+  const ai = useAiTask('prSummary', cfg);
+  React.useEffect(() => { ai.close(); }, [a, b]);
+  const go = () => ai.start(async () => ({ base: a, head: b, commits: cmp.commitsB.map((c) => c.subject).reverse(), patch: (await gitApi().diff(repo, { area: 'range', hash: a, ref: b })).patch }));
+  const d = ai.st && ai.st.data;
+  return (
+    <>
+      {!ai.st && <AiButton ai={ai} label={`Resumo para PR (${b} → ${a})`} onClick={go} disabled={!cmp.onlyB} reason={`${b} não tem commits novos`} />}
+      <AiPanel ai={ai} className="gt-compare__ai"
+        body={(st) => (st.phase === 'done' && d ? <><div className="gt-pr__title">{d.title}</div><AiMarkdown text={d.body} /></> : <AiMarkdown text={st.text} />)}
+        actions={[
+          { label: 'Copiar título', icon: 'copy', onClick: () => aiCopy(d.title, toast, 'Título copiado'), hidden: !d },
+          { label: 'Copiar descrição', icon: 'copy', primary: true, onClick: () => aiCopy(d.body, toast, 'Descrição copiada'), hidden: !d },
+        ]} />
+    </>
+  );
+}
+
+function Compare({ repo, branches, initial, toast }) {
+  const cfg = useAiMode();
   const names = branches.map((b) => b.name);
   const [a, setA] = React.useState(initial.a);
   const [b, setB] = React.useState(initial.b);
@@ -50,6 +89,7 @@ function Compare({ repo, branches, initial }) {
             </svg>
             <div className="gt-fork__side"><span className="gt-fork__name" style={{ color: laneColor(1) }}>{b}</span><b>{cmp.onlyB}</b> commit{cmp.onlyB === 1 ? '' : 's'} só aqui</div>
           </div>
+          {aiOn(cfg) && <PrSummaryAi repo={repo} cfg={cfg} a={a} b={b} cmp={cmp} toast={toast} />}
           <p className="gt-hint">Ancestral comum: <code>{short(cmp.base) || '—'}</code>. {cmp.onlyA === 0 && cmp.onlyB > 0 ? `${a} pode avançar direto até ${b} (fast-forward).` : cmp.onlyA > 0 && cmp.onlyB > 0 ? 'As duas andaram: juntar exige um merge (ou rebase).' : cmp.onlyB === 0 && cmp.onlyA === 0 ? 'Estão no mesmo commit.' : ''}</p>
           <div className="gt-compare__cols">
             {[[a, cmp.commitsA, 0], [b, cmp.commitsB, 1]].map(([name, list, color]) => (
@@ -74,8 +114,9 @@ function Compare({ repo, branches, initial }) {
   );
 }
 
-export function Branches({ repo, status, run, openMerge }) {
+export function Branches({ repo, status, run, openMerge, toast }) {
   const { data, error } = useRepoData(repo, (r) => gitApi().branches(r));
+  const cfg = useAiMode();
   const [creating, setCreating] = React.useState(false);
   const [name, setName] = React.useState('');
   const [checkout, setCheckout] = React.useState(true);
@@ -112,9 +153,10 @@ export function Branches({ repo, status, run, openMerge }) {
           <Checkbox label="Trocar para ela" checked={checkout} onChange={setCheckout} />
           <OpButton op={{ op: 'branch.create', name: name || 'x', checkout }} run={() => create({ preventDefault() {} })} disabled={!validBranchName(name)} variant="primary" size="md">Criar</OpButton>
           {name && !validBranchName(name) && <span className="gt-err">Nome inválido (sem espaços, “..”, “~”, “^”, “:”…)</span>}
+          {aiOn(cfg) && <BranchNameAi cfg={cfg} names={branches.map((b) => b.name)} onPick={setName} />}
         </form>
       )}
-      {cmp && <Compare repo={repo} branches={branches} initial={cmp} />}
+      {cmp && <Compare repo={repo} branches={branches} initial={cmp} toast={toast} />}
 
       <table className="gt-btable">
         <thead><tr><th /><th>Branch</th><th>Último commit</th><th title="Atrás / à frente da base">vs {base}</th><th>Upstream</th><th /></tr></thead>

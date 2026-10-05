@@ -39,6 +39,30 @@ function slugBranch(s) {
     .slice(0, 60).replace(/[-./]+$/, '');
 }
 
+/**
+ * Modelos pequenos às vezes repetem o contexto em volta do trecho em conflito. Tira do começo as linhas que são o fim
+ * do contexto anterior e, do fim, as que são o começo do contexto seguinte (senão elas ficariam duplicadas no arquivo).
+ */
+function trimContext(code, before = [], after = []) {
+  let lines = code.split('\n');
+  before = before.filter((l) => l.trim()); after = after.filter((l) => l.trim());
+  const same = (a, b) => a.trim() === b.trim() && a.trim() !== '';
+  for (let n = Math.min(before.length, lines.length - 1); n > 0; n--) {
+    if (before.slice(-n).every((l, k) => same(l, lines[k]))) { lines = lines.slice(n); break; }
+  }
+  for (let n = Math.min(after.length, lines.length - 1); n > 0; n--) {
+    if (after.slice(0, n).every((l, k) => same(l, lines[lines.length - n + k]))) { lines = lines.slice(0, -n); break; }
+  }
+  return lines.join('\n');
+}
+
+/** Prefixo para um nome sem prefixo: fix/ quando a descrição fala em corrigir; senão o mais usado no repositório. */
+function guessPrefix(description, prefixes) {
+  const fixy = /\b(corrig|consert|fix|bug|erro|falha|quebr)/i.test(description || '');
+  if (fixy) return prefixes.find((p) => /^(fix|bugfix|hotfix)$/.test(p)) || 'fix';
+  return prefixes.find((p) => /^(feat|feature)$/.test(p)) || prefixes[0] || 'feat';
+}
+
 /** Prefixos usados nas branches do repositório (feat/, fix/…), os mais comuns primeiro. */
 function branchPrefixes(names = []) {
   const n = {};
@@ -106,11 +130,11 @@ const TASKS = {
       };
     },
     clean: tidy,
-    parse(text) {
+    parse(text, input = {}) {
       const all = [...String(text).matchAll(/```[\w+#.-]*\n([\s\S]*?)```/g)];
       const last = all[all.length - 1];
       if (!last) return { explanation: tidy(text), code: null };
-      const code = last[1].replace(/\n$/, '');
+      const code = trimContext(last[1].replace(/\n$/, ''), input.before, input.after);
       return { explanation: tidy(text.slice(0, last.index)), code: /^(<{7}|={7}|>{7})/m.test(code) ? null : code };
     },
   },
@@ -131,7 +155,9 @@ const TASKS = {
     clean: tidy,
     parse(text, input = {}) {
       const taken = new Set(input.existing || []);
-      return [...new Set(tidy(text).split('\n').map(slugBranch))].filter((b) => validBranch(b) && !taken.has(b)).slice(0, 3);
+      const pre = guessPrefix(input.description, branchPrefixes(input.existing));
+      return [...new Set(tidy(text).split('\n').map(slugBranch).map((b) => (b && !b.includes('/') ? `${pre}/${b}` : b)))]
+        .filter((b) => validBranch(b) && !taken.has(b)).slice(0, 3);
     },
   },
 
@@ -333,4 +359,4 @@ function sniffKind(text) {
   return 'text';
 }
 
-module.exports = { TASKS, clip, lastFence, validBranch, slugBranch, branchPrefixes, looseJson, cmdRefs, noteRefs, sniffKind };
+module.exports = { TASKS, clip, lastFence, validBranch, slugBranch, branchPrefixes, trimContext, guessPrefix, looseJson, cmdRefs, noteRefs, sniffKind };

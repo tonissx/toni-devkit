@@ -5,6 +5,7 @@ import { layoutGraph } from '../../git/graph.js';
 import { validBranchName } from '../../git/ops.js';
 import { gitApi, useRepoData, ago, fullDate, short, RefBadges, FilePath, laneColor, OpButton } from './shared.jsx';
 import { GitDiff } from './GitDiff.jsx';
+import { useAiMode, useAiTask, aiOn, AiButton, AiPanel } from '../../ai/ui.jsx';
 
 const { Icon, Spinner } = DS;
 const ROW = 30;   // altura de uma linha
@@ -43,17 +44,32 @@ function Graph({ layout, commits, headHash }) {
   );
 }
 
-/** O commit como nota (mensagem, arquivos e o diff, cortado se for enorme). */
-async function saveAsNote(repo, c) {
+/** O commit como nota (mensagem, arquivos e o diff, cortado se for enorme; e a explicação da IA, se houver). */
+async function saveAsNote(repo, c, explanation) {
   const d = await gitApi().diff(repo, { area: 'commit', hash: c.hash });
   const patch = d.patch.length > 60000 ? d.patch.slice(0, 60000) + '\n… (diff cortado)' : d.patch;
   const repoName = repo.split(/[\\/]/).pop();
   const files = c.files.map((f) => `- \`${f.path}\` (+${f.added} −${f.deleted})`).join('\n');
-  const content = `${c.message}\n\n**Commit** \`${c.hash}\` · ${c.author} · ${fullDate(c.time)} · repositório ${repoName}\n\n### Arquivos\n${files}\n\n### Diff\n\`\`\`diff\n${patch.replace(/\`\`\`/g, "'''")}\n\`\`\`\n`;
+  const explained = explanation ? `### Explicação (IA)\n${explanation}\n\n` : '';
+  const content = `${c.message}\n\n**Commit** \`${c.hash}\` · ${c.author} · ${fullDate(c.time)} · repositório ${repoName}\n\n${explained}### Arquivos\n${files}\n\n### Diff\n\`\`\`diff\n${patch.replace(/\`\`\`/g, "'''")}\n\`\`\`\n`;
   return window.devkit.notes.create({ title: `Commit ${short(c.hash)}: ${c.message.split('\n')[0]}`.slice(0, 120), content, tags: ['git', repoName.toLowerCase().replace(/[^\w-]+/g, '-')], type: 'note', source: 'git' });
 }
 
+/** "Explicar este commit": o que mudou, por quê e o que observar — a partir da mensagem e do diff. */
+function ExplainCommit({ repo, c, cfg }) {
+  const ai = useAiTask('explainCommit', cfg);
+  const go = () => ai.start(async () => ({ message: c.message, patch: (await gitApi().diff(repo, { area: 'commit', hash: c.hash })).patch }));
+  const save = async () => { const n = await saveAsNote(repo, c, ai.st.text); window.devkit.notes.open({ id: n.id }); };
+  return (
+    <div className="gt-explain">
+      {!ai.st && <AiButton ai={ai} label="Explicar este commit" onClick={go} />}
+      <AiPanel ai={ai} actions={[{ label: 'Salvar como nota (com a explicação)', icon: 'notebook-pen', onClick: save }]} />
+    </div>
+  );
+}
+
 function CommitDetail({ repo, hash, run, onPick }) {
+  const cfg = useAiMode();
   const { data: c, error } = useRepoData(repo, (r) => gitApi().commit(r, hash), [hash]);
   const [file, setFile] = React.useState(null);
   const [branch, setBranch] = React.useState('');
@@ -77,6 +93,7 @@ function CommitDetail({ repo, hash, run, onPick }) {
           {c.parents.length > 1 && <span className="gt-detail__merge" title="Commit de merge: junta duas linhas de história"><Icon name="git-merge" size={12} /> merge</span>}
           <button type="button" className="gt-hash" title="Cria uma nota com a mensagem, os arquivos e o diff deste commit" onClick={() => saveAsNote(repo, c).then((n) => window.devkit.notes.open({ id: n.id }))}><Icon name="notebook-pen" size={11} /> salvar como nota</button>
         </div>
+        {aiOn(cfg) && <ExplainCommit key={c.hash} repo={repo} c={c} cfg={cfg} />}
         {c.parents.length > 0 && (
           <div className="gt-detail__parents">Pai{c.parents.length > 1 ? 's' : ''}: {c.parents.map((p) => <button type="button" key={p} className="gt-hash" onClick={() => onPick(p)}>{short(p)}</button>)}</div>
         )}

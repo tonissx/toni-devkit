@@ -4,6 +4,7 @@
 import { DS } from '../../lib/ds.js';
 import { parseConflicts, resolveConflicts, conflictCount, hasMarkers } from '../../git/conflict.js';
 import { gitApi, useRepoData, FilePath, OpButton } from './shared.jsx';
+import { useAiMode, useAiTask, aiOn, AiButton, AiPanel, AiMarkdown } from '../../ai/ui.jsx';
 
 const { Icon, Spinner } = DS;
 
@@ -30,9 +31,13 @@ function Context({ lines }) {
   );
 }
 
-function Block({ block, n, total, choice, setChoice, labels }) {
+function Block({ block, n, total, choice, setChoice, labels, cfg, path, before, after }) {
   const editing = choice && typeof choice === 'object';
   const [draft, setDraft] = React.useState(() => block.ours.join('\n'));
+  // IA: explica o que cada lado queria e propõe a versão combinada; "Usar" cai no modo Editar para revisar.
+  const ai = useAiTask('conflictHelp', cfg);
+  const suggest = () => ai.start(() => ({ path, ours: block.ours, theirs: block.theirs, base: block.base, before, after, labels }));
+  const code = ai.st && ai.st.data && ai.st.data.code;
   return (
     <section className={'gt-cf__block' + (choice ? ' is-done' : '')}>
       <header className="gt-cf__head">
@@ -44,8 +49,19 @@ function Block({ block, n, total, choice, setChoice, labels }) {
             </button>
           ))}
           <button type="button" className={'gt-op is-sm' + (editing ? ' is-on is-accent' : ' is-ghost')} onClick={() => setChoice({ text: draft })}><Icon name="pencil" size={13} /><span>Editar</span></button>
+          {aiOn(cfg) && !ai.st && <AiButton ai={ai} label="Sugerir combinação" onClick={suggest} />}
         </span>
       </header>
+      {aiOn(cfg) && (
+        <AiPanel ai={ai} className="gt-cf__ai"
+          body={(st) => (st.phase === 'done' && st.data ? (
+            <>
+              {st.data.explanation && <AiMarkdown text={st.data.explanation} />}
+              {st.data.code != null ? <pre className="gt-cf__code gt-cf__aicode">{st.data.code || ' '}</pre> : <div className="gt-hint">A resposta não trouxe um bloco de código utilizável — use as opções acima.</div>}
+            </>
+          ) : <AiMarkdown text={st.text} />)}
+          actions={[{ label: 'Usar esta versão (revisar no Editar)', icon: 'check', primary: true, hidden: code == null, onClick: () => { setDraft(code); setChoice({ text: code }); ai.close(); } }]} />
+      )}
       {editing ? (
         <textarea className="gt-cf__edit" value={choice.text} spellCheck={false} rows={Math.min(16, Math.max(3, choice.text.split('\n').length + 1))}
           onChange={(e) => { setDraft(e.target.value); setChoice({ text: e.target.value }); }} aria-label="Texto final deste bloco" />
@@ -69,6 +85,7 @@ export function ConflictEditor({ repo, path, operation, run }) {
   const parsed = React.useMemo(() => (cf && cf.merged != null ? parseConflicts(cf.merged) : null), [cf && cf.merged]);
   const [choices, setChoices] = React.useState([]);
   const [showResult, setShowResult] = React.useState(false);
+  const cfg = useAiMode();
   React.useEffect(() => { setChoices([]); setShowResult(false); }, [path, cf && cf.merged]);
 
   if (error) return <div className="gt-msg is-error">{error}</div>;
@@ -129,7 +146,9 @@ export function ConflictEditor({ repo, path, operation, run }) {
         {parsed.parts.map((p, i) => {
           if (p.type === 'text') return <Context key={i} lines={p.lines} />;
           const idx = k++;
-          return <Block key={i} block={p} n={idx + 1} total={total} labels={labels} choice={choices[idx]} setChoice={(v) => setChoices((c) => { const n = [...c]; n[idx] = v; return n; })} />;
+          const prev = parsed.parts[i - 1], next = parsed.parts[i + 1];
+          return <Block key={i} block={p} n={idx + 1} total={total} labels={labels} choice={choices[idx]} setChoice={(v) => setChoices((c) => { const n = [...c]; n[idx] = v; return n; })}
+            cfg={cfg} path={path} before={prev && prev.type === 'text' ? prev.lines.slice(-20) : []} after={next && next.type === 'text' ? next.lines.slice(0, 20) : []} />;
         })}
       </div>
       <div className="gt-cf__foot">

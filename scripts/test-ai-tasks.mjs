@@ -92,3 +92,22 @@ test('sniffKind', () => {
   assert.equal(T.sniffKind('const a = 1;'), 'code');
   assert.equal(T.sniffKind('olá mundo'), 'text');
 });
+
+test('conflito: contexto repetido pelo modelo é removido', () => {
+  const before = ['import x;', 'export const soma = (a, b) => a + b;'];
+  const after = ['', 'export default soma;'];
+  assert.equal(T.trimContext('export const soma = (a, b) => a + b;\nexport const media = 1;\nexport default soma;', before, after), 'export const media = 1;');
+  assert.equal(T.trimContext('a\nb', [], []), 'a\nb');
+  // nunca esvazia: sobra ao menos uma linha
+  assert.equal(T.trimContext('export const soma = (a, b) => a + b;', before, []), 'export const soma = (a, b) => a + b;');
+  const r = TASKS.conflictHelp.parse('Explicação.\n```js\nexport const soma = (a, b) => a + b;\nexport const media = 2;\n```', { before });
+  assert.equal(r.code, 'export const media = 2;');
+});
+
+test('nome de branch sem prefixo ganha um', () => {
+  assert.equal(T.guessPrefix('corrigir o login', ['feat']), 'fix');
+  assert.equal(T.guessPrefix('corrigir o login', ['feat', 'hotfix']), 'hotfix');
+  assert.equal(T.guessPrefix('tela de relatórios', ['release', 'feature']), 'feature');
+  assert.equal(T.guessPrefix('tela', []), 'feat');
+  assert.deepEqual(TASKS.branchName.parse('calculo-media-vazia\nfix/media', { description: 'corrigir média', existing: ['main', 'feat/relatorio'] }), ['fix/calculo-media-vazia', 'fix/media']);
+});
