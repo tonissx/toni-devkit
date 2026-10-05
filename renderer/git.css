@@ -494,7 +494,12 @@
 .gt-invest > .gt-toolbar { overflow-x: auto; }
 .gt-inv { flex: 1; display: flex; min-height: 0; }
 .gt-inv.is-single { display: block; overflow: auto; padding: 14px 20px 20px; }
-.gt-inv__side { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; padding: 10px; border-right: 1px solid var(--tk-border); }
+.gt-inv__side { position: relative; width: 320px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; padding: 10px; border-right: 1px solid var(--tk-border); }
+.gt-inv__grip { position: absolute; top: 0; right: -3px; bottom: 0; width: 7px; cursor: col-resize; z-index: 2; touch-action: none; }
+.gt-inv__grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background .12s; }
+.gt-inv__grip:hover::after, .gt-inv__grip:focus-visible::after, body.gt-resizing .gt-inv__grip::after { background: var(--tk-accent); }
+.gt-inv__grip:focus-visible { outline: none; }
+body.gt-resizing { cursor: col-resize; user-select: none; }
 .gt-inv__main { flex: 1; min-width: 0; overflow: auto; }
 .gt-inv__form { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .gt-inv__help { margin: 10px 0 14px; line-height: 1.5; }
