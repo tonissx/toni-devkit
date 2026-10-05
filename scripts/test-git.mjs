@@ -935,6 +935,37 @@ test('serviço: branch com commits já mesclada por merge commit continua "mescl
   } finally { t.done(); }
 });
 
+test('serviço: branch que commitou e desfez o commit (reset) continua "sem commits próprios"', async () => {
+  const t = await setup();
+  try {
+    const dir = bugRepo(t.root);
+    const repo = await t.svc.add(dir);
+    sh(dir, 'checkout', '-q', '-b', 'feat/desfeita');
+    write(dir, 'novo.txt', 'trabalho\n');
+    sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'feat: trabalho');
+    sh(dir, 'reset', '-q', 'HEAD~1'); // o commit some, o arquivo fica como mudança não commitada
+    const b = (await t.svc.branches(repo)).branches.find((x) => x.name === 'feat/desfeita');
+    assert.equal(b.merged, true);
+    assert.equal(b.noOwnCommits, true);
+  } finally { t.done(); }
+});
+
+test('serviço: branch criada de origin/main (upstream = a base) e sem commits é "sem commits próprios"', async () => {
+  const t = await setup();
+  try {
+    const dir = bugRepo(t.root);
+    const remote = path.join(t.root, 'remoto.git');
+    sh(t.root, 'clone', '-q', '--bare', dir, remote);
+    sh(dir, 'remote', 'add', 'origin', remote);
+    sh(dir, 'fetch', '-q', 'origin');
+    sh(dir, 'switch', '-q', '-c', 'feat/do-remoto', 'origin/main');
+    const repo = await t.svc.add(dir);
+    const b = (await t.svc.branches(repo)).branches.find((x) => x.name === 'feat/do-remoto');
+    assert.equal(b.upstream, 'origin/main');
+    assert.equal(b.noOwnCommits, true);
+  } finally { t.done(); }
+});
+
 test('serviço: branch em uso por worktree — exclusão parcial, desfazer sem duplicar, remover worktree', async () => {
   const t = await setup();
   try {

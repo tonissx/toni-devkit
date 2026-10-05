@@ -284,18 +284,14 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     }));
   }
 
-  /** O reflog da branch tem só "branch: Created from …" (nenhum commit, merge etc. feito nela). Sem reflog: false. */
-  async function onlyCreated(repo, name) {
-    const lines = (await git(repo, ['reflog', 'show', '--format=%gs', `refs/heads/${name}`], { ok: [0, 128] }).catch(() => ({ stdout: '' }))).stdout.split('\n').filter(Boolean);
-    return lines.length > 0 && lines.every((l) => l.startsWith('branch: Created'));
-  }
-
   /** Branches locais com upstream, à frente/atrás da base (main/master) e se já foram mescladas nela. */
   async function branches(repo) {
     if (!(await hasHead(repo))) return { base: null, branches: [] };
     const list = P.parseBranches((await git(repo, ['for-each-ref', `--format=${P.BRANCH_FORMAT}`, '--sort=-committerdate', 'refs/heads'])).stdout);
     const base = ['main', 'master', 'develop'].find((b) => list.some((x) => x.name === b)) || (list.find((x) => x.current) || list[0] || {}).name || null;
     const merged = base ? new Set((await git(repo, ['branch', '--format=%(refname:short)', '--merged', base])).stdout.split('\n').filter(Boolean)) : new Set();
+    // Linha principal da base (só o primeiro pai de cada merge): uma branch cuja ponta está aqui nunca saiu dela.
+    const mainLine = base ? new Set((await git(repo, ['rev-list', '--first-parent', '--max-count=50000', base])).stdout.split('\n').filter(Boolean)) : new Set();
     // Branch aberta noutro worktree: o git não deixa excluir nem trocar para ela daqui.
     const wts = (await worktrees(repo)).filter((w) => w.branch);
     const inWorktree = new Map(wts.map((w) => [w.branch, w.path]));
@@ -309,8 +305,9 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       const c = (await git(repo, ['rev-list', '--left-right', '--count', `${base}...${b.name}`])).stdout.trim().split(/\s+/);
       b.baseBehind = +c[0]; b.baseAhead = +c[1];
       // "mesclada" (--merged) só olha commits: uma branch recém-criada na ponta da base (com trabalho ainda não commitado) cai aí também.
-      // Depois de um merge real, baseAhead também é 0; o que distingue é o reflog da branch ter só o registro de criação (e ela não vir de um remoto).
-      b.noOwnCommits = b.merged && !b.upstream && await onlyCreated(repo, b.name);
+      // Depois de um merge real, baseAhead também é 0; o que distingue é a ponta estar na linha principal da base (num merge commit
+      // ela é o 2º pai, fora dela). Vale também após `reset` de um commit. Upstream = a própria base (criada de origin/main) não conta.
+      b.noOwnCommits = b.merged && mainLine.has(b.hash) && (!b.upstream || b.upstream.endsWith('/' + base));
     }));
     return { base, branches: list };
   }
