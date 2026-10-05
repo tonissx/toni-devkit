@@ -1028,3 +1028,114 @@ test('serviço: remover worktree com mudanças — recusa normal, "mesmo assim" 
     assert.ok(files.includes('novo.txt') && files.includes(tracked));
   } finally { t.done(); }
 });
+
+/* ─────────────── fetch, pull e push ─────────────── */
+
+test('ops: fetch, pull e push — comandos, risco e rede', () => {
+  const f = O.buildOp({ op: 'fetch' });
+  assert.deepEqual(f.args, ['fetch', '--all', '--prune']);
+  assert.equal(f.risk, 'safe'); assert.equal(f.network, true);
+  const p = O.buildOp({ op: 'pull' });
+  assert.deepEqual(p.args, ['pull', '--ff-only']);
+  assert.equal(p.network, true); assert.ok(!p.mayConflict);
+  const pm = O.buildOp({ op: 'pull', mode: 'merge' });
+  assert.deepEqual(pm.args, ['pull', '--no-rebase', '--no-edit']);
+  assert.equal(pm.mayConflict, true); assert.equal(pm.backup, true);
+  assert.throws(() => O.buildOp({ op: 'pull', mode: 'rebase' }), /Modo/);
+  const s = O.buildOp({ op: 'push' });
+  assert.deepEqual(s.args, ['push']);
+  assert.equal(s.risk, 'safe'); assert.equal(s.network, true);
+  const sf = O.buildOp({ op: 'push', force: true });
+  assert.deepEqual(sf.args, ['push', '--force-with-lease']);
+  assert.equal(sf.risk, 'discard'); assert.equal(sf.backup, false);
+  assert.match(sf.explain, /remoto/);
+});
+
+/** Repo local + remoto bare + um segundo clone (a "outra pessoa") para criar divergência. */
+function remoteSetup(root) {
+  const dir = makeRepo(root, 'local');
+  const remote = path.join(root, 'remoto.git');
+  sh(root, 'init', '-q', '--bare', '-b', 'main', remote);
+  sh(dir, 'remote', 'add', 'origin', remote);
+  sh(dir, 'push', '-q', '-u', 'origin', 'main');
+  const other = path.join(root, 'outra');
+  sh(root, 'clone', '-q', remote, other);
+  sh(other, 'config', 'user.name', 'Outra'); sh(other, 'config', 'user.email', 'outra@devkit');
+  return { dir, remote, other };
+}
+
+test('serviço: fetch atualiza o "para receber" e pull só avança (ff-only)', async () => {
+  const t = await setup();
+  try {
+    const { dir, other } = remoteSetup(t.root);
+    const repo = await t.svc.add(dir);
+    write(other, 'b.txt', 'novo\n'); sh(other, 'add', '-A'); sh(other, 'commit', '-q', '-m', 'da outra pessoa'); sh(other, 'push', '-q');
+    assert.equal((await t.svc.status(repo)).branch.behind, 0); // ainda não sabe
+    await t.svc.exec(repo, { op: 'fetch' });
+    assert.equal((await t.svc.status(repo)).branch.behind, 1);
+    await t.svc.exec(repo, { op: 'pull' });
+    const st = await t.svc.status(repo);
+    assert.equal(st.branch.behind, 0);
+    assert.equal(read(dir, 'b.txt'), 'novo\n');
+  } finally { t.done(); }
+});
+
+test('serviço: pull com a branch divergida é recusado em português; "merge" traz e para em conflito', async () => {
+  const t = await setup();
+  try {
+    const { dir, other } = remoteSetup(t.root);
+    const repo = await t.svc.add(dir);
+    write(other, 'a.txt', 'remoto\n'); sh(other, 'add', '-A'); sh(other, 'commit', '-q', '-m', 'remoto mexeu'); sh(other, 'push', '-q');
+    write(dir, 'a.txt', 'local\n'); sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'local mexeu');
+    await t.svc.exec(repo, { op: 'fetch' });
+    await assert.rejects(t.svc.exec(repo, { op: 'pull' }), /divergiu/);
+    const r = await t.svc.exec(repo, { op: 'pull', mode: 'merge' });
+    assert.equal(r.stopped, true);
+    assert.equal(r.conflicts, 1);
+  } finally { t.done(); }
+});
+
+test('serviço: push envia; rejeitado quando o remoto tem mais; force-with-lease sobrescreve', async () => {
+  const t = await setup();
+  try {
+    const { dir, other, remote } = remoteSetup(t.root);
+    const repo = await t.svc.add(dir);
+    write(dir, 'c.txt', 'meu\n'); sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'meu commit');
+    assert.equal((await t.svc.status(repo)).branch.ahead, 1);
+    await t.svc.exec(repo, { op: 'push' });
+    assert.equal((await t.svc.status(repo)).branch.ahead, 0);
+
+    sh(other, 'pull', '-q'); write(other, 'd.txt', 'x\n'); sh(other, 'add', '-A'); sh(other, 'commit', '-q', '-m', 'outra'); sh(other, 'push', '-q');
+    write(dir, 'e.txt', 'y\n'); sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'mais um meu');
+    await t.svc.exec(repo, { op: 'fetch' }); // o lease só vale com o remoto conhecido
+    await assert.rejects(t.svc.exec(repo, { op: 'push' }), /receba antes/);
+    await t.svc.exec(repo, { op: 'push', force: true });
+    assert.match(sh(remote, 'log', '-1', '--format=%s', 'main'), /mais um meu/);
+  } finally { t.done(); }
+});
+
+test('serviço: push sem upstream, falta de credencial e host inexistente viram mensagens claras', async () => {
+  const t = await setup();
+  try {
+    const dir = makeRepo(t.root, 'solto');
+    const repo = await t.svc.add(dir);
+    await assert.rejects(t.svc.exec(repo, { op: 'push' }), /upstream|remoto/i);
+  } finally { t.done(); }
+  const { defaultRun } = require('../electron/git/service.js');
+  for (const [raw, re] of [
+    ["Authentication failed for 'https://x/y.git'", /autentica/i],
+    ["could not read Username for 'https://x': terminal prompts disabled", /autentica/i],
+    ['git@x: Permission denied (publickey).', /autentica/i],
+    ['Could not resolve host: github.com', /internet/i],
+  ]) {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'devkit-git-'));
+    try {
+      const dir = makeRepo(root, 'r');
+      const run = (cwd, args, o) => (args[0] === 'fetch' ? Promise.reject(Object.assign(new Error(raw), { gitCode: 128 })) : defaultRun(cwd, args, o));
+      const svc = createGitService({ file: path.join(root, 'g.json'), run, watch: () => ({ close() {} }) });
+      await svc.init();
+      const repo = await svc.add(dir);
+      await assert.rejects(svc.exec(repo, { op: 'fetch' }), re);
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  }
+});

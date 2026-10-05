@@ -304,6 +304,31 @@ const OPS = {
     explain: 'Termina a caça e volta para a branch em que você estava.',
   }),
 
+  /* ─────────────── Rede: buscar, receber, enviar (network: o serviço dá timeout próprio e nunca pede senha) ─────────────── */
+
+  fetch: () => ({
+    args: ['fetch', '--all', '--prune'], risk: 'safe', network: true, title: 'Buscar novidades do remoto',
+    explain: 'Consulta o remoto e atualiza o “↑ para enviar / ↓ para receber”. Não mexe nos seus arquivos nem nas suas branches.',
+  }),
+  pull: ({ mode = 'ffonly' }) => {
+    need(['ffonly', 'merge'].includes(mode), 'Modo de pull inválido');
+    return mode === 'merge' ? {
+      args: ['pull', '--no-rebase', '--no-edit'], risk: 'safe', network: true, backup: true, mayConflict: true,
+      title: 'Receber do remoto com merge',
+      explain: 'Traz os commits do remoto e junta com os seus num commit de merge. Se houver conflito, o git para e você resolve arquivo por arquivo.',
+    } : {
+      args: ['pull', '--ff-only'], risk: 'safe', network: true, title: 'Receber do remoto',
+      explain: 'Traz os commits novos do remoto e só avança a branch. Se a sua branch também tiver commits novos (divergiu), o git recusa e nada muda.',
+    };
+  },
+  push: ({ force }) => (force ? {
+    args: ['push', '--force-with-lease'], risk: 'discard', network: true, backup: false, title: 'Enviar à força',
+    explain: 'Substitui a branch no remoto pela sua, apagando lá os commits que você não tem. Só recusa se o remoto mudou desde o último fetch. O ponto de volta do Devkit é local e não desfaz o que mudar no remoto.',
+  } : {
+    args: ['push'], risk: 'safe', network: true, title: 'Enviar para o remoto',
+    explain: 'Envia os seus commits para a branch de destino (upstream) no remoto. Se o remoto tiver commits que você não tem, o git recusa.',
+  }),
+
   reset: ({ to, mode }) => {
     need(['soft', 'mixed', 'hard'].includes(mode), 'Modo inválido');
     return {

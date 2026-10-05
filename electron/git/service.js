@@ -3,7 +3,8 @@
  * Git (processo principal): roda o git do sistema sobre os repositórios que o usuário adicionou.
  *
  * - Sempre execFile('git', args) — sem shell — e só com argumentos montados por src/git/ops.js (escritas) ou aqui
- *   mesmo (leituras). Nada de rede: nenhuma operação de fetch/pull/push existe.
+ *   mesmo (leituras). Rede só nas operações marcadas `network` (fetch/pull/push): usam as credenciais que o git já
+ *   tem (credential manager, agente SSH, token) e nunca pedem senha — sem credencial, falham com mensagem clara.
  * - Ponto de volta: antes de operações que reescrevem/descartam, grava refs em refs/devkit/backup/<id>/… (HEAD, as
  *   mudanças via `git stash create`, a ponta de uma branch excluída, um stash descartado) e cópias de arquivos novos
  *   apagados em .git/devkit/files/<id>/. A lista fica em .git/devkit/backups.json. restoreBackup() volta ao estado.
@@ -53,10 +54,31 @@ function defaultRun(cwd, args, { stdin, ok = [0], read = true, timeout = 120e3, 
   });
 }
 
+/** Falhas de rede/credencial/divergência do git explicadas em português; null se não for uma conhecida. */
+function netMessage(msg, code) {
+  const m = String(msg || '');
+  if (/Authentication failed|could not read (Username|Password)|Permission denied \((publickey|keyboard)|terminal prompts disabled|Host key verification failed|HTTP (401|403)|The requested URL returned error: (401|403)|Repository not found/i.test(m)) {
+    return 'Falha de autenticação no remoto. Entre pelo git (credential manager, chave SSH ou token) e tente de novo.';
+  }
+  if (/Could not resolve host|unable to access|Could not read from remote|Connection (timed out|refused|reset)|Network is unreachable|Failed to connect/i.test(m)) {
+    return 'Não deu para falar com o remoto — confira a internet/VPN e o endereço do remoto.';
+  }
+  if (/stale info/i.test(m)) return 'O remoto mudou desde o último fetch — busque de novo antes de enviar à força.';
+  if (/\[rejected\]|non-fast-forward|fetch first|failed to push some refs/i.test(m)) return 'O remoto tem commits que você não tem — receba antes de enviar.';
+  if (/Not possible to fast-forward|diverging branches/i.test(m)) return 'A branch divergiu do remoto (os dois têm commits novos). Receba com merge ou resolva em Reorganizar.';
+  if (/would be overwritten by (merge|checkout)/i.test(m)) return 'Há mudanças locais que conflitam com o que veio do remoto — faça commit ou guarde-as no stash antes.';
+  if (/has no upstream branch|No configured push destination|There is no tracking information|No remote repository specified/i.test(m)) {
+    return 'Esta branch não tem destino no remoto (upstream). Configure um com `git push -u origin <branch>` no terminal.';
+  }
+  if (code === -1 && !m.trim()) return 'O remoto demorou demais para responder (mais de 90 s) — tente de novo.';
+  return null;
+}
+
 /** Algumas recusas comuns do git explicadas em português (o resto passa como veio). */
 function friendly(msg) {
   const m = String(msg || '');
   let x;
+  if ((x = netMessage(m))) return x;
   if ((x = /used by worktree at '([^']+)'/.exec(m))) return `em uso pelo worktree ${x[1].split(/[\\/]/).pop()} — remova o worktree antes`;
   if (/not fully merged/.test(m)) return 'tem commits que não estão em outra branch';
   if (/contains modified or untracked files/.test(m)) return 'a pasta tem mudanças não commitadas';
@@ -549,7 +571,13 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
           await fs.writeFile(abs, op.writeFile.content);
         }
         // Merge, cherry-pick e rebase podem parar no meio com conflito (código 1): não é erro, é a vez do usuário.
-        const res = await run(r.top, op.args, { stdin: op.stdin, read: false, env, ok: op.mayConflict ? [0, 1] : [0] });
+        const netOpts = op.network ? { env: { ...env, GCM_INTERACTIVE: 'never' }, timeout: 90e3 } : { env };
+        let res;
+        try { res = await run(r.top, op.args, { stdin: op.stdin, read: false, ...netOpts, ok: op.mayConflict ? [0, 1] : [0] }); }
+        catch (e) {
+          const m = op.network ? netMessage(e.stderr || e.message, e.gitCode) : null;
+          throw m ? Object.assign(new Error(m), { gitCode: e.gitCode, stderr: e.stderr }) : e;
+        }
         let output = res.stdout + res.stderr;
         if (res.code !== 0) {
           const st = await status(r.path);
