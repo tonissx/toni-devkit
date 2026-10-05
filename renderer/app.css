@@ -968,3 +968,25 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .home-row-wrap:hover .home-row__stick, .home-row__stick:focus-visible { opacity: 1; }
 .home-row-wrap:hover .home-row__aside { visibility: hidden; }
 .home-row__stick:hover { color: var(--hue); border-color: var(--hue); }
+
+/* ── Configurações → IA ── */
+.ai-progress { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--tk-border); }
+.ai-progress__step { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--tk-text); }
+.ai-models { display: flex; flex-direction: column; gap: 6px; padding: 12px 0; border-bottom: 1px solid var(--tk-border); }
+.ai-model { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm); }
+.ai-model.is-sel { border-color: var(--tk-accent); }
+.ai-model__pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 2px 0; text-align: left; color: inherit; font: inherit; cursor: pointer; }
+.ai-model__pick:disabled { cursor: default; }
+.ai-model__radio { flex-shrink: 0; width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--tk-text-3); }
+.ai-model__radio.is-on { border-color: var(--tk-accent); background: radial-gradient(circle, var(--tk-accent) 0 3.5px, transparent 4px); }
+.ai-model__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ai-model__main b { font-size: 13px; font-weight: 600; color: var(--tk-text); }
+.ai-model__main small { font-size: 11.5px; color: var(--tk-text-3); }
+.ai-model__pull { display: flex; align-items: center; gap: 8px; width: 160px; }
+.ai-model__pull .tk-progress { flex: 1; }
+.ai-model__pull small { font: 11px var(--tk-font-mono); color: var(--tk-text-2); min-width: 34px; text-align: right; }
+.ai-test { margin-top: 12px; padding: 10px 12px; border-radius: var(--tk-radius-sm); background: var(--tk-surface-2); border-left: 2px solid var(--tk-accent); }
+.ai-test.is-error { border-left-color: var(--tk-red); color: var(--tk-red); font-size: 12.5px; }
+.ai-test pre { margin: 0 0 6px; white-space: pre-wrap; font: 12px/1.5 var(--tk-font-mono); color: var(--tk-text); }
+.ai-test small { font-size: 11px; color: var(--tk-text-3); }
+.ai-where { padding-top: 12px; }

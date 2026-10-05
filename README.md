@@ -189,6 +189,24 @@ operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nad
   arquivo, **abrir no Diff Checker** (antes × depois). A palette lista cada repositório ("Git: <nome>") e as receitas; o
   uso conta no DevCore
 
+**IA (opcional)**
+
+- **Sugerir mensagem** (Mudanças → caixa de commit): manda o diff do que está preparado, os títulos dos 10 últimos commits
+  (para seguir o estilo e o idioma do repositório) e a branch; a resposta aparece aos poucos na caixa — `Esc` ou **Parar**
+  interrompe e devolve o que estava escrito. Nada é commitado sozinho: revise, edite e commite. **Ver o que é enviado**
+  mostra o pedido exato; lockfiles, imagens e binários vão só pelo nome, e o diff tem teto de tamanho (o corte é anotado)
+- Desligada por padrão. Em **Configurações → IA**:
+  - **Local (offline)**: usa o [Ollama](https://ollama.com), um programa à parte que roda o modelo nesta máquina, sem
+    internet. **Instalar o Ollama** baixa o instalador oficial, **confere a assinatura digital** (só executa se for válida e
+    da Ollama Inc.) e instala para o usuário, sem administrador; ele fica na bandeja, inicia com o Windows e é
+    desinstalado à parte. Depois é só escolher e **Baixar** um modelo — o sugerido é o `qwen2.5-coder:3b` (~1,9 GB, rápido
+    mesmo sem placa de vídeo); o `7b` é mais preciso e mais lento na CPU. Só aceita Ollama em `127.0.0.1`/`localhost`
+  - **Nuvem (Claude)**: API da Anthropic pelo SDK oficial (Opus 5.5, Sonnet 5.5 ou Haiku 4.5). A **chave fica no Vault**
+    (entrada do tipo API/token) e só é lida no processo principal, na hora da chamada — o cofre precisa estar desbloqueado.
+    Antes do primeiro envio pergunta (com a opção de não perguntar de novo)
+  - **Testar** gera uma mensagem para um diff de exemplo e mostra quanto tempo levou nesta máquina
+- Configuração em `%APPDATA%\Toni Devkit\ai.json`. Testes: `npm run test:ai`
+
 ## Início
 
 O painel do dia, aberto ao clicar em **Início** na sidebar. Tudo se atualiza sozinho quando uma nota, um link ou o cofre

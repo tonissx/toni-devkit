@@ -12,7 +12,7 @@
     "watch": "node scripts/build-renderer.mjs --watch",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",
-    "test": "node scripts/test-sql.mjs && node --test scripts/test-xml.mjs scripts/test-diff.mjs scripts/test-json.mjs scripts/test-palette.mjs scripts/test-binds.mjs scripts/test-notes.mjs scripts/test-devcore.mjs scripts/test-compute-version.mjs scripts/test-updater.mjs scripts/test-vault.mjs scripts/test-links.mjs scripts/test-home.mjs scripts/test-stickies.mjs scripts/test-git.mjs",
+    "test": "node scripts/test-sql.mjs && node --test scripts/test-xml.mjs scripts/test-diff.mjs scripts/test-json.mjs scripts/test-palette.mjs scripts/test-binds.mjs scripts/test-notes.mjs scripts/test-devcore.mjs scripts/test-compute-version.mjs scripts/test-updater.mjs scripts/test-vault.mjs scripts/test-links.mjs scripts/test-home.mjs scripts/test-stickies.mjs scripts/test-git.mjs scripts/test-ai.mjs",
     "test:xml": "node --test scripts/test-xml.mjs",
     "test:diff": "node --test scripts/test-diff.mjs",
     "test:json": "node --test scripts/test-json.mjs",
@@ -23,6 +23,7 @@
     "test:home": "node --test scripts/test-home.mjs",
     "test:stickies": "node --test scripts/test-stickies.mjs",
     "test:git": "node --test scripts/test-git.mjs",
+    "test:ai": "node --test scripts/test-ai.mjs",
     "test:vault": "node --test scripts/test-vault.mjs",
     "devcore:sim": "node scripts/devcore-sim.mjs",
     "version:compute": "node scripts/compute-version.mjs",
@@ -32,6 +33,7 @@
     "dist:linux": "npm run build && electron-builder --linux --publish never"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "electron-updater": "^6.8.9",
     "pyodide": "314.0.7"
   },
@@ -63,6 +65,7 @@
       "src/vault/**",
       "src/stickies/**",
       "src/git/**",
+      "src/ai/**",
       "src/commands/search.js",
       "src/commands/binds.js",
       "package.json"

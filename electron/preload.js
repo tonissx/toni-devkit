@@ -293,6 +293,23 @@ contextBridge.exposeInMainWorld('devkit', {
       return () => ipcRenderer.removeListener('git:changed', h);
     },
   },
+  /**
+   * IA opcional (ver electron/ai/service.js): modo Local (Ollama) ou Nuvem (Claude, chave no Vault — nunca chega aqui).
+   */
+  ai: {
+    status: () => ipcRenderer.invoke('ai:status'),
+    /** Só a configuração (rápido: não consulta o Ollama). */
+    config: () => ipcRenderer.invoke('ai:config'),
+    setConfig: (patch) => ipcRenderer.invoke('ai:setConfig', patch),
+    /** O que será enviado (system + user + arquivos), para mostrar antes. */
+    buildRequest: (task, input) => ipcRenderer.invoke('ai:buildRequest', task, input),
+    installOllama: () => ipcRenderer.invoke('ai:installOllama'),
+    pullModel: (name) => ipcRenderer.invoke('ai:pullModel', name),
+    generate: (requestId, task, input) => ipcRenderer.invoke('ai:generate', requestId, task, input),
+    cancel: (requestId) => ipcRenderer.invoke('ai:cancel', requestId),
+    onProgress: (cb) => { const h = (_e, p) => cb(p); ipcRenderer.on('ai:progress', h); return () => ipcRenderer.removeListener('ai:progress', h); },
+    onChunk: (cb) => { const h = (_e, p) => cb(p); ipcRenderer.on('ai:chunk', h); return () => ipcRenderer.removeListener('ai:chunk', h); },
+  },
   /** Atualização automática (ver electron/updater/service.js). */
   updater: {
     status: () => ipcRenderer.invoke('updater:status'),

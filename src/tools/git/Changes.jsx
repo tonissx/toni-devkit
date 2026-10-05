@@ -63,10 +63,130 @@ function Section({ title, hint, files, area, actions, sel, ...rest }) {
   );
 }
 
+const aiErr = (e) => String((e && e.message) || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+const CLOUD_OK = 'tk.ai.cloudOk';
+
+/** Modo da IA (Configurações → IA); relido quando a janela volta ao foco. */
+function useAiMode() {
+  const [cfg, setCfg] = React.useState(null);
+  React.useEffect(() => {
+    if (!window.devkit.ai) return undefined;
+    const load = () => window.devkit.ai.config().then(setCfg, () => {});
+    load();
+    window.addEventListener('focus', load);
+    return () => window.removeEventListener('focus', load);
+  }, []);
+  return cfg;
+}
+
+/**
+ * "Sugerir mensagem": manda o diff preparado + os títulos dos últimos commits para a IA escolhida e escreve a resposta
+ * aos poucos na caixa. Nada é commitado sozinho. Na nuvem, pergunta antes de enviar (até a pessoa dispensar).
+ */
+function useAiSuggest({ repo, status, cfg, msg, setMsg, enabled }) {
+  const [st, setSt] = React.useState(null); // { phase: 'confirm'|'busy'|'done'|'error', req, dest, error, ms, showReq }
+  const reqId = React.useRef(null);
+  const before = React.useRef('');
+  React.useEffect(() => window.devkit.ai.onChunk((p) => {
+    if (p.requestId !== reqId.current) return;
+    setMsg((m) => m + p.chunk);
+  }), []);
+  React.useEffect(() => () => { if (reqId.current) window.devkit.ai.cancel(reqId.current); }, []);
+  const dest = !cfg ? '' : cfg.mode === 'local' ? `Ollama nesta máquina · ${cfg.localModel}` : `API da Anthropic · ${cfg.cloudModel}`;
+
+  const gather = async () => {
+    const [d, log] = await Promise.all([gitApi().diff(repo, { area: 'staged' }), status.unborn ? [] : gitApi().log(repo, { limit: 10, ref: 'HEAD' }).catch(() => [])]);
+    const input = { diff: d.patch, recent: log.map((c) => c.subject), branch: status.branch.head || '' };
+    return { input, req: await window.devkit.ai.buildRequest('commitMessage', input) };
+  };
+  const send = async (pre) => {
+    const id = 'commit-' + Date.now();
+    try {
+      const { input, req } = pre || await gather();
+      before.current = msg;
+      reqId.current = id;
+      setSt((s) => ({ phase: 'busy', req, input, showReq: s && s.showReq }));
+      setMsg('');
+      const r = await window.devkit.ai.generate(id, 'commitMessage', input);
+      if (reqId.current !== id) return;
+      setMsg(r.text);
+      setSt((s) => ({ ...s, phase: 'done', ms: r.ms, model: r.model }));
+    } catch (e) {
+      if (reqId.current !== id && reqId.current) return;
+      setMsg(before.current);
+      const text = aiErr(e);
+      setSt((s) => (text === 'Cancelado' ? null : { ...s, phase: 'error', error: text }));
+    } finally { if (reqId.current === id) reqId.current = null; }
+  };
+  const start = async () => {
+    let cloudOk = false;
+    try { cloudOk = localStorage.getItem(CLOUD_OK) === '1'; } catch { /* ignore */ }
+    if (cfg.mode === 'cloud' && !cloudOk) {
+      try { const pre = await gather(); setSt({ phase: 'confirm', ...pre }); } catch (e) { setSt({ phase: 'error', error: aiErr(e) }); }
+      return;
+    }
+    send();
+  };
+  const cancel = () => { if (reqId.current) window.devkit.ai.cancel(reqId.current); };
+  const busy = st && st.phase === 'busy';
+  const req = st && st.req;
+  React.useEffect(() => {
+    if (!busy) return undefined;
+    const h = (e) => { if (e.key === 'Escape') { e.preventDefault(); cancel(); } };
+    window.addEventListener('keydown', h, true);
+    return () => window.removeEventListener('keydown', h, true);
+  }, [busy]);
+
+  if (!enabled && !st) return { button: null, panel: null };
+  return {
+    button: enabled && (
+      <button type="button" className={'gt-ai__btn' + (busy ? ' is-on' : '')} disabled={!busy && !status.staged.length}
+        title={busy ? 'Parar (Esc)' : !status.staged.length ? 'Prepare (stage) algum arquivo primeiro' : `Sugerir a mensagem com IA (${dest})`}
+        onClick={busy ? cancel : start}>
+        {busy ? <Spinner size={11} /> : <Icon name="sparkles" size={12} />}<span>{busy ? 'Parar' : 'Sugerir'}</span>
+      </button>
+    ),
+    panel: st && (
+        <div className={'gt-ai is-' + st.phase}>
+          <div className="gt-ai__line">
+            <Icon name={st.phase === 'error' ? 'circle-alert' : cfg.mode === 'local' ? 'cpu' : 'cloud'} size={13} />
+            <span className="gt-ai__text">
+              {st.phase === 'confirm' && <>Enviar para a <b>{dest}</b>? Vão {req.files.length} arquivo{req.files.length === 1 ? '' : 's'} do diff preparado{req.omitted.length ? ` (${req.omitted.length} só pelo nome)` : ''} e os títulos dos últimos commits.</>}
+              {st.phase === 'busy' && <>Gerando com {dest}… <span className="gt-ai__muted">Esc para parar</span></>}
+              {st.phase === 'done' && <>Sugestão de {st.model} em {(st.ms / 1000).toFixed(1).replace('.', ',')} s — revise e edite antes do commit.</>}
+              {st.phase === 'error' && st.error}
+            </span>
+            {req && <button type="button" className="gt-ai__link" onClick={() => setSt((s) => ({ ...s, showReq: !s.showReq }))}>{st.showReq ? 'Ocultar' : 'Ver o que é enviado'}</button>}
+            {st.phase === 'done' && before.current.trim() && <button type="button" className="gt-ai__link" onClick={() => { setMsg(before.current); setSt(null); }}>Desfazer</button>}
+            {st.phase !== 'busy' && st.phase !== 'confirm' && <button type="button" className="gt-ai__x" title="Fechar" onClick={() => setSt(null)}><Icon name="x" size={12} /></button>}
+          </div>
+          {st.phase === 'confirm' && (
+            <div className="gt-ai__actions">
+              <button type="button" className="gt-op is-primary is-sm" onClick={() => send(st)}><Icon name="send" size={12} /><span>Enviar</span></button>
+              <button type="button" className="gt-op is-sm" onClick={() => { try { localStorage.setItem(CLOUD_OK, '1'); } catch { /* ignore */ } send(st); }}>Enviar e não perguntar de novo</button>
+              <button type="button" className="gt-op is-ghost is-sm" onClick={() => setSt(null)}>Cancelar</button>
+            </div>
+          )}
+          {req && st.showReq && (
+            <div className="gt-ai__req tk-scroll">
+              <div className="gt-ai__reqhead">Destino: {dest}{req.truncated ? ' · diff cortado no limite de tamanho' : ''}</div>
+              <div className="gt-ai__reqlabel">Instruções (system)</div>
+              <pre>{req.system}</pre>
+              <div className="gt-ai__reqlabel">Pedido</div>
+              <pre>{req.user}</pre>
+            </div>
+          )}
+        </div>
+    ),
+  };
+}
+
 function CommitBox({ status, run, repo, focus }) {
+  const ai = useAiMode();
   const [msg, setMsg] = React.useState(() => { try { return localStorage.getItem('tk.git.draft:' + repo) || ''; } catch { return ''; } });
   const [amend, setAmend] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const sug = useAiSuggest({ repo, status, cfg: ai, msg, setMsg, enabled: !!ai && ai.mode !== 'off' && !amend });
   React.useEffect(() => { try { localStorage.setItem('tk.git.draft:' + repo, msg); } catch { /* ignore */ } }, [msg, repo]);
   const subject = msg.split('\n')[0];
   const canCommit = (status.staged.length > 0 || amend) && msg.trim() && !status.conflicts.length;
@@ -89,9 +209,12 @@ function CommitBox({ status, run, repo, focus }) {
   React.useEffect(() => { if (focus && focus.amend && !status.unborn) toggleAmend(true, true); }, [focus && focus.nonce]);
   return (
     <div className="gt-commit">
-      <textarea className="gt-commit__msg" value={msg} onChange={(e) => setMsg(e.target.value)} rows={3}
+      <div className="gt-commit__msgwrap">
+      <textarea className={'gt-commit__msg' + (sug.button ? ' has-ai' : '')} value={msg} onChange={(e) => setMsg(e.target.value)} rows={3}
         placeholder={'Mensagem do commit — o que mudou e por quê\n(1ª linha curta; detalhes depois de uma linha em branco)'}
         onKeyDown={(e) => { if (isMod(e) && e.key === 'Enter') { e.preventDefault(); go(); } }} aria-label="Mensagem do commit" />
+        {sug.button}
+      </div>
       <div className="gt-commit__bar">
         <span className={'gt-commit__count' + (subject.length > 72 ? ' is-long' : subject.length > 50 ? ' is-warn' : '')} title="A 1ª linha fica melhor com até 50 caracteres (máximo 72)">{subject.length}/50</span>
         {!status.unborn && <Checkbox label="Corrigir o último commit (amend)" checked={amend} onChange={toggleAmend} />}
@@ -103,6 +226,7 @@ function CommitBox({ status, run, repo, focus }) {
           <span>{amend ? 'Corrigir commit' : status.staged.length ? `Commit de ${status.staged.length} arquivo${status.staged.length === 1 ? '' : 's'}` : 'Commit'}</span>
         </button>
       </div>
+      {sug.panel}
     </div>
   );
 }
