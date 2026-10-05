@@ -61,6 +61,8 @@ function MergedBranches({ repo, run }) {
               <div key={b.name} className="gt-mt__row">
                 <Checkbox checked={!b.worktree && pick.has(b.name)} disabled={!!b.worktree} onChange={() => setPick((s) => { const n = new Set(s); n.has(b.name) ? n.delete(b.name) : n.add(b.name); return n; })} label={<b className="gt-mono">{b.name}</b>} />
                 <span className="gt-mt__main"><small>{b.subject} · {ago(b.time)}</small></span>
+                {b.noOwnCommits && <span className="gt-tag is-merged" title={`Ainda não tem commits próprios: aponta para um commit que já está em ${data.base}. Mudanças não commitadas não contam.`}>sem commits próprios</span>}
+                {b.worktree && b.worktreeDirty > 0 && <span className="gt-tag is-gone" title="O worktree desta branch tem mudanças não commitadas — elas não contam como mescladas.">{b.worktreeDirty} mudança{b.worktreeDirty === 1 ? '' : 's'} pendente{b.worktreeDirty === 1 ? '' : 's'}</span>}
                 {b.worktree && <span className="gt-tag is-gone" title={`Aberta no worktree ${b.worktree}. Remova o worktree (seção Worktrees) para poder excluí-la.`}>em uso por worktree</span>}
               </div>
             ))}

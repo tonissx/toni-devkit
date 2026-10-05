@@ -130,7 +130,8 @@ export function Branches({ repo, status, run, openMerge }) {
                 ) : <>
                   <b>{b.name}</b>
                   {b.current && <span className="gt-tag is-current">atual</span>}
-                  {b.merged && <span className="gt-tag is-merged" title={`Todos os commits dela já estão em ${base}`}>mesclada</span>}
+                  {b.merged && !b.noOwnCommits && <span className="gt-tag is-merged" title={`Todos os commits dela já estão em ${base}`}>mesclada</span>}
+                  {b.merged && b.noOwnCommits && <span className="gt-tag is-merged" title={`Ainda não tem commits próprios: aponta para um commit que já está em ${base}. Mudanças não commitadas não contam.`}>sem commits próprios</span>}
                   {!b.merged && !b.current && b.name !== base && b.containedIn && b.containedIn.length > 0 && <span className="gt-tag is-merged" title={`Todos os commits dela já estão em ${b.containedIn.join(', ')} — dá para excluir sem perder nada`}>contida em {b.containedIn[0]}{b.containedIn.length > 1 ? ` +${b.containedIn.length - 1}` : ''}</span>}
                   {b.gone && <span className="gt-tag is-gone" title="A branch remota que ela acompanhava foi apagada">remota sumiu</span>}
                   {b.worktree && <span className="gt-tag is-gone" title={`Aberta no worktree ${b.worktree} — não dá para trocar para ela nem excluí-la daqui (veja Manutenção → Worktrees)`}>em worktree</span>}

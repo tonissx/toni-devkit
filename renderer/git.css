@@ -37,6 +37,12 @@
 .gt-repo__badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--tk-radius-pill); background: color-mix(in srgb, var(--tk-amber) 18%, transparent);
   color: var(--tk-amber); font: 600 10.5px/18px var(--tk-font-mono); text-align: center; }
 .gt-repo__badge.is-conf { background: var(--tk-red-a12); color: var(--tk-red); }
+.gt-repo-wrap { position: relative; }
+.gt-repo__rm { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); display: none; align-items: center; justify-content: center; width: 24px; height: 24px;
+  border: 0; border-radius: var(--tk-radius-md); background: var(--tk-surface-3); color: var(--tk-text-3); cursor: pointer; }
+.gt-repo__rm:hover { color: var(--tk-red); }
+.gt-repo-wrap:hover .gt-repo__rm, .gt-repo-wrap:focus-within .gt-repo__rm { display: inline-flex; }
+.gt-repo-wrap:hover .gt-repo__badge, .gt-repo-wrap:focus-within .gt-repo__badge { visibility: hidden; }
 .gt-found { max-height: 340px; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
 .gt-found__item { display: inline-flex; flex-direction: column; }
 .gt-found__item small { font: 11px var(--tk-font-mono); color: var(--tk-text-3); }
