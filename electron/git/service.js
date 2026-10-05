@@ -415,6 +415,16 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       await run(r.top, ['update-ref', ref('stash'), h], { read: false });
       refs.stash = h; meta.stashMessage = msg;
     }
+    if (op.backupWorktree) {
+      // Mudanças (inclusive arquivos novos) de outro worktree que vai ser apagado: viram um stash recuperável.
+      await run(op.backupWorktree, ['add', '-A'], { read: false });
+      const wip = (await run(op.backupWorktree, ['stash', 'create'], { read: false })).stdout.trim();
+      if (wip) {
+        await run(r.top, ['update-ref', ref('stash'), wip], { read: false });
+        refs.stash = wip; kind = 'stash';
+        meta.stashMessage = `Devkit: mudanças do worktree ${path.basename(op.backupWorktree)}`;
+      }
+    }
     if (op.backupFiles) {
       kind = 'files';
       const dest = path.join(r.gitDir, 'devkit', 'files', id);
@@ -508,6 +518,10 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
         const cur = P.parseStatus((await run(r.top, ['status', '--porcelain=v2', '--branch', '-z'])).stdout).branch.head || 'HEAD';
         await run(r.top, ['stash', 'push', '-u', '-m', `Devkit: guardado ao trocar de ${cur} para ${input.name}`], { read: false });
       }
+      if (op.worktreePath) {
+        const known = (await worktreeList(r)).filter((w) => !w.main).map((w) => w.path);
+        if (!known.some((k) => sameDir(path.normalize(k), path.normalize(op.worktreePath)))) throw new Error('Esse worktree não é deste repositório');
+      }
       const env = op.plan ? await prepareRebase(r, op) : undefined;
       const backup = op.backup && !unborn ? await createBackup(r, op) : op.backupFiles ? await createBackup(r, op) : null;
       try {
@@ -518,10 +532,6 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
           if (next.added) await fs.writeFile(file, next.content);
         }
         if (!op.args.length) return { ok: true, title: op.title, display: op.display, risk: op.risk, backup: backup ? backup.id : null, output: '' };
-        if (op.worktreePath) {
-          const known = (await worktreeList(r)).filter((w) => !w.main).map((w) => w.path);
-          if (!known.some((k) => sameDir(path.normalize(k), path.normalize(op.worktreePath)))) throw new Error('Esse worktree não é deste repositório');
-        }
         if (op.each) {
           // Um comando por item: o que o git recusar não impede os outros; o resultado diz o que saiu e o que ficou.
           const done = [], failed = [];

@@ -1003,3 +1003,28 @@ test('serviço: branch em uso por worktree — exclusão parcial, desfazer sem d
     await assert.rejects(t.svc.exec(repo, { op: 'branch.deleteMany', names: ['main'] }), /main/);
   } finally { t.done(); }
 });
+
+test('serviço: remover worktree com mudanças — recusa normal, "mesmo assim" guarda num stash e desfazer traz de volta', async () => {
+  const t = await setup();
+  try {
+    const dir = bugRepo(t.root);
+    const repo = await t.svc.add(dir);
+    sh(dir, 'worktree', 'add', '-q', '-b', 'worktree-y', path.join(dir, '.claude', 'worktrees', 'y'), 'HEAD');
+    const wt = (await t.svc.worktrees(repo))[0].path;
+    const tracked = sh(wt, 'ls-files').split('\n').filter(Boolean)[0];
+    writeFileSync(path.join(wt, tracked), 'alterado no worktree\n');
+    writeFileSync(path.join(wt, 'novo.txt'), 'arquivo novo\n');
+    await assert.rejects(t.svc.exec(repo, { op: 'worktree.remove', path: wt }), /modified or untracked|mudanças/i);
+    const r = await t.svc.exec(repo, { op: 'worktree.removeForce', path: wt });
+    assert.ok(r.backup);
+    assert.equal(existsSync(wt), false);
+    await assert.rejects(t.svc.exec(repo, { op: 'worktree.removeForce', path: path.join(t.root, 'outro') }), /não é deste repositório/);
+    // Desfazer: as mudanças (inclusive o arquivo novo) voltam como stash.
+    const res = await t.svc.restoreBackup(repo, r.backup);
+    assert.match(res.message, /Stash recuperado/);
+    const st = (await t.svc.stashes(repo))[0];
+    assert.match(st.message, /worktree y/);
+    const files = (await t.svc.stashFiles(repo, 'stash@{0}')).map((f) => f.path);
+    assert.ok(files.includes('novo.txt') && files.includes(tracked));
+  } finally { t.done(); }
+});
