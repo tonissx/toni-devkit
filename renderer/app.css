@@ -731,6 +731,24 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   .dc-villain { transition: none; }
 }
 
+/* Upgrades: ilustrações e seção de combos */
+.dc-upgrades { display: flex; flex-direction: column; gap: 18px; }
+.dc-upgrades > section > .tk-menu__heading { padding-left: 0; }
+.dc-upgrades__head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.dc-upgrades__head .tk-menu__heading { display: inline-flex; align-items: center; gap: 5px; padding-left: 0; }
+.dc-upgrades__hint { font-size: 11.5px; color: var(--tk-text-3); }
+.dc-upg__head { display: flex; align-items: center; gap: 10px; }
+.dc-upg-art {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  border-radius: var(--tk-radius-md); background: var(--tk-surface-3); color: var(--tk-text-2);
+}
+.dc-upg.is-owned { border-color: color-mix(in srgb, var(--tk-accent) 45%, var(--tk-border)); }
+.dc-upg.is-owned .dc-upg-art { background: color-mix(in srgb, var(--tk-accent) 14%, var(--tk-surface-3)); color: var(--tk-accent-text); }
+.dc-upg.is-locked .dc-upg-art { color: var(--tk-text-3); }
+.dc-upg .dc-chip.is-ok { align-self: flex-start; }
+.dc-chip--art { padding-left: 2px; }
+.dc-chip--art .dc-upg-art { border-radius: 3px; background: transparent; }
+
 /* Combos entre geradores */
 .dc-boosts { display: flex; flex-direction: column; gap: 3px; margin: 3px 0 2px; font-size: 11.5px; color: var(--tk-text-3); }
 .dc-boosts > span { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }

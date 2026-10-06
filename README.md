@@ -496,7 +496,11 @@ tela do DevCore aparece, no máximo, um ponto discreto no item da sidebar quando
   ("Script Runner +1% a cada 3 Terminal Workers", até "Local Cluster +1% a cada 10 Terminal Workers"), então os
   geradores antigos continuam valendo a compra. Cada linha mostra a participação no total, quem ela impulsiona,
   quanto isso rende ("Também impulsiona: Script Runner +23% · rende 1,2 K/s (4% do total)") e quem a impulsiona
-  (efeito `{ type:'per', gen, per, target, value }` em `content/upgrades.js`)
+  (efeito `{ type:'per', gen, per, target, value }` em `content/upgrades.js`). Na aba Upgrades os combos têm uma
+  seção própria com todos os já revelados (ativos, disponíveis e o requisito dos próximos)
+- **Ilustrações dos upgrades** (`src/tools/devcore/UpgradeArt.jsx`): todo upgrade tem um desenho SVG próprio; os
+  combos são montados com os glifos dos dois geradores (fonte → alvo), então um combo novo já nasce ilustrado.
+  Um teste garante que nenhum upgrade fica sem ilustração
 - **Blueprints (Mk II / Mk III)**: cada gerador tem um conjunto de 4 peças temáticas por nível. Com o conjunto
   completo, **Refactor** consome as peças e evolui o gerador: Mk II = produção ×3 e próximas unidades ÷4;
   Mk III = mais ×5 (×15 no total) e custo ÷10 (÷40). A estação da categoria muda na cena (moldura e 2ª fileira de

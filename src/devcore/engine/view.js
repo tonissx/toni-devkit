@@ -84,6 +84,7 @@ function snapshot(s, now, c = CONTENT) {
       requirement: owned || available ? '' : describeCondition(u.requires, c),
       effects: u.effects.map((e) => describeEffect(e, c)).filter(Boolean),
       // Combo: quanto renderia agora (o alvo ganha isto com as unidades atuais do gerador fonte).
+      combo: comboInfo(s, u, c),
       comboNow: u.kind === 'combo' ? u.effects.filter((e) => e.type === 'per').map((e) => pct(e.value * ((s.run.generators[e.gen] || {}).owned || 0) / e.per) + ' ' + (c.gen[e.target.split(':')[1]] || {}).name) : [],
     };
   });
@@ -180,6 +181,15 @@ function snapshot(s, now, c = CONTENT) {
     freshSkins: [...s.cosmetics.fresh],
     hasNews: s.discoveries.unseen.length > 0 || newUpgrades.length > 0 || s.cosmetics.fresh.length > 0,
   };
+}
+
+/** Combo de um upgrade: { from, to, fromName, toName, visible } (visible = os dois geradores já liberados). */
+function comboInfo(s, u, c) {
+  const e = u.effects.find((x) => x.type === 'per');
+  if (!e) return null;
+  const to = e.target.split(':')[1];
+  const tierOk = (id) => !!c.gen[id] && c.gen[id].tier <= s.run.tier;
+  return { from: e.gen, to, fromName: (c.gen[e.gen] || { name: e.gen }).name, toName: (c.gen[to] || { name: to }).name, visible: tierOk(e.gen) && tierOk(to) };
 }
 
 /**

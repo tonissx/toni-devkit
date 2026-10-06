@@ -876,6 +876,25 @@ test('combo: a view mostra quem impulsiona quem e quanto isso rende', () => {
   assert.match(card.effects[0], /Script Runner a cada 3 Terminal Worker/);
 });
 
+test('upgrades: todos têm ilustração (próprios ou, nos combos, os glifos dos dois geradores)', () => {
+  const src = readFileSync(new URL('../src/tools/devcore/UpgradeArt.jsx', import.meta.url), 'utf8');
+  const block = (name) => src.slice(src.indexOf(`const ${name} = {`), src.indexOf('};', src.indexOf(`const ${name} = {`)));
+  const keys = (name) => [...block(name).matchAll(/^\s+'?([\w-]+)'?: /gm)].map((m) => m[1]);
+  const art = keys('ART');
+  const gens = keys('GEN');
+  for (const u of CONTENT.UPGRADES.filter((x) => x.kind !== 'combo')) assert.ok(art.includes(u.id), 'upgrade sem ilustração: ' + u.id);
+  for (const g of CONTENT.GENERATORS) assert.ok(gens.includes(g.id), 'gerador sem glifo: ' + g.id);
+  for (const id of art) assert.ok(CONTENT.upgrade[id], 'ilustração de upgrade inexistente: ' + id);
+});
+
+test('combo: a view diz o par de geradores e só revela quando os dois estão liberados', () => {
+  const s = make({ tier: 2 });
+  const card = (id) => snapshot(s, T0).upgrades.find((u) => u.id === id);
+  assert.deepEqual(card('indexed-artifacts').combo, { from: 'index-worker', to: 'automation-worker', fromName: 'Index Worker', toName: 'Automation Worker', visible: true });
+  assert.equal(card('agentic-pipelines').combo.visible, false, 'Agent é do Tier 3');
+  assert.equal(card('parallel-execution').combo, null);
+});
+
 test('combo: validate pega combo inválido', () => {
   const bad = (e) => validate({ ...CONTENT, UPGRADES: [...CONTENT.UPGRADES, { id: 'x', kind: 'combo', name: 'x', cost: 1, effects: [e] }] });
   assert.ok(bad({ type: 'per', gen: 'nope', per: 3, target: 'gen:agent', value: 0.01 }).some((m) => /gerador inexistente nope/.test(m)));

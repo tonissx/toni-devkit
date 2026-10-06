@@ -2,6 +2,7 @@ import { DS } from '../../lib/ds.js';
 import { formatNum, formatDuration } from '../../devcore/engine/format.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
 import { PartIcon } from './PartArt.jsx';
+import { UpgradeArt } from './UpgradeArt.jsx';
 
 const { Button, Icon, ProgressBar, Toggle } = DS;
 
@@ -143,42 +144,71 @@ export function GeneratorsPanel({ snap, amount, act }) {
 }
 
 /* ─────────────── Upgrades ─────────────── */
+/** Card de upgrade com ilustração. Combo: o par de geradores e quanto rende (agora ou, se instalado, ativo). */
+function UpgradeCard({ u, snap, amount, act }) {
+  const locked = u.status === 'locked';
+  const secret = locked && !(u.combo && u.combo.visible); // upgrade comum bloqueado: ainda um mistério
+  return (
+    <div className={'dc-card dc-upg' + (snap.newUpgrades.includes(u.id) ? ' is-new' : '') + (locked ? ' is-locked' : '') + (u.status === 'owned' ? ' is-owned' : '')}>
+      <div className="dc-upg__head">
+        <UpgradeArt u={u} locked={secret} />
+        <div>
+          <div className="dc-card__kind">{KIND[u.kind]}</div>
+          <div className="dc-card__title">{secret ? '???' : u.name}</div>
+        </div>
+      </div>
+      {!secret && <div className="dc-card__desc">{u.description}</div>}
+      {u.combo && !secret && <div className="dc-card__combo">
+        {u.effects.map((e) => <span key={e} className="dc-chip is-ok">{e}</span>)}
+        {u.comboNow.length > 0 && <span className="dc-card__now">{u.status === 'owned' ? 'Ativo' : 'Agora'}: {u.comboNow.join(' · ')}</span>}
+      </div>}
+      {locked && <div className="dc-card__desc">Requer {u.requirement}</div>}
+      {u.status === 'available' && (
+        <Button size="sm" variant={amount >= u.cost ? 'primary' : 'secondary'} disabled={amount < u.cost} onClick={() => act({ type: 'upgrade', id: u.id })}>
+          {formatNum(u.cost)} Compute
+        </Button>
+      )}
+      {u.status === 'owned' && <span className="dc-chip is-ok"><Icon name="check" size={12} />Instalado</span>}
+    </div>
+  );
+}
+
 export function UpgradesPanel({ snap, amount, act }) {
-  const available = snap.upgrades.filter((u) => u.status === 'available');
-  const locked = snap.upgrades.filter((u) => u.status === 'locked').slice(0, 2);
-  const owned = snap.upgrades.filter((u) => u.status === 'owned');
+  const regular = snap.upgrades.filter((u) => u.kind !== 'combo');
+  const available = regular.filter((u) => u.status === 'available');
+  const locked = regular.filter((u) => u.status === 'locked').slice(0, 2);
+  const owned = regular.filter((u) => u.status === 'owned');
+  // Combos: todos os revelados (instalados, disponíveis e os próximos, com o requisito) — a "rede" entre geradores.
+  const combos = snap.upgrades.filter((u) => u.kind === 'combo');
+  const shown = combos.filter((u) => u.combo.visible);
+  const order = { available: 0, locked: 1, owned: 2 };
   return (
     <div className="dc-upgrades">
-      {!available.length && <div className="dc-empty">Nenhum upgrade disponível agora — continue produzindo.</div>}
-      <div className="dc-grid">
-        {available.map((u) => (
-          <div key={u.id} className={'dc-card' + (snap.newUpgrades.includes(u.id) ? ' is-new' : '')}>
-            <div className="dc-card__kind">{KIND[u.kind]}</div>
-            <div className="dc-card__title">{u.name}</div>
-            <div className="dc-card__desc">{u.description}</div>
-            {u.kind === 'combo' && <div className="dc-card__combo">
-              {u.effects.map((e) => <span key={e} className="dc-chip is-ok">{e}</span>)}
-              {u.comboNow.length > 0 && <span className="dc-card__now">Agora: {u.comboNow.join(' · ')}</span>}
-            </div>}
-            <Button size="sm" variant={amount >= u.cost ? 'primary' : 'secondary'} disabled={amount < u.cost} onClick={() => act({ type: 'upgrade', id: u.id })}>
-              {formatNum(u.cost)} Compute
-            </Button>
-          </div>
-        ))}
-        {locked.map((u) => (
-          <div key={u.id} className="dc-card is-locked">
-            <div className="dc-card__kind">{KIND[u.kind]}</div>
-            <div className="dc-card__title">???</div>
-            <div className="dc-card__desc">Requer {u.requirement}</div>
-          </div>
-        ))}
-      </div>
-      {owned.length > 0 && (
-        <div className="dc-owned-list">
-          <div className="tk-menu__heading">Instalados ({owned.length})</div>
-          {owned.map((u) => <span key={u.id} className="dc-chip"><Icon name="check" size={12} />{u.name}</span>)}
+      <section>
+        <div className="tk-menu__heading">Upgrades</div>
+        {!available.length && <div className="dc-empty">Nenhum upgrade disponível agora — continue produzindo.</div>}
+        <div className="dc-grid">
+          {[...available, ...locked].map((u) => <UpgradeCard key={u.id} u={u} snap={snap} amount={amount} act={act} />)}
         </div>
-      )}
+        {owned.length > 0 && (
+          <div className="dc-owned-list">
+            <div className="tk-menu__heading">Instalados ({owned.length})</div>
+            {owned.map((u) => <span key={u.id} className="dc-chip dc-chip--art" title={u.description}><UpgradeArt u={u} size={18} />{u.name}</span>)}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <div className="dc-upgrades__head">
+          <span className="tk-menu__heading"><Icon name="git-merge" size={12} /> Combos</span>
+          <span className="dc-chip">{combos.filter((u) => u.status === 'owned').length}/{combos.length} ativos</span>
+          <span className="dc-upgrades__hint">Um gerador mais barato fortalece um mais caro — os antigos continuam valendo a compra.</span>
+        </div>
+        <div className="dc-grid">
+          {[...shown].sort((x, y) => order[x.status] - order[y.status]).map((u) => <UpgradeCard key={u.id} u={u} snap={snap} amount={amount} act={act} />)}
+        </div>
+        {shown.length < combos.length && <div className="dc-empty">{combos.length - shown.length} combo(s) aparecem com os próximos tiers.</div>}
+      </section>
     </div>
   );
 }
