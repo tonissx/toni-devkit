@@ -1036,3 +1036,5 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-ask__panel { align-self: stretch; }
 .nts-ask__panel .ai-panel__body { max-height: 320px; }
 .nts-ask__src { margin-top: 8px; font-size: 11.5px; color: var(--tk-text-3); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.sqla__modes { display: inline-flex; gap: 4px; }
+.ai-act.is-on { border-color: var(--tk-accent); color: var(--tk-accent-text, var(--tk-accent)); }

@@ -233,6 +233,23 @@ const TASKS = {
     parse: (text) => tidy(lastFence(text) != null ? lastFence(text) : text.replace(/^sql\s*\n/i, '')),
   },
 
+  sqlModify: {
+    label: 'Alterar SQL', maxTokens: 1800, cloudHint: true,
+    build(i) {
+      if (!String(i.sql || '').trim()) throw new Error('Não há consulta no editor para alterar');
+      if (!String(i.instruction || '').trim()) throw new Error('Diga o que mudar na consulta');
+      return {
+        system: ['Você altera consultas SQL existentes.', 'Responda SOMENTE com a consulta completa já alterada, num bloco ```sql, sem explicações.',
+          'Aplique só o que foi pedido. Todo o resto fica como está: tabelas, aliases, colunas, comentários, ordem e comandos que não têm relação com o pedido.',
+          'Se o pedido precisar de tabela ou coluna que não existe no esquema (quando informado), use um nome plausível e deixe um comentário -- dizendo o que confirmar.'].join('\n'),
+        user: [String(i.schema || '').trim() ? `Esquema:\n${clip(i.schema, 8000)}` : null,
+          `Consulta atual:\n\`\`\`sql\n${clip(i.sql, 12000)}\n\`\`\``, `Alteração pedida: ${clip(i.instruction, 1500)}`].filter(Boolean).join('\n\n'),
+      };
+    },
+    clean: tidy,
+    parse: (text) => tidy(lastFence(text) != null ? lastFence(text) : text.replace(/^sql\s*\n/i, '')),
+  },
+
   jsonNames: {
     label: 'Melhorar nomes', maxTokens: 1500,
     build(i) {

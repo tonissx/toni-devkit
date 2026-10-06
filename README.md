@@ -204,7 +204,7 @@ pedido nenhum** — notas vão com as referências dos blocos `secret`, nunca co
 | Git → Histórico | **Explicar este commit** (o que mudou, por quê, o que observar) e salvar como nota com a explicação |
 | Git → conflitos | **Sugerir combinação** por bloco; **Usar esta versão** cai no Editar para revisar antes de resolver |
 | Git → Branches | **Nova branch**: descreva a tarefa e escolha um dos 3 nomes (com o prefixo que o repositório usa) · **Comparar**: **Resumo para PR** (título + descrição para copiar) |
-| SQL Formatter | **Explicar consulta** · **Escrever a partir de uma descrição** (com o esquema das tabelas, opcional, lembrado no PC) |
+| SQL Formatter | **Explicar consulta** · **Escrever ou alterar com IA**: *Nova consulta* a partir de uma descrição, ou *Alterar a atual* (“trocar o LEFT JOIN por INNER”, “só 2025”…) — muda só o que foi pedido, com **Comparar no Diff Checker** e **Desfazer**; o esquema das tabelas é opcional e fica lembrado no PC |
 | JSON Visualizer | **Melhorar nomes** dos tipos gerados (só os nomes mudam; o Devkit aplica no código original) · **Explicar o erro** quando o Consertar não resolve |
 | Diff Checker | **Resumir diferenças** (adicionado, removido, alterado e o que parece arriscado) |
 | Notes | Botão **IA** no editor: **título e tags** (em chips, reaproveitando as tags que já existem), **Resumir** (insere no topo), **Transformar em checklist** (seleção ou nota toda) · **Perguntar às notas**: digite a pergunta na busca |

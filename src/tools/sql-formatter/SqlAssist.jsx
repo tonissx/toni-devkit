@@ -25,6 +25,8 @@ export function SqlAssist({ sql, cfg, setSql }) {
   const risks = React.useMemo(() => sqlRisks(deferred), [deferred]);
   const explain = useAiTask('sqlExplain', cfg);
   const write = useAiTask('sqlFromText', cfg);
+  const modify = useAiTask('sqlModify', cfg);
+  const [mode, setMode] = React.useState(null); // 'new' | 'edit' — null: decide pelo editor (tem SQL → alterar)
   const [composing, setComposing] = React.useState(false);
   const [desc, setDesc] = React.useState('');
   const [schema, setSchema] = React.useState(() => { try { return localStorage.getItem(SCHEMA_KEY) || ''; } catch { return ''; } });
@@ -33,9 +35,15 @@ export function SqlAssist({ sql, cfg, setSql }) {
   React.useEffect(() => { try { localStorage.setItem(SCHEMA_KEY, schema); } catch { /* ignore */ } }, [schema]);
   const on = aiOn(cfg);
 
-  const doWrite = () => write.start(() => ({ description: desc, schema }));
+  const hasSql = !!sql.trim();
+  const editing = (mode || (hasSql ? 'edit' : 'new')) === 'edit' && hasSql;
+  const doWrite = () => (prev.current = null, editing ? modify.start(() => ({ sql, instruction: desc, schema })) : write.start(() => ({ description: desc, schema })));
+  const idle = !write.st && !modify.st;
   if (!on && !risks.length) return null;
   const result = write.st && write.st.data;
+  const changed = modify.st && modify.st.data;
+  const undo = prev.current != null ? [{ label: 'Desfazer', onClick: () => { setSql(prev.current); prev.current = null; write.close(); modify.close(); } }] : [];
+  const put = (text) => { prev.current = sql; setSql(text); setComposing(false); };
   return (
     <div className="sqla">
       <div className="sqla__bar">
@@ -43,18 +51,23 @@ export function SqlAssist({ sql, cfg, setSql }) {
         {on && (
           <div className="sqla__ai">
             {!explain.st && <AiButton ai={explain} label="Explicar consulta" onClick={() => explain.start(() => ({ sql, risks: risks.map((r) => r.text) }))} disabled={!sql.trim()} reason="Cole um SQL para explicar" />}
-            {!write.st && <AiButton ai={write} label={composing ? 'Fechar' : 'Escrever a partir de uma descrição'} onClick={() => setComposing((v) => !v)} />}
+            {idle && <AiButton ai={write} label={composing ? 'Fechar' : hasSql ? 'Escrever ou alterar com IA' : 'Escrever a partir de uma descrição'} onClick={() => setComposing((v) => !v)} />}
           </div>
         )}
       </div>
       {on && <AiPanel ai={explain} className="sqla__panel" />}
-      {on && composing && !write.st && (
+      {on && composing && idle && (
         <form className="sqla__compose" onSubmit={(e) => { e.preventDefault(); if (desc.trim()) doWrite(); }}>
-          <input autoFocus value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="ex.: clientes que compraram mais de 3 vezes em 2025, com o total gasto" aria-label="Descrição da consulta" />
+          <span className="sqla__modes" role="radiogroup" aria-label="O que fazer">
+            <button type="button" role="radio" aria-checked={!editing} className={'ai-act' + (!editing ? ' is-on' : '')} onClick={() => setMode('new')}><Icon name="file-plus" size={12} /><span>Nova consulta</span></button>
+            <button type="button" role="radio" aria-checked={editing} className={'ai-act' + (editing ? ' is-on' : '')} disabled={!hasSql} title={hasSql ? 'Muda a consulta que está na entrada' : 'Cole uma consulta na entrada primeiro'} onClick={() => setMode('edit')}><Icon name="file-pen" size={12} /><span>Alterar a atual</span></button>
+          </span>
+          <input autoFocus value={desc} onChange={(e) => setDesc(e.target.value)} aria-label={editing ? 'O que mudar na consulta' : 'Descrição da consulta'}
+            placeholder={editing ? 'ex.: trocar o LEFT JOIN por INNER, filtrar só 2025, somar o total por mês' : 'ex.: clientes que compraram mais de 3 vezes em 2025, com o total gasto'} />
           <button type="button" className={'ai-act' + (schema.trim() ? ' is-on' : '')} onClick={() => setShowSchema((v) => !v)} title="As tabelas e colunas que existem (CREATE TABLE ou uma lista) — a IA usa só elas">
             <Icon name="table" size={12} /><span>Esquema{schema.trim() ? ' ✓' : ''}</span>
           </button>
-          <button type="submit" className="ai-act is-primary" disabled={!desc.trim()}><Icon name="sparkles" size={12} /><span>Escrever</span></button>
+          <button type="submit" className="ai-act is-primary" disabled={!desc.trim()}><Icon name="sparkles" size={12} /><span>{editing ? 'Alterar' : 'Escrever'}</span></button>
           {showSchema && <textarea value={schema} onChange={(e) => setSchema(e.target.value)} rows={5} spellCheck={false}
             placeholder={'Cole o esquema (fica salvo neste computador):\nCREATE TABLE clientes (id int, nome varchar(80), ...);\nou: pedidos(id, cliente_id, total, data)'} aria-label="Esquema" />}
         </form>
@@ -62,8 +75,17 @@ export function SqlAssist({ sql, cfg, setSql }) {
       {on && (
         <AiPanel ai={write} className="sqla__panel"
           body={(st) => <pre className="sqla__sql">{st.phase === 'done' && result != null ? result : st.text}</pre>}
-          extraLinks={prev.current != null ? [{ label: 'Desfazer', onClick: () => { setSql(prev.current); prev.current = null; write.close(); } }] : []}
-          actions={[{ label: 'Colocar na entrada', icon: 'arrow-down-to-line', primary: true, disabled: !result, onClick: () => { prev.current = sql; setSql(result); setComposing(false); } }]} />
+          extraLinks={undo}
+          actions={[{ label: 'Colocar na entrada', icon: 'arrow-down-to-line', primary: true, disabled: !result, onClick: () => put(result) }]} />
+      )}
+      {on && (
+        <AiPanel ai={modify} className="sqla__panel"
+          body={(st) => <pre className="sqla__sql">{st.phase === 'done' && changed != null ? changed : st.text}</pre>}
+          extraLinks={undo}
+          actions={[
+            { label: 'Comparar no Diff Checker', icon: 'git-compare', hidden: !changed, onClick: () => window.devkit.app.command({ type: 'go', route: 'diff', params: { left: modify.st.input.sql, right: changed, leftFile: 'consulta atual.sql', rightFile: 'consulta alterada.sql' } }) },
+            { label: 'Substituir a consulta', icon: 'replace', primary: true, disabled: !changed || prev.current != null, onClick: () => put(changed) },
+          ]} />
       )}
     </div>
   );

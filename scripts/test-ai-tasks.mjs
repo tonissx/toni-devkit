@@ -12,7 +12,7 @@ test('todas as tarefas montam system + user em texto', () => {
   const inputs = {
     commitMessage: { diff: patch }, explainCommit: { message: 'x', patch }, conflictHelp: { ours: ['a'], theirs: ['b'] },
     branchName: { description: 'corrigir login' }, prSummary: { base: 'main', head: 'feat/x', commits: ['a'], patch },
-    sqlExplain: { sql: 'select 1' }, sqlFromText: { description: 'clientes' }, jsonNames: { lang: 'TypeScript', code: 'interface Root {}', sample: '{}' },
+    sqlExplain: { sql: 'select 1' }, sqlFromText: { description: 'clientes' }, sqlModify: { sql: 'select 1', instruction: 'filtrar 2025' }, jsonNames: { lang: 'TypeScript', code: 'interface Root {}', sample: '{}' },
     jsonError: { error: 'x', line: 1, col: 1, excerpt: '1 | {' }, diffSummary: { patch }, noteMeta: { content: 'texto' },
     noteSummary: { content: 'texto' }, noteChecklist: { text: 'fazer a e b' }, notesAsk: { question: 'q', notes: [{ title: 'N', excerpt: 'e' }] },
     paletteAsk: { question: 'q', commands: [{ id: 'go:git', name: 'Git' }] }, clipExplain: { text: 'select 1', kind: 'sql' },
@@ -142,3 +142,14 @@ test('perguntar às notas: palavras-chave e trecho em volta', () => {
   assert.ok(ex.length <= 602 && ex.startsWith('…') && ex.endsWith('…'));
   assert.equal(N.excerptAround('curta', ['x']), 'curta');
 });
+
+test('alterar SQL: manda a consulta atual e o pedido; exige os dois', () => {
+  const r = TASKS.sqlModify.build({ sql: 'SELECT a FROM t', instruction: 'só os ativos', schema: 't(a, ativo)' });
+  assert.match(r.user, /Esquema:\nt\(a, ativo\)/);
+  assert.match(r.user, /Consulta atual:\n```sql\nSELECT a FROM t\n```/);
+  assert.match(r.user, /Alteração pedida: só os ativos$/);
+  assert.throws(() => TASKS.sqlModify.build({ sql: ' ', instruction: 'x' }), /Não há consulta/);
+  assert.throws(() => TASKS.sqlModify.build({ sql: 'select 1', instruction: '' }), /Diga o que mudar/);
+  assert.equal(TASKS.sqlModify.parse('Aqui:\n```sql\nSELECT a FROM t WHERE ativo = 1\n```'), 'SELECT a FROM t WHERE ativo = 1');
+});
+
