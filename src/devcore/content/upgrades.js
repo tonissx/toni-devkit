@@ -21,6 +21,7 @@ const UPGRADES = [
 
   // Combo — um gerador mais barato fortalece um mais caro (+value no alvo a cada `per` unidades de `gen`), como as
   // grandmas do Cookie Clicker: os geradores antigos continuam valendo a compra até o fim da run.
+  // Os do Tier 3 pedem o dobro de unidades e custam 5× mais que o padrão do começo.
   { id: 'shell-pipes', kind: 'combo', name: 'Shell Pipes', description: 'Scripts encadeiam a saída dos terminais.',
     cost: 8000, requires: { all: [{ owned: { gen: 'terminal-worker', n: 25 } }, { owned: { gen: 'script-runner', n: 5 } }] },
     effects: [{ type: 'per', gen: 'terminal-worker', per: 3, target: 'gen:script-runner', value: 0.01 }] },
@@ -31,13 +32,13 @@ const UPGRADES = [
     cost: 1e6, requires: { all: [{ owned: { gen: 'index-worker', n: 25 } }, { owned: { gen: 'automation-worker', n: 5 } }] },
     effects: [{ type: 'per', gen: 'index-worker', per: 4, target: 'gen:automation-worker', value: 0.01 }] },
   { id: 'agentic-pipelines', kind: 'combo', name: 'Agentic Pipelines', description: 'Agentes disparam pipelines em vez de fazer tudo à mão.',
-    cost: 3e8, requires: { all: [{ owned: { gen: 'automation-worker', n: 25 } }, { owned: { gen: 'agent', n: 5 } }] },
+    cost: 1.5e9, requires: { all: [{ owned: { gen: 'automation-worker', n: 50 } }, { owned: { gen: 'agent', n: 10 } }] },
     effects: [{ type: 'per', gen: 'automation-worker', per: 4, target: 'gen:agent', value: 0.01 }] },
   { id: 'autoscaler-agents', kind: 'combo', name: 'Autoscaler Agents', description: 'Agentes decidem quando o cluster cresce.',
-    cost: 3e9, requires: { all: [{ owned: { gen: 'agent', n: 15 } }, { owned: { gen: 'local-cluster', n: 5 } }] },
+    cost: 1.5e10, requires: { all: [{ owned: { gen: 'agent', n: 30 } }, { owned: { gen: 'local-cluster', n: 10 } }] },
     effects: [{ type: 'per', gen: 'agent', per: 4, target: 'gen:local-cluster', value: 0.01 }] },
   { id: 'edge-shells', kind: 'combo', name: 'Edge Shells', description: 'Cada terminal vira um nó de borda do cluster.',
-    cost: 5e9, requires: { all: [{ owned: { gen: 'terminal-worker', n: 100 } }, { owned: { gen: 'local-cluster', n: 10 } }] },
+    cost: 2.5e10, requires: { all: [{ owned: { gen: 'terminal-worker', n: 200 } }, { owned: { gen: 'local-cluster', n: 20 } }] },
     effects: [{ type: 'per', gen: 'terminal-worker', per: 10, target: 'gen:local-cluster', value: 0.01 }] },
 
   // Global
