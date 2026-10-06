@@ -6,6 +6,7 @@ import { Scene } from './Scene.jsx';
 import { GeneratorsPanel, UpgradesPanel, PetsPanel, TechPanel } from './Panels.jsx';
 import { OpsPanel } from './OpsPanel.jsx';
 import { RateWithDetails } from './RateDetails.jsx';
+import { MapPanel } from './MapPanel.jsx';
 
 const { Tabs, Modal, Button, ProgressBar, Spinner, Icon } = DS;
 
@@ -133,6 +134,8 @@ export function DevCoreScreen({ toast, request }) {
       else if (e.type === 'ability') out.push({ at: t, type: 'ability', pet: e.pet, text: (s.pets.find((p) => p.ability.id === e.id) || { ability: {} }).ability.name });
     }
     for (const e of log || []) {
+      if (e.type === 'mapOpen') toast('Mapa liberado', `${e.name}: batalhas, eventos e Patches na aba Mapa`);
+      if (e.type === 'battle' && e.cleared) toast('Área concluída', 'O Legacy Monolith caiu!');
       if (e.type !== 'quest') continue;
       const item = e.item && (s.inventory.find((k) => k.id === e.item) || {}).name;
       toast('Missão concluída', e.title + (item ? ' · +1 ' + item : ''));
@@ -202,6 +205,7 @@ export function DevCoreScreen({ toast, request }) {
     { value: 'upgrades', label: 'Upgrades', icon: 'arrow-up-circle', count: availableUps || undefined, dot: snap.newUpgrades.length > 0 },
     { value: 'tech', label: 'Tech', icon: 'radar', dot: freshUnseen.length > 0 },
     { value: 'ops', label: 'Ops', icon: 'shield', dot: !!(snap.ops.active && !snap.ops.active.contained) },
+    ...(snap.map.unlocked ? [{ value: 'map', label: 'Mapa', icon: 'map', dot: !!snap.map.pending || (!snap.map.cleared && snap.map.nodes.some((n) => n.status === 'reachable' && n.affordable)) }] : []),
   ];
 
   return (
@@ -236,6 +240,7 @@ export function DevCoreScreen({ toast, request }) {
         {ui.tab === 'upgrades' && <UpgradesPanel snap={snap} amount={liveAmount} act={act} />}
         {ui.tab === 'tech' && <TechPanel snap={snap} freshUnseen={freshUnseen} />}
         {ui.tab === 'ops' && <OpsPanel snap={snap} amount={liveAmount} act={act} now={serverNow} />}
+        {ui.tab === 'map' && snap.map.unlocked && <MapPanel snap={snap} act={act} />}
       </div>
 
       {snap.welcome && <WelcomeBack snap={snap} onClose={() => act({ type: 'ackWelcome' })} />}

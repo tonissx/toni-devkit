@@ -346,6 +346,7 @@ const devcoreCommands = [
   devcoreTab('looks', 'Customize DevPets', 'pets', 'palette', 'Visual e evolução dos DevPets', ['visual', 'skin', 'aparência', 'cores', 'pets']),
   devcoreTab('discoveries', 'View Discoveries', 'tech', 'radar', 'Tiers, sinergias e descobertas', ['descobertas', 'tech', 'sinergias']),
   devcoreTab('blueprints', 'View Blueprints', 'generators', 'package', 'Peças, sucata e Refactor (Mk II/III) dos geradores', ['blueprints', 'peças', 'sucata', 'refactor', 'mk', 'marcos']),
+  devcoreTab('map', 'View Map', 'map', 'map', 'Mapa da área: batalhas, eventos, loja e Patches', ['mapa', 'batalha', 'arena', 'patches', 'chefe', 'localhost', 'esquadrão']),
   devcoreTab('ops', 'View Ops', 'ops', 'shield', 'Incidentes, previsão, consumíveis e bestiário', ['incidentes', 'vilões', 'consumíveis', 'itens', 'bestiário', 'ops']),
   {
     id: 'devcore:collect', name: 'Collect Offline Progress', icon: 'download',
