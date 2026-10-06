@@ -199,6 +199,8 @@
 .gt-bars__n { font: 11.5px var(--tk-font-mono); color: var(--tk-text-3); text-align: right; }
 .gt-last { display: flex; flex-direction: column; gap: 6px; }
 .gt-last__subject { font-weight: 600; font-size: 13.5px; }
+.gt-last .gt-refs { display: flex; flex-wrap: wrap; margin-right: 0; min-width: 0; }
+.gt-last .gt-ref { max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .gt-last__meta { font-size: 12px; color: var(--tk-text-3); }
 .gt-last__meta code { font-family: var(--tk-font-mono); }
 .gt-last__actions { display: flex; gap: 6px; margin-top: 4px; }
