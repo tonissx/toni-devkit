@@ -102,6 +102,19 @@ upgrades), com `source: 'patch:<id>'`. A maioria **alimenta a produção**; algu
 | Raro | Combos rendem o dobro · habilidades dos pets duram +50% · −20% no custo de treino dos pets |
 | Épico | Produção ×1,5 · o 1º ataque de cada batalha é crítico · uma Elite por área custa 1× |
 
+### 4.5 Apresentação do mapa (decidido, a implementar)
+
+- **Mais espaço na aba Mapa:** a cena de estações (farm) que fica no topo do DevCore **some** quando a aba Mapa está
+  aberta, e o mapa ocupa esse espaço.
+- **Perspectiva 3D**, no estilo de *Inscryption*: o mapa como um tabuleiro visto em ângulo (inclinado, com
+  profundidade), com **elementos 3D da área** espalhados por ele — no Localhost, por exemplo, teclado, caneca, post-its,
+  cabos e um monitor ao fundo. Os pontos ficam "em pé" sobre o tabuleiro.
+- **Caminhos pontilhados e curvos**, não linhas retas: trilhas que serpenteiam entre os pontos (curvas suaves), como
+  um caminho desenhado no tabuleiro. O trecho já percorrido e as saídas abertas continuam destacados.
+- Proposta técnica: CSS 3D (`perspective` + `rotateX` no tabuleiro) com os elementos da área como SVG/camadas em
+  profundidade, e as trilhas como curvas SVG (`path` com `stroke-dasharray`). Sem motor 3D; o hover e o clique dos
+  pontos continuam como hoje. Respeitar `prefers-reduced-motion`.
+
 ## 5. Batalha — auto-battler com preparação (decidido)
 
 ### 5.1 Preparação
@@ -220,6 +233,24 @@ custar tempo de recuperação além da entrada.
 | Staging | Esteiras de pipeline com luzes de CI piscando |
 | Production | Datacenter: racks, cabos e alarmes |
 
+### 6.1 Música e efeitos sonoros (decidido, a implementar)
+
+- **Música nas batalhas e efeitos sonoros** (golpes, críticos, habilidades, quedas, vitória/derrota, abrir o baú de
+  recompensa), com inspiração em *Castlevania: Symphony of the Night* (atmosfera gótica, órgão e cordas, chefes
+  dramáticos) e *Vampire Survivors* (efeitos curtos e satisfatórios, sensação de "ganho").
+- **Composições e sons originais**: a referência é de clima e estilo, sem reaproveitar músicas ou samples desses jogos.
+- Um tema por área (Localhost, Staging, Production) e um tema de chefe.
+- O DevKit é usado durante o trabalho, então (proposta): **som desligado por padrão** ou bem baixo, com controle de
+  volume e "mudo" nas configurações do DevCore; nenhum som fora da arena e dos popups.
+
+### 6.2 Popup de item ganho (decidido, a implementar)
+
+- Todo item **ganho ou comprado** (consumível, peça, Patch — no mapa, em eventos, na loja, nas recompensas de
+  batalha) mostra um **popup na tela** com o **ícone, o nome e a descrição** do item.
+- Vários itens de uma vez (ex.: recompensas de uma vitória) aparecem em sequência ou empilhados, e somem sozinhos ou
+  com um clique.
+- Combina com o efeito sonoro de "ganho" (§6.1).
+
 ## 7. Áreas e chefes
 
 Tema de pipeline de deploy. Vencer o chefe abre a próxima área.
@@ -323,7 +354,8 @@ A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa d
 | 2026-10-06 | **Níveis dos pets zeram** na Singularity |
 | 2026-10-06 | Batalha numa **arena própria e temática da área** |
 | 2026-10-06 | **Esquadrão de 3** por enquanto |
-| 2026-10-07 | **Vida persiste entre batalhas**, recuperação de 25%/h (também offline), fora de combate até 25%, cura completa no descanso e consumível **Health Check** fabricável |
+| 2026-10-06 | **Vida persiste entre batalhas**, recuperação de 25%/h (também offline), fora de combate até 25%, cura completa no descanso e consumível **Health Check** fabricável |
+| 2026-10-06 | Apresentação (a implementar): **música e efeitos sonoros** nas batalhas (inspiração em *Castlevania SOTN* e *Vampire Survivors*); **popup de item ganho/comprado** com ícone, nome e descrição; na aba Mapa a **cena de farm some** e o mapa ganha espaço; mapa em **perspectiva 3D** estilo *Inscryption*, com elementos 3D da área; **caminhos pontilhados e curvos** |
 
 ## 13. Em aberto
 
