@@ -498,6 +498,14 @@ tela do DevCore aparece, no máximo, um ponto discreto no item da sidebar quando
   quanto isso rende ("Também impulsiona: Script Runner +23% · rende 1,2 K/s (4% do total)") e quem a impulsiona
   (efeito `{ type:'per', gen, per, target, value }` em `content/upgrades.js`). Na aba Upgrades os combos têm uma
   seção própria com todos os já revelados (ativos, disponíveis e o requisito dos próximos)
+- **Mapa** (MVP: só a Área 1, *Localhost*; desenho em [`docs/devcore-mapa-singularity.md`](docs/devcore-mapa-singularity.md)):
+  abre no Tier 2. Mapa de 3 trilhas × 9 colunas + o chefe *Legacy Monolith*, gerado pela semente da run, com
+  batalhas, elites (algumas com atalho), deploy expresso, eventos, loja e descanso. Cada ponto custa Compute (custo
+  fixo por coluna): é a escolha entre aumentar a produção e avançar. **Batalhas** são auto-battler com preparação:
+  esquadrão de até 3 DevPets, frente/trás, gatilho da habilidade de cada um e até 2 consumíveis; os inimigos têm traços
+  (dreno, esquiva, enxame, divisão, perfuração, fortificação) com counters de pets; a previsão simula 20 lutas; a arena
+  reproduz a luta e dá para pular. Derrota só custa a entrada. Recompensas: consumíveis, peças e **Patches** (efeitos
+  da run, a maioria na produção). `npm run devcore:sim` mostra o ritmo (Área 1 em ~3,4 dias no uso casual)
 - **Ilustrações dos upgrades** (`src/tools/devcore/UpgradeArt.jsx`): todo upgrade tem um desenho SVG próprio; os
   combos são montados com os glifos dos dois geradores (fonte → alvo), então um combo novo já nasce ilustrado.
   Um teste garante que nenhum upgrade fica sem ilustração
