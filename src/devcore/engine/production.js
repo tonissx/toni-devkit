@@ -106,7 +106,10 @@ function comboEffects(ups, s, c, exclude) {
   return out;
 }
 
-/** Todos os efeitos no instante t. opts.exclude: ignora os combos vindos desse gerador (view: quanto ele impulsiona). */
+/**
+ * Todos os efeitos no instante t. Só para a view: opts.exclude ignora os combos vindos desse gerador (quanto ele
+ * impulsiona); opts.skip ignora efeitos por source (ex.: 'ability:compile-burst' — quanto um bônus temporário rende).
+ */
 function collectEffects(s, t, c = CONTENT, opts = {}) {
   const ups = upgradeEffects(s, c);
   const upAgg = aggregate(ups);
@@ -118,7 +121,7 @@ function collectEffects(s, t, c = CONTENT, opts = {}) {
     for (const e of syn.effects) effects.push({ ...e, value: e.perActiveCategory ? e.value * active.size : e.value, source: 'synergy:' + syn.id });
   }
   effects.push(...discoveryEffects(s, c), ...abilityEffects(s, t, c), ...incidentEffects(s, t, c), ...blueprintEffects(s, c));
-  return { effects, active };
+  return { effects: opts.skip ? effects.filter((e) => !opts.skip.includes(e.source)) : effects, active };
 }
 
 /** Produção no instante t: { rate, gens: {id: rate}, agg, active }. opts: ver collectEffects. */

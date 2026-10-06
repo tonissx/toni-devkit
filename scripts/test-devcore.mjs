@@ -895,6 +895,30 @@ test('combo: a view diz o par de geradores e só revela quando os dois estão li
   assert.equal(card('parallel-execution').combo, null);
 });
 
+test('view: produção por segundo discriminada — base e cada bônus temporário (habilidade, consumível, incidente)', () => {
+  const s = make({ gens: { 'terminal-worker': 10, 'index-worker': 5 }, tier: 2 });
+  const base = production(s, T0).rate;
+  s.run.abilities['compile-burst'] = { activeUntil: T0 + 30e3, readyAt: T0 + 300e3 };
+  s.run.boosts = [{ id: 'coffee', target: 'global', mult: 1.5, until: T0 + 600e3 }];
+  s.run.incidents.active = { id: 'memory-leak', start: T0 - 1000, end: T0 + 3600e3, contained: false, by: null };
+  const info = snapshot(s, T0).rateInfo;
+  near(info.base, base);
+  near(info.total, production(s, T0).rate);
+  assert.deepEqual(info.items.map((x) => x.kind), ['ability', 'boost', 'incident'], 'maior ganho primeiro, perda no fim');
+  const [burst, coffee, leak] = info.items;
+  assert.equal(burst.pet, 'byte');
+  assert.equal(burst.until, T0 + 30e3);
+  near(burst.delta, info.total - info.total / 3);
+  assert.equal(coffee.icon, 'coffee');
+  near(coffee.delta, info.total - info.total / 1.5);
+  assert.ok(leak.delta < 0 && leak.villain.id === 'leaky');
+  assert.match(leak.effects[0], /Data/);
+  // Sem nada temporário: base = total e nenhuma linha.
+  const calm = snapshot(make({ gens: { 'terminal-worker': 10 } }), T0).rateInfo;
+  assert.equal(calm.items.length, 0);
+  near(calm.base, calm.total);
+});
+
 test('combo: validate pega combo inválido', () => {
   const bad = (e) => validate({ ...CONTENT, UPGRADES: [...CONTENT.UPGRADES, { id: 'x', kind: 'combo', name: 'x', cost: 1, effects: [e] }] });
   assert.ok(bad({ type: 'per', gen: 'nope', per: 3, target: 'gen:agent', value: 0.01 }).some((m) => /gerador inexistente nope/.test(m)));

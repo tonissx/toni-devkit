@@ -430,7 +430,10 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-amount { display: flex; align-items: baseline; gap: 10px; }
 .dc-amount__label { font: 500 11px var(--tk-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--tk-text-3); }
 .dc-amount__value { font: 600 30px/1 var(--tk-font-mono); color: var(--tk-text); font-variant-numeric: tabular-nums; min-width: 6ch; text-align: right; }
-.dc-amount__rate { font: 500 13px var(--tk-font-mono); color: var(--tk-accent-text); }
+.dc-amount__rate { display: inline-flex; align-items: center; gap: 4px; font: 500 13px var(--tk-font-mono); color: var(--tk-accent-text); cursor: help; }
+.dc-amount__rate.is-down, .dc-amount__down { color: var(--tk-warning); }
+.dc-amount__down { display: inline-flex; }
+.dc-amount__rate .lucide, .dc-amount__rate svg { flex-shrink: 0; }
 .dc-head__next { justify-self: end; width: min(280px, 100%); display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; color: var(--tk-text-3); }
 .dc-head__next b { color: var(--tk-text-2); font-weight: 500; }
 
@@ -772,6 +775,17 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-info__gen .lucide, .dc-info__gen svg { color: var(--tk-text-3); flex-shrink: 0; }
 .dc-info__row b { font: 500 11.5px var(--tk-font-mono); color: var(--tk-accent-text); text-align: right; }
 @media (prefers-reduced-motion: reduce) { .dc-info { animation: none; } }
+
+/* Produção por segundo discriminada (cartão da taxa no cabeçalho) */
+.dc-rate { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; min-width: 250px; }
+.dc-rate__icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; color: var(--tk-text-3); }
+.dc-rate__name { display: flex; flex-direction: column; color: var(--tk-text); }
+.dc-rate__name em { font-style: normal; color: var(--tk-text-3); }
+.dc-rate__name small { font: 400 10.5px var(--tk-font-mono); color: var(--tk-text-3); }
+.dc-rate b { font: 500 11.5px var(--tk-font-mono); color: var(--tk-accent-text); text-align: right; }
+.dc-rate.is-down b { color: var(--tk-warning); }
+.dc-rate.is-total { margin-top: 2px; padding-top: 6px; border-top: 1px solid var(--tk-border); }
+.dc-rate.is-total .dc-rate__name { font-weight: 600; }
 
 /* Versões anteriores (modal): lista à esquerda, diff à direita. */
 .nts-history { display: grid; grid-template-columns: 240px 1fr; gap: 12px; height: min(62vh, 560px); min-height: 280px; }
