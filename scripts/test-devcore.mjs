@@ -35,7 +35,7 @@ test('content: ids unique and references valid; MVP sizes', () => {
   assert.deepEqual(validate(), []);
   assert.ok(CONTENT.GENERATORS.length >= 4 && CONTENT.GENERATORS.length <= 6);
   assert.ok(CONTENT.PETS.length >= 3 && CONTENT.PETS.length <= 8);
-  assert.ok(CONTENT.UPGRADES.length >= 10 && CONTENT.UPGRADES.length <= 15);
+  assert.ok(CONTENT.UPGRADES.length >= 10 && CONTENT.UPGRADES.length <= 20);
   assert.ok(CONTENT.DISCOVERIES.length >= 5 && CONTENT.DISCOVERIES.length <= 14);
   assert.equal(CONTENT.TIERS.length, 3);
 });
@@ -974,6 +974,50 @@ test('legacy: sem perks de Arquivo, peças e sucata não atravessam; a view exp�
   assert.equal(v.perks.find((k) => k.id === 'bootstrap').status, 'locked');
   assert.ok(v.nextLeft > 0 && v.nextPct >= 0 && v.nextPct <= 100);
   assert.equal(v.canRebuild, false);
+});
+
+/* ─────────────── Combos entre geradores ─────────────── */
+const { collectEffects } = require('../src/devcore/engine/production.js');
+
+test('combo: o alvo ganha +value a cada N unidades da fonte (contínuo), só com o upgrade', () => {
+  const without = make({ gens: { 'terminal-worker': 30, 'script-runner': 10 } });
+  const r0 = production(without, T0).gens['script-runner'];
+  const withUp = make({ gens: { 'terminal-worker': 30, 'script-runner': 10 }, upgrades: ['shell-pipes'] });
+  near(production(withUp, T0).gens['script-runner'], r0 * 1.1); // 30 Terminals / 3 × 1% = +10%
+  // Terminal Worker não muda: o combo só mexe no alvo.
+  near(production(withUp, T0).gens['terminal-worker'], production(without, T0).gens['terminal-worker']);
+  withUp.run.generators['terminal-worker'].owned = 31;
+  near(production(withUp, T0).gens['script-runner'], r0 * (1 + 0.01 * 31 / 3));
+});
+
+test('combo: fonte ainda bloqueada pelo tier não conta; exclude tira os combos de uma fonte', () => {
+  const s = make({ gens: { 'index-worker': 40, 'automation-worker': 10 }, upgrades: ['indexed-artifacts'], tier: 1 });
+  assert.ok(!collectEffects(s, T0).effects.some((e) => String(e.source).startsWith('combo:')));
+  s.run.tier = 2;
+  assert.ok(collectEffects(s, T0).effects.some((e) => e.source === 'combo:index-worker' && e.target === 'gen:automation-worker'));
+  assert.ok(!collectEffects(s, T0, CONTENT, { exclude: 'index-worker' }).effects.some((e) => e.source === 'combo:index-worker'));
+});
+
+test('combo: a view mostra quem impulsiona quem e quanto isso rende', () => {
+  const s = make({ gens: { 'terminal-worker': 60, 'script-runner': 10 }, upgrades: ['shell-pipes'] });
+  const v = snapshot(s, T0);
+  const term = v.generators.find((g) => g.id === 'terminal-worker');
+  const script = v.generators.find((g) => g.id === 'script-runner');
+  assert.deepEqual(term.boosts.map((b) => [b.id, Math.round(b.pct * 100)]), [['script-runner', 20]]);
+  assert.deepEqual(script.boostedBy.map((b) => b.id), ['terminal-worker']);
+  near(term.boostRate, production(s, T0).rate - production(s, T0, CONTENT, { exclude: 'terminal-worker' }).rate);
+  near(term.boostRate, script.rate - script.rate / 1.2);
+  near(term.share + script.share, 1);
+  const card = v.upgrades.find((u) => u.id === 'shell-pipes');
+  assert.equal(card.kind, 'combo');
+  assert.match(card.effects[0], /Script Runner a cada 3 Terminal Worker/);
+});
+
+test('combo: validate pega combo inválido', () => {
+  const bad = (e) => validate({ ...CONTENT, UPGRADES: [...CONTENT.UPGRADES, { id: 'x', kind: 'combo', name: 'x', cost: 1, effects: [e] }] });
+  assert.ok(bad({ type: 'per', gen: 'nope', per: 3, target: 'gen:agent', value: 0.01 }).some((m) => /gerador inexistente nope/.test(m)));
+  assert.ok(bad({ type: 'per', gen: 'agent', per: 3, target: 'gen:agent', value: 0.01 }).some((m) => /outro gerador/.test(m)));
+  assert.ok(bad({ type: 'per', gen: 'agent', per: 0, target: 'gen:local-cluster', value: 0.01 }).some((m) => /per\/value/.test(m)));
 });
 
 test('legacy: saves antigos (meta do MVP) migram', () => {

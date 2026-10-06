@@ -731,6 +731,12 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   .dc-villain { transition: none; }
 }
 
+/* Combos entre geradores */
+.dc-boosts { display: flex; flex-direction: column; gap: 3px; margin: 3px 0 2px; font-size: 11.5px; color: var(--tk-text-3); }
+.dc-boosts > span { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.dc-card__combo { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.dc-card__now { font: 400 11px var(--tk-font-mono); color: var(--tk-text-3); }
+
 /* Legado (Rebuild + Árvore de perks) */
 .dc-legacy { display: flex; flex-direction: column; gap: 12px; }
 .dc-legacy__top { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 8px; }

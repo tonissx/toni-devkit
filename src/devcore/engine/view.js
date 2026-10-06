@@ -26,6 +26,10 @@ function describeEffect(e, c = CONTENT) {
     : kind === 'gen' ? (c.gen[id] || { name: id }).name : e.target;
   if (e.type === 'mul') return '×' + formatNum(e.value, { rate: true }) + ' ' + what;
   if (e.type === 'add') return pct(e.value) + ' ' + what;
+  if (e.type === 'per') {
+    const src = (c.gen[e.gen] || { name: e.gen }).name;
+    return `${pct(e.value)} ${what} a cada ${e.per === 1 ? '' : e.per + ' '}${src}`;
+  }
   return '';
 }
 
@@ -67,6 +71,8 @@ function snapshot(s, now, c = CONTENT) {
       cost1: costOf(g, owned, 1, div), cost10: costOf(g, owned, 10, div), max, costMax: costOf(g, owned, max, div),
       costDiv: div, mk: bpOf(s, g.id).mk, mult: generatorMult(s, g.id, c), nextMilestone: nextMilestone(owned, c),
       blueprint: blueprintView(s, g.id, now, c),
+      share: prod.rate > 0 ? (prod.gens[g.id] || 0) / prod.rate : 0, // fração da produção total
+      ...comboView(s, g, prod, now, c),
     };
   });
 
@@ -78,6 +84,9 @@ function snapshot(s, now, c = CONTENT) {
       status: owned ? 'owned' : available ? 'available' : 'locked',
       affordable: available && u.cost <= amount,
       requirement: owned || available ? '' : describeCondition(u.requires, c),
+      effects: u.effects.map((e) => describeEffect(e, c)).filter(Boolean),
+      // Combo: quanto renderia agora (o alvo ganha isto com as unidades atuais do gerador fonte).
+      comboNow: u.kind === 'combo' ? u.effects.filter((e) => e.type === 'per').map((e) => pct(e.value * ((s.run.generators[e.gen] || {}).owned || 0) / e.per) + ' ' + (c.gen[e.target.split(':')[1]] || {}).name) : [],
     };
   });
 
@@ -174,6 +183,23 @@ function snapshot(s, now, c = CONTENT) {
     freshSkins: [...s.cosmetics.fresh],
     hasNews: s.discoveries.unseen.length > 0 || newUpgrades.length > 0 || s.cosmetics.fresh.length > 0,
   };
+}
+
+/**
+ * Combos de um gerador (como o tooltip das grandmas do Cookie Clicker):
+ * boosts: quanto ele soma em cada alvo · boostRate/boostShare: quanto esses boosts rendem agora (e % do total)
+ * boostedBy: quem soma nele.
+ */
+function comboView(s, g, prod, now, c) {
+  const sum = (pred, key) => {
+    const m = new Map();
+    for (const e of prod.effects) if (e.type === 'add' && String(e.source).startsWith('combo:') && pred(e)) m.set(key(e), (m.get(key(e)) || 0) + e.value);
+    return [...m].map(([id, v]) => ({ id, name: (c.gen[id] || { name: id }).name, pct: v }));
+  };
+  const boosts = sum((e) => e.source === 'combo:' + g.id, (e) => e.target.split(':')[1]);
+  const boostedBy = sum((e) => e.target === 'gen:' + g.id, (e) => e.source.split(':')[1]);
+  const boostRate = boosts.length ? Math.max(0, prod.rate - production(s, now, c, { exclude: g.id }).rate) : 0;
+  return { boosts, boostedBy, boostRate, boostShare: prod.rate > 0 ? boostRate / prod.rate : 0 };
 }
 
 /** Legado: fragmentos, nível, o que o Rebuild renderia agora e a árvore de perks. */

@@ -4,6 +4,8 @@
  * Toda fonte de bônus (upgrade, DevPet, sinergia, descoberta, habilidade ativa) vira um Effect
  * { type:'add'|'mul', target, value }. Por alvo: fator = (1 + Σadd) × Πmul.
  * Produção de um gerador = base × owned × fator(gen) × fator(categoria) × fator(global) [× diversidade].
+ * Combos ({ type:'per', gen:'a', per:N, target, value }): o alvo ganha +value a cada N unidades do gerador `a`
+ * (contínuo, como as grandmas do Cookie Clicker) — viram um 'add' comum com source 'combo:<a>'.
  */
 const { CONTENT } = require('../content/index.js');
 const { incidentEffects } = require('./incidents.js');
@@ -96,12 +98,23 @@ function abilityEffects(s, t, c) {
   return out;
 }
 
-/** Todos os efeitos no instante t. */
-function collectEffects(s, t, c = CONTENT) {
+/** Combos → efeitos 'add' proporcionais às unidades do gerador fonte (só se ele estiver liberado). */
+function comboEffects(ups, s, c, exclude) {
+  const out = [];
+  for (const e of ups) {
+    if (e.type !== 'per' || e.gen === exclude || !c.gen[e.gen] || !generatorUnlocked(s, c.gen[e.gen])) continue;
+    const owned = (s.run.generators[e.gen] || {}).owned || 0;
+    if (owned > 0) out.push({ type: 'add', target: e.target, value: e.value * owned / e.per, source: 'combo:' + e.gen });
+  }
+  return out;
+}
+
+/** Todos os efeitos no instante t. opts.exclude: ignora os combos vindos desse gerador (view: quanto ele impulsiona). */
+function collectEffects(s, t, c = CONTENT, opts = {}) {
   const ups = upgradeEffects(s, c);
   const upAgg = aggregate(ups);
   const active = activeCategories(s, c);
-  const effects = [...ups];
+  const effects = [...ups, ...comboEffects(ups, s, c, opts.exclude)];
   for (const id of Object.keys(s.run.pets)) effects.push(...petEffects(s, id, upAgg, c, active));
   for (const syn of c.SYNERGIES) {
     if (!synergyActive(s, syn, active, c)) continue;
@@ -111,9 +124,9 @@ function collectEffects(s, t, c = CONTENT) {
   return { effects, active };
 }
 
-/** Produção no instante t: { rate, gens: {id: rate}, agg, active }. */
-function production(s, t, c = CONTENT) {
-  const { effects, active } = collectEffects(s, t, c);
+/** Produção no instante t: { rate, gens: {id: rate}, agg, active }. opts: ver collectEffects. */
+function production(s, t, c = CONTENT, opts = {}) {
+  const { effects, active } = collectEffects(s, t, c, opts);
   const agg = aggregate(effects);
   const gens = {};
   let rate = 0;
