@@ -153,3 +153,38 @@ test('alterar SQL: manda a consulta atual e o pedido; exige os dois', () => {
   assert.equal(TASKS.sqlModify.parse('Aqui:\n```sql\nSELECT a FROM t WHERE ativo = 1\n```'), 'SELECT a FROM t WHERE ativo = 1');
 });
 
+
+test('palette: ações do Devkit ligadas à pergunta (sem IA)', () => {
+  const { relatedCommands, keywords } = require('../src/ai/related.js');
+  const { COMMANDS } = require('../src/commands/registry.js');
+  const cmds = COMMANDS.filter((c) => !c.takesQuery && !c.requiresAi);
+  const top = (q) => relatedCommands(q, cmds).map((c) => c.id);
+  assert.equal(top('? como desfazer o último commit que fiz?')[0], 'git:recipe:undo-commit');
+  assert.equal(top('commitei na branch errada')[0], 'git:recipe:move-to-branch');
+  assert.equal(top('quero juntar meus commits')[0], 'git:recipe:squash-last');
+  assert.equal(top('formatar sql')[0], 'tool:sql');
+  assert.deepEqual(top('qual a capital da França?'), []);
+  assert.equal(relatedCommands('desfazer commit', cmds, { limit: 15, min: 1 }).length <= 15, true);
+  assert.deepEqual(keywords('Como eu configurei o proxy do Fluig?'), ['configurei', 'proxy', 'fluig']);
+});
+
+test('palette: ids e nomes citados viram ações; o texto fica sem ids', () => {
+  const input = { commands: [{ id: 'git:recipe:undo-commit', name: 'Git: Desfazer o último commit' }, { id: 'tool:sql', name: 'SQL Formatter' }] };
+  assert.deepEqual(TASKS.paletteAsk.parse('git:recipe:undo-commit', input), { cmds: ['git:recipe:undo-commit'], text: '' });
+  assert.deepEqual(TASKS.paletteAsk.parse('Use `git reset --soft HEAD~1` ou [[cmd:git:recipe:undo-commit]].', input).cmds, ['git:recipe:undo-commit']);
+  const r = TASKS.paletteAsk.parse('Use `git reset --soft HEAD~1`. No Devkit: Desfazer o último commit.', input);
+  assert.deepEqual(r.cmds, ['git:recipe:undo-commit']);
+  assert.match(r.text, /git reset --soft HEAD~1/);
+  assert.doesNotMatch(TASKS.paletteAsk.build({ question: 'q', ...input }).system, /cmd:|git:recipe/);
+});
+
+test('palette: aviso de comandos que apagam trabalho', () => {
+  const { riskyCommands } = require('../src/ai/related.js');
+  assert.match(riskyCommands('use `git reset --hard HEAD~1`')[0], /--soft/);
+  assert.deepEqual(riskyCommands('use git reset --soft HEAD~1'), []);
+  assert.equal(riskyCommands('git push origin main --force').length, 1);
+  assert.equal(riskyCommands('git push --force-with-lease').length, 0);
+  assert.equal(riskyCommands('git clean -fd').length, 1);
+  assert.equal(riskyCommands('git checkout -- .').length, 1);
+  assert.equal(riskyCommands('git checkout main').length, 0);
+});

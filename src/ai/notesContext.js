@@ -3,13 +3,7 @@
 // trechos das melhores notas. Notas com a tag "privado" nunca entram. O conteúdo vai como está no arquivo: blocos
 // ```secret``` têm só o NOME da entrada do Vault — o segredo nunca é resolvido aqui.
 
-const STOP = new Set('a o os as um uma uns umas de do da dos das em no na nos nas por para pra com sem que qual quais quando como onde quem é e ou se meu minha meus minhas eu foi era ser está estão the of to in on for and or is are was what how where when which who why my i'.split(' '));
-
-/** Palavras que importam na pergunta (sem acento, sem palavras vazias). */
-function keywords(question) {
-  return [...new Set(String(question || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .split(/[^\w.-]+/).filter((w) => w.length > 2 && !STOP.has(w)))].slice(0, 8);
-}
+const { keywords } = require('./related.js');
 
 /** Trecho de até `max` caracteres em volta da 1ª palavra-chave encontrada (ou o começo da nota). */
 function excerptAround(content, words, max = 1500) {

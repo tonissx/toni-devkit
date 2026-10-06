@@ -14,6 +14,7 @@ import { QuickNote } from './QuickNote.jsx';
 import { emit } from '../lib/events.js';
 import { useAiMode, aiOn } from '../ai/ui.jsx';
 import { PaletteAi } from './PaletteAi.jsx';
+import { relatedCommands } from '../ai/related.js';
 
 const { Icon, Kbd, Spinner } = DS;
 
@@ -113,7 +114,8 @@ function buildSections(scope, query, recent, nd, extra = [], link = null, ai = f
         items: question ? [cmdItem({ cmd: {
           id: 'ai:ask', name: `Perguntar: ${question}`, description: 'Resposta curta; sugere ações do Devkit quando ajudam',
           icon: 'sparkles', dynamic: true, keepOpen: true,
-          run: (ctx) => ctx.palette.ai({ task: 'paletteAsk', title: question, input: { question, commands: AI_CMDS.map(({ id, name }) => ({ id, name })) } }),
+          // Vão só os comandos ligados à pergunta (lista curta: modelos pequenos se perdem na lista inteira).
+          run: (ctx) => ctx.palette.ai({ task: 'paletteAsk', title: question, question, input: { question, commands: relatedCommands(question, AI_CMDS, { limit: 15, min: 1 }).map(({ id, name }) => ({ id, name })) } }),
         } })] : [],
       }];
     }
@@ -474,6 +476,8 @@ export function Palette() {
   const onKeyDown = (e) => {
     if (e.nativeEvent.isComposing) return;
     if (aiReq && e.key === 'Escape') { e.preventDefault(); setAiReq(null); return; } // Esc volta para a lista (gerando: o painel para antes)
+    // Com a resposta aberta, Enter executa a 1ª ação sugerida do Devkit (e não reenvia a pergunta).
+    if (aiReq && e.key === 'Enter') { e.preventDefault(); const b = document.querySelector('.pl-ai__cmd'); if (b) b.click(); return; }
     if (pwd) { // pedindo a senha: só Enter e Esc têm função; o resto é digitação
       if (e.key === 'Enter') { e.preventDefault(); submitUnlock(); }
       else if (e.key === 'Escape') { e.preventDefault(); setPwd(null); setPw(''); setError(null); }

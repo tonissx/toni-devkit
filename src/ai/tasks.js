@@ -360,18 +360,29 @@ const TASKS = {
   paletteAsk: {
     label: 'Pergunta', maxTokens: 600,
     build(i) {
+      const list = (i.commands || []).slice(0, 20);
       return {
         system: ['Você é o assistente do Toni Devkit, um app de ferramentas para devs (SQL, XML, JSON, Diff, Git, Notes, Vault).', PT,
-          'Responda em no máximo 6 linhas, com comandos em `código` quando for o caso.',
-          'Se uma ação do Devkit ajudar, cite até 3 no formato [[cmd:id]] usando SOMENTE ids da lista abaixo.',
-          `Ações do Devkit (id — nome):\n${(i.commands || []).slice(0, 150).map((c) => `${c.id} — ${c.name}`).join('\n')}`].join('\n'),
+          'Responda a pergunta em texto, em no máximo 6 linhas, explicando como fazer (com o comando em `código` quando houver).',
+          list.length ? 'As ações prontas do Devkit ligadas à pergunta já aparecem como botões abaixo da sua resposta. Se uma delas resolve, termine com uma frase curta dizendo que dá para fazer pelo Devkit, citando o nome da ação — sem escrever ids.' : null,
+          list.length ? 'Ações do Devkit ligadas à pergunta:\n' + list.map((c) => `- ${c.name}`).join('\n') : null].filter(Boolean).join('\n'),
         user: clip(i.question, 1500),
       };
     },
     clean: tidy,
+    // Ids citados (com ou sem [[cmd:…]]) viram botões; no texto eles saem — modelos pequenos às vezes só escrevem o id.
     parse(text, input = {}) {
-      const ids = new Set((input.commands || []).map((c) => c.id));
-      return { cmds: cmdRefs(text).filter((id) => ids.has(id)).slice(0, 3) };
+      const ids = (input.commands || []).map((c) => c.id);
+      const known = new Set(ids);
+      const bare = ids.filter((id) => String(text).includes(id));
+      // Ação citada pelo nome ("Desfazer o último commit"), sem o prefixo "Git: ".
+      const low = String(text).toLowerCase();
+      const named = (input.commands || []).filter((c) => { const n = String(c.name || '').replace(/^[\w ]+:\s*/, '').toLowerCase(); return n.length > 6 && low.includes(n); }).map((c) => c.id);
+      const cmds = [...new Set([...cmdRefs(text).filter((id) => known.has(id)), ...bare, ...named])].slice(0, 3);
+      let clean = String(text).replace(/\s*\[\[cmd:[^\]]+\]\]/g, '');
+      for (const id of [...ids].sort((a, b) => b.length - a.length)) clean = clean.split(id).join('');
+      clean = clean.replace(/`\s*`/g, '').replace(/[ \t]+\n/g, '\n').trim();
+      return { cmds, text: clean };
     },
   },
 
