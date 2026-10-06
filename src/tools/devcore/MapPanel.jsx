@@ -9,10 +9,12 @@ const { Button, Icon } = DS;
 const COMBAT = ['battle', 'elite', 'boss'];
 const CHANCE_CLASS = { 'favorável': 'is-good', 'arriscado': 'is-risky', 'muito arriscado': 'is-bad' };
 
-/** Sprite de um pet do jogador (cores do visual escolhido). */
+/** Sprite de um pet (cores do visual escolhido); pet que o jogador ainda não tem aparece como silhueta. */
 function Pet({ snap, id, size = 40 }) {
   const p = snap.pets.find((x) => x.id === id);
-  return p ? <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} aura={auraOf(p)} size={size} className="is-static" /> : null;
+  if (!p) return null;
+  if (!p.owned) return <PetSprite id={p.id} size={size} locked className="is-static" />;
+  return <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} aura={auraOf(p)} size={size} className="is-static" />;
 }
 
 /** Linha de inimigo: sprite, nome, atributos e traços (com o counter e se o esquadrão salvo anula). */
@@ -224,7 +226,7 @@ export function MapPanel({ snap, act }) {
           <div className="dc-card__title">{map.area.name}</div>
           <div className="dc-row__desc">{map.area.description}</div>
         </div>
-        <span className="dc-chip" title="Batalhas na vida">{map.stats.wins} vitórias · {map.stats.losses} derrotas</span>
+        <span className="dc-chip" title="Batalhas na vida">{map.stats.wins} vitória{map.stats.wins === 1 ? '' : 's'} · {map.stats.losses} derrota{map.stats.losses === 1 ? '' : 's'}</span>
         {map.battleBuff && <span className="dc-chip is-ok">Próxima batalha +{Math.round(map.battleBuff.atk * 100)}% de ataque</span>}
       </div>
       <div className="dc-patches">

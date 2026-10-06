@@ -11,6 +11,23 @@ import { MapPanel } from './MapPanel.jsx';
 const { Tabs, Modal, Button, ProgressBar, Spinner, Icon } = DS;
 
 const api = () => window.devkit.devcore;
+
+/** Um erro num painel do DevCore não derruba a tela: mostra a mensagem e deixa tentar de novo. */
+class PanelBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error) { console.error('[devcore] erro no painel', error); }
+  componentDidUpdate(prev) { if (prev.resetKey !== this.props.resetKey && this.state.error) this.setState({ error: null }); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="dc-empty">
+        Algo deu errado neste painel: {String(this.state.error.message || this.state.error)}{' '}
+        <Button size="sm" variant="ghost" onClick={() => this.setState({ error: null })}>Tentar de novo</Button>
+      </div>
+    );
+  }
+}
 const petName = (snap, id) => (snap.pets.find((p) => p.id === id) || { name: id }).name;
 
 /**
@@ -235,12 +252,14 @@ export function DevCoreScreen({ toast, request }) {
         <Tabs items={tabs} value={ui.tab} onChange={(tab) => setUi((u) => ({ ...u, tab }))} />
       </div>
       <div className="dc-panel tk-scroll">
+        <PanelBoundary resetKey={ui.tab}>
         {ui.tab === 'generators' && <GeneratorsPanel snap={snap} amount={liveAmount} act={act} />}
         {ui.tab === 'pets' && <PetsPanel snap={snap} amount={liveAmount} act={act} now={serverNow} />}
         {ui.tab === 'upgrades' && <UpgradesPanel snap={snap} amount={liveAmount} act={act} />}
         {ui.tab === 'tech' && <TechPanel snap={snap} freshUnseen={freshUnseen} />}
         {ui.tab === 'ops' && <OpsPanel snap={snap} amount={liveAmount} act={act} now={serverNow} />}
         {ui.tab === 'map' && snap.map.unlocked && <MapPanel snap={snap} act={act} />}
+        </PanelBoundary>
       </div>
 
       {snap.welcome && <WelcomeBack snap={snap} onClose={() => act({ type: 'ackWelcome' })} />}
