@@ -2,6 +2,7 @@ import { DS, mod } from '../lib/ds.js';
 import { THEMES } from '../lib/themes.js';
 import { acceleratorFromEvent, acceleratorLabel } from '../commands/binds.js';
 import { LinksCard } from './LinksCard.jsx';
+import { AiCard } from './AiCard.jsx';
 
 const { PageHeader, Card, Select, Kbd, Badge, Toggle, Alert, Button } = DS;
 
@@ -197,6 +198,7 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater, toast }) 
         <PaletteCard />
         <LinksCard toast={toast} />
         <BindsCard onChange={setBinds} />
+        <AiCard toast={toast} />
         <Card padding={24}>
           <div className="tk-card__title">Atalhos</div>
           {shortcuts.map(([a, k]) => <Row key={a} label={a}><Kbd size="sm">{k}</Kbd></Row>)}

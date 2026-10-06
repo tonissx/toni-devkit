@@ -5,6 +5,7 @@ import { gitApi, useRepoData, FilePath, KindBadge, OpButton, preview, RiskBadge 
 import { GitDiff } from './GitDiff.jsx';
 import { ConflictEditor } from './Conflicts.jsx';
 import { suggestions } from '../../git/ignore.js';
+import { useAiMode, useAiTask, aiOn, AiButton, AiPanel } from '../../ai/ui.jsx';
 
 const { Icon, Spinner, Checkbox } = DS;
 
@@ -63,10 +64,36 @@ function Section({ title, hint, files, area, actions, sel, ...rest }) {
   );
 }
 
+/**
+ * "Sugerir mensagem": manda o diff preparado + os títulos dos últimos commits para a IA escolhida e escreve a resposta
+ * aos poucos na caixa. Nada é commitado sozinho; Esc/Parar devolve o que estava escrito.
+ */
+function useCommitSuggest({ repo, status, cfg, msg, setMsg }) {
+  const before = React.useRef('');
+  const ai = useAiTask('commitMessage', cfg, {
+    onStart: () => { before.current = msg; setMsg(''); },
+    onChunk: (c) => setMsg((m) => m + c),
+    onDone: (r) => setMsg(r.text),
+    onFail: () => setMsg(before.current),
+  });
+  const start = () => ai.start(async () => {
+    const [d, log] = await Promise.all([gitApi().diff(repo, { area: 'staged' }), status.unborn ? [] : gitApi().log(repo, { limit: 10, ref: 'HEAD' }).catch(() => [])]);
+    return { diff: d.patch, recent: log.map((c) => c.subject), branch: status.branch.head || '' };
+  });
+  return {
+    button: <AiButton ai={ai} label="Sugerir" className="gt-commit__ai" onClick={start} disabled={!status.staged.length} reason="Prepare arquivos para sugerir" />,
+    panel: <AiPanel ai={ai} body="none" extraLinks={before.current.trim() ? [{ label: 'Desfazer', onClick: () => { setMsg(before.current); ai.close(); } }] : []} />,
+  };
+}
+
 function CommitBox({ status, run, repo, focus }) {
+  const ai = useAiMode();
+  const aiOk = aiOn(ai);
   const [msg, setMsg] = React.useState(() => { try { return localStorage.getItem('tk.git.draft:' + repo) || ''; } catch { return ''; } });
   const [amend, setAmend] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const sug = useCommitSuggest({ repo, status, cfg: ai, msg, setMsg });
+  const showAi = aiOk && !amend;
   React.useEffect(() => { try { localStorage.setItem('tk.git.draft:' + repo, msg); } catch { /* ignore */ } }, [msg, repo]);
   const subject = msg.split('\n')[0];
   const canCommit = (status.staged.length > 0 || amend) && msg.trim() && !status.conflicts.length;
@@ -89,9 +116,12 @@ function CommitBox({ status, run, repo, focus }) {
   React.useEffect(() => { if (focus && focus.amend && !status.unborn) toggleAmend(true, true); }, [focus && focus.nonce]);
   return (
     <div className="gt-commit">
-      <textarea className="gt-commit__msg" value={msg} onChange={(e) => setMsg(e.target.value)} rows={3}
+      <div className="gt-commit__msgwrap">
+      <textarea className={'gt-commit__msg' + (showAi ? ' has-ai' : '')} value={msg} onChange={(e) => setMsg(e.target.value)} rows={3}
         placeholder={'Mensagem do commit — o que mudou e por quê\n(1ª linha curta; detalhes depois de uma linha em branco)'}
         onKeyDown={(e) => { if (isMod(e) && e.key === 'Enter') { e.preventDefault(); go(); } }} aria-label="Mensagem do commit" />
+        {showAi && sug.button}
+      </div>
       <div className="gt-commit__bar">
         <span className={'gt-commit__count' + (subject.length > 72 ? ' is-long' : subject.length > 50 ? ' is-warn' : '')} title="A 1ª linha fica melhor com até 50 caracteres (máximo 72)">{subject.length}/50</span>
         {!status.unborn && <Checkbox label="Corrigir o último commit (amend)" checked={amend} onChange={toggleAmend} />}
@@ -103,6 +133,7 @@ function CommitBox({ status, run, repo, focus }) {
           <span>{amend ? 'Corrigir commit' : status.staged.length ? `Commit de ${status.staged.length} arquivo${status.staged.length === 1 ? '' : 's'}` : 'Commit'}</span>
         </button>
       </div>
+      {sug.panel}
     </div>
   );
 }

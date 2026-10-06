@@ -189,6 +189,50 @@ operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nad
   arquivo, **abrir no Diff Checker** (antes × depois). A palette lista cada repositório ("Git: <nome>") e as receitas; o
   uso conta no DevCore
 
+**IA**: mensagem de commit, explicar commit, combinar conflito, nome de branch e resumo de PR — ver [IA (opcional)](#ia-opcional)
+
+## IA (opcional)
+
+Desligada por padrão: com ela desligada nenhum botão de IA aparece. Ligada, cada ferramenta ganha botões ✦ que fazem um
+pedido só quando clicados. Em todos: **Ver o que é enviado** mostra o pedido exato, a resposta aparece aos poucos,
+`Esc`/**Parar** interrompe, e nada é aplicado sem clique (quase tudo tem **Desfazer**). **O Vault nunca entra em
+pedido nenhum** — notas vão com as referências dos blocos `secret`, nunca com o segredo.
+
+| Onde | O quê |
+| --- | --- |
+| Git → Mudanças | **Sugerir** a mensagem de commit (diff preparado + estilo dos últimos commits), escrita direto na caixa |
+| Git → Histórico | **Explicar este commit** (o que mudou, por quê, o que observar) e salvar como nota com a explicação |
+| Git → conflitos | **Sugerir combinação** por bloco; **Usar esta versão** cai no Editar para revisar antes de resolver |
+| Git → Branches | **Nova branch**: descreva a tarefa e escolha um dos 3 nomes (com o prefixo que o repositório usa) · **Comparar**: **Resumo para PR** (título + descrição para copiar) |
+| SQL Formatter | **Explicar consulta** · **Escrever ou alterar com IA**: *Nova consulta* a partir de uma descrição, ou *Alterar a atual* (“trocar o LEFT JOIN por INNER”, “só 2025”…) — muda só o que foi pedido, com **Comparar no Diff Checker** e **Desfazer**; o esquema das tabelas é opcional e fica lembrado no PC |
+| JSON Visualizer | **Melhorar nomes** dos tipos gerados (só os nomes mudam; o Devkit aplica no código original) · **Explicar o erro** quando o Consertar não resolve |
+| Diff Checker | **Resumir diferenças** (adicionado, removido, alterado e o que parece arriscado) |
+| Notes | Botão **IA** no editor: **título e tags** (em chips, reaproveitando as tags que já existem), **Resumir** (insere no topo), **Transformar em checklist** (seleção ou nota toda) · **Perguntar às notas**: digite a pergunta na busca |
+| Palette | Comece com **`?`** para perguntar (pode sugerir ações do Devkit) · em Notes, `?` pergunta às notas · **IA: explicar o que está copiado** (SQL, JSON, XML, código ou erro com stack) |
+
+**Sem IA** (sempre disponíveis): avisos de risco no SQL (UPDATE/DELETE sem WHERE, JOIN sem ON, SELECT *, NOT IN com
+subconsulta…), visão **Tipos** no JSON (TypeScript, C# e JSON Schema), **Consertar** JSON (comentários, vírgulas
+sobrando, aspas simples, chaves sem aspas, True/None) e o comando da palette **Gerar tipos TypeScript do JSON copiado**.
+
+**Perguntar às notas** busca primeiro, no PC, as notas que combinam com a pergunta e manda só trechos delas (até 6);
+a resposta cita as notas como links. Notas com a tag `privado` nunca vão.
+
+**Configurações → IA**:
+
+- **Local (offline)**: usa o [Ollama](https://ollama.com), um programa à parte que roda o modelo nesta máquina, sem
+  internet. **Instalar o Ollama** baixa o instalador oficial, **confere a assinatura digital** (só executa se for válida e
+  da Ollama Inc.) e instala para o usuário, sem administrador; ele fica na bandeja, inicia com o Windows e é
+  desinstalado à parte. Depois é só escolher e **Baixar** um modelo — o sugerido é o `qwen2.5-coder:3b` (~1,9 GB, rápido
+  mesmo sem placa de vídeo); o `7b` é mais preciso e mais lento na CPU. Só aceita Ollama em `127.0.0.1`/`localhost`.
+  Nas tarefas mais difíceis (conflito, PR, SQL a partir de texto, perguntas às notas) o painel avisa que a Nuvem vai melhor
+- **Nuvem (Claude)**: API da Anthropic pelo SDK oficial (Opus 5.5, Sonnet 5.5 ou Haiku 4.5). A **chave fica no Vault**
+  (entrada do tipo API/token) e só é lida no processo principal, na hora da chamada — o cofre precisa estar desbloqueado.
+  Antes do primeiro envio pergunta (com a opção de não perguntar de novo)
+- **Testar** gera uma mensagem para um diff de exemplo e mostra quanto tempo levou nesta máquina
+
+Configuração em `%APPDATA%\Toni Devkit\ai.json`. As tarefas (o que cada uma envia e como lê a resposta) ficam em
+`src/ai/tasks.js`; as peças de tela, em `src/ai/ui.jsx`. Testes: `npm run test:ai`.
+
 ## Início
 
 O painel do dia, aberto ao clicar em **Início** na sidebar. Tudo se atualiza sozinho quando uma nota, um link ou o cofre

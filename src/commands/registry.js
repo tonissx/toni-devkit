@@ -15,7 +15,9 @@
  *     ctx.vault (API do Vault — só metadados; copy() grava no clipboard pelo processo principal)
  *     ctx.stickies (sticky notes: open(noteId), toggleAll())
  *     ctx.openApp(route, params?) — params chega à ferramenta (ex.: { tab: 'pets' })
- *     ctx.palette.quickNote(texto?) / ctx.palette.enter(escopo)   (comandos keepOpen: a palette continua aberta)
+ *     ctx.palette.quickNote(texto?) / ctx.palette.enter(escopo) / ctx.palette.ai({ task, input, title })
+ *       (comandos keepOpen: a palette continua aberta)
+ * - requiresAi: só aparece com a IA ligada (Configurações → IA).
  *   O 3º argumento traz { ctrl } (Ctrl+Enter).
  *   Pode ser async. Se devolver uma string, ela aparece como confirmação antes da palette fechar.
  *   Se lançar erro, a palette mostra o erro e continua aberta.
@@ -34,6 +36,8 @@ const { formatXml } = require('../tools/xml-formatter/engine.js');
 const { needsValue, shortUrl } = require('../links/link.js');
 const { kindOf, summary, primaryIndex, isDbLike } = require('../vault/entry.js');
 const { RECIPES } = require('../git/recipes.js');
+const { generateTypes } = require('../tools/json-visualizer/types.js');
+const { sniffKind } = require('../ai/tasks.js');
 
 const CATEGORIES = [
   { id: 'tools', name: 'Tools', key: 't', icon: 'wrench', description: 'Abrir uma ferramenta do Devkit' },
@@ -135,6 +139,32 @@ const actionCommands = [
     run: async (ctx) => {
       const text = await readClipboard(ctx);
       return detectClipboardKind(text) === 'xml' ? formatXmlClip(ctx, text) : formatSqlClip(ctx, text);
+    },
+  },
+  {
+    id: 'clipboard:types',
+    name: 'Gerar tipos TypeScript do JSON copiado',
+    description: 'Lê o JSON da área de transferência e copia as interfaces TypeScript (sem IA)',
+    icon: 'braces',
+    keywords: ['clipboard', 'json', 'typescript', 'interface', 'tipos', 'types', 'ts'],
+    run: async (ctx) => {
+      let value;
+      try { value = JSON.parse(await readClipboard(ctx)); } catch (e) { throw new Error(/vazia/.test(e.message) ? e.message : 'O que está copiado não é um JSON válido'); }
+      await ctx.clipboard.write(generateTypes(value, 'ts'));
+      return 'Tipos TypeScript copiados';
+    },
+  },
+  {
+    id: 'ai:clipboard',
+    name: 'IA: explicar o que está copiado',
+    description: 'SQL, JSON, XML, código ou uma mensagem de erro — explica e aponta problemas',
+    icon: 'sparkles',
+    requiresAi: true,
+    keepOpen: true,
+    keywords: ['ia', 'ai', 'clipboard', 'explicar', 'erro', 'stack', 'sql', 'codigo'],
+    run: async (ctx) => {
+      const text = await readClipboard(ctx);
+      ctx.palette.ai({ task: 'clipExplain', title: 'Explicar o que está copiado', input: { text, kind: sniffKind(text) } });
     },
   },
   {

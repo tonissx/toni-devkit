@@ -17,6 +17,8 @@ const { createLinksService } = require('./links/service');
 const { createVaultService } = require('./vault/service');
 const { createStickiesService } = require('./stickies/service');
 const { createGitService } = require('./git/service');
+const { createAiService } = require('./ai/service');
+const { primaryIndex } = require('../src/vault/entry.js');
 
 // Event Bus: as features anunciam o que aconteceu; módulos (DevCore) escutam sem acoplamento.
 const bus = createBus();
@@ -613,6 +615,45 @@ ipcMain.handle('git:open-in', async (_e, repo, where) => {
   return shell.openPath(top);
 });
 
+/* ─────────────── IA (opcional: Ollama local ou API do Claude) ─────────────── */
+// %APPDATA%/Toni Devkit/ai.json. A chave da API fica no Vault: o serviço a lê aqui, no processo principal, só na hora
+// de chamar a API — a tela nunca a recebe. Ver electron/ai/service.js.
+let ai = null;
+let aiReady = null;
+
+function initAi() {
+  ai = createAiService({
+    file: path.join(app.getPath('userData'), 'ai.json'),
+    getApiKey: async (entryId) => {
+      if (!entryId || !vault || !vault.status().unlocked) return null;
+      const entry = (vault.list() || []).find((e) => e.id === entryId);
+      if (!entry) return null;
+      const i = primaryIndex(entry);
+      return i === -1 ? null : vault.reveal(entryId, i);
+    },
+  });
+  aiReady = ai.init().catch((e) => { console.error('[ai]', e); });
+}
+
+ipcMain.handle('ai:status', async () => { await aiReady; return ai.status(); });
+ipcMain.handle('ai:config', async () => { await aiReady; return ai.getConfig(); });
+// Mudou a configuração: avisa todas as janelas (a palette e as stickies são outras janelas).
+ipcMain.handle('ai:setConfig', async (_e, patch) => {
+  await aiReady;
+  const cfg = await ai.setConfig(patch && typeof patch === 'object' ? patch : {});
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('ai:changed', cfg);
+  return cfg;
+});
+ipcMain.handle('ai:buildRequest', async (_e, task, input) => { await aiReady; return ai.buildRequest(task, input); });
+// Progresso e pedaços de texto vão só para a janela que pediu.
+ipcMain.handle('ai:installOllama', async (e) => { await aiReady; return ai.installOllama((p) => e.sender.send('ai:progress', { kind: 'install', ...p })); });
+ipcMain.handle('ai:pullModel', async (e, name) => { await aiReady; return ai.pullModel(String(name || ''), (p) => e.sender.send('ai:progress', { kind: 'pull', name, ...p })); });
+ipcMain.handle('ai:generate', async (e, requestId, task, input) => {
+  await aiReady;
+  return ai.generate(String(requestId), task, input, (chunk) => e.sender.send('ai:chunk', { requestId: String(requestId), chunk }));
+});
+ipcMain.handle('ai:cancel', async (_e, requestId) => { await aiReady; return ai.cancel(String(requestId)); });
+
 /* ─────────────── Atualização ─────────────── */
 // Windows instalado (NSIS) e Linux: electron-updater troca os arquivos sozinho. macOS e Windows
 // portátil (não conseguem se auto-substituir em disco): só avisam e abrem a release no navegador.
@@ -664,6 +705,7 @@ if (!app.requestSingleInstanceLock()) {
     initStickies();
     initLinks();
     initGit();
+    initAi();
     initVault();
     registerNotesProtocol();
     initDevCore();

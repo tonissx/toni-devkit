@@ -376,10 +376,12 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       log(repo, { limit: 1, ref: 'HEAD' }),
     ]);
     const days = new Map();
-    for (const t of act.stdout.split('\n').filter(Boolean)) { const d = new Date(+t * 1000); const k = d.toISOString().slice(0, 10); days.set(k, (days.get(k) || 0) + 1); }
+    // Dia LOCAL (não UTC): no Brasil, commit depois das 21h ia para o dia seguinte no mapa.
+    const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    for (const t of act.stdout.split('\n').filter(Boolean)) { const k = dayKey(new Date(+t * 1000)); days.set(k, (days.get(k) || 0) + 1); }
     const activity = [];
     const today = now();
-    for (let i = 89; i >= 0; i--) { const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i); const k = d.toISOString().slice(0, 10); activity.push({ day: k, n: days.get(k) || 0 }); }
+    for (let i = 89; i >= 0; i--) { const k = dayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)); activity.push({ day: k, n: days.get(k) || 0 }); }
     const fileCount = new Map();
     for (const f of hot.stdout.split('\n').filter(Boolean)) fileCount.set(f, (fileCount.get(f) || 0) + 1);
     return {

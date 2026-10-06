@@ -253,7 +253,7 @@ export function GitScreen({ toast, request }) {
     { value: 'maintenance', label: 'Manutenção', icon: 'wrench' },
     { value: 'time', label: 'Máquina do tempo', icon: 'life-buoy' },
   ];
-  const props = { repo, status: s, run, go, undo, focus, openMerge: setMerging };
+  const props = { repo, status: s, run, go, undo, focus, openMerge: setMerging, toast };
   const Panel = PANELS[ui.tab] || Overview;
 
   return (

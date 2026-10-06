@@ -254,4 +254,29 @@ function applyHunk(left, right, hunk, direction) {
   return { left: a.join(eolOf(left || right)), right };
 }
 
-module.exports = { diffLines, diffSeq, buildHunks, pairRows, diffInline, applyHunk, splitLines, stats };
+/**
+ * Resultado de diffLines → texto no formato diff unificado (com `context` linhas iguais em volta de cada bloco).
+ * Usado para mandar as diferenças à IA ("Resumir diferenças").
+ */
+function unifiedDiff(result, { context = 3, leftName = 'Original', rightName = 'Alterado' } = {}) {
+  const { a, b, ops, hunks } = result;
+  if (!hunks.length) return '';
+  const out = [`--- ${leftName}`, `+++ ${rightName}`];
+  // Junta blocos próximos (o contexto de um encosta no do outro).
+  const groups = [];
+  for (const h of hunks) {
+    const from = Math.max(0, h.opStart - context), to = Math.min(ops.length, h.opEnd + context);
+    const last = groups[groups.length - 1];
+    if (last && from <= last.to) last.to = to; else groups.push({ from, to });
+  }
+  for (const g of groups) {
+    const slice = ops.slice(g.from, g.to);
+    const firstA = slice.find((o) => o.a >= 0), firstB = slice.find((o) => o.b >= 0);
+    const na = slice.filter((o) => o.t !== 'add').length, nb = slice.filter((o) => o.t !== 'del').length;
+    out.push(`@@ -${firstA ? firstA.a + 1 : 0},${na} +${firstB ? firstB.b + 1 : 0},${nb} @@`);
+    for (const o of slice) out.push(o.t === 'eq' ? ' ' + a[o.a] : o.t === 'del' ? '-' + a[o.a] : '+' + b[o.b]);
+  }
+  return out.join('\n') + '\n';
+}
+
+module.exports = { diffLines, diffSeq, buildHunks, pairRows, diffInline, applyHunk, splitLines, stats, unifiedDiff };

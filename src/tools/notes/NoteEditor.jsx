@@ -11,6 +11,8 @@ import { isTemplateFolder } from '../../notes/templates.js';
 import { Backlinks } from './Backlinks.jsx';
 import { HistoryModal } from './HistoryModal.jsx';
 import { normalize } from '../../commands/search.js';
+import { useAiMode, aiOn } from '../../ai/ui.jsx';
+import { useNoteAi } from './NoteAi.jsx';
 
 const { SegmentedControl, IconButton, Button, Alert, Kbd, Select } = DS;
 
@@ -74,6 +76,8 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
   const [renameOffer, setRenameOffer] = React.useState(null); // { from, to, count }
   const [showHistory, setShowHistory] = React.useState(false);
   const title = displayTitle(note);
+  const cfg = useAiMode();
+  const ai = useNoteAi({ cfg, note, update, bodyRef });
 
   React.useEffect(() => {
     if (!isNew && initial.id) notesApi().markViewed(initial.id);
@@ -231,6 +235,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
         />
         <div className="nts-editor__tools">
           <span className={'nts-status is-' + status} role="status">{statusLabel(status)}</span>
+          {aiOn(cfg) && ai.button}
           <IconButton size="sm" className="nts-pin" icon="pin" label={note.pinned ? 'Desafixar' : 'Fixar (Pinned)'} active={note.pinned} onClick={() => update({ pinned: !note.pinned })} />
           <IconButton size="sm" className="nts-fav" icon="star" label={note.favorite ? 'Remover dos favoritos' : 'Favoritar'} active={note.favorite} onClick={() => update({ favorite: !note.favorite })} />
           <IconButton size="sm" icon="sticky-note" label="Fixar na tela (sticky note)" disabled={isNew && status === 'idle'}
@@ -276,6 +281,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
           <Button size="sm" variant="ghost" onClick={() => setRenameOffer(null)}>Agora não</Button>
         </Alert>
       )}
+      {aiOn(cfg) && ai.panels}
       <div className={'nts-editor__body is-' + mode}>
         {mode !== 'preview' && editor}
         {mode !== 'edit' && preview}
