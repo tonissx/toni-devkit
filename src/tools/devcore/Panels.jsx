@@ -71,6 +71,12 @@ const rateText = (v) => '+' + formatNum(v, { rate: true }) + '/s';
 /** Linha "rótulo · valor" dos cartões de detalhes. */
 const InfoRow = ({ k, children }) => <div className="dc-info__row"><span>{k}</span><b>{children}</b></div>;
 
+/** Nome de um gerador com o ícone dele (o mesmo da linha na aba Generators). */
+const GenLabel = ({ snap, id, name }) => {
+  const g = snap.generators.find((x) => x.id === id);
+  return <span className="dc-info__gen"><Icon name={catIcon(snap, g ? g.category : null)} size={12} />{name}</span>;
+};
+
 /** Detalhes de um gerador (hover no nome): descrição, cada um, multiplicador, próximo marco, participação. */
 function GenDetails({ g }) {
   const m = g.nextMilestone;
@@ -87,28 +93,28 @@ function GenDetails({ g }) {
 }
 
 /** Detalhes dos combos de um gerador (hover no selo): quem ele impulsiona, quanto rende e quem impulsiona ele. */
-function ComboDetails({ g }) {
+function ComboDetails({ g, snap }) {
   return (
     <>
       {g.boosts.length > 0 && <>
         <div className="dc-info__title"><Icon name="git-merge" size={12} /> Também impulsiona</div>
-        {g.boosts.map((b) => <InfoRow key={b.id} k={b.name}>{pctText(b.pct)}</InfoRow>)}
+        {g.boosts.map((b) => <InfoRow key={b.id} k={<GenLabel snap={snap} id={b.id} name={b.name} />}>{pctText(b.pct)}</InfoRow>)}
         {g.boostRate > 0 && <p className="dc-info__text">Rende {rateText(g.boostRate)} ({formatNum(g.boostShare * 100, { rate: true })}% do total).</p>}
       </>}
       {g.boostedBy.length > 0 && <>
         <div className="dc-info__title"><Icon name="arrow-down-right" size={12} /> Impulsionado por</div>
-        {g.boostedBy.map((b) => <InfoRow key={b.id} k={b.name}>{pctText(b.pct)}</InfoRow>)}
+        {g.boostedBy.map((b) => <InfoRow key={b.id} k={<GenLabel snap={snap} id={b.id} name={b.name} />}>{pctText(b.pct)}</InfoRow>)}
       </>}
     </>
   );
 }
 
 /** Selo de combo na linha do gerador: nº de ligações; os detalhes ficam no hover. */
-function ComboBadge({ g }) {
+function ComboBadge({ g, snap }) {
   const n = g.boosts.length + g.boostedBy.length;
   if (!n) return null;
   return (
-    <InfoCard content={<ComboDetails g={g} />} label={`Combos de ${g.name}: ${n}`}>
+    <InfoCard content={<ComboDetails g={g} snap={snap} />} label={`Combos de ${g.name}: ${n}`}>
       <span className="dc-combo-badge"><Icon name="git-merge" size={11} />{n}</span>
     </InfoCard>
   );
@@ -137,7 +143,7 @@ export function GeneratorsPanel({ snap, amount, act }) {
               <button type="button" className={'dc-bp-toggle' + (g.blueprint && g.blueprint.complete ? ' is-ready' : '')} aria-expanded={open === g.id} onClick={() => setOpen(open === g.id ? null : g.id)}>
                 <Icon name="package" size={11} />{g.blueprint ? `${g.blueprint.owned}/4` : 'máx'}
               </button>
-              <ComboBadge g={g} />
+              <ComboBadge g={g} snap={snap} />
             </div>
             <Milestone g={g} />
           </div>

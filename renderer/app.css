@@ -761,13 +761,15 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   position: fixed; z-index: 60; width: max-content; max-width: 280px; padding: 10px 12px; pointer-events: none;
   display: flex; flex-direction: column; gap: 5px;
   background: var(--tk-surface-3); border: 1px solid var(--tk-border-strong); border-radius: var(--tk-radius-lg);
-  box-shadow: var(--tk-shadow-pop); color: var(--tk-text-2); font-size: 12px; animation: tk-pop-in var(--tk-dur) var(--tk-ease);
+  box-shadow: var(--tk-shadow-pop); color: var(--tk-text-2); font: 400 12px/1.4 var(--tk-font-sans); animation: tk-pop-in var(--tk-dur) var(--tk-ease);
 }
 .dc-info__title { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--tk-text); }
 .dc-info__title:not(:first-child) { margin-top: 4px; }
 .dc-info__text { margin: 0; line-height: 1.45; color: var(--tk-text-3); }
 .dc-info__row { display: flex; justify-content: space-between; gap: 16px; }
 .dc-info__row span { color: var(--tk-text-3); }
+.dc-info__row .dc-info__gen { display: inline-flex; align-items: center; gap: 6px; color: var(--tk-text); }
+.dc-info__gen .lucide, .dc-info__gen svg { color: var(--tk-text-3); flex-shrink: 0; }
 .dc-info__row b { font: 500 11.5px var(--tk-font-mono); color: var(--tk-accent-text); text-align: right; }
 @media (prefers-reduced-motion: reduce) { .dc-info { animation: none; } }
 
