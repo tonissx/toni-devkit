@@ -9,7 +9,7 @@
  *   buy { gen, qty|'max' }    upgrade { id }    train { pet }    station { pet, on }
  *   ability { id }            event { name, data }    ackWelcome    seen { upgrades? }
  *   skin { pet, skin }        visual (paleta) de um DevPet — só visuais já desbloqueados
- *   use { item, ability? }    consumível (Coffee, Hotfix, Rollback, Cache Warmer)
+ *   use { item, ability?, pet? } consumível (Coffee, Hotfix, Rollback, Cache Warmer, Health Check)
  *   craft { item }            fabrica um consumível com Compute (N minutos da produção atual)
  *   (missões diárias: progresso vem de `event`; concluir rende contador de visuais e, às vezes, um consumível)
  *   quiet { on }             modo tranquilo: sem incidentes (e sem as recompensas deles)
@@ -34,6 +34,7 @@ const { ensureScheduled, endIncident, grantItem, abilitiesLocked, randFor } = re
 const { bpOf, partId, levelOf, parsePart, partError, dropPart, costDivOf } = require('./blueprints.js');
 const { ensureMap, mapAct } = require('./map.js');
 const { patchMod } = require('./patches.js');
+const { petHp, setPetHp } = require('./battle.js');
 
 const upgradeAvailable = (s, u) => !s.run.upgrades[u.id] && check(u.requires, s);
 
@@ -217,6 +218,14 @@ function act(s, action, now, c, log) {
       } else if (e.type === 'shield') {
         if (s.run.shields >= k.cap) return 'Rollback já armado';
         s.run.shields += 1;
+      } else if (e.type === 'heal') {
+        // Um DevPet indicado (ou o mais machucado) recupera `value` da vida e sai do fora de combate.
+        const hurt = Object.keys(s.run.pets).filter((id) => c.pet[id] && petHp(s, id, now, c) < 1);
+        const id = action.pet || hurt.sort((a, b) => petHp(s, a, now, c) - petHp(s, b, now, c))[0];
+        if (!id || !s.run.pets[id]) return 'Nenhum DevPet machucado';
+        if (petHp(s, id, now, c) >= 1) return 'Esse DevPet já está com a vida cheia';
+        setPetHp(s, id, petHp(s, id, now, c) + e.value, now);
+        log.push({ type: 'healed', pet: id });
       } else if (e.type === 'resetCooldown') {
         const waiting = Object.entries(s.run.abilities).filter(([, a]) => a.readyAt > now);
         const pick = action.ability ? waiting.find(([id]) => id === action.ability) : waiting.sort((x, y) => y[1].readyAt - x[1].readyAt)[0];

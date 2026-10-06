@@ -5,6 +5,7 @@
  * (custo = craftMinutes × produção atual — continua relevante em qualquer fase).
  * effect.type: 'boost' (multiplica um alvo por um tempo) · 'hotfix' (encerra o incidente ativo)
  *              · 'shield' (o próximo incidente nasce contido) · 'resetCooldown' (zera a recarga de uma habilidade)
+ *              · 'heal' (cura `value` da vida de um DevPet no mapa; sem pet indicado, o mais machucado)
  */
 
 const CONSUMABLES = [
@@ -16,6 +17,8 @@ const CONSUMABLES = [
     description: 'O próximo incidente já nasce contido.', effect: { type: 'shield' } },
   { id: 'cache-warmer', name: 'Cache Warmer', icon: 'flame', cap: 3, craftMinutes: 30,
     description: 'Zera a recarga de uma habilidade.', effect: { type: 'resetCooldown' } },
+  { id: 'health-check', name: 'Health Check', icon: 'heart-pulse', cap: 3, craftMinutes: 30,
+    description: 'Cura 50% da vida de um DevPet e o tira do fora de combate.', effect: { type: 'heal', value: 0.5 } },
 ];
 
 module.exports = { CONSUMABLES };

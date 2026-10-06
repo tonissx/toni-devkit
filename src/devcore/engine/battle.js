@@ -29,6 +29,30 @@ function patchBattle(s, c = CONTENT) {
   return out;
 }
 
+/** Fração de vida de um pet agora (persiste entre batalhas; recupera perHour por hora, também offline). */
+function petHp(s, petId, now, c = CONTENT) {
+  const st = s.run.pets[petId];
+  if (!st) return 0;
+  const hp = st.hp == null ? 1 : st.hp;
+  if (now == null || hp >= 1) return Math.min(1, hp);
+  return Math.min(1, hp + c.BATTLE.recovery.perHour * Math.max(0, now - (st.hpAt || now)) / 3600e3);
+}
+
+/** Fora de combate: caiu a 0 numa luta e ainda não recuperou koMin. */
+const petDown = (s, petId, now, c = CONTENT) => !!(s.run.pets[petId] && s.run.pets[petId].ko) && petHp(s, petId, now, c) < c.BATTLE.recovery.koMin;
+
+/** Milissegundos até um valor de vida (0 se já passou). */
+const msUntilHp = (s, petId, target, now, c = CONTENT) => Math.max(0, (target - petHp(s, petId, now, c)) / c.BATTLE.recovery.perHour * 3600e3);
+
+/** Grava a vida de um pet (fração) agora. */
+function setPetHp(s, petId, frac, now) {
+  const st = s.run.pets[petId];
+  if (!st) return;
+  st.hp = Math.max(0, Math.min(1, frac));
+  st.hpAt = now;
+  st.ko = st.hp <= 0;
+}
+
 /** Atributos de combate de um pet no nível atual (sem Patches). */
 function petStats(s, petId, c = CONTENT) {
   const p = c.pet[petId];
@@ -52,19 +76,20 @@ function enemyStats(enemyId, col, area, c = CONTENT, kind = 'battle') {
 
 /**
  * Monta a batalha a partir do estado: squad = { pets:[ids], front:[ids], triggers:{id:trigger}, items:[ids] }.
- * kind: battle | elite | boss (tipo do ponto do mapa).
+ * kind: battle | elite | boss (tipo do ponto do mapa). now: a luta começa com a vida atual de cada pet (sem now: vida cheia).
  * → { pets:[unit], enemies:[unit], items:[ids], counters:{ anyOf:Set, front:Set }, firstCrit }
  */
-function setupBattle(s, squad, enemyIds, col, areaId, c = CONTENT, kind = 'battle') {
+function setupBattle(s, squad, enemyIds, col, areaId, c = CONTENT, kind = 'battle', now = null) {
   const area = c.area[areaId];
   const pb = patchBattle(s, c);
   const buff = (s.run.battleBuff && s.run.battleBuff.atk) || 0;
   const pets = squad.pets.map((id, i) => {
     const st = petStats(s, id, c);
-    const hp = Math.round(st.hp * (1 + pb.hp));
+    const maxHp = Math.round(st.hp * (1 + pb.hp));
+    const hp = now == null ? maxHp : Math.max(1, Math.round(maxHp * petHp(s, id, now, c)));
     return {
       uid: 'p' + i, side: 'pet', id, name: c.pet[id].name, role: c.PET_ROLES[id], front: squad.front.includes(id),
-      hp, maxHp: hp, atk: st.atk * (1 + pb.atk + buff), def: st.def * (1 + pb.def), spd: st.spd,
+      hp, maxHp, atk: st.atk * (1 + pb.atk + buff), def: st.def * (1 + pb.def), spd: st.spd,
       ability: c.pet[id].ability, trigger: (squad.triggers && squad.triggers[id]) || 'start',
     };
   });
@@ -225,7 +250,11 @@ function resolve(setup, seed, c = CONTENT) {
   log.push({ r: Math.min(r, B.maxRounds), k: 'end', v: win ? 1 : 0 });
   return {
     win, rounds: Math.min(r, B.maxRounds), log, usedItems: used,
-    units: units.map((u) => ({ uid: u.uid, side: u.side, id: u.id, name: u.name, maxHp: u.maxHp, front: !!u.front, boss: !!u.boss, child: !!u.child })),
+    // hp: vida no início (a arena começa daí) · end: vida que sobrou (o mapa grava nos pets)
+    units: units.map((u) => {
+      const start = (setup.pets.find((x) => x.uid === u.uid) || setup.enemies.find((x) => x.uid === u.uid) || u).hp;
+      return { uid: u.uid, side: u.side, id: u.id, name: u.name, hp: u.child ? u.maxHp : start, maxHp: u.maxHp, end: u.alive ? u.hp : 0, front: !!u.front, boss: !!u.boss, child: !!u.child };
+    }),
   };
 }
 
@@ -238,4 +267,4 @@ function preview(setup, seed, c = CONTENT) {
   return { chance, label: chance >= c.BATTLE.chance.good ? 'favorável' : chance >= c.BATTLE.chance.risky ? 'arriscado' : 'muito arriscado' };
 }
 
-module.exports = { scaleAt, petStats, enemyStats, setupBattle, resolve, preview, patchBattle, countered };
+module.exports = { petHp, petDown, msUntilHp, setPetHp, scaleAt, petStats, enemyStats, setupBattle, resolve, preview, patchBattle, countered };

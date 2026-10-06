@@ -37,7 +37,7 @@ export function Arena({ battle, snap, area, onClose }) {
   const hp = {};
   const alive = {};
   const visible = {};
-  for (const u of battle.units) { hp[u.uid] = u.maxHp; alive[u.uid] = true; visible[u.uid] = !u.child; }
+  for (const u of battle.units) { hp[u.uid] = u.hp != null ? u.hp : u.maxHp; alive[u.uid] = true; visible[u.uid] = !u.child; }  // começa da vida atual
   for (const e of log.slice(0, i)) {
     if (e.k === 'atk' && e.t) hp[e.t] = Math.max(0, hp[e.t] - e.v);
     if (e.k === 'heal') hp[e.t] = Math.min(battle.units.find((u) => u.uid === e.t).maxHp, hp[e.t] + e.v);

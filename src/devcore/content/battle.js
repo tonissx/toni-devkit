@@ -29,6 +29,9 @@ const BATTLE = {
   supportHealBelow: 0.6,
   previewRuns: 20,
   chance: { good: 0.8, risky: 0.4 },  // favorável ≥ 80% · arriscado ≥ 40% · muito arriscado abaixo
+  // A vida persiste entre batalhas e se recupera com o tempo (também offline). Pet que cai a 0 fica fora de combate
+  // até recuperar koMin. (docs/devcore-mapa-singularity.md §5.5)
+  recovery: { perHour: 0.25, koMin: 0.25 },
 };
 
 /** Gatilho da habilidade de cada pet (uma vez por batalha). */

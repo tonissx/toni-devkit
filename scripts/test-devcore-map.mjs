@@ -213,7 +213,8 @@ test('mapa: descanso (treino respeita o nível máximo) e loja (compra uma vez, 
   let s = run(before('rest'), { type: 'mapMove', node: '1-0' }).state;
   s.run.squad.pets = ['byte', 'noxi'];
   s.run.pets.noxi.level = 4;
-  const r = run(s, { type: 'mapChoose', index: 0 });
+  const train = CONTENT.REST_OPTIONS.findIndex((o) => o.id === 'train');
+  const r = run(s, { type: 'mapChoose', index: train });
   assert.equal(r.state.run.pets.noxi.level, 5, 'o de menor nível do esquadrão sobe');
   s = run(before('shop', { inventory: { coffee: 4 } }), { type: 'mapMove', node: '1-0' }).state;
   assert.equal(s.run.map.pending.kind, 'shop');
@@ -287,4 +288,72 @@ test('ritmo: no uso casual o mapa abre nas primeiras horas e a Área 1 cai em ~2
   const d = day(m.map.cleared);
   assert.ok(d >= 2 && d <= 5, `Área 1 concluída em ${d.toFixed(1)} dias`);
   assert.ok(m.state.run.patches.length >= 2, 'Patches conquistados');
+});
+
+/* ─────────────── vida entre batalhas ─────────────── */
+const H = 3600e3;
+
+test('vida: persiste depois da luta e recupera 25% por hora (também com o app fechado)', () => {
+  let s = make({ pets: { byte: 3, noxi: 3, query: 3 } });
+  s.run.map.nodes['0-0'].group = ['zero', 'leaky', 'flicker'];
+  s = run(s, { type: 'mapFight', node: '0-0', squad: squadOf(['byte', 'noxi', 'query']) }).state;
+  const lb = s.run.map.lastBattle;
+  const hurt = lb.units.filter((u) => u.side === 'pet' && u.end < u.maxHp);
+  assert.ok(hurt.length > 0, 'alguém saiu machucado');
+  for (const u of lb.units.filter((x) => x.side === 'pet')) near(battle.petHp(s, u.id, T0), u.end / u.maxHp);
+  const id = hurt[0].id;
+  const after = battle.petHp(s, id, T0);
+  near(battle.petHp(s, id, T0 + H), Math.min(1, after + 0.25));
+  assert.equal(battle.petHp(s, id, T0 + 5 * H), 1, 'cheia em até 4 h');
+  // Fechado (boot com o app fora 3 h): a recuperação conta igual.
+  const back = run(s, { type: 'boot' }, T0 + 3 * H).state;
+  near(battle.petHp(back, id, T0 + 3 * H), Math.min(1, after + 0.75));
+});
+
+test('vida: a próxima luta começa com a vida atual; a previsão e a arena também', () => {
+  const s = make({ pets: { byte: 10 } });
+  battle.setPetHp(s, 'byte', 0.4, T0);
+  const setup = battle.setupBattle(s, squadOf(['byte']), ['bug'], 0, 'localhost', CONTENT, 'battle', T0);
+  assert.equal(setup.pets[0].hp, Math.round(setup.pets[0].maxHp * 0.4));
+  const full = battle.setupBattle(s, squadOf(['byte']), ['bug'], 0, 'localhost', CONTENT, 'battle', T0 + 4 * H);
+  assert.equal(full.pets[0].hp, full.pets[0].maxHp);
+  const r = run(s, { type: 'mapFight', node: '0-0', squad: squadOf(['byte']) }).state;
+  const u = r.run.map.lastBattle.units.find((x) => x.side === 'pet');
+  assert.equal(u.hp, Math.round(u.maxHp * 0.4), 'a arena começa da vida atual');
+});
+
+test('vida: fora de combate não luta até recuperar 25%; Health Check e cura do descanso', () => {
+  let s = make({ pets: { byte: 10, noxi: 10 }, inventory: { 'health-check': 1 } });
+  battle.setPetHp(s, 'byte', 0, T0);
+  assert.equal(battle.petDown(s, 'byte', T0), true);
+  assert.match(run(s, { type: 'mapFight', node: '0-0', squad: squadOf(['byte']) }).error, /Byte está fora de combate \(volta em 1h 00m\)/);
+  assert.equal(battle.petDown(s, 'byte', T0 + H), false, 'volta com 25% depois de 1 h');
+  // Health Check sem pet indicado cura o mais machucado (+50%) e o tira do fora de combate.
+  const healed = run(s, { type: 'use', item: 'health-check' });
+  assert.equal(healed.error, undefined);
+  near(battle.petHp(healed.state, 'byte', T0), 0.5);
+  assert.equal(battle.petDown(healed.state, 'byte', T0), false);
+  assert.equal(healed.state.run.inventory['health-check'], 0);
+  assert.equal(run(make({ pets: { byte: 10 }, inventory: { 'health-check': 1 } }), { type: 'use', item: 'health-check' }).error, 'Nenhum DevPet machucado');
+  // Descanso: cura completa do time.
+  s = before('rest');
+  battle.setPetHp(s, 'byte', 0.1, T0); battle.setPetHp(s, 'noxi', 0, T0);
+  s = run(s, { type: 'mapMove', node: '1-0' }).state;
+  s = run(s, { type: 'mapChoose', index: CONTENT.REST_OPTIONS.findIndex((o) => o.id === 'heal') }).state;
+  assert.deepEqual(['byte', 'noxi', 'query'].map((id) => battle.petHp(s, id, T0)), [1, 1, 1]);
+  // View: vida, fora de combate e quando volta.
+  const v = make({ pets: { byte: 10 } });
+  battle.setPetHp(v, 'byte', 0, T0);
+  const p = snapshot(v, T0 + 0.5 * H).map.roster.find((x) => x.id === 'byte');
+  assert.equal(p.down, true);
+  near(p.life, 0.125);
+  near(p.backInMs, 0.5 * H);
+  near(p.fullInMs, 3.5 * H);
+});
+
+test('vida: saves sem vida guardada começam cheios', () => {
+  const s = make({ pets: { byte: 5 } });
+  delete s.run.pets.byte.hp;
+  assert.equal(battle.petHp(s, 'byte', T0), 1);
+  assert.equal(battle.petDown(s, 'byte', T0), false);
 });

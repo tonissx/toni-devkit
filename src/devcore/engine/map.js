@@ -13,7 +13,8 @@ const { rng } = require('./rng.js');
 const { check } = require('./conditions.js');
 const { grantItem } = require('./incidents.js');
 const { dropPart } = require('./blueprints.js');
-const { setupBattle, resolve } = require('./battle.js');
+const { setupBattle, resolve, petDown, msUntilHp, setPetHp } = require('./battle.js');
+const { formatDuration } = require('./format.js');
 
 /** Hash inteiro estável de uma string (semente por ponto). */
 function hash(str) {
@@ -120,13 +121,15 @@ function nodeCost(s, node, c = CONTENT) {
   return area.costs[Math.min(node.col, area.costs.length - 1)] * c.NODE_TYPES[node.type].costMult;
 }
 
-/** Valida a preparação. → erro ou null */
-function squadError(s, squad, c = CONTENT) {
+/** Valida a preparação (now: confere quem está fora de combate). → erro ou null */
+function squadError(s, squad, c = CONTENT, now = null) {
   const B = c.BATTLE;
   if (!squad || !Array.isArray(squad.pets) || !squad.pets.length) return 'Escolha ao menos um DevPet';
   if (squad.pets.length > B.squadSize) return `O esquadrão tem no máximo ${B.squadSize} DevPets`;
   if (new Set(squad.pets).size !== squad.pets.length) return 'DevPet repetido no esquadrão';
   if (squad.pets.some((id) => !s.run.pets[id])) return 'DevPet indisponível';
+  const down = now == null ? null : squad.pets.find((id) => petDown(s, id, now, c));
+  if (down) return `${c.pet[down].name} está fora de combate (volta em ${formatDuration(msUntilHp(s, down, c.BATTLE.recovery.koMin, now, c))})`;
   const items = squad.items || [];
   if (items.length > B.maxItems || new Set(items).size !== items.length) return `Leve até ${B.maxItems} consumíveis diferentes`;
   if (items.some((id) => !c.BATTLE_ITEMS[id] || !(s.run.inventory[id] > 0))) return 'Consumível indisponível';
@@ -158,7 +161,7 @@ function petToLevel(s, c) {
 }
 
 /** Aplica recompensas de evento/descanso. → [{ type, … }] (para o log e a UI) */
-function grantRewards(s, rewards, rand, c) {
+function grantRewards(s, rewards, rand, c, now = null) {
   const out = [];
   for (const r of rewards) {
     if (r.patch) { const id = grantPatch(s, r.patch, rand, c); out.push(id ? { type: 'patch', id } : { type: 'none' }); }
@@ -166,6 +169,7 @@ function grantRewards(s, rewards, rand, c) {
     if (r.part) { const d = dropPart(s, rand, {}, c); out.push(d.type === 'part' && !d.dup ? { type: 'part', gen: d.gen, name: d.name } : { type: 'scrap' }); }
     if (r.petLevel) { const id = petToLevel(s, c); if (id) { s.run.pets[id].level += r.petLevel; out.push({ type: 'petLevel', pet: id, level: s.run.pets[id].level }); } }
     if (r.battleBuff) { s.run.battleBuff = { atk: ((s.run.battleBuff && s.run.battleBuff.atk) || 0) + r.battleBuff.atk }; out.push({ type: 'battleBuff', atk: s.run.battleBuff.atk }); }
+    if (r.healAll) { for (const id of Object.keys(s.run.pets)) setPetHp(s, id, 1, now); out.push({ type: 'healAll' }); }
     if (r.restock) { for (const k of c.CONSUMABLES) s.run.inventory[k.id] = Math.min(k.cap, (s.run.inventory[k.id] || 0) + 1); out.push({ type: 'restock' }); }
     if (r.swapPatch) {
       const i = s.run.patches.findIndex((id) => c.patch[id] && c.patch[id].rarity === 'common');
@@ -203,7 +207,7 @@ function mapAct(s, action, now, c, log) {
   const blocking = m.pending && m.pending.kind !== 'shop';
 
   if (action.type === 'mapSquad') {
-    const err = squadError(s, action.squad, c);
+    const err = squadError(s, action.squad, c, now);
     if (err) return err;
     s.run.squad = { ...cleanSquad(action.squad), node: action.node && m.nodes[action.node] ? action.node : null };
     return null;
@@ -221,7 +225,7 @@ function mapAct(s, action, now, c, log) {
     const cost = (ch.cost || 0) * area.costs[node.col];
     if (cost > res.amount) return 'Compute insuficiente';
     res.amount -= cost;
-    const rewards = grantRewards(s, ch.rewards, randFor(s, 'choose', node.id), c);
+    const rewards = grantRewards(s, ch.rewards, randFor(s, 'choose', node.id), c, now);
     m.pending = null;
     log.push({ type: 'mapChoice', node: node.id, kind: p.kind, index: action.index, rewards });
     return null;
@@ -273,15 +277,17 @@ function mapAct(s, action, now, c, log) {
   if (action.type === 'mapFight') {
     if (!['battle', 'elite', 'boss'].includes(node.type)) return 'Esse ponto não é uma batalha';
     const squad = action.squad || s.run.squad;
-    const err = squadError(s, squad, c);
+    const err = squadError(s, squad, c, now);
     if (err) return err;
     if (cost > res.amount) return 'Compute insuficiente';
     res.amount -= cost;
     s.run.squad = { ...cleanSquad(squad), node: null };
     const attempt = m.attempts[node.id] || 0;
     m.attempts[node.id] = attempt + 1;
-    const setup = setupBattle(s, squad, node.group, node.col, m.area, c, node.type);
+    const setup = setupBattle(s, squad, node.group, node.col, m.area, c, node.type, now);
     const result = resolve(setup, (s.seed ^ hash('battle:' + node.id) ^ Math.imul(attempt + 1, 2654435761)) >>> 0, c);
+    // A vida que sobrou fica nos pets (recupera com o tempo); quem caiu fica fora de combate.
+    for (const u of result.units) if (u.side === 'pet') setPetHp(s, u.id, u.end / u.maxHp, now);
     for (const id of result.usedItems) s.run.inventory[id] = Math.max(0, (s.run.inventory[id] || 0) - 1);
     s.run.battleBuff = null;
     m.pending = null;

@@ -10,7 +10,7 @@ const { upgradeAvailable, craftCost, partCost } = require('./index.js');
 const { bpOf, partId, levelOf, nextMilestone, generatorMult, costDivOf } = require('./blueprints.js');
 const { patchMod } = require('./patches.js');
 const { reachable, nodeCost, squadError } = require('./map.js');
-const { setupBattle, preview, petStats, enemyStats, countered } = require('./battle.js');
+const { setupBattle, preview, petStats, enemyStats, countered, petHp, petDown, msUntilHp } = require('./battle.js');
 const { abilitiesLocked, incidentsEnabled } = require('./incidents.js');
 const { check } = require('./conditions.js');
 const { stationedPets } = require('../content/index.js');
@@ -326,6 +326,7 @@ function rewardText(r, c) {
   if (r.type === 'petLevel') return c.pet[r.pet].name + ' no nível ' + r.level;
   if (r.type === 'battleBuff') return 'próxima batalha +' + Math.round(r.atk * 100) + '% de ataque';
   if (r.type === 'restock') return '+1 de cada consumível';
+  if (r.type === 'healAll') return 'time com a vida cheia';
   if (r.type === 'swap') return r.id ? `${c.patch[r.from].name} → ${c.patch[r.id].name}` : 'troca sem Patch disponível';
   return '';
 }
@@ -355,7 +356,7 @@ function mapView(s, now, c) {
   const amount = s.run.resources.compute.amount;
   const reach = new Set(reachable(s));
   const sq = s.run.squad;
-  const squadOk = !squadError(s, sq, c);
+  const squadOk = !squadError(s, sq, c, now);
   const counters = squadOk ? { anyOf: new Set(sq.pets), front: new Set(sq.pets.filter((id) => sq.front.includes(id))) } : null;
   const nodes = Object.values(m.nodes).map((n) => {
     const cost = nodeCost(s, n, c);
@@ -394,7 +395,7 @@ function mapView(s, now, c) {
   const target = sq.node && m.nodes[sq.node];
   if (target && target.group && squadOk && reach.has(target.id)) {
     const attempt = m.attempts[target.id] || 0;
-    forecast = { node: target.id, ...preview(setupBattle(s, sq, target.group, target.col, m.area, c, target.type), (s.seed ^ attempt) >>> 0, c) };
+    forecast = { node: target.id, ...preview(setupBattle(s, sq, target.group, target.col, m.area, c, target.type, now), (s.seed ^ attempt) >>> 0, c) };
   }
   const lb = m.lastBattle;
   return {
@@ -409,11 +410,16 @@ function mapView(s, now, c) {
       const st = petStats(s, id, c);
       const role = c.ROLES[c.PET_ROLES[id]];
       const ab = c.BATTLE_ABILITIES[c.pet[id].ability];
+      const frac = petHp(s, id, now, c);
+      const down = petDown(s, id, now, c);
       return { id, name: c.pet[id].name, level: s.run.pets[id].level, role: c.PET_ROLES[id], roleName: role.name,
         hp: st.hp, atk: Math.round(st.atk), def: Math.round(st.def), spd: st.spd,
+        // Vida entre batalhas: fração atual, fora de combate, quando volta e quando fica cheia.
+        life: frac, down, backInMs: down ? msUntilHp(s, id, c.BATTLE.recovery.koMin, now, c) : 0, fullInMs: msUntilHp(s, id, 1, now, c),
         ability: { id: c.pet[id].ability, name: c.ability[c.pet[id].ability].name, text: ab.text } };
     }),
     items: Object.entries(c.BATTLE_ITEMS).map(([id, k]) => ({ id, name: c.consumable[id].name, icon: c.consumable[id].icon, text: k.text, n: s.run.inventory[id] || 0 })),
+    healItems: s.run.inventory['health-check'] || 0,  // Health Check em estoque (cura fora da batalha)
     triggers: c.TRIGGERS,
     lastBattle: lb ? { ...lb, rewards: lb.rewards.map((r) => ({ ...r, text: rewardText(r, c) })),
       units: lb.units.map((u) => (u.side === 'enemy' ? { ...u, sprite: c.enemy[u.id].sprite, color: c.enemy[u.id].color } : u)) } : null,

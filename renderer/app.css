@@ -780,13 +780,19 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-prep .tk-menu__heading { padding-left: 0; }
 .dc-roster { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .dc-roster__pet {
-  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 6px; align-items: center; text-align: left;
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; column-gap: 6px; align-items: center; text-align: left;
   padding: 4px 10px 4px 4px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: transparent; color: var(--tk-text-2); font: inherit; cursor: pointer;
 }
-.dc-roster__pet svg { grid-row: span 2; }
+.dc-roster__pet svg { grid-row: span 3; }
 .dc-roster__pet span { font-size: 12.5px; font-weight: 600; color: var(--tk-text); }
 .dc-roster__pet small { font-size: 10.5px; color: var(--tk-text-3); }
 .dc-roster__pet.is-on { border-color: var(--tk-accent); background: color-mix(in srgb, var(--tk-accent) 10%, var(--tk-bg)); }
+.dc-roster__pet.is-down { opacity: .5; cursor: not-allowed; }
+.dc-life { grid-column: 2; width: 100%; min-width: 64px; }
+.dc-life.is-low .tk-progress__fill, .dc-roster__pet.is-down .tk-progress__fill { background: var(--tk-warning); box-shadow: none; }
+.dc-slot__life { font: 500 11px var(--tk-font-mono); color: var(--tk-accent-text); min-width: 34px; }
+.dc-slot__life.is-low { color: var(--tk-warning); }
+.dc-heal { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0; font-size: 11.5px; color: var(--tk-text-3); }
 .dc-slot { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
 .dc-slot b { min-width: 52px; }
 .dc-slot__pos, .dc-slot__trigger, .dc-prep__item {

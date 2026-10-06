@@ -76,7 +76,7 @@ caminhos se ajudam, mas o Compute de agora só pode ir para um deles.
 | **Deploy expresso** | 5× | Paga e avança, sem lutar | Nenhuma: é o preço de pular |
 | **Evento** | grátis para entrar | Escolha em texto, no estilo log do sistema | Depende da escolha (trocas) |
 | **Loja** | itens à venda | Consumíveis, peças de Blueprint, Patches | O que comprar |
-| **Descanso** | grátis | Escolhe 1 benefício (treino de pet com desconto, recarregar consumível, gatilho extra) | O escolhido |
+| **Descanso** | grátis | Escolhe 1 benefício (cura completa do time, treino, reabastecer consumíveis, foco na próxima batalha) | O escolhido |
 | **Chefe** | 4× | Batalha contra o chefe da área | Patch raro + abre a próxima área |
 
 "×" é a **unidade de custo da área** (ver [Ritmo e custos](#8-ritmo-e-custos)).
@@ -165,16 +165,36 @@ peso tático à escolha do esquadrão:
 Cada área adiciona 2–3 inimigos novos e um chefe (ver [Áreas](#7-áreas-e-chefes)). Tudo vai para o bestiário, que
 ganha uma seção de batalha (vencidos, derrotas).
 
-### 5.5 Consumíveis em batalha (proposta)
+### 5.5 Vida entre batalhas e recuperação (decidido)
+
+A vida **persiste entre batalhas**: o pet entra na próxima luta com a vida que sobrou. Isso dá peso ao descanso, faz os
+8 pets girarem (o time machucado descansa, o reserva entra) e torna o risco legível ("encaro a elite com o Byte a 40%?").
+
+| Regra | Valor |
+|---|---|
+| Recuperação | 25% da vida máxima por hora fora de batalha (cheia em ~4 h), **também offline**, calculada pelo tempo (sem ticks) |
+| Fora de combate | Pet que cai a 0 numa luta fica fora de combate e não pode lutar até recuperar 25% (~1 h) |
+| Descanso no mapa | Opção "Cura completa do time" |
+| Health Check (consumível novo) | Cura 50% da vida de um pet e o tira do fora de combate; ganho como os outros (loja, achados, missões) e fabricável com Compute |
+| Rollback | Continua sendo o revive *durante* a luta |
+| Previsão | Já considera a vida atual de cada pet |
+
+**Cuidado de desenho — espera em dobro:** o mapa já tem um portão de tempo (juntar Compute). A recuperação é mais
+rápida que juntar o Compute do próximo ponto, então raramente vira gargalo; só pesa quando o jogador força várias lutas
+seguidas, e há saída paga (Health Check) para quem quer avançar já. Derrota continua sem tirar progresso, mas passa a
+custar tempo de recuperação além da entrada.
+
+### 5.6 Consumíveis em batalha (proposta)
 
 | Consumível | Em batalha |
 |---|---|
 | Coffee | +50% de ataque do esquadrão por 3 rodadas |
 | Hotfix | Dano grande num inimigo |
 | Rollback | Revive um pet com 30% de vida |
+| Health Check | Fora da batalha: cura 50% de um pet (ver §5.5) |
 | Cache Warmer | Recarrega a habilidade de um pet |
 
-### 5.6 Resolução
+### 5.7 Resolução
 
 - O engine resolve em **rodadas** (proposta: no máximo 30; empate por tempo conta como derrota). Em cada rodada, as
   unidades agem por ordem de velocidade.
@@ -182,8 +202,10 @@ ganha uma seção de batalha (vencidos, derrotas).
   número da tentativa. Sem acaso, a previsão seria exata e o jogo viraria "testar montagens até ficar verde".
 - **Previsão de vitória:** antes de confirmar, o engine simula a luta ~20 vezes com sementes diferentes e mostra
   "favorável" (≥ 80%), "arriscado" (40–80%) ou "muito arriscado" (< 40%), com a porcentagem.
-- **Vida não persiste entre batalhas** (proposta, para simplificar). A tensão vem do custo em Compute, não de desgaste.
-- **Derrota:** perde só o Compute de entrada; o ponto continua lá para tentar de novo.
+- **A vida persiste entre batalhas** (ver §5.5): a luta começa com a vida atual de cada pet e termina gravando a
+  vida que sobrou.
+- **Derrota:** perde o Compute de entrada e os pets ficam machucados (recuperam com o tempo); o ponto continua lá para
+  tentar de novo.
 
 ## 6. Arena (decidido: própria e temática da área)
 
@@ -301,10 +323,10 @@ A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa d
 | 2026-10-06 | **Níveis dos pets zeram** na Singularity |
 | 2026-10-06 | Batalha numa **arena própria e temática da área** |
 | 2026-10-06 | **Esquadrão de 3** por enquanto |
+| 2026-10-07 | **Vida persiste entre batalhas**, recuperação de 25%/h (também offline), fora de combate até 25%, cura completa no descanso e consumível **Health Check** fabricável |
 
 ## 13. Em aberto
 
-- **Vida entre batalhas:** proposta é não persistir. Persistir daria mais peso ao descanso, mas aumenta o desgaste.
 - **Deploy expresso:** ponto próprio no mapa (proposta atual) ou uma opção "pagar para pular" em qualquer batalha?
 - **Abandonar a área:** dá para gerar um mapa novo da área (pagando) se o caminho ficou ruim?
 - **Combos e upgrades:** algum atravessa a Singularity, ou tudo vem da árvore?

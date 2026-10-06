@@ -74,12 +74,12 @@ function blueprints(s, now, c, step) {
 
 /* ─────────────── Mapa (robô) ─────────────── */
 const { reachable, nodeCost } = require('./engine/map.js');
-const { setupBattle, preview, petStats } = require('./engine/battle.js');
+const { setupBattle, preview, petStats, petHp, petDown } = require('./engine/battle.js');
 
 /** Esquadrão do robô para um grupo de inimigos: counters primeiro, depois os mais fortes; tanques/atacantes na frente. */
-function botSquad(s, enemies, kind, c) {
-  const owned = Object.keys(s.run.pets).filter((id) => c.pet[id]);
-  const power = (id) => { const st = petStats(s, id, c); return st.hp + st.atk * 6 + st.def * 2; };
+function botSquad(s, enemies, kind, c, now = null) {
+  const owned = Object.keys(s.run.pets).filter((id) => c.pet[id] && (now == null || !petDown(s, id, now, c)));
+  const power = (id) => { const st = petStats(s, id, c); return (st.hp + st.atk * 6 + st.def * 2) * (now == null ? 1 : petHp(s, id, now, c)); };
   const need = new Set();
   for (const e of enemies) for (const t of c.enemy[e].traits) {
     const ct = c.TRAITS[t].counter;
@@ -112,8 +112,9 @@ function botMapChoice(s, now, c) {
   const options = reachable(s).map((id) => m.nodes[id]).map((n) => {
     const cost = nodeCost(s, n, c);
     if (!n.group) return { n, cost, chance: 1, score: n.type === 'express' ? 0.3 : 2 };
-    const squad = botSquad(s, n.group, n.type, c);
-    const p = preview(setupBattle(s, squad, n.group, n.col, m.area, c, n.type), (s.seed ^ (m.attempts[n.id] || 0)) >>> 0, c).chance;
+    const squad = botSquad(s, n.group, n.type, c, now);
+    if (!squad.pets.length) return { n, cost, chance: 0, score: -1 };
+    const p = preview(setupBattle(s, squad, n.group, n.col, m.area, c, n.type, now), (s.seed ^ (m.attempts[n.id] || 0)) >>> 0, c).chance;
     const min = n.type === 'elite' ? 0.8 : 0.5;
     return { n, cost, chance: p, squad, score: p >= min ? p + (n.type === 'elite' ? 0.2 : 0) : -1 };
   }).filter((o) => o.score >= 0).sort((a, b) => b.score - a.score || a.cost - b.cost);

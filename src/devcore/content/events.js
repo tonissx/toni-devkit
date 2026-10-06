@@ -4,6 +4,7 @@
  * choice: { text, cost?: n (× custo-base da coluna), needs?: 'commonPatch', rewards: Reward[] }
  * Reward: { patch: 'common'|'rare'|'epic' } · { item: true } · { part: true } · { petLevel: 1 } (pet de menor nível do
  *         esquadrão salvo) · { battleBuff: { atk } } (próxima batalha) · { swapPatch: 'rare' } (troca um comum) · { restock: true }
+ *         · { healAll: true } (todos os DevPets com a vida cheia)
  */
 
 const EVENTS = [
@@ -40,6 +41,7 @@ const EVENTS = [
 
 /** Opções do descanso (escolhe uma). */
 const REST_OPTIONS = [
+  { id: 'heal', text: 'Cura completa: todo o time volta com a vida cheia', rewards: [{ healAll: true }] },
   { id: 'train', text: 'Treino: o pet de menor nível do esquadrão sobe 1 nível', rewards: [{ petLevel: 1 }] },
   { id: 'restock', text: 'Reabastecer: +1 de cada consumível (até o teto)', rewards: [{ restock: true }] },
   { id: 'focus', text: 'Foco: esquadrão +20% de ataque na próxima batalha', rewards: [{ battleBuff: { atk: 0.2 } }] },

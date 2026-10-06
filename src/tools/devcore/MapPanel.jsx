@@ -1,11 +1,12 @@
 import { DS } from '../../lib/ds.js';
-import { formatNum } from '../../devcore/engine/format.js';
+import { formatNum, formatDuration } from '../../devcore/engine/format.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
 import { VillainSprite } from './VillainSprite.jsx';
 import { InfoCard } from './InfoCard.jsx';
 import { Arena } from './Arena.jsx';
 
-const { Button, Icon } = DS;
+const { Button, Icon, ProgressBar } = DS;
+const pct = (v) => Math.round(v * 100) + '%';
 const COMBAT = ['battle', 'elite', 'boss'];
 const CHANCE_CLASS = { 'favorável': 'is-good', 'arriscado': 'is-risky', 'muito arriscado': 'is-bad' };
 
@@ -126,14 +127,15 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
   const saved = map.squad;
   const initial = () => {
     if (saved.valid && saved.pets.length) return { pets: saved.pets, front: saved.front, triggers: saved.triggers, items: saved.items.filter((id) => (map.items.find((k) => k.id === id) || {}).n > 0) };
-    const best = [...map.roster].sort((a, b) => b.level - a.level || b.atk - a.atk).slice(0, 3).map((p) => p.id);
+    const best = map.roster.filter((p) => !p.down).sort((a, b) => b.level * b.life - a.level * a.life || b.atk - a.atk).slice(0, 3).map((p) => p.id);
     return { pets: best, front: best.slice(0, 2), triggers: {}, items: [] };
   };
   const [sq, setSq] = React.useState(initial);
   // Cada mudança salva a preparação: a view devolve a previsão e quais traços o esquadrão anula.
   React.useEffect(() => { if (sq.pets.length) act({ type: 'mapSquad', squad: sq, node: node.id }); }, [JSON.stringify(sq), node.id]);
   const set = (patch) => setSq((s) => ({ ...s, ...patch }));
-  const togglePet = (id) => set(sq.pets.includes(id)
+  const isDown = (id) => (map.roster.find((p) => p.id === id) || {}).down;
+  const togglePet = (id) => !isDown(id) && set(sq.pets.includes(id)
     ? { pets: sq.pets.filter((x) => x !== id), front: sq.front.filter((x) => x !== id) }
     : sq.pets.length < 3 ? { pets: [...sq.pets, id], front: sq.front.length < 2 ? [...sq.front, id] : sq.front } : {});
   const toggleItem = (id) => set({ items: sq.items.includes(id) ? sq.items.filter((x) => x !== id) : sq.items.length < 2 ? [...sq.items, id] : sq.items });
@@ -152,10 +154,13 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
                 <InfoCard key={p.id} content={<><div className="dc-info__title">{p.name} · {p.roleName}</div>
                   <div className="dc-info__row"><span>Nível</span><b>{p.level}</b></div>
                   <div className="dc-info__row"><span>Vida · Ataque · Defesa</span><b>{p.hp} · {p.atk} · {p.def}</b></div>
-                  <div className="dc-info__row"><span>{p.ability.name}</span><b>{p.ability.text}</b></div></>} focusable={false}>
-                  <button type="button" className={'dc-roster__pet' + (on ? ' is-on' : '')} aria-pressed={on} onClick={() => togglePet(p.id)}>
+                  <div className="dc-info__row"><span>{p.ability.name}</span><b>{p.ability.text}</b></div>
+                  <div className="dc-info__row"><span>Vida</span><b>{pct(p.life)}{p.life < 1 ? ` · cheia em ${formatDuration(p.fullInMs)}` : ''}</b></div></>} focusable={false}>
+                  <button type="button" className={'dc-roster__pet' + (on ? ' is-on' : '') + (p.down ? ' is-down' : '')} aria-pressed={on} aria-disabled={p.down} onClick={() => togglePet(p.id)}>
                     <Pet snap={snap} id={p.id} size={34} />
-                    <span>{p.name}</span><small>{p.roleName} · nv {p.level}</small>
+                    <span>{p.name}</span>
+                    <small>{p.down ? `fora de combate · volta em ${formatDuration(p.backInMs)}` : `${p.roleName} · nv ${p.level}`}</small>
+                    <span className={'dc-life' + (p.life < 0.5 ? ' is-low' : '')} title={'Vida ' + pct(p.life)}><ProgressBar value={p.life * 100} size="sm" /></span>
                   </button>
                 </InfoCard>
               );
@@ -167,6 +172,7 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
               <div key={id} className="dc-slot">
                 <Pet snap={snap} id={id} size={26} />
                 <b>{p.name}</b>
+                <span className={'dc-slot__life' + (p.life < 0.5 ? ' is-low' : '')}>{pct(p.life)}</span>
                 <button type="button" className={'dc-slot__pos' + (sq.front.includes(id) ? ' is-front' : '')} onClick={() => set({ front: sq.front.includes(id) ? sq.front.filter((x) => x !== id) : [...sq.front, id] })}>
                   {sq.front.includes(id) ? 'Frente' : 'Trás'}
                 </button>
@@ -177,6 +183,17 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
               </div>
             );
           })}
+          {roster.some((p) => p.life < 1) && (
+            <div className="dc-heal">
+              <Icon name="heart-pulse" size={13} />
+              <span>Health Check ×{map.healItems}: cura 50% de um pet{map.healItems ? '' : ' (fabrique na aba Ops)'}</span>
+              {roster.filter((p) => p.life < 1).map((p) => (
+                <Button key={p.id} size="sm" variant="ghost" disabled={!map.healItems} onClick={() => act({ type: 'use', item: 'health-check', pet: p.id })}>
+                  {p.name} {pct(p.life)}
+                </Button>
+              ))}
+            </div>
+          )}
           <div className="tk-menu__heading">Consumíveis ({sq.items.length}/2)</div>
           <div className="dc-prep__items">
             {map.items.map((k) => (
