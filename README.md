@@ -544,6 +544,10 @@ Features (ferramentas, palette, Notes) ── emit ──► Event Bus (electron
 
 ### Próximos passos: Batalhas (roadmap)
 
+> **Desenho atualizado:** as batalhas passam a fazer parte de um mapa com áreas, chefes e um reset chamado
+> *Singularity*. O desenho completo, com as decisões tomadas, está em
+> [`docs/devcore-mapa-singularity.md`](docs/devcore-mapa-singularity.md). As notas abaixo são a ideia original.
+
 Ideia registrada para depois; **ainda não implementada**. Pré-requisito: usar o DevCore alguns dias e ajustar o ritmo
 atual, porque a batalha depende desse balanceamento.
 
