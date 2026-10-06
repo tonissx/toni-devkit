@@ -6,7 +6,8 @@ import { PartIcon } from './PartArt.jsx';
 const { Button, Icon, ProgressBar, Toggle } = DS;
 
 const catIcon = (snap, id) => (snap.categories.find((c) => c.id === id) || { icon: 'cpu' }).icon;
-const KIND = { generator: 'Gerador', global: 'Global', mechanic: 'Mecânica', pet: 'DevPet' };
+const KIND = { generator: 'Gerador', global: 'Global', mechanic: 'Mecânica', pet: 'DevPet', combo: 'Combo' };
+const pctText = (v) => '+' + formatNum(v * 100, { rate: true }) + '%';
 
 /* ─────────────── Generators ─────────────── */
 export const MK = { 1: 'I', 2: 'II', 3: 'III' };
@@ -63,6 +64,24 @@ function BlueprintArea({ g, snap, amount, act }) {
   );
 }
 
+/** Combos: quem este gerador impulsiona (e quanto isso rende) e quem impulsiona ele. */
+function ComboLine({ g }) {
+  if (!g.boosts.length && !g.boostedBy.length) return null;
+  return (
+    <div className="dc-boosts">
+      {g.boosts.length > 0 && <span>
+        <Icon name="git-merge" size={11} /> Também impulsiona{' '}
+        {g.boosts.map((b) => <span key={b.id} className="dc-chip is-ok">{b.name} {pctText(b.pct)}</span>)}
+        {g.boostRate > 0 && <> · rende +{formatNum(g.boostRate, { rate: true })}/s ({formatNum(g.boostShare * 100, { rate: true })}% do total)</>}
+      </span>}
+      {g.boostedBy.length > 0 && <span>
+        <Icon name="arrow-down-right" size={11} /> Impulsionado por{' '}
+        {g.boostedBy.map((b) => <span key={b.id} className="dc-chip">{b.name} {pctText(b.pct)}</span>)}
+      </span>}
+    </div>
+  );
+}
+
 export function GeneratorsPanel({ snap, amount, act }) {
   const [open, setOpen] = React.useState(null);
   const unlocked = snap.generators.filter((g) => g.unlocked);
@@ -87,12 +106,14 @@ export function GeneratorsPanel({ snap, amount, act }) {
               </button>
             </div>
             <div className="dc-row__desc">{g.description}</div>
+            <ComboLine g={g} />
             <Milestone g={g} />
           </div>
           <div className="dc-row__stat">
             <b>+{formatNum(g.rate, { rate: true })}/s</b>
             <span>{g.each != null ? formatNum(g.each, { rate: true }) + '/s cada' : 'nenhum ainda'}</span>
             {g.mult > 1 && <span className="dc-row__mult" title="Marcos × Mk">{multText(g.mult)}</span>}
+            {g.owned > 0 && <span title="Participação na produção total">{formatNum(g.share * 100, { rate: true })}% do total</span>}
           </div>
           <div className="dc-buy">
             <Button size="sm" variant={amount >= g.cost1 ? 'primary' : 'secondary'} disabled={amount < g.cost1} onClick={() => act({ type: 'buy', gen: g.id, qty: 1 })}>
@@ -135,6 +156,10 @@ export function UpgradesPanel({ snap, amount, act }) {
             <div className="dc-card__kind">{KIND[u.kind]}</div>
             <div className="dc-card__title">{u.name}</div>
             <div className="dc-card__desc">{u.description}</div>
+            {u.kind === 'combo' && <div className="dc-card__combo">
+              {u.effects.map((e) => <span key={e} className="dc-chip is-ok">{e}</span>)}
+              {u.comboNow.length > 0 && <span className="dc-card__now">Agora: {u.comboNow.join(' · ')}</span>}
+            </div>}
             <Button size="sm" variant={amount >= u.cost ? 'primary' : 'secondary'} disabled={amount < u.cost} onClick={() => act({ type: 'upgrade', id: u.id })}>
               {formatNum(u.cost)} Compute
             </Button>

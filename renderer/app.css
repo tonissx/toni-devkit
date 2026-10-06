@@ -731,6 +731,12 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   .dc-villain { transition: none; }
 }
 
+/* Combos entre geradores */
+.dc-boosts { display: flex; flex-direction: column; gap: 3px; margin: 3px 0 2px; font-size: 11.5px; color: var(--tk-text-3); }
+.dc-boosts > span { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.dc-card__combo { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.dc-card__now { font: 400 11px var(--tk-font-mono); color: var(--tk-text-3); }
+
 /* Versões anteriores (modal): lista à esquerda, diff à direita. */
 .nts-history { display: grid; grid-template-columns: 240px 1fr; gap: 12px; height: min(62vh, 560px); min-height: 280px; }
 .nts-history:has(.tk-empty), .nts-history:has(> .nts-list__msg) { display: flex; align-items: center; justify-content: center; }
