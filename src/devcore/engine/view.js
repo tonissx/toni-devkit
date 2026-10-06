@@ -8,6 +8,9 @@ const { production, stationSlots, synergyActive, hasMechanic, activeCategories, 
 const { costOf, maxAffordable, trainCost } = require('./economy.js');
 const { upgradeAvailable, craftCost, partCost } = require('./index.js');
 const { bpOf, partId, levelOf, nextMilestone, generatorMult, costDivOf } = require('./blueprints.js');
+const { patchMod } = require('./patches.js');
+const { reachable, nodeCost, squadError } = require('./map.js');
+const { setupBattle, preview, petStats, enemyStats, countered } = require('./battle.js');
 const { abilitiesLocked, incidentsEnabled } = require('./incidents.js');
 const { check } = require('./conditions.js');
 const { stationedPets } = require('../content/index.js');
@@ -107,7 +110,7 @@ function snapshot(s, now, c = CONTENT) {
       // Cor efetiva (visual escolhido) + estágio de evolução.
       color: skin.colors.body || p.color, eye: skin.colors.eye || null, baseColor: p.color,
       skin: skin.id, stage: { id: stage.id, name: stage.name, next: next && next.minLevel <= maxLevel ? { name: next.name, level: next.minLevel } : null },
-      trainCost: st.level < maxLevel ? trainCost(p, st.level) : null,
+      trainCost: st.level < maxLevel ? trainCost(p, st.level) * patchMod(s, 'trainCost', c) : null,
       bonus: p.bonus.map((e) => describeEffect({ ...e, value: e.value * (1 + p.perLevel * (st.level - 1)) }, c) + (e.perActiveCategory ? ' por categoria ativa' : '')),
       station: st.station, canStation: slots > 0 && (st.station || used < slots),
       lines: p.lines,
@@ -151,6 +154,7 @@ function snapshot(s, now, c = CONTENT) {
     at: now,
     amount, lifetime: res.lifetime, rate: prod.rate,
     rateInfo: rateBreakdown(s, now, prod, c),
+    map: mapView(s, now, c),
     // Próximo instante em que a taxa/cena muda (a UI busca um snapshot novo nessa hora).
     nextChange: Math.min(...[
       ...Object.values(s.run.abilities).map((a) => a.activeUntil),
@@ -299,4 +303,122 @@ function abilitiesList(s, now, c = CONTENT) {
   }));
 }
 
-module.exports = { snapshot, abilitiesList, itemsList, describeEffect, describeCondition };
+/** Inimigo de um grupo para a UI: atributos na coluna, traços e se o esquadrão salvo anula cada um. */
+function enemyInfo(id, col, area, kind, counters, c) {
+  const e = c.enemy[id];
+  const st = enemyStats(id, col, area, c, kind);
+  return {
+    id, name: e.name, sprite: e.sprite, color: e.color, boss: !!e.boss, lines: e.lines,
+    hp: st.hp, atk: Math.round(st.atk), def: Math.round(st.def), spd: st.spd,
+    traits: e.traits.map((t) => ({ id: t, name: c.TRAITS[t].name, text: c.TRAITS[t].text, counterText: c.TRAITS[t].counterText, countered: !!counters && countered(t, counters, c) })),
+  };
+}
+
+/** Patch para a UI. */
+const patchInfo = (id, c) => { const p = c.patch[id]; return p ? { id, name: p.name, rarity: p.rarity, rarityName: c.RARITIES[p.rarity].name, icon: p.icon, description: p.description } : null; };
+
+/** Recompensa (log do mapa) em texto curto para a UI. */
+function rewardText(r, c) {
+  if (r.type === 'patch') return 'Patch ' + c.patch[r.id].name;
+  if (r.type === 'item') return '+1 ' + c.consumable[r.id].name;
+  if (r.type === 'part') return 'peça ' + r.name;
+  if (r.type === 'scrap') return '+1 sucata';
+  if (r.type === 'petLevel') return c.pet[r.pet].name + ' no nível ' + r.level;
+  if (r.type === 'battleBuff') return 'próxima batalha +' + Math.round(r.atk * 100) + '% de ataque';
+  if (r.type === 'restock') return '+1 de cada consumível';
+  if (r.type === 'swap') return r.id ? `${c.patch[r.from].name} → ${c.patch[r.id].name}` : 'troca sem Patch disponível';
+  return '';
+}
+
+/** O que um tipo de ponto rende (texto para o hover). */
+function rewardHint(type, c) {
+  const R = c.BATTLE_REWARDS;
+  if (type === 'battle') return `Consumível ou peça · ${Math.round(R.battle.patchChance * 100)}% de chance de um Patch comum`;
+  if (type === 'elite') return 'Patch raro + consumível';
+  if (type === 'boss') return 'Patch épico · conclui a área';
+  if (type === 'express') return 'Avança sem lutar (sem recompensa)';
+  if (type === 'event') return 'Uma escolha com trocas';
+  if (type === 'shop') return 'Consumíveis, peças e Patches à venda';
+  if (type === 'rest') return 'Treino, reabastecer ou foco';
+  return '';
+}
+
+/**
+ * Mapa da área para a UI: pontos (status, custo, inimigos, recompensa), pendente (evento/descanso/loja), Patches,
+ * preparação salva com a previsão, e a última batalha (para a arena).
+ */
+function mapView(s, now, c) {
+  const m = s.run.map;
+  const first = c.AREAS[0];
+  if (!m) return { unlocked: false, requirement: describeCondition(first.unlock, c), area: { id: first.id, name: first.name } };
+  const area = c.area[m.area];
+  const amount = s.run.resources.compute.amount;
+  const reach = new Set(reachable(s));
+  const sq = s.run.squad;
+  const squadOk = !squadError(s, sq, c);
+  const counters = squadOk ? { anyOf: new Set(sq.pets), front: new Set(sq.pets.filter((id) => sq.front.includes(id))) } : null;
+  const nodes = Object.values(m.nodes).map((n) => {
+    const cost = nodeCost(s, n, c);
+    const kind = c.NODE_TYPES[n.type];
+    return {
+      id: n.id, col: n.col, lane: n.lane, type: n.type, typeName: kind.name, icon: kind.icon, next: n.next, shortcut: n.shortcut || null,
+      status: m.at === n.id ? 'current' : m.visited.includes(n.id) ? 'visited' : reach.has(n.id) ? 'reachable' : 'locked',
+      cost, affordable: cost <= amount, attempts: m.attempts[n.id] || 0, reward: rewardHint(n.type, c),
+      enemies: n.group ? n.group.map((id) => enemyInfo(id, n.col, area, n.type, counters, c)) : null,
+      event: n.event ? { id: n.event, title: c.event[n.event].title } : null,
+    };
+  });
+  let pending = null;
+  if (m.pending) {
+    const node = m.nodes[m.pending.node];
+    const base = area.costs[node.col];
+    const hasCommon = s.run.patches.some((id) => c.patch[id] && c.patch[id].rarity === 'common');
+    if (m.pending.kind === 'event') {
+      const ev = c.event[node.event];
+      pending = { kind: 'event', node: node.id, title: ev.title, text: ev.text, finder: ev.finder,
+        choices: ev.choices.map((ch, i) => ({ index: i, text: ch.text, cost: (ch.cost || 0) * base,
+          disabled: (ch.cost || 0) * base > amount || (ch.needs === 'commonPatch' && !hasCommon) })) };
+    } else if (m.pending.kind === 'rest') {
+      pending = { kind: 'rest', node: node.id, title: 'Descanso', choices: c.REST_OPTIONS.map((o, i) => ({ index: i, text: o.text, cost: 0, disabled: false })) };
+    } else {
+      pending = { kind: 'shop', node: node.id, title: 'Loja', offers: node.offers.map((o) => ({
+        index: o.index, kind: o.kind, price: o.price, bought: o.bought, affordable: o.price <= amount,
+        name: o.kind === 'item' ? c.consumable[o.id].name : o.kind === 'part' ? 'Peça de Blueprint' : 'Patch ' + c.RARITIES[o.rarity].name.toLowerCase(),
+        icon: o.kind === 'item' ? c.consumable[o.id].icon : o.kind === 'part' ? 'package' : 'sparkles',
+        full: o.kind === 'item' && (s.run.inventory[o.id] || 0) >= c.consumable[o.id].cap,
+      })) };
+    }
+  }
+  // Previsão para o ponto que está sendo preparado (só um — a view é recalculada a cada ação).
+  let forecast = null;
+  const target = sq.node && m.nodes[sq.node];
+  if (target && target.group && squadOk && reach.has(target.id)) {
+    const attempt = m.attempts[target.id] || 0;
+    forecast = { node: target.id, ...preview(setupBattle(s, sq, target.group, target.col, m.area, c, target.type), (s.seed ^ attempt) >>> 0, c) };
+  }
+  const lb = m.lastBattle;
+  return {
+    unlocked: true,
+    area: { id: area.id, name: area.name, description: area.description, arena: area.arena, columns: area.columns, lanes: area.lanes },
+    at: m.at, cleared: m.cleared, nodes, pending,
+    patches: s.run.patches.map((id) => patchInfo(id, c)).filter(Boolean),
+    battleBuff: s.run.battleBuff,
+    squad: { pets: sq.pets, front: sq.front, triggers: sq.triggers, items: sq.items, node: sq.node, valid: squadOk },
+    forecast,
+    roster: Object.keys(s.run.pets).filter((id) => c.pet[id]).map((id) => {
+      const st = petStats(s, id, c);
+      const role = c.ROLES[c.PET_ROLES[id]];
+      const ab = c.BATTLE_ABILITIES[c.pet[id].ability];
+      return { id, name: c.pet[id].name, level: s.run.pets[id].level, role: c.PET_ROLES[id], roleName: role.name,
+        hp: st.hp, atk: Math.round(st.atk), def: Math.round(st.def), spd: st.spd,
+        ability: { id: c.pet[id].ability, name: c.ability[c.pet[id].ability].name, text: ab.text } };
+    }),
+    items: Object.entries(c.BATTLE_ITEMS).map(([id, k]) => ({ id, name: c.consumable[id].name, icon: c.consumable[id].icon, text: k.text, n: s.run.inventory[id] || 0 })),
+    triggers: c.TRIGGERS,
+    lastBattle: lb ? { ...lb, rewards: lb.rewards.map((r) => ({ ...r, text: rewardText(r, c) })),
+      units: lb.units.map((u) => (u.side === 'enemy' ? { ...u, sprite: c.enemy[u.id].sprite, color: c.enemy[u.id].color } : u)) } : null,
+    stats: { wins: s.arena.wins, losses: s.arena.losses },
+  };
+}
+
+module.exports = { snapshot, abilitiesList, itemsList, describeEffect, describeCondition, rewardText };

@@ -72,6 +72,83 @@ function blueprints(s, now, c, step) {
   for (const g of v.generators) if (g.blueprint && g.blueprint.complete) step({ type: 'refactor', gen: g.id });
 }
 
+/* ─────────────── Mapa (robô) ─────────────── */
+const { reachable, nodeCost } = require('./engine/map.js');
+const { setupBattle, preview, petStats } = require('./engine/battle.js');
+
+/** Esquadrão do robô para um grupo de inimigos: counters primeiro, depois os mais fortes; tanques/atacantes na frente. */
+function botSquad(s, enemies, kind, c) {
+  const owned = Object.keys(s.run.pets).filter((id) => c.pet[id]);
+  const power = (id) => { const st = petStats(s, id, c); return st.hp + st.atk * 6 + st.def * 2; };
+  const need = new Set();
+  for (const e of enemies) for (const t of c.enemy[e].traits) {
+    const ct = c.TRAITS[t].counter;
+    if (!ct) continue;
+    const ids = [...(ct.anyOf || []), ...(ct.front || [])].filter((id) => owned.includes(id));
+    if (ids.length) need.add(ids.sort((a, b) => power(b) - power(a))[0]);
+  }
+  const pets = [...need, ...owned.filter((id) => !need.has(id)).sort((a, b) => power(b) - power(a))].slice(0, c.BATTLE.squadSize);
+  const frontRole = (id) => ['tank', 'attacker'].includes(c.PET_ROLES[id]);
+  const front = [...pets.filter(frontRole), ...pets.filter((id) => !frontRole(id))].slice(0, 2);
+  const triggers = Object.fromEntries(pets.map((id) => [id, c.PET_ROLES[id] === 'support' ? 'allyLow' : 'start']));
+  const items = kind === 'battle' ? [] : ['hotfix', 'coffee', 'rollback'].filter((id) => (s.run.inventory[id] || 0) > 0).slice(0, c.BATTLE.maxItems);
+  return { pets, front, triggers, items };
+}
+
+/** Próximo passo do robô no mapa: { action, cost } ou null. Guarda Compute para lutas que valem a pena. */
+function botMapChoice(s, now, c) {
+  const m = s.run.map;
+  if (!m || m.cleared) return null;
+  if (m.pending && m.pending.kind !== 'shop') {
+    const node = m.nodes[m.pending.node];
+    if (m.pending.kind === 'rest') return { action: { type: 'mapChoose', index: 0 }, cost: 0 };
+    const ev = c.event[node.event];
+    const amount = s.run.resources.compute.amount;
+    const base = c.area[m.area].costs[node.col];
+    const hasCommon = s.run.patches.some((id) => c.patch[id].rarity === 'common');
+    const i = ev.choices.findIndex((ch) => ch.rewards.length && (ch.cost || 0) * base <= amount && (ch.needs !== 'commonPatch' || hasCommon));
+    return { action: { type: 'mapChoose', index: i === -1 ? ev.choices.length - 1 : i }, cost: 0 };
+  }
+  const options = reachable(s).map((id) => m.nodes[id]).map((n) => {
+    const cost = nodeCost(s, n, c);
+    if (!n.group) return { n, cost, chance: 1, score: n.type === 'express' ? 0.3 : 2 };
+    const squad = botSquad(s, n.group, n.type, c);
+    const p = preview(setupBattle(s, squad, n.group, n.col, m.area, c, n.type), (s.seed ^ (m.attempts[n.id] || 0)) >>> 0, c).chance;
+    const min = n.type === 'elite' ? 0.8 : 0.5;
+    return { n, cost, chance: p, squad, score: p >= min ? p + (n.type === 'elite' ? 0.2 : 0) : -1 };
+  }).filter((o) => o.score >= 0).sort((a, b) => b.score - a.score || a.cost - b.cost);
+  const best = options[0];
+  if (!best) return null;
+  const action = best.squad ? { type: 'mapFight', node: best.n.id, squad: best.squad } : { type: 'mapMove', node: best.n.id };
+  return { action, cost: best.cost };
+}
+
+/**
+ * Joga o mapa enquanto houver o que fazer com o Compute atual. `step` aplica a ação e devolve { state } (o estado é
+ * substituído a cada ação). → Compute a guardar para o próximo ponto.
+ */
+function playMap(s, now, c, step, marks, reserveHours) {
+  for (let guard = 0; guard < 30; guard++) {
+    const m = s.run.map;
+    if (!m) return 0;
+    if (m.pending && m.pending.kind === 'shop') {
+      const node = m.nodes[m.pending.node];
+      const o = node.offers.find((x) => !x.bought && x.kind === 'patch' && x.price <= s.run.resources.compute.amount * 0.5);
+      if (o) { s = step({ type: 'mapBuy', offer: o.index }).state; continue; }
+    }
+    const pick = botMapChoice(s, now, c);
+    if (!pick) return 0;
+    const rate = production(s, now, c).rate;
+    if (pick.cost > s.run.resources.compute.amount) return pick.cost <= rate * reserveHours * 3600 ? pick.cost : 0;
+    const before = m.lastBattle ? m.lastBattle.id : 0;
+    s = step(pick.action).state;
+    const lb = s.run.map.lastBattle;
+    if (lb && lb.id !== before) { if (lb.win) marks.map.wins++; else marks.map.losses++; }
+    if (s.run.map.cleared && marks.map.cleared == null) marks.map.cleared = now;
+  }
+  return 0;
+}
+
 /**
  * profile: { checkEverySec, onlineHoursPerDay, days, events(day) → [{name,data}], strategy?, quiet?, blueprints? }
  * Retorna marcos { t2, t3, pets:{id:t}, synergies:{id:t}, incidents, items, finalAmount, … }.
@@ -82,7 +159,8 @@ function simulate(profile, c = CONTENT) {
   let s = createState(t0, c);
   let now = t0;
   const marks = { t2: null, t3: null, pets: {}, synergies: {}, purchases: 0, maxWaitSec: 0, maxCheapestSec: 0,
-    incidents: { seen: 0, contained: 0, escaped: 0, hotfixed: 0 }, items: 0, parts: 0, firstMk2: null, firstMk3: null };
+    incidents: { seen: 0, contained: 0, escaped: 0, hotfixed: 0 }, items: 0, parts: 0, firstMk2: null, firstMk3: null,
+    map: { opened: null, cleared: null, wins: 0, losses: 0, byDay: [] } };
   const step = (action) => {
     const r = dispatch(s, action, now, c);
     s = r.state;
@@ -120,10 +198,17 @@ function simulate(profile, c = CONTENT) {
     }
     if (strategy === 'prepared') prepare(s, now, c, step);
     if (strategy !== 'passive' && profile.blueprints !== false) blueprints(s, now, c, step);
+    // Mapa: avança quando dá; se o próximo ponto custa até `mapReserveHours` de produção, guarda Compute para ele.
+    let reserve = 0;
+    if (profile.map !== false) {
+      if (s.run.map && marks.map.opened == null) marks.map.opened = now;
+      reserve = playMap(s, now, c, step, marks, profile.mapReserveHours || 4);
+      if (s.run.map) marks.map.byDay[Math.floor((now - t0) / 86400e3)] = s.run.map.visited.length;
+    }
     // Compra enquanto houver o que comprar (melhor valor primeiro), como um jogador atento.
     for (let guard = 0; guard < 200; guard++) {
       const best = options(s, now, c, strategy)[0];
-      if (!best || best.cost > s.run.resources.compute.amount) break;
+      if (!best || best.cost > s.run.resources.compute.amount - reserve) break;
       step(best.action);
       marks.purchases++;
       marks.maxWaitSec = Math.max(marks.maxWaitSec, (now - lastPurchase) / 1000);
@@ -176,4 +261,4 @@ const PROFILES = {
   },
 };
 
-module.exports = { simulate, PROFILES, options, incidentLoss };
+module.exports = { simulate, PROFILES, options, incidentLoss, botSquad, botMapChoice };

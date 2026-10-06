@@ -1,0 +1,82 @@
+'use strict';
+/**
+ * Batalha (auto-battler com preparação) — números e regras como dados. Ver docs/devcore-mapa-singularity.md.
+ * Atributo de um pet = base do papel × (1 + perLevel × (nível − 1)) × estágio × raridade.
+ * Velocidade vira energia: a cada rodada a unidade ganha `spd` e age enquanto tiver ≥ energyPerAction.
+ */
+
+const ROLES = {
+  attacker: { name: 'Atacante', hp: 100, atk: 24, def: 8, spd: 10 },
+  tank: { name: 'Tanque', hp: 180, atk: 11, def: 20, spd: 7 },
+  support: { name: 'Suporte', hp: 115, atk: 12, def: 12, spd: 9 },   // cura o aliado mais ferido (< 60%) em vez de atacar
+  speed: { name: 'Velocidade', hp: 90, atk: 15, def: 8, spd: 15 },
+};
+
+/** Papel de cada DevPet (vem da especialização). */
+const PET_ROLES = { byte: 'attacker', git: 'attacker', armo: 'tank', query: 'tank', memo: 'support', relay: 'support', noxi: 'speed', lint: 'speed' };
+
+const BATTLE = {
+  squadSize: 3,
+  maxItems: 2,
+  maxRounds: 30,              // sem vencer até aqui = derrota (tempo esgotado)
+  energyPerAction: 10,
+  perLevel: 0.15,
+  stageMult: [1, 1.1, 1.25],  // Base · Veterano · Mestre
+  rarityMult: { common: 1, rare: 1.1, epic: 1.2 },
+  critChance: 0.1,
+  critMult: 1.6,
+  supportHeal: 0.15,          // suporte cura 15% da vida máxima do aliado mais ferido
+  supportHealBelow: 0.6,
+  previewRuns: 20,
+  chance: { good: 0.8, risky: 0.4 },  // favorável ≥ 80% · arriscado ≥ 40% · muito arriscado abaixo
+};
+
+/** Gatilho da habilidade de cada pet (uma vez por batalha). */
+const TRIGGERS = [
+  { id: 'start', name: 'No início' },
+  { id: 'round3', name: 'Na rodada 3' },
+  { id: 'allyLow', name: 'Aliado abaixo de 50%' },
+];
+
+/**
+ * Versão de batalha das habilidades dos pets.
+ * type: burst (próximo ataque × mult) · decoy (absorve o próximo golpe) · shield (dano recebido × value por N rodadas)
+ *       mark (inimigo mais forte recebe +value) · heal (cura value da vida do aliado mais ferido)
+ *       atkBuff (+value de ataque no esquadrão por N rodadas) · haste (+1 ação por rodada por N rodadas)
+ *       cleanse (remove dreno e cura value de todos)
+ */
+const BATTLE_ABILITIES = {
+  'compile-burst': { type: 'burst', mult: 3, text: 'Próximo ataque ×3' },
+  'branch-off': { type: 'decoy', text: 'Um clone absorve o próximo golpe' },
+  'scale-out': { type: 'shield', value: 0.5, rounds: 2, text: 'Esquadrão recebe metade do dano por 2 rodadas' },
+  index: { type: 'mark', value: 0.3, text: 'Inimigo mais forte recebe +30% de dano' },
+  recall: { type: 'heal', value: 0.3, text: 'Cura 30% da vida do aliado mais ferido' },
+  orchestrate: { type: 'atkBuff', value: 0.25, rounds: 3, text: 'Esquadrão +25% de ataque por 3 rodadas' },
+  parallelize: { type: 'haste', rounds: 2, text: 'Esquadrão age 2× por 2 rodadas' },
+  'lint-pass': { type: 'cleanse', value: 0.1, text: 'Remove o dreno e cura 10% de todos' },
+};
+
+/**
+ * Consumíveis em batalha — usados sozinhos no momento certo.
+ * when: start (rodada 1) · firstDown (primeiro pet a cair) · firstAbility (depois da 1ª habilidade usada)
+ */
+const BATTLE_ITEMS = {
+  coffee: { when: 'start', type: 'atkBuff', value: 0.3, rounds: 3, text: '+30% de ataque por 3 rodadas (rodada 1)' },
+  hotfix: { when: 'start', type: 'nuke', mult: 2.5, text: 'Dano 2,5× o maior ataque do esquadrão no inimigo mais forte (rodada 1)' },
+  rollback: { when: 'firstDown', type: 'revive', value: 0.3, text: 'Revive o primeiro pet a cair com 30% da vida' },
+  'cache-warmer': { when: 'firstAbility', type: 'recharge', text: 'A primeira habilidade usada fica pronta de novo' },
+};
+
+/**
+ * Traços dos inimigos e o counter de cada um (pet no esquadrão / na frente que anula o traço).
+ */
+const TRAITS = {
+  drain: { name: 'Dreno', text: 'Quem acerta perde 10% de ataque (até −50%)', counter: { anyOf: ['query', 'memo'] }, counterText: 'Query ou Memo no esquadrão anulam' },
+  evade: { name: 'Esquiva', text: 'Desvia de 30% dos ataques', value: 0.3, counter: { anyOf: ['noxi'] }, counterText: 'Noxi no esquadrão faz todos acertarem' },
+  swarm: { name: 'Enxame', text: 'Vários inimigos fracos', counter: { front: ['armo'] }, value: 0.6, counterText: 'Armo na frente: o enxame causa 40% menos dano' },
+  split: { name: 'Divisão', text: 'Ao cair, vira dois com 40% da vida', value: 0.4, counter: { anyOf: ['relay'] }, counterText: 'Relay no esquadrão impede a divisão' },
+  fortify: { name: 'Fortificação', text: '+6% de defesa a cada rodada', value: 0.06, counter: null, counterText: 'Sem counter: vença rápido (habilidades no início)' },
+  pierce: { name: 'Perfuração', text: 'Ignora a defesa', counter: { anyOf: ['armo'] }, counterText: 'Armo no esquadrão devolve a defesa' },
+};
+
+module.exports = { ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS };

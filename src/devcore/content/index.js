@@ -14,12 +14,21 @@ const { INCIDENTS } = require('./incidents.js');
 const { CONSUMABLES } = require('./consumables.js');
 const { BLUEPRINTS } = require('./blueprints.js');
 const { QUESTS } = require('./quests.js');
+const { ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS } = require('./battle.js');
+const { ENEMIES } = require('./enemies.js');
+const { AREAS, NODE_TYPES } = require('./areas.js');
+const { PATCHES, RARITIES } = require('./patches.js');
+const { EVENTS, REST_OPTIONS, SHOP, BATTLE_REWARDS } = require('./events.js');
 
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 
 const CONTENT = {
   BALANCE, RESOURCES, CATEGORIES, TIERS, GENERATORS, UPGRADES, PETS, RARITY, ABILITIES, SYNERGIES, DISCOVERIES, STAGES, SKINS,
   INCIDENTS, CONSUMABLES, BLUEPRINTS, QUESTS,
+  // Mapa e batalhas (docs/devcore-mapa-singularity.md)
+  ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS, ENEMIES, AREAS, NODE_TYPES, PATCHES, RARITIES,
+  EVENTS, REST_OPTIONS, SHOP, BATTLE_REWARDS,
+  enemy: byId(ENEMIES), area: byId(AREAS), patch: byId(PATCHES), event: byId(EVENTS),
   quest: byId(QUESTS),
   gen: byId(GENERATORS), upgrade: byId(UPGRADES), pet: byId(PETS), ability: byId(ABILITIES),
   category: byId(CATEGORIES), discovery: byId(DISCOVERIES), synergy: byId(SYNERGIES), skin: byId(SKINS),
@@ -100,6 +109,26 @@ function validate(c = CONTENT) {
       if (!(l.mult > 1) || !(l.costDiv >= 1)) errors.push(`blueprint ${b.gen} mk${l.mk}: mult > 1 e costDiv ≥ 1`);
     });
   }
+  // Mapa e batalhas
+  for (const p of c.PETS) {
+    if (!c.ROLES[c.PET_ROLES[p.id]]) errors.push(`battle: pet ${p.id} sem papel`);
+    if (!c.BATTLE_ABILITIES[p.ability]) errors.push(`battle: habilidade ${p.ability} sem versão de batalha`);
+  }
+  for (const id of Object.keys(c.BATTLE_ITEMS)) if (!c.consumable[id]) errors.push(`battle: item ${id} inexistente`);
+  uniq('enemies', c.ENEMIES); uniq('patches', c.PATCHES); uniq('events', c.EVENTS); uniq('areas', c.AREAS);
+  for (const e of c.ENEMIES) for (const t of e.traits) if (!c.TRAITS[t]) errors.push(`enemy ${e.id}: traço ${t}`);
+  for (const a of c.AREAS) {
+    if (!a.scale || !(a.scale.linear >= 0) || !(a.scale.quad >= 0) || !(a.scale.eliteMult >= 1)) errors.push(`area ${a.id}: scale`);
+    if (a.costs.length !== a.columns + 1) errors.push(`area ${a.id}: costs precisa de ${a.columns + 1} valores (colunas + chefe)`);
+    if (!c.enemy[a.boss] || !c.enemy[a.boss].boss) errors.push(`area ${a.id}: chefe ${a.boss}`);
+    for (const [kind, groups] of Object.entries(a.groups)) for (const g of groups) for (const id of g) if (!c.enemy[id]) errors.push(`area ${a.id}: inimigo ${id} (${kind})`);
+    for (const types of Object.values(a.fixed)) for (const t of types) if (!c.NODE_TYPES[t]) errors.push(`area ${a.id}: tipo ${t}`);
+  }
+  for (const p of c.PATCHES) {
+    if (!c.RARITIES[p.rarity]) errors.push(`patch ${p.id}: raridade ${p.rarity}`);
+    for (const e of p.effects || []) if (e.target) checkTarget('patch ' + p.id, e.target);
+  }
+  for (const ev of c.EVENTS) if (!ev.choices.length) errors.push(`event ${ev.id}: sem escolhas`);
   for (const d of c.DISCOVERIES) {
     for (const r of d.rewards) if (r.pet && !c.pet[r.pet]) errors.push(`discovery ${d.id}: pet ${r.pet}`);
     if (d.finder && !c.pet[d.finder]) errors.push(`discovery ${d.id}: finder ${d.finder}`);

@@ -34,6 +34,11 @@ function createState(now, c = CONTENT) {
       shields: 0,
       blueprints: {},  // { [gen]: { mk, parts: { [partId]: true } } } — sem entrada = Mk I
       scrap: 0,
+      // Mapa e batalhas (docs/devcore-mapa-singularity.md): o mapa nasce no Tier 2 (engine/map.js ensureMap).
+      map: null,
+      patches: [],        // Patches da run (recompensas do mapa)
+      squad: { pets: [], front: [], triggers: {}, items: [], node: null },  // última preparação (e o ponto da previsão)
+      battleBuff: null,   // { atk } para a próxima batalha (evento/descanso)
     },
     meta: { fragments: 0, rebuilds: 0, perks: {} },
     usage: { days: {}, distinct: {}, first: {} },
@@ -41,6 +46,7 @@ function createState(now, c = CONTENT) {
     pending: { welcome: null },
     cosmetics: { skins: {}, unlocked: ['default'], fresh: [] },
     bestiary: {},
+    arena: { wins: 0, losses: 0, defeated: {}, areas: {} },  // estatísticas de batalha — nunca zeram
     quests: { day: '', ids: [], done: [], seen: {}, total: 0, byPet: {} }, // missões diárias — o contador nunca reseta
     settings: { quiet: false },
   };

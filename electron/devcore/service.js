@@ -15,7 +15,7 @@ const { dispatch } = require('../../src/devcore/engine/index.js');
 const { snapshot, abilitiesList, itemsList } = require('../../src/devcore/engine/view.js');
 
 // Ações que as janelas podem pedir (eventos, boot e tick são internos).
-const UI_ACTIONS = new Set(['buy', 'upgrade', 'train', 'station', 'ability', 'ackWelcome', 'seen', 'skin', 'use', 'craft', 'quiet', 'buyPart', 'scrapPart', 'refactor']);
+const UI_ACTIONS = new Set(['buy', 'upgrade', 'train', 'station', 'ability', 'ackWelcome', 'seen', 'skin', 'use', 'craft', 'quiet', 'buyPart', 'scrapPart', 'refactor', 'mapSquad', 'mapMove', 'mapFight', 'mapChoose', 'mapBuy']);
 
 function createDevCoreService({ file, now = () => Date.now(), broadcast = () => {} }) {
   let state = null;

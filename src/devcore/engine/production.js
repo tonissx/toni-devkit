@@ -10,6 +10,7 @@
 const { CONTENT } = require('../content/index.js');
 const { incidentEffects } = require('./incidents.js');
 const { blueprintEffects } = require('./blueprints.js');
+const { patchEffects } = require('./patches.js');
 
 /** Agrega efeitos por alvo. */
 function aggregate(effects) {
@@ -120,7 +121,7 @@ function collectEffects(s, t, c = CONTENT, opts = {}) {
     if (!synergyActive(s, syn, active, c)) continue;
     for (const e of syn.effects) effects.push({ ...e, value: e.perActiveCategory ? e.value * active.size : e.value, source: 'synergy:' + syn.id });
   }
-  effects.push(...discoveryEffects(s, c), ...abilityEffects(s, t, c), ...incidentEffects(s, t, c), ...blueprintEffects(s, c));
+  effects.push(...discoveryEffects(s, c), ...abilityEffects(s, t, c), ...incidentEffects(s, t, c), ...blueprintEffects(s, c), ...patchEffects(s, c));
   return { effects: opts.skip ? effects.filter((e) => !opts.skip.includes(e.source)) : effects, active };
 }
 

@@ -16,6 +16,10 @@
  *   buyPart { part }          compra uma peça de Blueprint com Compute (N minutos da produção atual)
  *   scrapPart { part }        troca sucata por uma peça faltante
  *   refactor { gen }          conjunto completo → próximo Mk (produção do gerador × mult, visual novo)
+ *   mapFight { node, squad }  mapa: batalha (paga a entrada; derrota só custa a entrada) — ver engine/map.js
+ *   mapMove { node }          mapa: deploy expresso, evento, loja ou descanso
+ *   mapChoose { index }       mapa: opção do evento/descanso · mapBuy { offer }: compra na loja
+ *   mapSquad { squad, node? } mapa: salva a preparação (a view mostra a previsão para `node`)
  */
 const { CONTENT } = require('../content/index.js');
 const { advanceTo } = require('./advance.js');
@@ -28,6 +32,8 @@ const { stageOf, evaluateSkins } = require('./appearance.js');
 const { record: recordQuestEvent, evaluateQuests } = require('./quests.js');
 const { ensureScheduled, endIncident, grantItem, abilitiesLocked, randFor } = require('./incidents.js');
 const { bpOf, partId, levelOf, parsePart, partError, dropPart, costDivOf } = require('./blueprints.js');
+const { ensureMap, mapAct } = require('./map.js');
+const { patchMod } = require('./patches.js');
 
 const upgradeAvailable = (s, u) => !s.run.upgrades[u.id] && check(u.requires, s);
 
@@ -132,7 +138,7 @@ function act(s, action, now, c, log) {
       const st = s.run.pets[action.pet];
       if (!p || !st) return 'DevPet indisponível';
       if (st.level >= c.RARITY[p.rarity].maxLevel) return 'Nível máximo';
-      const cost = trainCost(p, st.level);
+      const cost = trainCost(p, st.level) * patchMod(s, 'trainCost', c);
       const res = s.run.resources.compute;
       if (cost > res.amount) return 'Compute insuficiente';
       res.amount -= cost;
@@ -163,7 +169,7 @@ function act(s, action, now, c, log) {
       const a = s.run.abilities[def.id] || { activeUntil: 0, readyAt: 0 };
       if (a.readyAt > now) return 'Em recarga';
       const e = def.effect;
-      if (e.type === 'burst') a.activeUntil = now + e.durationSec * 1000;
+      if (e.type === 'burst') a.activeUntil = now + e.durationSec * patchMod(s, 'abilityDuration', c) * 1000;
       if (e.type === 'instant') {
         const gained = production(s, now, c).rate * e.seconds;
         s.run.resources.compute.amount += gained;
@@ -276,6 +282,8 @@ function act(s, action, now, c, log) {
       }
       return null;
     }
+    case 'mapSquad': case 'mapMove': case 'mapFight': case 'mapChoose': case 'mapBuy':
+      return mapAct(s, action, now, c, log);
     case 'seen':
       s.discoveries.unseen = [];
       if (action.skins) s.cosmetics.fresh = [];
@@ -295,7 +303,7 @@ function dispatch(state, action, now, c = CONTENT) {
     log.push(...advanceTo(s, now, { offline: false }, c).log);
     if (action.type !== 'tick') error = act(s, action, now, c, log);
   }
-  log.push(...evaluate(s, now, c), ...evaluateQuests(s, now, c), ...evaluateSkins(s, c));
+  log.push(...evaluate(s, now, c), ...evaluateQuests(s, now, c), ...evaluateSkins(s, c), ...ensureMap(s, c));
   s.run.boosts = s.run.boosts.filter((b) => b.until > now);
   ensureScheduled(s, now, c); // um tier novo (ou sair do modo tranquilo) liga os incidentes a partir de agora
   return error ? { state: s, log, error } : { state: s, log };
