@@ -50,13 +50,47 @@ test('batalha: determinística pela semente; atributos crescem com nível, está
 });
 
 test('batalha: Patches de batalha e o buff da próxima batalha entram nos atributos', () => {
-  const base = battle.setupBattle(make({ pets: { byte: 1 } }), squadOf(['byte']), ['bug'], 0, 'localhost').pets[0];
+  // Na retaguarda (só bônus de velocidade), para medir só Patches e buff.
+  const rear = { slots: { rear: 'byte' }, triggers: {}, items: [] };
+  const base = battle.setupBattle(make({ pets: { byte: 1 } }), rear, ['bug'], 0, 'localhost').pets[0];
   const s = make({ pets: { byte: 1 }, patches: ['pair-review', 'retry-policy', 'type-safety'] });
   s.run.battleBuff = { atk: 0.2 };
-  const p = battle.setupBattle(s, squadOf(['byte']), ['bug'], 0, 'localhost').pets[0];
+  const p = battle.setupBattle(s, rear, ['bug'], 0, 'localhost').pets[0];
   near(p.atk, base.atk * (1 + 0.1 + 0.2));
   assert.equal(p.maxHp, Math.round(base.maxHp / 1 * 1.15));
   near(p.def, base.def * 1.25);
+});
+
+test('slots: bônus por slot (e extra do papel certo), alvo pela ordem dos slots, cura da retaguarda, formato antigo', () => {
+  const s = make({ pets: { armo: 10, byte: 10, memo: 12 } });
+  const stats = (id) => battle.petStats(s, id);
+  const setup = battle.setupBattle(s, { slots: { vanguard: 'armo', center: 'byte', rear: 'memo' }, triggers: {}, items: [] }, ['bug'], 0, 'localhost');
+  const [armo, byte, memo] = setup.pets;
+  assert.deepEqual(setup.pets.map((u) => u.slot), ['vanguard', 'center', 'rear']);
+  near(armo.def, stats('armo').def * (1 + 0.15 + 0.3));        // vanguarda + tanque
+  assert.equal(armo.maxHp, Math.round(stats('armo').hp * 1.15));
+  near(byte.atk, stats('byte').atk * (1 + 0.1 + 0.25));        // centro + atacante
+  assert.equal(memo.spd, stats('memo').spd + 2);               // retaguarda
+  assert.equal(memo.healMult, 1.5);                            // retaguarda + suporte
+  // Fora do papel: tanque no centro só ganha o bônus geral do centro.
+  const off = battle.setupBattle(s, { slots: { center: 'armo' } }, ['bug'], 0, 'localhost').pets[0];
+  near(off.atk, stats('armo').atk * 1.1);
+  near(off.def, stats('armo').def);
+  // Alvo: os inimigos batem na vanguarda; o centro só apanha depois que ela cai.
+  const r = battle.resolve(battle.setupBattle(make({ pets: { git: 1, byte: 10 } }), { slots: { vanguard: 'git', center: 'byte' }, triggers: { git: 'allyLow', byte: 'allyLow' } }, ['zero', 'zero', 'zero'], 6, 'localhost', CONTENT, 'elite'), 3);
+  const hits = r.log.filter((e) => e.k === 'atk' && e.a[0] === 'e');
+  const downAt = r.log.findIndex((e) => e.k === 'down' && e.t === 'p0');
+  assert.ok(hits.length && hits[0].t === 'p0', 'primeiro golpe na vanguarda');
+  assert.ok(r.log.slice(0, downAt).filter((e) => e.k === 'atk' && e.a[0] === 'e').every((e) => e.t === 'p0'), 'centro intocado enquanto a vanguarda está de pé');
+  // Formato antigo (pets + front) vira slots: frente primeiro.
+  assert.deepEqual(battle.slotsOf({ pets: ['byte', 'armo', 'memo'], front: ['armo'] }), { vanguard: 'armo', center: 'byte', rear: 'memo' });
+  // Enxame: só o Armo na vanguarda anula.
+  assert.equal(battle.setupBattle(s, { slots: { vanguard: 'armo' } }, ['swarm-bot'], 0, 'localhost').counters.front.has('armo'), true);
+  assert.equal(battle.setupBattle(s, { slots: { rear: 'armo', vanguard: 'byte' } }, ['swarm-bot'], 0, 'localhost').counters.front.has('armo'), false);
+  // O mapa guarda os slots.
+  const m = run(s, { type: 'mapSquad', squad: { slots: { vanguard: 'armo', rear: 'memo' }, triggers: {}, items: [] }, node: '0-0' }).state;
+  assert.deepEqual(m.run.squad.slots, { vanguard: 'armo', center: null, rear: 'memo' });
+  assert.deepEqual(m.run.squad.pets, ['armo', 'memo']);
 });
 
 test('batalha: counters anulam os traços (dreno, esquiva, divisão, enxame, perfuração)', () => {

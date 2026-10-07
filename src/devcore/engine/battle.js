@@ -53,6 +53,29 @@ function setPetHp(s, petId, frac, now) {
   st.ko = st.hp <= 0;
 }
 
+/**
+ * Slots da preparação: { vanguard, center, rear } (ids ou null). Preparações antigas (pets + front) viram slots:
+ * os da frente primeiro, depois os de trás, na ordem.
+ */
+function slotsOf(squad, c = CONTENT) {
+  const ids = c.SLOTS.map((x) => x.id);
+  if (squad && squad.slots) return Object.fromEntries(ids.map((id) => [id, squad.slots[id] || null]));
+  const pets = (squad && squad.pets) || [];
+  const front = (squad && squad.front) || [];
+  const order = [...pets.filter((id) => front.includes(id)), ...pets.filter((id) => !front.includes(id))];
+  return Object.fromEntries(ids.map((id, i) => [id, order[i] || null]));
+}
+/** Pets da preparação na ordem dos slots (vanguarda → retaguarda). */
+const petsOf = (squad, c = CONTENT) => Object.values(slotsOf(squad, c)).filter(Boolean);
+/** Bônus de um slot para um pet (o do slot + o extra do papel). */
+function slotBonus(slotId, petId, c = CONTENT) {
+  const sl = c.SLOTS.find((x) => x.id === slotId);
+  const out = { atk: 0, def: 0, hp: 0, spd: 0, heal: 0 };
+  if (!sl) return out;
+  for (const b of [sl.bonus || {}, (sl.roles || {})[c.PET_ROLES[petId]] || {}]) for (const k of Object.keys(out)) out[k] += b[k] || 0;
+  return out;
+}
+
 /** Atributos de combate de um pet no nível atual (sem Patches). */
 function petStats(s, petId, c = CONTENT) {
   const p = c.pet[petId];
@@ -75,7 +98,8 @@ function enemyStats(enemyId, col, area, c = CONTENT, kind = 'battle') {
 }
 
 /**
- * Monta a batalha a partir do estado: squad = { pets:[ids], front:[ids], triggers:{id:trigger}, items:[ids] }.
+ * Monta a batalha a partir do estado: squad = { slots:{vanguard,center,rear}, triggers:{id:trigger}, items:[ids] }
+ * (ou o formato antigo { pets, front }, convertido por slotsOf).
  * kind: battle | elite | boss (tipo do ponto do mapa). now: a luta começa com a vida atual de cada pet (sem now: vida cheia).
  * → { pets:[unit], enemies:[unit], items:[ids], counters:{ anyOf:Set, front:Set }, firstCrit }
  */
@@ -83,13 +107,16 @@ function setupBattle(s, squad, enemyIds, col, areaId, c = CONTENT, kind = 'battl
   const area = c.area[areaId];
   const pb = patchBattle(s, c);
   const buff = (s.run.battleBuff && s.run.battleBuff.atk) || 0;
-  const pets = squad.pets.map((id, i) => {
+  const slots = slotsOf(squad, c);
+  const placed = c.SLOTS.map((sl, rank) => ({ slot: sl.id, rank, id: slots[sl.id] })).filter((x) => x.id);
+  const pets = placed.map(({ slot, rank, id }, i) => {
     const st = petStats(s, id, c);
-    const maxHp = Math.round(st.hp * (1 + pb.hp));
+    const sb = slotBonus(slot, id, c);
+    const maxHp = Math.round(st.hp * (1 + pb.hp + sb.hp));
     const hp = now == null ? maxHp : Math.max(1, Math.round(maxHp * petHp(s, id, now, c)));
     return {
-      uid: 'p' + i, side: 'pet', id, name: c.pet[id].name, role: c.PET_ROLES[id], front: squad.front.includes(id),
-      hp, maxHp, atk: st.atk * (1 + pb.atk + buff), def: st.def * (1 + pb.def), spd: st.spd,
+      uid: 'p' + i, side: 'pet', id, name: c.pet[id].name, role: c.PET_ROLES[id], slot, rank, front: slot === 'vanguard',
+      hp, maxHp, atk: st.atk * (1 + pb.atk + buff + sb.atk), def: st.def * (1 + pb.def + sb.def), spd: st.spd + sb.spd, healMult: 1 + sb.heal,
       ability: c.pet[id].ability, trigger: (squad.triggers && squad.triggers[id]) || 'start',
     };
   });
@@ -99,7 +126,7 @@ function setupBattle(s, squad, enemyIds, col, areaId, c = CONTENT, kind = 'battl
   });
   return {
     pets, enemies, items: [...(squad.items || [])],
-    counters: { anyOf: new Set(squad.pets), front: new Set(squad.pets.filter((id) => squad.front.includes(id))) },
+    counters: { anyOf: new Set(placed.map((x) => x.id)), front: new Set(slots.vanguard ? [slots.vanguard] : []) },
     firstCrit: pb.firstCrit,
   };
 }
@@ -135,7 +162,11 @@ function resolve(setup, seed, c = CONTENT) {
   const atkMult = () => 1 + sum(squad.buffs.filter((b) => b.until >= r).map((b) => b.value));
   const strongest = () => aliveEnemies().sort((a, b) => b.hp - a.hp)[0];
   const weakestAlly = () => alivePets().sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
-  const heal = (u, amount, by) => { const v = Math.min(u.maxHp - u.hp, Math.round(amount)); u.hp += v; log.push({ r, k: 'heal', a: by, t: u.uid, v }); };
+  const heal = (u, amount, by) => {
+    const src = pets.find((x) => x.uid === by);           // retaguarda + suporte cura mais
+    const v = Math.min(u.maxHp - u.hp, Math.round(amount * (src ? src.healMult : 1)));
+    u.hp += v; log.push({ r, k: 'heal', a: by, t: u.uid, v });
+  };
 
   function useAbility(p) {
     if (!p.alive || p.abilityUsed) return;
@@ -194,9 +225,7 @@ function resolve(setup, seed, c = CONTENT) {
   function enemyAct(e) {
     const targets = alivePets();
     if (!targets.length) return;
-    const front = targets.filter((u) => u.front);
-    const pool = front.length ? front : targets;
-    const t = pool.sort((a, b) => (b.role === 'tank') - (a.role === 'tank') || a.hp - b.hp)[0]; // tanque segura a frente
+    const t = [...targets].sort((a, b) => a.rank - b.rank)[0]; // o slot mais à frente que estiver de pé
     if (squad.decoy > 0) { squad.decoy -= 1; log.push({ r, k: 'decoy', a: e.uid, t: t.uid }); return; }
     const crit = rand() < B.critChance;
     const def = has('pierce', e) ? 0 : t.def;
@@ -255,7 +284,7 @@ function resolve(setup, seed, c = CONTENT) {
     // hp: vida no início (a arena começa daí) · end: vida que sobrou (o mapa grava nos pets)
     units: units.map((u) => {
       const start = (setup.pets.find((x) => x.uid === u.uid) || setup.enemies.find((x) => x.uid === u.uid) || u).hp;
-      return { uid: u.uid, side: u.side, id: u.id, name: u.name, hp: u.child ? u.maxHp : start, maxHp: u.maxHp, end: u.alive ? u.hp : 0, front: !!u.front, boss: !!u.boss, child: !!u.child };
+      return { uid: u.uid, side: u.side, id: u.id, name: u.name, hp: u.child ? u.maxHp : start, maxHp: u.maxHp, end: u.alive ? u.hp : 0, front: !!u.front, slot: u.slot || null, rank: u.rank != null ? u.rank : null, boss: !!u.boss, child: !!u.child };
     }),
   };
 }
@@ -277,4 +306,4 @@ function preview(setup, seed, c = CONTENT) {
   return { chance, label: chance >= c.BATTLE.chance.good ? 'favorável' : chance >= c.BATTLE.chance.risky ? 'arriscado' : 'muito arriscado', timeouts: timeouts / n };
 }
 
-module.exports = { petHp, petDown, msUntilHp, setPetHp, scaleAt, petStats, enemyStats, setupBattle, resolve, preview, patchBattle, countered };
+module.exports = { slotsOf, petsOf, slotBonus, petHp, petDown, msUntilHp, setPetHp, scaleAt, petStats, enemyStats, setupBattle, resolve, preview, patchBattle, countered };

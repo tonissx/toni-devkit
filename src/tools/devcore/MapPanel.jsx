@@ -253,41 +253,90 @@ function PendingPanel({ map, snap, act }) {
   );
 }
 
-/** Preparação da batalha: esquadrão, formação, gatilhos, consumíveis; inimigos, previsão e custo. */
+/** Texto de um bônus de slot: "+15% defesa · +2 velocidade". */
+function bonusText(b) {
+  const parts = [];
+  if (b.atk) parts.push(`+${Math.round(b.atk * 100)}% ataque`);
+  if (b.def) parts.push(`+${Math.round(b.def * 100)}% defesa`);
+  if (b.hp) parts.push(`+${Math.round(b.hp * 100)}% vida`);
+  if (b.spd) parts.push(`+${b.spd} velocidade`);
+  if (b.heal) parts.push(`cura +${Math.round(b.heal * 100)}%`);
+  return parts.join(' · ');
+}
+const ROLE_NAMES = { tank: 'Tanque', attacker: 'Atacante', support: 'Suporte', speed: 'Velocidade' };
+const SLOT_ORDER = ['rear', 'center', 'vanguard'];   // na tela, como na arena: retaguarda → vanguarda → inimigos
+const SLOT_PREF = { vanguard: ['tank', 'attacker', 'speed', 'support'], center: ['attacker', 'speed', 'tank', 'support'], rear: ['support', 'speed', 'attacker', 'tank'] };
+
+/** Preparação da batalha: slots do esquadrão (arrastar e soltar), gatilhos, consumíveis; inimigos, previsão e custo. */
 function PrepPanel({ map, snap, node, act, onCancel }) {
   const saved = map.squad;
+  const roster = map.roster;
+  const role = (id) => (roster.find((p) => p.id === id) || {}).role;
+  const isDown = (id) => (roster.find((p) => p.id === id) || {}).down;
   const initial = () => {
-    if (saved.valid && saved.pets.length) return { pets: saved.pets, front: saved.front, triggers: saved.triggers, items: saved.items.filter((id) => (map.items.find((k) => k.id === id) || {}).n > 0) };
-    const best = map.roster.filter((p) => !p.down).sort((a, b) => b.level * b.life - a.level * a.life || b.atk - a.atk).slice(0, 3).map((p) => p.id);
-    return { pets: best, front: best.slice(0, 2), triggers: {}, items: [] };
+    const items = saved.items.filter((id) => (map.items.find((k) => k.id === id) || {}).n > 0);
+    if (saved.valid && saved.pets.length) return { slots: { ...saved.slots }, triggers: saved.triggers, items };
+    // Sugestão inicial: os melhores disponíveis, cada um no slot do seu papel.
+    const best = roster.filter((p) => !p.down).sort((x, y) => y.level * y.life - x.level * x.life || y.atk - x.atk).slice(0, 3).map((p) => p.id);
+    const slots = { vanguard: null, center: null, rear: null };
+    for (const sl of ['vanguard', 'center', 'rear']) {
+      const pick = SLOT_PREF[sl].map((r) => best.find((id) => role(id) === r && !Object.values(slots).includes(id))).find(Boolean);
+      slots[sl] = pick || null;
+    }
+    for (const id of best) if (!Object.values(slots).includes(id)) { const free = ['vanguard', 'center', 'rear'].find((x) => !slots[x]); if (free) slots[free] = id; }
+    return { slots, triggers: {}, items: [] };
   };
   const [sq, setSq] = React.useState(initial);
+  const [picked, setPicked] = React.useState(null);  // slot selecionado (alternativa ao arrastar: clique no slot e depois no pet)
+  const [over, setOver] = React.useState(null);      // slot sob o arraste
+  const placed = Object.values(sq.slots).filter(Boolean);
   // Cada mudança salva a preparação: a view devolve a previsão e quais traços o esquadrão anula.
-  React.useEffect(() => { if (sq.pets.length) act({ type: 'mapSquad', squad: sq, node: node.id }); }, [JSON.stringify(sq), node.id]);
+  React.useEffect(() => { if (placed.length) act({ type: 'mapSquad', squad: sq, node: node.id }); }, [JSON.stringify(sq), node.id]);
   const set = (patch) => setSq((s) => ({ ...s, ...patch }));
-  const isDown = (id) => (map.roster.find((p) => p.id === id) || {}).down;
-  const togglePet = (id) => !isDown(id) && set(sq.pets.includes(id)
-    ? { pets: sq.pets.filter((x) => x !== id), front: sq.front.filter((x) => x !== id) }
-    : sq.pets.length < 3 ? { pets: [...sq.pets, id], front: sq.front.length < 2 ? [...sq.front, id] : sq.front } : {});
+  const slotOf = (id) => Object.keys(sq.slots).find((k) => sq.slots[k] === id) || null;
+
+  /** Põe um pet num slot: sai do slot antigo; quem estava no destino troca de lugar (ou volta ao elenco). */
+  const place = (id, target) => {
+    if (!id || isDown(id)) return;
+    const slots = { ...sq.slots };
+    const from = slotOf(id);
+    const occupant = slots[target];
+    if (from) slots[from] = from !== target && occupant ? occupant : null;
+    slots[target] = id;
+    set({ slots });
+    setPicked(null);
+  };
+  const remove = (id) => { const from = slotOf(id); if (from) set({ slots: { ...sq.slots, [from]: null } }); };
+  /** Clique num pet do elenco: vai para o slot selecionado, senão para o primeiro vazio do papel dele (ou qualquer vazio). */
+  const clickPet = (id) => {
+    if (isDown(id)) return;
+    if (picked) return place(id, picked);
+    if (slotOf(id)) return remove(id);
+    const free = ['vanguard', 'center', 'rear'].filter((k) => !sq.slots[k]);
+    const best = free.sort((x, y) => SLOT_PREF[x].indexOf(role(id)) - SLOT_PREF[y].indexOf(role(id)))[0];
+    if (best) place(id, best);
+  };
   const toggleItem = (id) => set({ items: sq.items.includes(id) ? sq.items.filter((x) => x !== id) : sq.items.length < 2 ? [...sq.items, id] : sq.items });
   const f = map.forecast && map.forecast.node === node.id ? map.forecast : null;
-  const roster = map.roster;
+  const drag = (id) => (e) => { e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'move'; };
   return (
     <section className="dc-mapbox dc-prep">
       <div className="dc-mapbox__head"><Icon name={node.icon} size={14} /> <b>{node.typeName}</b><span>Monte o esquadrão: a luta se resolve sozinha.</span></div>
       <div className="dc-prep__cols">
         <div>
-          <div className="tk-menu__heading">Esquadrão ({sq.pets.length}/3)</div>
-          <div className="dc-roster">
+          <div className="tk-menu__heading">DevPets · arraste para um slot</div>
+          <div className="dc-roster" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); remove(e.dataTransfer.getData('text/plain')); }}>
             {roster.map((p) => {
-              const on = sq.pets.includes(p.id);
+              const on = !!slotOf(p.id);
               return (
                 <InfoCard key={p.id} content={<><div className="dc-info__title">{p.name} · {p.roleName}</div>
                   <div className="dc-info__row"><span>Nível</span><b>{p.level}</b></div>
                   <div className="dc-info__row"><span>Vida · Ataque · Defesa</span><b>{p.hp} · {p.atk} · {p.def}</b></div>
                   <div className="dc-info__row"><span>{p.ability.name}</span><b>{p.ability.text}</b></div>
                   <div className="dc-info__row"><span>Vida</span><b>{pct(p.life)}{p.life < 1 ? ` · cheia em ${formatDuration(p.fullInMs)}` : ''}</b></div></>} focusable={false}>
-                  <button type="button" className={'dc-roster__pet' + (on ? ' is-on' : '') + (p.down ? ' is-down' : '')} aria-pressed={on} aria-disabled={p.down} onClick={() => togglePet(p.id)}>
+                  <button type="button" className={'dc-roster__pet' + (on ? ' is-on' : '') + (p.down ? ' is-down' : '')} aria-pressed={on} aria-disabled={p.down}
+                    draggable={!p.down} onDragStart={drag(p.id)} onClick={() => clickPet(p.id)}
+                    title={picked ? 'Colocar no slot selecionado' : on ? 'Tirar do esquadrão' : 'Colocar no esquadrão'}>
                     <Pet snap={snap} id={p.id} size={34} />
                     <span>{p.name}</span>
                     <small>{p.down ? `fora de combate · volta em ${formatDuration(p.backInMs)}` : `${p.roleName} · nv ${p.level}`}</small>
@@ -297,23 +346,44 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
               );
             })}
           </div>
-          {sq.pets.map((id) => {
-            const p = roster.find((x) => x.id === id);
-            return (
-              <div key={id} className="dc-slot">
-                <Pet snap={snap} id={id} size={26} />
-                <b>{p.name}</b>
-                <span className={'dc-slot__life' + (p.life < 0.5 ? ' is-low' : '')}>{pct(p.life)}</span>
-                <button type="button" className={'dc-slot__pos' + (sq.front.includes(id) ? ' is-front' : '')} onClick={() => set({ front: sq.front.includes(id) ? sq.front.filter((x) => x !== id) : [...sq.front, id] })}>
-                  {sq.front.includes(id) ? 'Frente' : 'Trás'}
-                </button>
-                <select className="dc-slot__trigger" value={sq.triggers[id] || 'start'} aria-label={'Gatilho de ' + p.ability.name}
-                  onChange={(e) => set({ triggers: { ...sq.triggers, [id]: e.target.value } })}>
-                  {map.triggers.map((t) => <option key={t.id} value={t.id}>{p.ability.name}: {t.name.toLowerCase()}</option>)}
-                </select>
-              </div>
-            );
-          })}
+          <div className="dc-slots" role="group" aria-label="Slots do esquadrão">
+            {SLOT_ORDER.map((sid) => {
+              const sl = map.slots.find((x) => x.id === sid);
+              const id = sq.slots[sid];
+              const p = id && roster.find((x) => x.id === id);
+              const extra = Object.entries(sl.roles || {});
+              const match = p && sl.roles && sl.roles[p.role];
+              return (
+                <div key={sid} className={'dc-slotbox is-' + sid + (picked === sid ? ' is-picked' : '') + (over === sid ? ' is-over' : '') + (match ? ' is-match' : '') + (p ? ' is-filled' : '')}
+                  onDragOver={(e) => { e.preventDefault(); setOver(sid); }} onDragLeave={() => setOver((o) => (o === sid ? null : o))}
+                  onDrop={(e) => { e.preventDefault(); setOver(null); place(e.dataTransfer.getData('text/plain'), sid); }}>
+                  <button type="button" className="dc-slotbox__head" aria-pressed={picked === sid} onClick={() => setPicked(picked === sid ? null : sid)}
+                    title="Selecionar este slot (depois clique num DevPet)">
+                    <b>{sl.name}</b><small>{sl.text}</small>
+                  </button>
+                  <div className="dc-slotbox__bonus">
+                    <span>{bonusText(sl.bonus)}</span>
+                    {extra.map(([r, bb]) => <span key={r} className={match && p.role === r ? 'is-on' : ''}>{ROLE_NAMES[r]}: {bonusText(bb)}</span>)}
+                  </div>
+                  {p ? (
+                    <div className="dc-slotbox__pet" draggable onDragStart={drag(id)}>
+                      <Pet snap={snap} id={id} size={40} />
+                      <div className="dc-slotbox__info">
+                        <b>{p.name}</b>
+                        <span className={'dc-slot__life' + (p.life < 0.5 ? ' is-low' : '')}>{pct(p.life)} de vida</span>
+                      </div>
+                      <button type="button" className="dc-slotbox__remove" aria-label={'Tirar ' + p.name + ' do slot'} onClick={() => remove(id)}><Icon name="x" size={12} /></button>
+                      <select className="dc-slot__trigger" value={sq.triggers[id] || 'start'} aria-label={'Gatilho de ' + p.ability.name}
+                        onChange={(e) => set({ triggers: { ...sq.triggers, [id]: e.target.value } })}>
+                        {map.triggers.map((t) => <option key={t.id} value={t.id}>{p.ability.name}: {t.name.toLowerCase()}</option>)}
+                      </select>
+                    </div>
+                  ) : <div className="dc-slotbox__empty">{picked === sid ? 'Clique num DevPet' : 'Arraste um DevPet'}</div>}
+                </div>
+              );
+            })}
+            <div className="dc-slots__foe" aria-hidden="true"><Icon name="swords" size={14} /> inimigos</div>
+          </div>
           {roster.some((p) => p.life < 1) && (
             <div className="dc-heal">
               <Icon name="heart-pulse" size={13} />
@@ -349,7 +419,7 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
         {map.battleBuff && <span className="dc-chip is-ok">+{Math.round(map.battleBuff.atk * 100)}% de ataque nesta batalha</span>}
         <span className="dc-prep__cost">Entrada: <b>{formatNum(node.cost)}</b> Compute</span>
         <Button variant="ghost" onClick={onCancel}>Cancelar</Button>
-        <Button variant="primary" icon="swords" disabled={!sq.pets.length || !node.affordable} onClick={() => act({ type: 'mapFight', node: node.id, squad: sq })}>Lutar</Button>
+        <Button variant="primary" icon="swords" disabled={!placed.length || !node.affordable} onClick={() => act({ type: 'mapFight', node: node.id, squad: sq })}>Lutar</Button>
       </div>
     </section>
   );

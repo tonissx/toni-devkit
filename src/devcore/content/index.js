@@ -14,7 +14,7 @@ const { INCIDENTS } = require('./incidents.js');
 const { CONSUMABLES } = require('./consumables.js');
 const { BLUEPRINTS } = require('./blueprints.js');
 const { QUESTS } = require('./quests.js');
-const { ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS, BATTLE_TIMEOUT_LORE } = require('./battle.js');
+const { ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS, BATTLE_TIMEOUT_LORE, SLOTS } = require('./battle.js');
 const { ENEMIES } = require('./enemies.js');
 const { AREAS, NODE_TYPES } = require('./areas.js');
 const { PATCHES, RARITIES } = require('./patches.js');
@@ -26,7 +26,7 @@ const CONTENT = {
   BALANCE, RESOURCES, CATEGORIES, TIERS, GENERATORS, UPGRADES, PETS, RARITY, ABILITIES, SYNERGIES, DISCOVERIES, STAGES, SKINS,
   INCIDENTS, CONSUMABLES, BLUEPRINTS, QUESTS,
   // Mapa e batalhas (docs/devcore-mapa-singularity.md)
-  ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS, BATTLE_TIMEOUT_LORE, ENEMIES, AREAS, NODE_TYPES, PATCHES, RARITIES,
+  ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS, BATTLE_TIMEOUT_LORE, SLOTS, ENEMIES, AREAS, NODE_TYPES, PATCHES, RARITIES,
   EVENTS, REST_OPTIONS, SHOP, BATTLE_REWARDS,
   enemy: byId(ENEMIES), area: byId(AREAS), patch: byId(PATCHES), event: byId(EVENTS),
   quest: byId(QUESTS),
@@ -115,6 +115,8 @@ function validate(c = CONTENT) {
     if (!c.BATTLE_ABILITIES[p.ability]) errors.push(`battle: habilidade ${p.ability} sem versão de batalha`);
   }
   for (const id of Object.keys(c.BATTLE_ITEMS)) if (!c.consumable[id]) errors.push(`battle: item ${id} inexistente`);
+  if (c.SLOTS.length !== c.BATTLE.squadSize) errors.push('battle: um slot por vaga do esquadrão');
+  for (const sl of c.SLOTS) for (const r of Object.keys(sl.roles || {})) if (!c.ROLES[r]) errors.push(`battle: slot ${sl.id} com papel ${r}`);
   uniq('enemies', c.ENEMIES); uniq('patches', c.PATCHES); uniq('events', c.EVENTS); uniq('areas', c.AREAS);
   for (const e of c.ENEMIES) for (const t of e.traits) if (!c.TRAITS[t]) errors.push(`enemy ${e.id}: traço ${t}`);
   for (const a of c.AREAS) {

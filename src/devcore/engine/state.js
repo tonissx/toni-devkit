@@ -37,7 +37,7 @@ function createState(now, c = CONTENT) {
       // Mapa e batalhas (docs/devcore-mapa-singularity.md): o mapa nasce no Tier 2 (engine/map.js ensureMap).
       map: null,
       patches: [],        // Patches da run (recompensas do mapa)
-      squad: { pets: [], front: [], triggers: {}, items: [], node: null },  // última preparação (e o ponto da previsão)
+      squad: { slots: { vanguard: null, center: null, rear: null }, pets: [], front: [], triggers: {}, items: [], node: null },  // última preparação (e o ponto da previsão)
       battleBuff: null,   // { atk } para a próxima batalha (evento/descanso)
     },
     meta: { fragments: 0, rebuilds: 0, perks: {} },

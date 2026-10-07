@@ -34,6 +34,20 @@ const BATTLE = {
   recovery: { perHour: 0.25, koMin: 0.25 },
 };
 
+/**
+ * Slots do esquadrão (na ordem em que os inimigos atacam: o slot mais à frente que estiver de pé é o alvo).
+ * bonus vale para qualquer pet no slot; roles[papel] soma um bônus extra quando o papel combina com o slot.
+ * Campos: atk/def/hp (fração), spd (pontos), heal (fração a mais nas curas que o pet faz).
+ */
+const SLOTS = [
+  { id: 'vanguard', name: 'Vanguarda', text: 'Primeiro alvo dos inimigos.', bonus: { def: 0.15 },
+    roles: { tank: { def: 0.3, hp: 0.15 } } },
+  { id: 'center', name: 'Centro', text: 'Só apanha quando a vanguarda cai.', bonus: { atk: 0.1 },
+    roles: { attacker: { atk: 0.25 } } },
+  { id: 'rear', name: 'Retaguarda', text: 'Só apanha quando os outros dois caem.', bonus: { spd: 2 },
+    roles: { support: { heal: 0.5 }, speed: { spd: 4 } } },
+];
+
 /** Gatilho da habilidade de cada pet (uma vez por batalha). */
 const TRIGGERS = [
   { id: 'start', name: 'No início' },
@@ -76,7 +90,7 @@ const BATTLE_ITEMS = {
 const TRAITS = {
   drain: { name: 'Dreno', text: 'Quem acerta perde 10% de ataque (até −50%)', counter: { anyOf: ['query', 'memo'] }, counterText: 'Query ou Memo no esquadrão anulam' },
   evade: { name: 'Esquiva', text: 'Desvia de 30% dos ataques', value: 0.3, counter: { anyOf: ['noxi'] }, counterText: 'Noxi no esquadrão faz todos acertarem' },
-  swarm: { name: 'Enxame', text: 'Vários inimigos fracos', counter: { front: ['armo'] }, value: 0.6, counterText: 'Armo na frente: o enxame causa 40% menos dano' },
+  swarm: { name: 'Enxame', text: 'Vários inimigos fracos', counter: { front: ['armo'] }, value: 0.6, counterText: 'Armo na vanguarda: o enxame causa 40% menos dano' },
   split: { name: 'Divisão', text: 'Ao cair, vira dois com 40% da vida', value: 0.4, counter: { anyOf: ['relay'] }, counterText: 'Relay no esquadrão impede a divisão' },
   fortify: { name: 'Fortificação', text: '+6% de defesa a cada rodada', value: 0.06, counter: null, counterText: 'Sem counter: vença rápido (habilidades no início)' },
   pierce: { name: 'Perfuração', text: 'Ignora a defesa', counter: { anyOf: ['armo'] }, counterText: 'Armo no esquadrão devolve a defesa' },
@@ -90,4 +104,4 @@ const BATTLE_TIMEOUT_LORE = [
   'A reunião das 17h chamou o esquadrão. Os inimigos aproveitaram para fazer merge na main sem review.',
 ];
 
-module.exports = { BATTLE_TIMEOUT_LORE, ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS };
+module.exports = { SLOTS, BATTLE_TIMEOUT_LORE, ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS };

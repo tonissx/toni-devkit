@@ -10,7 +10,7 @@ const { upgradeAvailable, craftCost, partCost } = require('./index.js');
 const { bpOf, partId, levelOf, nextMilestone, generatorMult, costDivOf } = require('./blueprints.js');
 const { patchMod } = require('./patches.js');
 const { reachable, nodeCost, squadError } = require('./map.js');
-const { setupBattle, preview, petStats, enemyStats, countered, petHp, petDown, msUntilHp } = require('./battle.js');
+const { setupBattle, preview, petStats, enemyStats, countered, petHp, petDown, msUntilHp, slotsOf, petsOf } = require('./battle.js');
 const { abilitiesLocked, incidentsEnabled } = require('./incidents.js');
 const { check } = require('./conditions.js');
 const { stationedPets } = require('../content/index.js');
@@ -367,7 +367,8 @@ function mapView(s, now, c) {
   const reach = new Set(reachable(s));
   const sq = s.run.squad;
   const squadOk = !squadError(s, sq, c, now);
-  const counters = squadOk ? { anyOf: new Set(sq.pets), front: new Set(sq.pets.filter((id) => sq.front.includes(id))) } : null;
+  const sqSlots = slotsOf(sq, c);
+  const counters = squadOk ? { anyOf: new Set(petsOf(sq, c)), front: new Set(sqSlots.vanguard ? [sqSlots.vanguard] : []) } : null;
   const nodes = Object.values(m.nodes).map((n) => {
     const cost = nodeCost(s, n, c);
     const kind = c.NODE_TYPES[n.type];
@@ -414,7 +415,8 @@ function mapView(s, now, c) {
     at: m.at, cleared: m.cleared, nodes, pending,
     patches: s.run.patches.map((id) => patchInfo(id, c)).filter(Boolean),
     battleBuff: s.run.battleBuff,
-    squad: { pets: sq.pets, front: sq.front, triggers: sq.triggers, items: sq.items, node: sq.node, valid: squadOk },
+    squad: { slots: sqSlots, pets: petsOf(sq, c), triggers: sq.triggers, items: sq.items, node: sq.node, valid: squadOk },
+    slots: c.SLOTS.map((sl) => ({ id: sl.id, name: sl.name, text: sl.text, bonus: sl.bonus, roles: sl.roles })),
     forecast,
     roster: Object.keys(s.run.pets).filter((id) => c.pet[id]).map((id) => {
       const st = petStats(s, id, c);

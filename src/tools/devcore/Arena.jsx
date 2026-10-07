@@ -223,7 +223,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           {Array.from({ length: st.decoys }, (_, k) => (
             <span key={'decoy' + k} className="dc-fx-decoy" aria-hidden="true"><PetSprite id="git" color={(pet('git') || {}).color || '#F05133'} eye={(pet('git') || {}).eye} size={48} className="is-static" /></span>
           ))}
-          {[...pets].sort((a, b) => a.front - b.front).map((u) => <Unit key={u.uid} u={u} />)}
+          {[...pets].sort((a, b) => (b.rank != null ? b.rank : -b.front) - (a.rank != null ? a.rank : -a.front)).map((u) => <Unit key={u.uid} u={u} />)}
         </div>
         {curFx && caster && (
           <div key={'banner' + i} className={'dc-fx-banner is-' + curFx.type} style={{ '--pet': casterPet ? casterPet.color : '#fff' }} aria-live="polite">

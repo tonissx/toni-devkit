@@ -122,8 +122,17 @@ upgrades), com `source: 'patch:<id>'`. A maioria **alimenta a produção**; algu
 Antes de confirmar, o jogador vê os inimigos do ponto (sprite, nome, traço) e decide:
 
 - **Esquadrão de 3 pets** (decidido: 3 por enquanto) entre os que já encontrou.
-- **Formação:** cada pet na **frente** ou **atrás**. Inimigos atacam a frente primeiro; quem está atrás só apanha
-  quando a frente cai (ou contra inimigos com alcance).
+- **Slots (decidido):** o esquadrão é montado arrastando os pets para três slots — **Vanguarda, Centro e
+  Retaguarda**. Os inimigos atacam sempre o slot mais à frente que estiver de pé (vanguarda → centro → retaguarda).
+  Cada slot dá um bônus, e um bônus extra quando o papel combina:
+
+  | Slot | Bônus | Papel certo |
+  |---|---|---|
+  | Vanguarda | +15% defesa | Tanque: +30% defesa e +15% vida |
+  | Centro | +10% ataque | Atacante: +25% ataque |
+  | Retaguarda | +2 velocidade | Suporte: cura +50% · Velocidade: +4 velocidade |
+
+  Counters "na frente" (Armo contra o enxame) valem para a vanguarda. Slots podem ficar vazios (esquadrão de 1 a 3).
 - **Até 2 consumíveis** levados para a luta.
 - **Gatilho da habilidade** de cada pet: "no início", "quando um aliado ficar abaixo de 50% de vida", "contra o
   chefe/elite", "na rodada N".
@@ -355,6 +364,7 @@ A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa d
 | 2026-10-06 | Batalha numa **arena própria e temática da área** |
 | 2026-10-06 | **Esquadrão de 3** por enquanto |
 | 2026-10-06 | **Vida persiste entre batalhas**, recuperação de 25%/h (também offline), fora de combate até 25%, cura completa no descanso e consumível **Health Check** fabricável |
+| 2026-10-07 | Montagem do esquadrão em **slots de arrastar e soltar** (Vanguarda, Centro, Retaguarda), com bônus por slot e extra para o papel certo; a ordem dos slots define quem apanha |
 | 2026-10-06 | Apresentação (a implementar): **música e efeitos sonoros** nas batalhas (inspiração em *Castlevania SOTN* e *Vampire Survivors*); **popup de item ganho/comprado** com ícone, nome e descrição; na aba Mapa a **cena de farm some** e o mapa ganha espaço; mapa em **perspectiva 3D** estilo *Inscryption*, com elementos 3D da área; **caminhos pontilhados e curvos** |
 
 ## 13. Em aberto

@@ -843,6 +843,28 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-slot__life.is-low { color: var(--tk-warning); }
 .dc-heal { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0; font-size: 11.5px; color: var(--tk-text-3); }
 .dc-slot { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
+/* Slots do esquadrão: retaguarda → centro → vanguarda → inimigos (como na arena) */
+.dc-slots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 8px; align-items: stretch; margin: 6px 0 10px; }
+.dc-slots__foe { align-self: center; display: inline-flex; flex-direction: column; align-items: center; gap: 2px; font: 500 10px var(--tk-font-mono); color: #FF7B7B; text-transform: uppercase; }
+.dc-slotbox { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1.5px dashed var(--tk-border-strong); border-radius: var(--tk-radius-md); background: var(--tk-bg); transition: border-color .15s, background .15s; min-height: 150px; }
+.dc-slotbox.is-filled { border-style: solid; }
+.dc-slotbox.is-match { border-color: color-mix(in srgb, var(--tk-accent) 70%, var(--tk-border-strong)); }
+.dc-slotbox.is-over, .dc-slotbox.is-picked { border-color: var(--tk-accent); background: color-mix(in srgb, var(--tk-accent) 10%, var(--tk-bg)); }
+.dc-slotbox__head { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 0; border: 0; background: none; color: var(--tk-text); font: inherit; text-align: left; cursor: pointer; }
+.dc-slotbox__head b { font-size: 12.5px; }
+.dc-slotbox__head small { font-size: 10.5px; color: var(--tk-text-3); }
+.dc-slotbox.is-vanguard .dc-slotbox__head b { color: #FF9F7A; }
+.dc-slotbox.is-center .dc-slotbox__head b { color: #FFD27A; }
+.dc-slotbox.is-rear .dc-slotbox__head b { color: #8EC5FF; }
+.dc-slotbox__bonus { display: flex; flex-direction: column; gap: 1px; font: 400 10.5px var(--tk-font-mono); color: var(--tk-text-3); }
+.dc-slotbox__bonus .is-on { color: var(--tk-accent-text); font-weight: 600; }
+.dc-slotbox__pet { position: relative; display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 8px; margin-top: auto; cursor: grab; }
+.dc-slotbox__pet .dc-slot__trigger { grid-column: 1 / -1; }
+.dc-slotbox__info { display: flex; flex-direction: column; font-size: 12.5px; }
+.dc-slotbox__remove { position: absolute; top: -2px; right: -2px; display: inline-flex; padding: 3px; border: 1px solid var(--tk-border); border-radius: 50%; background: var(--tk-surface-3); color: var(--tk-text-3); cursor: pointer; }
+.dc-slotbox__remove:hover { color: var(--tk-text); }
+.dc-slotbox__empty { margin-top: auto; padding: 14px 6px; text-align: center; font-size: 11.5px; color: var(--tk-text-3); border-radius: 6px; background: color-mix(in srgb, var(--tk-text-3) 6%, transparent); }
+.dc-roster__pet[draggable="true"] { cursor: grab; }
 .dc-slot b { min-width: 52px; }
 .dc-slot__pos, .dc-slot__trigger, .dc-prep__item {
   padding: 3px 8px; border: 1px solid var(--tk-border); border-radius: 6px; background: var(--tk-surface-3); color: var(--tk-text-2); font: 400 11.5px var(--tk-font-sans); cursor: pointer;

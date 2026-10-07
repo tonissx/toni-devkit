@@ -13,7 +13,7 @@ const { rng } = require('./rng.js');
 const { check } = require('./conditions.js');
 const { grantItem } = require('./incidents.js');
 const { dropPart } = require('./blueprints.js');
-const { setupBattle, resolve, petDown, msUntilHp, setPetHp } = require('./battle.js');
+const { setupBattle, resolve, petDown, msUntilHp, setPetHp, slotsOf, petsOf } = require('./battle.js');
 const { formatDuration } = require('./format.js');
 
 /** Hash inteiro estável de uma string (semente por ponto). */
@@ -124,11 +124,13 @@ function nodeCost(s, node, c = CONTENT) {
 /** Valida a preparação (now: confere quem está fora de combate). → erro ou null */
 function squadError(s, squad, c = CONTENT, now = null) {
   const B = c.BATTLE;
-  if (!squad || !Array.isArray(squad.pets) || !squad.pets.length) return 'Escolha ao menos um DevPet';
-  if (squad.pets.length > B.squadSize) return `O esquadrão tem no máximo ${B.squadSize} DevPets`;
-  if (new Set(squad.pets).size !== squad.pets.length) return 'DevPet repetido no esquadrão';
-  if (squad.pets.some((id) => !s.run.pets[id])) return 'DevPet indisponível';
-  const down = now == null ? null : squad.pets.find((id) => petDown(s, id, now, c));
+  if (!squad) return 'Escolha ao menos um DevPet';
+  const pets = petsOf(squad, c);
+  if (!pets.length) return 'Escolha ao menos um DevPet';
+  if (pets.length > B.squadSize) return `O esquadrão tem no máximo ${B.squadSize} DevPets`;
+  if (new Set(pets).size !== pets.length) return 'DevPet repetido no esquadrão';
+  if (pets.some((id) => !s.run.pets[id])) return 'DevPet indisponível';
+  const down = now == null ? null : pets.find((id) => petDown(s, id, now, c));
   if (down) return `${c.pet[down].name} está fora de combate (volta em ${formatDuration(msUntilHp(s, down, c.BATTLE.recovery.koMin, now, c))})`;
   const items = squad.items || [];
   if (items.length > B.maxItems || new Set(items).size !== items.length) return `Leve até ${B.maxItems} consumíveis diferentes`;
@@ -137,12 +139,16 @@ function squadError(s, squad, c = CONTENT, now = null) {
   return null;
 }
 
-/** Normaliza a preparação (só o que vale guardar). */
-const cleanSquad = (squad) => ({
-  pets: [...squad.pets], front: (squad.front || []).filter((id) => squad.pets.includes(id)),
-  triggers: Object.fromEntries(Object.entries(squad.triggers || {}).filter(([id]) => squad.pets.includes(id))),
-  items: [...(squad.items || [])],
-});
+/** Normaliza a preparação (só o que vale guardar): slots, e pets/front derivados (compatibilidade). */
+const cleanSquad = (squad) => {
+  const slots = slotsOf(squad);
+  const pets = petsOf(squad);
+  return {
+    slots, pets, front: slots.vanguard ? [slots.vanguard] : [],
+    triggers: Object.fromEntries(Object.entries(squad.triggers || {}).filter(([id]) => pets.includes(id))),
+    items: [...(squad.items || [])],
+  };
+};
 
 /** Concede um Patch da raridade (que a run ainda não tem). → id | null */
 function grantPatch(s, rarity, rand, c = CONTENT) {
@@ -155,7 +161,8 @@ function grantPatch(s, rarity, rand, c = CONTENT) {
 
 /** O pet de menor nível do esquadrão salvo (ou de todos) que ainda pode subir. */
 function petToLevel(s, c) {
-  const ids = (s.run.squad.pets.length ? s.run.squad.pets : Object.keys(s.run.pets)).filter((id) => s.run.pets[id]);
+  const saved = petsOf(s.run.squad);
+  const ids = (saved.length ? saved : Object.keys(s.run.pets)).filter((id) => s.run.pets[id]);
   const max = (id) => c.RARITY[c.pet[id].rarity].maxLevel;
   return ids.filter((id) => s.run.pets[id].level < max(id)).sort((a, b) => s.run.pets[a].level - s.run.pets[b].level)[0] || null;
 }

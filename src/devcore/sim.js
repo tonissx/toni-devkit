@@ -88,11 +88,18 @@ function botSquad(s, enemies, kind, c, now = null) {
     if (ids.length) need.add(ids.sort((a, b) => power(b) - power(a))[0]);
   }
   const pets = [...need, ...owned.filter((id) => !need.has(id)).sort((a, b) => power(b) - power(a))].slice(0, c.BATTLE.squadSize);
-  const frontRole = (id) => ['tank', 'attacker'].includes(c.PET_ROLES[id]);
-  const front = [...pets.filter(frontRole), ...pets.filter((id) => !frontRole(id))].slice(0, 2);
+  // Slots pelo papel: tanque na vanguarda, atacante no centro, suporte/velocidade na retaguarda (o resto completa).
+  const pref = { vanguard: ['tank', 'attacker', 'speed', 'support'], center: ['attacker', 'speed', 'tank', 'support'], rear: ['support', 'speed', 'attacker', 'tank'] };
+  const left = [...pets];
+  const slots = {};
+  for (const sl of ['vanguard', 'center', 'rear']) {
+    const pick = pref[sl].map((role) => left.find((id) => c.PET_ROLES[id] === role)).find(Boolean);
+    slots[sl] = pick || null;
+    if (pick) left.splice(left.indexOf(pick), 1);
+  }
   const triggers = Object.fromEntries(pets.map((id) => [id, c.PET_ROLES[id] === 'support' ? 'allyLow' : 'start']));
   const items = kind === 'battle' ? [] : ['hotfix', 'coffee', 'rollback'].filter((id) => (s.run.inventory[id] || 0) > 0).slice(0, c.BATTLE.maxItems);
-  return { pets, front, triggers, items };
+  return { slots, triggers, items };
 }
 
 /** Próximo passo do robô no mapa: { action, cost } ou null. Guarda Compute para lutas que valem a pena. */
@@ -113,7 +120,7 @@ function botMapChoice(s, now, c) {
     const cost = nodeCost(s, n, c);
     if (!n.group) return { n, cost, chance: 1, score: n.type === 'express' ? 0.3 : 2 };
     const squad = botSquad(s, n.group, n.type, c, now);
-    if (!squad.pets.length) return { n, cost, chance: 0, score: -1 };
+    if (!Object.values(squad.slots).some(Boolean)) return { n, cost, chance: 0, score: -1 };
     const p = preview(setupBattle(s, squad, n.group, n.col, m.area, c, n.type, now), (s.seed ^ (m.attempts[n.id] || 0)) >>> 0, c).chance;
     const min = n.type === 'elite' ? 0.8 : 0.5;
     return { n, cost, chance: p, squad, score: p >= min ? p + (n.type === 'elite' ? 0.2 : 0) : -1 };
