@@ -7,7 +7,7 @@ import { GeneratorsPanel, UpgradesPanel, PetsPanel, TechPanel } from './Panels.j
 import { OpsPanel } from './OpsPanel.jsx';
 import { RateWithDetails } from './RateDetails.jsx';
 import { MapPanel } from './MapPanel.jsx';
-import { ItemPopups, gainsFrom } from './ItemPopups.jsx';
+import { ItemPopups, gainsFrom, mergeGains } from './ItemPopups.jsx';
 import { configureAudio } from './audio.js';
 
 const { Tabs, Modal, Button, ProgressBar, Spinner, Icon } = DS;
@@ -177,7 +177,7 @@ export function DevCoreScreen({ toast, request }) {
       toast('Missão concluída', e.title + (item ? ' · +1 ' + item : ''));
     }
     const got = gainsFrom(log, s);
-    if (got.length) setGains((g) => [...g, ...got]);
+    if (got.length) setGains((g) => mergeGains(g, got)); // mesmo item seguido → um popup com a quantidade
     if (out.length) setReactions((r) => [...r.filter((x) => t - x.at < REACTION_MS), ...out]);
     if ((log || []).some((e) => e.type === 'discovery')) setFreshUnseen((f) => [...new Set([...f, ...log.filter((e) => e.type === 'discovery').map((e) => e.id)])]);
   }, []);
