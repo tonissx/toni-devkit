@@ -979,7 +979,7 @@ test('markdown: @date and !1..!3 become chips; lookalikes stay text', async () =
   const { renderMarkdown } = await loadMarkdown();
   const { html } = renderMarkdown('- [ ] pagar @2020-01-05 !1 ok\n- [ ] email a@2020-01-05 e wow!1');
   assert.match(html, /<span class="md-due is-late" title="Prazo">📅 05\/01<\/span>/);
-  assert.match(html, /<span class="md-pri is-p1" title="Prioridade 1">!1<\/span>/);
+  assert.match(html, /<span class="md-pri is-p1" title="Prioridade alta \(!1\)">⚑ Alta<\/span>/);
   assert.equal((html.match(/md-due/g) || []).length, 1);
   assert.equal((html.match(/md-pri/g) || []).length, 1);
 });
@@ -992,6 +992,17 @@ test('markdown: renderInline formats inline marks, flattens links, and neutraliz
   assert.ok(!/<a |<img/.test(flat), 'nada clicável dentro do botão: ' + flat);
   assert.ok(flat.includes('a nota') && flat.includes('Outra') && flat.includes('site') && flat.includes('&lt;img'));
   assert.equal(renderInline(''), '');
+});
+
+test('priority: !1/!2/!3 get descriptive labels; no (or unknown) priority falls back to "Sem prioridade"', () => {
+  const { priorityInfo } = require('../src/notes/priority.js');
+  assert.deepEqual([1, 2, 3].map((p) => priorityInfo(p).label), ['Alta', 'Média', 'Baixa']);
+  assert.deepEqual([1, 2, 3].map((p) => priorityInfo(p).level), [1, 2, 3]);
+  for (const none of [null, undefined, 0, 4, 'x']) {
+    assert.equal(priorityInfo(none).level, 0);
+    assert.equal(priorityInfo(none).label, 'Sem prioridade');
+  }
+  assert.match(priorityInfo(null).title, /!1.*!2.*!3/);   // a dica ensina a sintaxe
 });
 
 test('markdown: toggleTask flips the n-th task, skipping code blocks', async () => {

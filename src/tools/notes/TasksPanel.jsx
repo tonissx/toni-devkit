@@ -2,6 +2,7 @@ import { DS } from '../../lib/ds.js';
 import { notesApi, cleanError } from '../../notes/client.js';
 import { isoDate } from '../../notes/edit.js';
 import { TaskText } from './TaskText.jsx';
+import { PriorityTag } from './PriorityTag.jsx';
 
 const { SegmentedControl, EmptyState, Spinner, Icon } = DS;
 
@@ -91,7 +92,7 @@ export function TasksPanel({ tag, onOpen, toast }) {
                 <div className="nts-task__main">
                   <button type="button" className="nts-task__text" onClick={() => onOpen(t.noteId)} title="Abrir a nota"><TaskText text={t.text} /></button>
                   <div className="nts-task__meta">
-                    {t.priority && <span className={'nts-pill is-p' + t.priority} title={'Prioridade ' + t.priority}>!{t.priority}</span>}
+                    <PriorityTag priority={t.priority} />
                     {t.due && <span className={'nts-pill is-due' + (!t.checked && t.due < today ? ' is-late' : '')} title={t.due}><Icon name="calendar" size={11} /> {dueLabel(t.due)}</span>}
                     <span className="nts-task__note"><Icon name="file-text" size={11} /> {t.noteTitle}</span>
                   </div>

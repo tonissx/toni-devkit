@@ -6,6 +6,7 @@ import { isoDate } from '../notes/edit.js';
 import { cleanError, shortTime } from '../notes/client.js';
 import { needsValue } from '../links/link.js';
 import { TaskText } from '../tools/notes/TaskText.jsx';
+import { PriorityTag } from '../tools/notes/PriorityTag.jsx';
 import { formatNum } from '../devcore/engine/format.js';
 import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, PANELS } from '../home/dashboard.js';
 
@@ -182,7 +183,7 @@ function TasksPanel({ tasks, today, open, toast }) {
             <div className="nts-task__main">
               <button type="button" className="nts-task__text" onClick={() => open('notes', { id: t.noteId })} title="Abrir a nota"><TaskText text={t.text} /></button>
               <div className="nts-task__meta">
-                {t.priority && <span className={'nts-pill is-p' + t.priority} title={'Prioridade ' + t.priority}>!{t.priority}</span>}
+                <PriorityTag priority={t.priority} />
                 {t.due && <span className={'nts-pill is-due' + (t.bucket === 'late' ? ' is-late' : '')} title={t.due}><Icon name="calendar" size={11} /> {dueLabel(t.due, today)}</span>}
                 <span className="nts-task__note"><Icon name="file-text" size={11} /> {t.noteTitle}</span>
               </div>
