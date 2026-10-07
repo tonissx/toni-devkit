@@ -4,6 +4,7 @@ import { PetSprite, auraOf } from './PetSprite.jsx';
 import { VillainSprite } from './VillainSprite.jsx';
 import { InfoCard } from './InfoCard.jsx';
 import { Arena, SoundToggle } from './Arena.jsx';
+import { ForestProps } from './ForestArt.jsx';
 
 const { Button, Icon, ProgressBar } = DS;
 const pct = (v) => Math.round(v * 100) + '%';
@@ -61,49 +62,12 @@ const BOARD_H = 400;   // altura do tabuleiro (px, antes da inclinação)
 const PAD_X = 46;
 const PAD_Y = 48;
 
-/** Objetos 3D da área espalhados pelo tabuleiro (decoração; ver docs §4.5). upright: em pé, de frente para a câmera. */
-function AreaProps({ arena, w }) {
-  if (arena !== 'localhost') return null;
-  return (
-    <>
-      {/* Monitor ao fundo, em pé, com código na tela */}
-      <svg className="dc-prop is-upright" style={{ left: w * 0.62, top: -118 }} width="230" height="150" viewBox="0 0 230 150" aria-hidden="true">
-        <rect x="5" y="5" width="220" height="118" rx="8" fill="#232A36" stroke="#3A4354" strokeWidth="3" />
-        <rect x="15" y="15" width="200" height="98" rx="3" fill="#121823" />
-        <rect x="26" y="26" width="70" height="6" rx="3" fill="#4FC3C8" opacity=".8" />
-        <rect x="38" y="40" width="40" height="6" rx="3" fill="#C792EA" opacity=".8" /><rect x="84" y="40" width="70" height="6" rx="3" fill="#E8E8F0" opacity=".55" />
-        <rect x="38" y="54" width="96" height="6" rx="3" fill="#E8E8F0" opacity=".55" />
-        <rect x="38" y="68" width="54" height="6" rx="3" fill="#F78C6C" opacity=".8" />
-        <rect x="26" y="82" width="22" height="6" rx="3" fill="#4FC3C8" opacity=".8" />
-        <rect x="100" y="123" width="30" height="18" fill="#2A303C" /><rect x="80" y="139" width="70" height="8" rx="3" fill="#2A303C" />
-      </svg>
-      {/* Caneca, em pé, com vapor */}
-      <svg className="dc-prop is-upright" style={{ left: 6, top: BOARD_H - 92 }} width="62" height="74" viewBox="0 0 62 74" aria-hidden="true">
-        <path className="dc-prop__steam" d="M20 16 q-6 -8 0 -14 M32 16 q-6 -8 0 -14" stroke="#C9C9D2" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".5" />
-        <rect x="8" y="22" width="38" height="46" rx="6" fill="#C0392B" />
-        <path d="M46 32 h6 a8 8 0 0 1 0 18 h-6" stroke="#C0392B" strokeWidth="5" fill="none" />
-        <rect x="14" y="34" width="26" height="6" rx="3" fill="#F5E6C8" opacity=".85" />
-      </svg>
-      {/* Post-its, deitados no canto de cima à direita (livre: o chefe fica só na trilha do meio) */}
-      <div className="dc-prop is-flat dc-postit" style={{ left: w - 128, top: 34, transform: 'rotate(-7deg)' }}>TODO: fix</div>
-      <div className="dc-prop is-flat dc-postit is-blue" style={{ left: w - 74, top: 46, transform: 'rotate(6deg)' }}>git push</div>
-      {/* Teclado, deitado na borda da frente */}
-      <svg className="dc-prop is-flat" style={{ left: w * 0.36, top: BOARD_H - 26 }} width="260" height="56" viewBox="0 0 260 56" aria-hidden="true">
-        <rect width="260" height="56" rx="8" fill="#20252F" stroke="#323A48" />
-        {Array.from({ length: 3 }, (_, r) => Array.from({ length: 14 }, (__, k) => <rect key={r + '-' + k} x={8 + k * 17.5} y={8 + r * 15} width="14" height="11" rx="2" fill="#2E3542" />))}
-      </svg>
-      {/* Cabo enrolado */}
-      <svg className="dc-prop is-flat" style={{ left: w - 150, top: BOARD_H - 40 }} width="150" height="44" viewBox="0 0 150 44" aria-hidden="true">
-        <path d="M0 30 C 30 4, 50 44, 80 22 S 130 6, 150 28" stroke="#1A1D24" strokeWidth="5" fill="none" strokeLinecap="round" />
-      </svg>
-    </>
-  );
+/** Objetos 3D da área espalhados pelo tabuleiro (decoração; ver docs §4.5). spots: lugares livres entre as trilhas. */
+function AreaProps({ arena, w, spots }) {
+  if (arena === 'localhost') return <ForestProps w={w} h={BOARD_H} spots={spots} />;
+  return null;
 }
 
-/**
- * O mapa como tabuleiro em perspectiva (estilo Inscryption): mesa inclinada, pontos em pé como fichas, objetos da área
- * e trilhas pontilhadas e curvas (SVG em pixels — os pontos do tracejado não distorcem).
- */
 /** Curva de uma trilha a→b: ponto de controle no meio, deslocado na perpendicular (estável por trilha). */
 function trailCurve(x1, y1, x2, y2, key, shortcut) {
   const len = Math.hypot(x2 - x1, y2 - y1) || 1;
@@ -176,6 +140,22 @@ function MapGrid({ map, onNode, party = [], hold = false }) {
     const k = trailCurve(p0.x, p0.y, x(b), y(b), (a ? a.id : 'start') + '>' + b.id, a && a.shortcut === b.id);
     return { ...k, y1: k.y1 + 34, cy: k.cy + 34, y2: k.y2 + 34 };
   };
+  // Lugares livres para a floresta: o meio de cada célula entre duas trilhas sem diagonal cruzando, e faixas acima da
+  // primeira e abaixo da última trilha (colunas alternadas). Nada fica em cima de um caminho.
+  const spots = [];
+  const edges = new Set();
+  for (const n of map.nodes) for (const id of n.next) edges.add(n.id + '>' + id);
+  const colX = (c) => PAD_X + ((c + 0.5) / cols) * (w - 2 * PAD_X);
+  const laneY = (l) => PAD_Y + ((l + 0.5) / map.area.lanes) * (BOARD_H - 2 * PAD_Y);
+  for (let c = 0; c < map.area.columns - 1; c++) {
+    const midX = (colX(c) + colX(c + 1)) / 2;
+    for (let g = 0; g < map.area.lanes - 1; g++) {
+      const cross = edges.has(`${c}-${g}>${c + 1}-${g + 1}`) || edges.has(`${c}-${g + 1}>${c + 1}-${g}`);
+      if (!cross) spots.push({ id: `m${c}-${g}`, x: midX, y: (laneY(g) + laneY(g + 1)) / 2 + 16 });
+    }
+    if (c % 2 === 0) spots.push({ id: `t${c}`, x: midX, y: laneY(0) - 22 });
+    else spots.push({ id: `b${c}`, x: midX, y: laneY(map.area.lanes - 1) + 52 });
+  }
   const paths = [];
   for (const n of map.nodes) {
     for (const id of [...n.next, ...(n.shortcut ? [n.shortcut] : [])]) {
@@ -191,7 +171,7 @@ function MapGrid({ map, onNode, party = [], hold = false }) {
     <div className="dc-board" role="group" aria-label={'Mapa ' + map.area.name}>
       <div ref={ref} className={'dc-board__table dc-board--' + map.area.arena} style={{ height: BOARD_H }}>
         <div className="dc-board__mat" />
-        <AreaProps arena={map.area.arena} w={w} />
+        <AreaProps arena={map.area.arena} w={w} spots={spots} />
         <Party map={map} party={party} hold={hold} place={place} geom={geom} />
         <svg className="dc-board__paths" width={w} height={BOARD_H} aria-hidden="true">
           {paths.map((p) => <path key={p.key} className={'dc-trail' + p.cls} d={p.d} />)}

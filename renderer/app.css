@@ -749,7 +749,16 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   border-radius: 16px; box-shadow: 0 40px 60px -20px rgba(0, 0, 0, .65);
 }
 .dc-board--localhost { background: repeating-linear-gradient(92deg, #3B2A1D 0 14px, #43301F 14px 30px, #38281B 30px 41px); } /* mesa de madeira */
-.dc-board__mat { position: absolute; inset: 22px 26px; border-radius: 12px; background: radial-gradient(ellipse at 50% 40%, #222A37, #161B24 75%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05); } /* deskmat */
+.dc-board__mat { position: absolute; inset: 22px 26px; border-radius: 12px; background: radial-gradient(ellipse at 50% 40%, #222A37, #161B24 75%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05); }
+/* Floresta Localhost: chão de musgo com manchas e um leve brilho de circuito */
+.dc-board--localhost .dc-board__mat {
+  background:
+    radial-gradient(ellipse 18% 14% at 22% 30%, rgba(124, 245, 176, .07), transparent),
+    radial-gradient(ellipse 22% 16% at 70% 70%, rgba(94, 231, 255, .06), transparent),
+    radial-gradient(ellipse 30% 20% at 45% 55%, #1E4A31, transparent 70%),
+    radial-gradient(ellipse at 50% 40%, #1A3A28, #0F2318 78%);
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(124, 245, 176, .08);
+}
 .dc-board__paths { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 .dc-trail { fill: none; stroke: rgba(230, 225, 210, .35); stroke-width: 3.5; stroke-linecap: round; stroke-dasharray: 0.1 9; }
 .dc-trail.is-shortcut { stroke: rgba(255, 107, 107, .45); }
@@ -782,6 +791,18 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @keyframes dc-party-idle { 50% { transform: translateY(-2px); } }
 @keyframes dc-party-walk { from { transform: translateY(0) rotate(-4deg); } to { transform: translateY(-6px) rotate(4deg); } }
 .dc-prop.is-upright { transform: rotateX(calc(-1 * var(--tilt))); transform-origin: 50% 100%; filter: drop-shadow(0 8px 6px rgba(0, 0, 0, .45)); }
+/* Ancoradas pela base (em pé) ou pelo centro (deitadas) no ponto do tabuleiro */
+.dc-prop.is-upright.is-anchored { transform: translate(-50%, -100%) rotateX(calc(-1 * var(--tilt))); }
+.dc-prop.is-upright.is-anchored svg, .dc-prop.is-centered svg { display: block; }
+.dc-prop.is-flat.is-centered { transform: translate(-50%, -50%); opacity: .9; }
+.dc-led { animation: dc-led 2.4s ease-in-out infinite; filter: drop-shadow(0 0 3px currentColor); }
+@keyframes dc-led { 50% { opacity: .35; } }
+.dc-ripple { transform-origin: 43px 20px; animation: dc-ripple 3s ease-out infinite; }
+@keyframes dc-ripple { from { transform: scale(.4); opacity: .8; } to { transform: scale(1.6); opacity: 0; } }
+.dc-fireflies { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.dc-fireflies i { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #E8FF8A; box-shadow: 0 0 6px 2px rgba(232, 255, 138, .6); animation: dc-firefly 5s ease-in-out infinite; }
+@keyframes dc-firefly { 0%, 100% { opacity: 0; transform: translate(0, 0); } 30% { opacity: 1; } 60% { opacity: .8; transform: translate(14px, -10px); } 80% { opacity: 0; transform: translate(4px, -18px); } }
+@media (prefers-reduced-motion: reduce) { .dc-led, .dc-ripple, .dc-fireflies i { animation: none; } }
 .dc-prop.is-flat { filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .4)); }
 .dc-prop__steam { animation: dc-steam 3s ease-in-out infinite; }
 @keyframes dc-steam { 50% { opacity: .15; transform: translateY(-3px); } }
@@ -894,23 +915,11 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 
 /* Arena (tema por área) */
 .dc-arena { position: relative; display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 12px; height: 300px; padding: 24px 24px 40px; border-radius: var(--tk-radius-md); overflow: hidden; color: #E8E8F0; }
-.dc-arena--localhost { background: linear-gradient(to top, #3A2A1E 0, #4A3524 38px, transparent 38px), linear-gradient(#10141C, #1B2230); } /* mesa + parede */
-.dc-arena--localhost::before { /* monitor com linhas de código, ao fundo */
-  content: ''; position: absolute; left: 50%; top: 18px; width: 260px; height: 120px; transform: translateX(-50%); border-radius: 6px;
-  border: 6px solid #2A303C; box-shadow: 0 0 40px rgba(80, 140, 220, .18);
-  background:
-    linear-gradient(90deg, #4FC3C8 0 30%, transparent 30%) 14px 16px / 100% 6px no-repeat,
-    linear-gradient(90deg, #C792EA 0 18%, transparent 18% 22%, #E8E8F0 22% 52%, transparent 52%) 26px 30px / 100% 6px no-repeat,
-    linear-gradient(90deg, #E8E8F0 0 40%, transparent 40%) 26px 44px / 100% 6px no-repeat,
-    linear-gradient(90deg, #F78C6C 0 24%, transparent 24%) 26px 58px / 100% 6px no-repeat,
-    linear-gradient(90deg, #4FC3C8 0 8%, transparent 8%) 14px 72px / 100% 6px no-repeat,
-    #131A26;
-  opacity: .55;
-}
-.dc-arena--localhost::after { /* teclado */
-  content: ''; position: absolute; left: 50%; bottom: 10px; width: 180px; height: 14px; transform: translateX(-50%); border-radius: 3px;
-  background: repeating-linear-gradient(90deg, #2B2F3A 0 10px, #1E222B 10px 12px);
-}
+/* Arena da Floresta Localhost: clareira à noite, chão de musgo, árvores de circuito e vaga-lumes */
+.dc-arena--localhost { background: linear-gradient(to top, #16301F 0, #1E3F2A 38px, transparent 38px), radial-gradient(ellipse at 50% 0%, #1A3350, #0C1622 70%); }
+.dc-arena__backdrop { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.dc-arena__backdrop > span { position: absolute; opacity: .85; filter: brightness(.75); }
+.dc-arena.is-done .dc-arena__backdrop > span { display: none; }
 .dc-arena__side { display: flex; align-items: flex-end; gap: 12px; z-index: 1; }
 .dc-arena__side.is-pets { justify-content: flex-end; }
 .dc-arena__side.is-enemies { justify-content: flex-start; flex-wrap: wrap; }

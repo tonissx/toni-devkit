@@ -2,6 +2,7 @@ import { DS } from '../../lib/ds.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
 import { VillainSprite } from './VillainSprite.jsx';
 import { PartIcon } from './PartArt.jsx';
+import { ForestBackdrop } from './ForestArt.jsx';
 import { startMusic, stopMusic, sfx } from './audio.js';
 
 const { Modal, Button, Icon, ProgressBar } = DS;
@@ -217,6 +218,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           : <Button variant="ghost" icon="fast-forward" onClick={() => setI(log.length)}>Pular</Button>}
       </>}>
       <div className={'dc-arena dc-arena--' + area.arena + (burstHit ? ' is-shake' : '') + (done ? ' is-done' : '')} aria-label={'Arena ' + area.name}>
+        {area.arena === 'localhost' && <ForestBackdrop />}
         <div className={'dc-arena__side is-pets' + (on.shield ? ' is-shielded' : '') + (on.buff ? ' is-buffed' : '') + (on.haste ? ' is-hasted' : '')}>
           {on.shield && <span className="dc-fx-shield" aria-hidden="true" />}
           {curFx && curFx.type === 'cleanse' && <span className="dc-fx-wave" aria-hidden="true" />}

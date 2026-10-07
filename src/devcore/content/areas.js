@@ -23,8 +23,8 @@ const NODE_TYPES = {
 
 const AREAS = [
   {
-    id: 'localhost', name: 'Localhost', arena: 'localhost', unlock: { tier: 2 },
-    description: 'Onde todo deploy começa: a sua máquina.',
+    id: 'localhost', name: 'Floresta Localhost', arena: 'localhost', unlock: { tier: 2 },
+    description: 'Onde todo deploy nasce: uma floresta de circuitos crescendo dentro da sua máquina.',
     lanes: 3, columns: 9,
     // Coluna 4: loja, evento e descanso; coluna 8: descanso; o resto é sorteado.
     fixed: { 0: ['battle', 'battle', 'battle'], 4: ['shop', 'event', 'rest'], 8: ['rest', 'rest', 'rest'] },

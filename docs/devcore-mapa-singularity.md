@@ -107,8 +107,11 @@ upgrades), com `source: 'patch:<id>'`. A maioria **alimenta a produção**; algu
 - **Mais espaço na aba Mapa:** a cena de estações (farm) que fica no topo do DevCore **some** quando a aba Mapa está
   aberta, e o mapa ocupa esse espaço.
 - **Perspectiva 3D**, no estilo de *Inscryption*: o mapa como um tabuleiro visto em ângulo (inclinado, com
-  profundidade), com **elementos 3D da área** espalhados por ele — no Localhost, por exemplo, teclado, caneca, post-its,
-  cabos e um monitor ao fundo. Os pontos ficam "em pé" sobre o tabuleiro.
+  profundidade), com **elementos 3D da área** espalhados por ele, **inclusive entre as trilhas** (nos espaços livres,
+  sem cobrir caminhos). Os pontos ficam "em pé" sobre o tabuleiro.
+- **Área 1 — Floresta Localhost (decidido):** uma floresta tecnológica. Chão de musgo; árvores de circuito (tronco
+  com trilhas de placa, copa com LEDs) e pinheiros de fibra óptica ao fundo e nas bordas; entre as trilhas,
+  cogumelos-pendrive, tocos-capacitor, pedras-chip com musgo, samambaias de cabo e lagos de dados; vaga-lumes de LED.
 - **Caminhos pontilhados e curvos**, não linhas retas: trilhas que serpenteiam entre os pontos (curvas suaves), como
   um caminho desenhado no tabuleiro. O trecho já percorrido e as saídas abertas continuam destacados.
 - Proposta técnica: CSS 3D (`perspective` + `rotateX` no tabuleiro) com os elementos da área como SVG/camadas em
@@ -238,7 +241,7 @@ custar tempo de recuperação além da entrada.
 
 | Área | Ambientação (proposta) |
 |---|---|
-| Localhost | Mesa de dev: monitor, teclado e caneca ao fundo |
+| Floresta Localhost | Clareira à noite: árvores de circuito, pinheiros de fibra óptica, chão de musgo e vaga-lumes de LED |
 | Staging | Esteiras de pipeline com luzes de CI piscando |
 | Production | Datacenter: racks, cabos e alarmes |
 
@@ -248,7 +251,7 @@ custar tempo de recuperação além da entrada.
   recompensa), com inspiração em *Castlevania: Symphony of the Night* (atmosfera gótica, órgão e cordas, chefes
   dramáticos) e *Vampire Survivors* (efeitos curtos e satisfatórios, sensação de "ganho").
 - **Composições e sons originais**: a referência é de clima e estilo, sem reaproveitar músicas ou samples desses jogos.
-- Um tema por área (Localhost, Staging, Production) e um tema de chefe.
+- Um tema por área (Floresta Localhost, Staging, Production) e um tema de chefe.
 - O DevKit é usado durante o trabalho, então (proposta): **som desligado por padrão** ou bem baixo, com controle de
   volume e "mudo" nas configurações do DevCore; nenhum som fora da arena e dos popups.
 
@@ -266,7 +269,7 @@ Tema de pipeline de deploy. Vencer o chefe abre a próxima área.
 
 | Área | Abre | Chefe | Novos inimigos (proposta) |
 |---|---|---|---|
-| 1. Localhost | Tier 2 | **Legacy Monolith** | Bug, Typo, Dependência quebrada |
+| 1. Floresta Localhost | Tier 2 | **Legacy Monolith** | Bug, Typo, Dependência quebrada |
 | 2. Staging | Chefe da Área 1 | **The Merge Conflict** | Flaky Test, Race Condition, Config Drift |
 | 3. Production | Chefe da Área 2 | **Production Outage** | Memory Leak gigante, DDoS, Cold Start |
 
@@ -345,7 +348,7 @@ entre investir em produção ou avançar) para medir o ritmo por área e a taxa 
 | 0 | Este documento | Revisão |
 | 1 | Motor de batalha + previsão, sem UI | Testes + simulador (taxas de vitória por montagem) |
 | 2 | Mapa da Área 1 no engine + robô no simulador | Ritmo "~3 dias" e custos calibrados |
-| 3 | UI: aba Mapa, preparação e arena Localhost | App de teste com saves semeados |
+| 3 | UI: aba Mapa, preparação e arena da Floresta Localhost | App de teste com saves semeados |
 | 4 | Áreas 2–3, chefes e a Singularity (reset) | Simulador: Singularity em 1–2 semanas |
 | 5 | Árvore de Singularity | Desenho próprio antes de construir |
 
@@ -364,6 +367,7 @@ A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa d
 | 2026-10-06 | Batalha numa **arena própria e temática da área** |
 | 2026-10-06 | **Esquadrão de 3** por enquanto |
 | 2026-10-06 | **Vida persiste entre batalhas**, recuperação de 25%/h (também offline), fora de combate até 25%, cura completa no descanso e consumível **Health Check** fabricável |
+| 2026-10-07 | Área 1 vira a **Floresta Localhost** (floresta tecnológica) no mapa e na arena, com elementos 3D também entre as trilhas |
 | 2026-10-07 | Montagem do esquadrão em **slots de arrastar e soltar** (Vanguarda, Centro, Retaguarda), com bônus por slot e extra para o papel certo; a ordem dos slots define quem apanha |
 | 2026-10-06 | Apresentação (a implementar): **música e efeitos sonoros** nas batalhas (inspiração em *Castlevania SOTN* e *Vampire Survivors*); **popup de item ganho/comprado** com ícone, nome e descrição; na aba Mapa a **cena de farm some** e o mapa ganha espaço; mapa em **perspectiva 3D** estilo *Inscryption*, com elementos 3D da área; **caminhos pontilhados e curvos** |
 
