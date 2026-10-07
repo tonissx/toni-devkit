@@ -743,48 +743,49 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-patch.is-rare { color: #6EA8FF; }
 .dc-patch.is-epic { color: #F5C542; }
 /* Tabuleiro em perspectiva (estilo Inscryption): mesa inclinada, fichas em pé, objetos da área, trilhas pontilhadas */
-.dc-board { --tilt: 32deg; perspective: 1300px; perspective-origin: 50% -10%; padding: 120px 8px 0; margin-top: -40px; overflow: hidden; pointer-events: none; } /* a folga do topo (para a perspectiva) sobe sobre a faixa de Patches: não pode roubar o mouse */
+.dc-board { --tilt: 55deg; position: relative; perspective: 1100px; perspective-origin: 50% 20%; padding: 0 8px; overflow: hidden; pointer-events: none; } /* folga: não pode roubar o mouse */
 .dc-board__table {
   position: relative; pointer-events: auto; transform: rotateX(var(--tilt)); transform-origin: 50% 100%; transform-style: preserve-3d;
   border-radius: 16px; box-shadow: 0 40px 60px -20px rgba(0, 0, 0, .65);
 }
 .dc-board--localhost { background: repeating-linear-gradient(92deg, #3B2A1D 0 14px, #43301F 14px 30px, #38281B 30px 41px); } /* mesa de madeira */
-.dc-board__mat { position: absolute; inset: 22px 26px; border-radius: 12px; background: radial-gradient(ellipse at 50% 40%, #222A37, #161B24 75%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05); }
+.dc-board__mat { position: absolute; inset: 22px 26px; pointer-events: none; border-radius: 12px; background: radial-gradient(ellipse at 50% 40%, #222A37, #161B24 75%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05); }
 /* Floresta Localhost: chão de musgo com manchas e um leve brilho de circuito */
 .dc-board--localhost .dc-board__mat {
   background:
     radial-gradient(ellipse 18% 14% at 22% 30%, rgba(124, 245, 176, .07), transparent),
     radial-gradient(ellipse 22% 16% at 70% 70%, rgba(94, 231, 255, .06), transparent),
     radial-gradient(ellipse 30% 20% at 45% 55%, #1E4A31, transparent 70%),
-    radial-gradient(ellipse at 50% 40%, #1A3A28, #0F2318 78%);
-  box-shadow: inset 0 0 40px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(124, 245, 176, .08);
+    radial-gradient(ellipse 55% 50% at 50% 55%, rgba(255, 214, 140, .10), transparent 70%),
+    radial-gradient(ellipse at 50% 50%, #1D4230, #0F2318 70%, #07130C);
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, .75), inset 0 0 0 1px rgba(124, 245, 176, .08); /* luz de lampião: bordas no escuro */
 }
 .dc-board__paths { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-.dc-trail { fill: none; stroke: rgba(230, 225, 210, .35); stroke-width: 3.5; stroke-linecap: round; stroke-dasharray: 0.1 9; }
+.dc-trail { fill: none; stroke: rgba(230, 240, 225, .5); stroke-width: 5; stroke-linecap: round; stroke-dasharray: 0.1 12; }
 .dc-trail.is-shortcut { stroke: rgba(255, 107, 107, .45); }
 .dc-trail.is-walked { stroke: var(--tk-accent); stroke-width: 4.5; }
 .dc-trail.is-open { stroke: color-mix(in srgb, var(--tk-accent) 75%, #fff); animation: dc-trail-march 1.2s linear infinite; }
 @keyframes dc-trail-march { to { stroke-dashoffset: -18.2; } }
 .dc-token-shadow { position: absolute; width: 34px; height: 12px; transform: translate(-50%, -30%); border-radius: 50%; background: rgba(0, 0, 0, .45); filter: blur(2px); pointer-events: none; }
-.dc-map__slot { position: absolute; transform: translate(-50%, -92%) rotateX(calc(-1 * var(--tilt))); transform-origin: 50% 100%; }
+.dc-map__slot { position: absolute; z-index: 1500; transform: translate(-50%, -50%) translateZ(2px); } /* pintado no chão do mapa (2px acima do chão: no 3D o chão não pode ficar por cima) */
 .dc-node {
-  width: 38px; height: 38px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: default;
-  border: 2px solid #4A5366; background: linear-gradient(180deg, #2C3444, #1B212C); color: #C9CFDB;
-  box-shadow: 0 3px 0 #0E1117, 0 0 0 1px rgba(0, 0, 0, .4);
+  width: 50px; height: 50px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: default;
+  border: 2.5px solid rgba(214, 240, 222, .35); background: rgba(8, 18, 12, .62); color: #DDEFE2;
+  box-shadow: 0 0 0 3px rgba(8, 18, 12, .35);
 }
-.dc-map__slot.is-boss .dc-node, .dc-node.is-boss { width: 56px; height: 56px; color: #F5C542; border-color: #8C7224; background: linear-gradient(180deg, #3A3220, #1E1A10); }
+.dc-map__slot.is-boss .dc-node, .dc-node.is-boss { width: 72px; height: 72px; color: #F5C542; border-color: #8C7224; background: linear-gradient(180deg, #3A3220, #1E1A10); }
 .dc-node.is-elite { color: #FF7B7B; border-color: #6B3434; }
 .dc-node.is-locked { opacity: .55; }
 .dc-node.is-visited { border-color: var(--tk-accent); opacity: .8; }
-.dc-node.is-current { border-color: var(--tk-accent); color: var(--tk-accent-text); box-shadow: 0 3px 0 #0E1117, 0 0 0 4px color-mix(in srgb, var(--tk-accent) 35%, transparent), 0 0 18px color-mix(in srgb, var(--tk-accent) 45%, transparent); }
-.dc-node.is-reachable { cursor: pointer; border-color: var(--tk-accent); background: linear-gradient(180deg, color-mix(in srgb, var(--tk-accent) 30%, #2C3444), #1B212C); animation: dc-node-pulse 2s ease-in-out infinite; }
-.dc-node.is-reachable.is-poor { border-style: dashed; background: linear-gradient(180deg, #2C3444, #1B212C); animation: none; }
-.dc-node.is-reachable:hover { transform: translateY(-3px); }
+.dc-node.is-current { border-color: var(--tk-accent); color: var(--tk-accent-text); box-shadow: 0 0 0 5px color-mix(in srgb, var(--tk-accent) 30%, transparent), 0 0 22px color-mix(in srgb, var(--tk-accent) 45%, transparent); }
+.dc-node.is-reachable { cursor: pointer; border-color: var(--tk-accent); background: color-mix(in srgb, var(--tk-accent) 28%, rgba(8, 18, 12, .7)); animation: dc-node-pulse 2s ease-in-out infinite; }
+.dc-node.is-reachable.is-poor { border-style: dashed; background: rgba(8, 18, 12, .62); animation: none; }
+.dc-node.is-reachable:hover { transform: scale(1.08); }
 .dc-node:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
-@keyframes dc-node-pulse { 50% { box-shadow: 0 3px 0 #0E1117, 0 0 0 5px color-mix(in srgb, var(--tk-accent) 22%, transparent); } }
+@keyframes dc-node-pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--tk-accent) 25%, transparent), 0 0 18px color-mix(in srgb, var(--tk-accent) 35%, transparent); } }
 .dc-prop { position: absolute; pointer-events: none; }
 /* Esquadrão andando pelo tabuleiro (em pé, como as fichas) */
-.dc-party { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 2; transform-style: preserve-3d; }
+.dc-party { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 2000; transform-style: preserve-3d; }
 .dc-party__pet { position: absolute; bottom: 0; transform: translateX(-50%) rotateX(calc(-1 * var(--tilt))); transform-origin: 50% 100%; filter: drop-shadow(0 4px 3px rgba(0, 0, 0, .5)); }
 .dc-party__pet svg { display: block; animation: dc-party-idle 2.4s ease-in-out infinite; animation-delay: calc(var(--i) * -0.6s); }
 .dc-party.is-walking .dc-party__pet svg { animation: dc-party-walk .32s ease-in-out infinite alternate; animation-delay: calc(var(--i) * -0.11s); }
@@ -794,6 +795,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 /* Ancoradas pela base (em pé) ou pelo centro (deitadas) no ponto do tabuleiro */
 .dc-prop.is-upright.is-anchored { transform: translate(-50%, -100%) rotateX(calc(-1 * var(--tilt))); }
 .dc-prop.is-upright.is-anchored svg, .dc-prop.is-centered svg { display: block; }
+.dc-prop.is-dense { filter: none; } /* centenas de árvores: sem sombra (desempenho) */
 .dc-prop.is-flat.is-centered { transform: translate(-50%, -50%); opacity: .9; }
 .dc-led { animation: dc-led 2.4s ease-in-out infinite; filter: drop-shadow(0 0 3px currentColor); }
 @keyframes dc-led { 50% { opacity: .35; } }

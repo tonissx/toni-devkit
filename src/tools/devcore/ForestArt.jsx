@@ -79,11 +79,18 @@ export const DataPond = ({ s = 1 }) => (
   </svg>
 );
 
-/** Peças possíveis por tipo de lugar: entre trilhas (meio) ou nas bordas. */
-const MIDDLE = [
-  { C: CircuitTree, upright: true, s: 0.62 }, { C: FiberPine, upright: true, s: 0.62 }, { C: UsbShroom, upright: true, s: 0.9 },
-  { C: CapStump, upright: true, s: 0.95 }, { C: CableFern, upright: true, s: 0.9 }, { C: ChipRock, upright: false, s: 0.75 }, { C: DataPond, upright: false, s: 0.7 },
-];
+/** Pinheiro low-poly leve (sem animação): duas faces de tons diferentes, como uma miniatura de papelão. */
+const PINE_TONES = [['#1C4A33', '#2C6B47'], ['#173F2C', '#24593D'], ['#1F5638', '#33794F'], ['#143826', '#21503A'], ['#22603E', '#3A8657']];
+export const Pine = React.memo(({ s = 1, tone = 0 }) => {
+  const [dark, light] = PINE_TONES[tone % PINE_TONES.length];
+  return (
+    <svg width={30 * s} height={52 * s} viewBox="0 0 30 52" aria-hidden="true">
+      <rect x="13" y="42" width="4" height="10" fill="#3B2A1E" />
+      <path d="M15 2 L2 44 H15 Z" fill={dark} /><path d="M15 2 L28 44 H15 Z" fill={light} />
+      <path d="M15 2 L8 22 H15 Z" fill={light} opacity=".35" />
+    </svg>
+  );
+});
 
 /** Hash estável (escolha da peça por lugar). */
 function hashStr(str) {
@@ -92,33 +99,40 @@ function hashStr(str) {
   return h >>> 0;
 }
 
+/** Peça de um lugar da floresta, sorteada pelo hash: quase sempre pinheiro; às vezes uma peça tecnológica. */
+function pieceFor(h) {
+  const r = h % 100;
+  const s = 0.55 + ((h >>> 8) % 30) / 100;            // tamanho 0,55–0,85
+  if (r < 74) return { C: Pine, upright: true, props: { s: s * 1.15, tone: (h >>> 4) % 5 } };
+  if (r < 82) return { C: FiberPine, upright: true, props: { s: s * 0.75 } };
+  if (r < 89) return { C: CircuitTree, upright: true, props: { s: s * 0.7 } };
+  if (r < 93) return { C: UsbShroom, upright: true, props: { s: 0.8 } };
+  if (r < 96) return { C: CapStump, upright: true, props: { s: 0.85 } };
+  if (r < 98) return { C: CableFern, upright: true, props: { s: 0.8 } };
+  return { C: (h & 1) ? ChipRock : DataPond, upright: false, props: { s: 0.6 } };
+}
+
 /**
- * A floresta no tabuleiro: árvores altas no fundo e nas bordas (como uma mata em volta do mapa) e uma peça em cada
- * espaço livre entre as trilhas (`spots`: [{ id, x, y }]). Vaga-lumes de LED flutuando por cima.
+ * A floresta no tabuleiro (densa, como a mata do mapa do Inscryption): uma peça em cada lugar livre (`spots`, longe
+ * dos pontos e das trilhas) e vaga-lumes de LED por cima. Memorizada: só redesenha quando o traçado ou a largura mudam.
  */
-export function ForestProps({ w, h, spots }) {
-  const back = [0.06, 0.18, 0.31, 0.46, 0.6, 0.74, 0.88].map((f, i) => ({ x: w * f, y: 6 + (i % 2) * 8, T: i % 3 === 1 ? FiberPine : CircuitTree, s: 0.95 + (i % 2) * 0.15 }));
+export const ForestProps = React.memo(function ForestProps({ spots }) {
   return (
     <>
-      {back.map((t, i) => <span key={'back' + i} className="dc-prop is-upright is-anchored" style={{ left: t.x, top: t.y }}><t.T s={t.s} /></span>)}
-      <span className="dc-prop is-upright is-anchored" style={{ left: 18, top: h - 8 }}><CircuitTree s={1.05} /></span>
-      <span className="dc-prop is-upright is-anchored" style={{ left: w - 20, top: h - 6 }}><FiberPine s={1.1} /></span>
-      <span className="dc-prop is-upright is-anchored" style={{ left: 22, top: h * 0.45 }}><UsbShroom s={1.1} /></span>
-      <span className="dc-prop is-upright is-anchored" style={{ left: w - 18, top: h * 0.4 }}><CapStump s={1.1} /></span>
       {spots.map((sp) => {
-        const P = MIDDLE[hashStr(sp.id) % MIDDLE.length];
+        const P = pieceFor(sp.h);
         return (
-          <span key={sp.id} className={'dc-prop ' + (P.upright ? 'is-upright is-anchored' : 'is-flat is-centered')} style={{ left: sp.x, top: sp.y }}>
-            <P.C s={P.s} />
+          <span key={sp.id} className={'dc-prop ' + (P.upright ? 'is-upright is-anchored is-dense' : 'is-flat is-centered')} style={{ left: sp.x, top: sp.y, zIndex: Math.round(sp.y) }}>
+            <P.C {...P.props} />
           </span>
         );
       })}
       <div className="dc-fireflies" aria-hidden="true">
-        {Array.from({ length: 14 }, (_, i) => <i key={i} style={{ left: `${(hashStr('ff' + i) % 96) + 2}%`, top: `${(hashStr('fy' + i) % 80) + 8}%`, animationDelay: `${(i * 0.7) % 5}s` }} />)}
+        {Array.from({ length: 16 }, (_, i) => <i key={i} style={{ left: `${(hashStr('ff' + i) % 96) + 2}%`, top: `${(hashStr('fy' + i) % 90) + 4}%`, animationDelay: `${(i * 0.7) % 5}s` }} />)}
       </div>
     </>
   );
-}
+}, (a, b) => a.spots === b.spots);
 
 /** Fundo da arena: clareira na Floresta Localhost à noite (árvores de circuito, vaga-lumes). */
 export function ForestBackdrop() {

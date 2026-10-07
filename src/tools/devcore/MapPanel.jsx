@@ -58,13 +58,17 @@ function hashStr(str) {
   return h >>> 0;
 }
 
-const BOARD_H = 400;   // altura do tabuleiro (px, antes da inclinação)
-const PAD_X = 46;
-const PAD_Y = 48;
+// Tabuleiro vertical (estilo Inscryption): começo perto da câmera (embaixo), chefe ao fundo (em cima).
+const ROW_H = 82;       // distância entre colunas do mapa (que viram linhas, de baixo para cima)
+const LANE_W = 150;     // distância entre trilhas (lado a lado, centralizadas)
+const PAD_TOP = 70;
+const PAD_BOTTOM = 110; // espaço do esquadrão antes da primeira linha
+const boardH = (area) => PAD_TOP + (area.columns + 1) * ROW_H + PAD_BOTTOM;
+const BOARD_H = 400;    // altura de referência para decorações antigas (não usada no tabuleiro vertical)
 
 /** Objetos 3D da área espalhados pelo tabuleiro (decoração; ver docs §4.5). spots: lugares livres entre as trilhas. */
-function AreaProps({ arena, w, spots }) {
-  if (arena === 'localhost') return <ForestProps w={w} h={BOARD_H} spots={spots} />;
+function AreaProps({ arena, w, h, spots }) {
+  if (arena === 'localhost') return <ForestProps w={w} h={h} spots={spots} />;
   return null;
 }
 
@@ -117,7 +121,9 @@ function Party({ map, party, hold, place, geom }) {
 
 function MapGrid({ map, onNode, party = [], hold = false }) {
   const ref = React.useRef(null);
+  const boxRef = React.useRef(null);
   const [w, setW] = React.useState(900);
+  const [lift, setLift] = React.useState(0); // vazio que a inclinação deixa no topo (o tabuleiro sobe essa medida)
   React.useLayoutEffect(() => {
     if (!ref.current) return undefined;
     setW(ref.current.offsetWidth);
@@ -125,37 +131,29 @@ function MapGrid({ map, onNode, party = [], hold = false }) {
     ro.observe(ref.current);
     return () => ro.disconnect();
   }, []);
-  const cols = map.area.columns + 1;
-  const x = (n) => PAD_X + ((n.col + 0.5) / cols) * (w - 2 * PAD_X);
-  const y = (n) => PAD_Y + ((n.lane + 0.5) / map.area.lanes) * (BOARD_H - 2 * PAD_Y);
+  React.useLayoutEffect(() => {
+    if (!ref.current || !boxRef.current) return;
+    // Distância do topo do contêiner até o topo visível da mesa inclinada (não muda quando o contêiner sobe).
+    const gap = Math.max(0, Math.round(ref.current.getBoundingClientRect().top - boxRef.current.getBoundingClientRect().top) - 8);
+    if (Math.abs(gap - lift) > 2) setLift(gap);
+  }, [w]);
+  const H = boardH(map.area);
+  const lanes = map.area.lanes;
+  // Coluna do mapa → altura no tabuleiro (de baixo para cima); trilha → posição lateral, centralizada.
+  const x = (n) => w / 2 + (n.lane - (lanes - 1) / 2) * LANE_W;
+  const y = (n) => H - PAD_BOTTOM - (n.col + 0.5) * ROW_H;
   const byId = Object.fromEntries(map.nodes.map((n) => [n.id, n]));
-  // Onde o esquadrão fica: um pouco à frente do ponto (para não cobrir a ficha); antes de começar, à esquerda da coluna 0.
-  const start = { x: PAD_X * 0.45, y: BOARD_H / 2 };
+  // O esquadrão fica um pouco à frente do ponto (mais perto da câmera); antes de começar, embaixo, no centro.
+  const start = { x: w / 2, y: H - PAD_BOTTOM + ROW_H * 0.45 };
   const nodeAt = (id) => (id == null ? null : byId[id]);
-  const place = React.useCallback((id) => { const n = nodeAt(id); return n ? { x: x(n), y: y(n) + 34 } : { ...start, y: start.y + 34 }; }, [w, map.at]);
+  const place = React.useCallback((id) => { const n = nodeAt(id); return n ? { x: x(n), y: y(n) + 30 } : start; }, [w, map.at]);
   const geom = (from, to) => {
     const a = nodeAt(from);
     const b = nodeAt(to);
-    const p0 = a ? { x: x(a), y: y(a) } : start;
-    const k = trailCurve(p0.x, p0.y, x(b), y(b), (a ? a.id : 'start') + '>' + b.id, a && a.shortcut === b.id);
-    return { ...k, y1: k.y1 + 34, cy: k.cy + 34, y2: k.y2 + 34 };
+    const p0 = a ? { x: x(a), y: y(a) + 30 } : start;
+    const k = trailCurve(p0.x, p0.y, x(b), y(b) + 30, (a ? a.id : 'start') + '>' + b.id, a && a.shortcut === b.id);
+    return k;
   };
-  // Lugares livres para a floresta: o meio de cada célula entre duas trilhas sem diagonal cruzando, e faixas acima da
-  // primeira e abaixo da última trilha (colunas alternadas). Nada fica em cima de um caminho.
-  const spots = [];
-  const edges = new Set();
-  for (const n of map.nodes) for (const id of n.next) edges.add(n.id + '>' + id);
-  const colX = (c) => PAD_X + ((c + 0.5) / cols) * (w - 2 * PAD_X);
-  const laneY = (l) => PAD_Y + ((l + 0.5) / map.area.lanes) * (BOARD_H - 2 * PAD_Y);
-  for (let c = 0; c < map.area.columns - 1; c++) {
-    const midX = (colX(c) + colX(c + 1)) / 2;
-    for (let g = 0; g < map.area.lanes - 1; g++) {
-      const cross = edges.has(`${c}-${g}>${c + 1}-${g + 1}`) || edges.has(`${c}-${g + 1}>${c + 1}-${g}`);
-      if (!cross) spots.push({ id: `m${c}-${g}`, x: midX, y: (laneY(g) + laneY(g + 1)) / 2 + 16 });
-    }
-    if (c % 2 === 0) spots.push({ id: `t${c}`, x: midX, y: laneY(0) - 22 });
-    else spots.push({ id: `b${c}`, x: midX, y: laneY(map.area.lanes - 1) + 52 });
-  }
   const paths = [];
   for (const n of map.nodes) {
     for (const id of [...n.next, ...(n.shortcut ? [n.shortcut] : [])]) {
@@ -164,32 +162,51 @@ function MapGrid({ map, onNode, party = [], hold = false }) {
       const open = n.status === 'current' && t.status === 'reachable';
       // Curva: ponto de controle no meio, deslocado na perpendicular (sinal e tamanho estáveis por trilha).
       const k = trailCurve(x(n), y(n), x(t), y(t), n.id + '>' + id, id === n.shortcut);
-      paths.push({ key: n.id + '>' + id, d: `M${k.x1} ${k.y1} Q${k.cx} ${k.cy} ${k.x2} ${k.y2}`, cls: (walked ? ' is-walked' : open ? ' is-open' : '') + (id === n.shortcut ? ' is-shortcut' : '') });
+      paths.push({ key: n.id + '>' + id, k, d: `M${k.x1} ${k.y1} Q${k.cx} ${k.cy} ${k.x2} ${k.y2}`, cls: (walked ? ' is-walked' : open ? ' is-open' : '') + (id === n.shortcut ? ' is-shortcut' : '') });
     }
   }
+  // Floresta densa: uma árvore em cada ponto de uma grade (com variação) longe dos pontos e das trilhas.
+  // Calculada uma vez por largura e traçado (o painel redesenha a cada meio segundo).
+  const layoutKey = w + ':' + map.nodes.map((n) => n.id + n.next.join(',')).join('|');
+  const spots = React.useMemo(() => {
+    const avoid = [];
+    for (const n of map.nodes) avoid.push({ x: x(n), y: y(n) + 18, r: n.type === 'boss' ? 70 : 54 });
+    for (const p of paths) for (let i = 0; i <= 12; i++) { const q = onCurve(p.k, i / 12); avoid.push({ x: q.x, y: q.y, r: 26 }); }
+    avoid.push({ x: start.x, y: start.y, r: 60 });
+    const out = [];
+    const step = 44;
+    for (let gy = 18; gy < H - 4; gy += step * 0.8) {
+      for (let gx = 10; gx < w - 4; gx += step) {
+        const id = gx + ':' + gy;
+        const h = hashStr(id);
+        const px = gx + ((h % 17) - 8) + ((Math.floor(gy / (step * 0.8)) % 2) * step) / 2;
+        const py = gy + (((h >>> 5) % 13) - 6);
+        if (avoid.some((a) => (a.x - px) ** 2 + (a.y - py) ** 2 < a.r * a.r)) continue;
+        out.push({ id, x: px, y: py, h });
+      }
+    }
+    return out;
+  }, [layoutKey]);
   return (
-    <div className="dc-board" role="group" aria-label={'Mapa ' + map.area.name}>
-      <div ref={ref} className={'dc-board__table dc-board--' + map.area.arena} style={{ height: BOARD_H }}>
+    <div ref={boxRef} className="dc-board" role="group" aria-label={'Mapa ' + map.area.name} style={{ marginTop: -lift }}>
+      <div ref={ref} className={'dc-board__table dc-board--' + map.area.arena} style={{ height: H }}>
         <div className="dc-board__mat" />
-        <AreaProps arena={map.area.arena} w={w} spots={spots} />
-        <Party map={map} party={party} hold={hold} place={place} geom={geom} />
-        <svg className="dc-board__paths" width={w} height={BOARD_H} aria-hidden="true">
+        <svg className="dc-board__paths" width={w} height={H} aria-hidden="true">
           {paths.map((p) => <path key={p.key} className={'dc-trail' + p.cls} d={p.d} />)}
         </svg>
         {map.nodes.map((n) => (
-          <React.Fragment key={n.id}>
-            <span className="dc-token-shadow" style={{ left: x(n), top: y(n) }} />
-            <span className={'dc-map__slot' + (n.type === 'boss' ? ' is-boss' : '')} style={{ left: x(n), top: y(n) }}>
-              <InfoCard content={<NodeDetails n={n} />} focusable={false}>
-                <button type="button" className={'dc-node is-' + n.type + ' is-' + n.status + (n.status === 'reachable' && !n.affordable ? ' is-poor' : '')}
-                  aria-disabled={n.status !== 'reachable'} onClick={() => n.status === 'reachable' && onNode(n)}
-                  aria-label={`${n.typeName}, coluna ${n.col + 1}${n.cost ? ', ' + formatNum(n.cost) + ' Compute' : ''}`}>
-                  <Icon name={n.icon} size={n.type === 'boss' ? 24 : 17} />
-                </button>
-              </InfoCard>
-            </span>
-          </React.Fragment>
+          <span key={n.id} className={'dc-map__slot' + (n.type === 'boss' ? ' is-boss' : '')} style={{ left: x(n), top: y(n) }}>
+            <InfoCard content={<NodeDetails n={n} />} focusable={false}>
+              <button type="button" className={'dc-node is-' + n.type + ' is-' + n.status + (n.status === 'reachable' && !n.affordable ? ' is-poor' : '')}
+                aria-disabled={n.status !== 'reachable'} onClick={() => n.status === 'reachable' && onNode(n)}
+                aria-label={`${n.typeName}, coluna ${n.col + 1}${n.cost ? ', ' + formatNum(n.cost) + ' Compute' : ''}`}>
+                <Icon name={n.icon} size={n.type === 'boss' ? 30 : 22} />
+              </button>
+            </InfoCard>
+          </span>
         ))}
+        <AreaProps arena={map.area.arena} w={w} h={H} spots={spots} />
+        <Party map={map} party={party} hold={hold} place={place} geom={geom} />
       </div>
     </div>
   );
