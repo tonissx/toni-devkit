@@ -2,11 +2,14 @@ import { DS } from '../../lib/ds.js';
 import { formatNum, formatDuration } from '../../devcore/engine/format.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
 import { PartIcon } from './PartArt.jsx';
+import { UpgradeArt } from './UpgradeArt.jsx';
+import { InfoCard } from './InfoCard.jsx';
 
 const { Button, Icon, ProgressBar, Toggle } = DS;
 
 const catIcon = (snap, id) => (snap.categories.find((c) => c.id === id) || { icon: 'cpu' }).icon;
-const KIND = { generator: 'Gerador', global: 'Global', mechanic: 'Mecânica', pet: 'DevPet' };
+const KIND = { generator: 'Gerador', global: 'Global', mechanic: 'Mecânica', pet: 'DevPet', combo: 'Combo' };
+const pctText = (v) => '+' + formatNum(v * 100, { rate: true }) + '%';
 
 /* ─────────────── Generators ─────────────── */
 export const MK = { 1: 'I', 2: 'II', 3: 'III' };
@@ -63,6 +66,60 @@ function BlueprintArea({ g, snap, amount, act }) {
   );
 }
 
+const rateText = (v) => '+' + formatNum(v, { rate: true }) + '/s';
+
+/** Linha "rótulo · valor" dos cartões de detalhes. */
+const InfoRow = ({ k, children }) => <div className="dc-info__row"><span>{k}</span><b>{children}</b></div>;
+
+/** Nome de um gerador com o ícone dele (o mesmo da linha na aba Generators). */
+const GenLabel = ({ snap, id, name }) => {
+  const g = snap.generators.find((x) => x.id === id);
+  return <span className="dc-info__gen"><Icon name={catIcon(snap, g ? g.category : null)} size={12} />{name}</span>;
+};
+
+/** Detalhes de um gerador (hover no nome): descrição, cada um, multiplicador, próximo marco, participação. */
+function GenDetails({ g }) {
+  const m = g.nextMilestone;
+  return (
+    <>
+      <div className="dc-info__title">{g.name}</div>
+      <p className="dc-info__text">{g.description}</p>
+      <InfoRow k="Cada um">{g.each != null ? rateText(g.each) : 'nenhum ainda'}</InfoRow>
+      {g.mult > 1 && <InfoRow k="Multiplicador (marcos × Mk)">{multText(g.mult)}</InfoRow>}
+      <InfoRow k="Próximo marco">{m ? `${multText(m.mult)} em ${m.at} (faltam ${m.left})` : 'todos atingidos'}</InfoRow>
+      {g.owned > 0 && <InfoRow k="Participação">{formatNum(g.share * 100, { rate: true })}% do total</InfoRow>}
+    </>
+  );
+}
+
+/** Detalhes dos combos de um gerador (hover no selo): quem ele impulsiona, quanto rende e quem impulsiona ele. */
+function ComboDetails({ g, snap }) {
+  return (
+    <>
+      {g.boosts.length > 0 && <>
+        <div className="dc-info__title"><Icon name="git-merge" size={12} /> Também impulsiona</div>
+        {g.boosts.map((b) => <InfoRow key={b.id} k={<GenLabel snap={snap} id={b.id} name={b.name} />}>{pctText(b.pct)}</InfoRow>)}
+        {g.boostRate > 0 && <p className="dc-info__text">Rende {rateText(g.boostRate)} ({formatNum(g.boostShare * 100, { rate: true })}% do total).</p>}
+      </>}
+      {g.boostedBy.length > 0 && <>
+        <div className="dc-info__title"><Icon name="arrow-down-right" size={12} /> Impulsionado por</div>
+        {g.boostedBy.map((b) => <InfoRow key={b.id} k={<GenLabel snap={snap} id={b.id} name={b.name} />}>{pctText(b.pct)}</InfoRow>)}
+      </>}
+    </>
+  );
+}
+
+/** Selo de combo na linha do gerador: nº de ligações; os detalhes ficam no hover. */
+function ComboBadge({ g, snap }) {
+  const n = g.boosts.length + g.boostedBy.length;
+  if (!n) return null;
+  return (
+    <InfoCard content={<ComboDetails g={g} snap={snap} />} label={`Combos de ${g.name}: ${n}`}>
+      <span className="dc-combo-badge"><Icon name="git-merge" size={11} />{n}</span>
+    </InfoCard>
+  );
+}
+
 export function GeneratorsPanel({ snap, amount, act }) {
   const [open, setOpen] = React.useState(null);
   const unlocked = snap.generators.filter((g) => g.unlocked);
@@ -80,19 +137,19 @@ export function GeneratorsPanel({ snap, amount, act }) {
           <span className="dc-row__icon"><Icon name={catIcon(snap, g.category)} size={16} /></span>
           <div className="dc-row__main">
             <div className="dc-row__title">
-              {g.name} <span className="dc-owned">{g.owned}</span>
+              <InfoCard content={<GenDetails g={g} />}><span className="dc-info-label">{g.name}</span></InfoCard>
+              <span className="dc-owned">{g.owned}</span>
               {g.mk > 1 && <span className={'dc-mk is-mk' + g.mk}>Mk {MK[g.mk]}</span>}
               <button type="button" className={'dc-bp-toggle' + (g.blueprint && g.blueprint.complete ? ' is-ready' : '')} aria-expanded={open === g.id} onClick={() => setOpen(open === g.id ? null : g.id)}>
                 <Icon name="package" size={11} />{g.blueprint ? `${g.blueprint.owned}/4` : 'máx'}
               </button>
+              <ComboBadge g={g} snap={snap} />
             </div>
-            <div className="dc-row__desc">{g.description}</div>
             <Milestone g={g} />
           </div>
           <div className="dc-row__stat">
-            <b>+{formatNum(g.rate, { rate: true })}/s</b>
-            <span>{g.each != null ? formatNum(g.each, { rate: true }) + '/s cada' : 'nenhum ainda'}</span>
-            {g.mult > 1 && <span className="dc-row__mult" title="Marcos × Mk">{multText(g.mult)}</span>}
+            <b>{rateText(g.rate)}</b>
+            {g.owned > 0 && <span>{formatNum(g.share * 100, { rate: true })}% do total</span>}
           </div>
           <div className="dc-buy">
             <Button size="sm" variant={amount >= g.cost1 ? 'primary' : 'secondary'} disabled={amount < g.cost1} onClick={() => act({ type: 'buy', gen: g.id, qty: 1 })}>
@@ -122,38 +179,98 @@ export function GeneratorsPanel({ snap, amount, act }) {
 }
 
 /* ─────────────── Upgrades ─────────────── */
+/** Resumo de uma linha: o par do combo, o efeito numérico (gerador/global) ou a descrição curta. */
+function upgradeSummary(u) {
+  if (u.combo) return `${u.combo.fromName} → ${u.combo.toName}`;
+  if ((u.kind === 'generator' || u.kind === 'global') && u.effects.length) return u.effects.join(' · ');
+  return u.description;
+}
+
+/** Detalhes de um upgrade (hover): categoria, descrição, efeitos, quanto o combo rende e o requisito. */
+function UpgradeDetails({ u }) {
+  const showEffects = u.combo || u.kind === 'generator' || u.kind === 'global';
+  return (
+    <>
+      <div className="dc-info__title">{u.name} <span className="dc-chip">{KIND[u.kind]}</span></div>
+      <p className="dc-info__text">{u.description}</p>
+      {showEffects && u.effects.map((e) => <InfoRow key={e} k="Efeito">{e}</InfoRow>)}
+      {u.comboNow.length > 0 && <InfoRow k={u.status === 'owned' ? 'Ativo' : 'Se comprar agora'}>{u.comboNow.join(' · ')}</InfoRow>}
+      {u.status === 'locked' && <InfoRow k="Requer">{u.requirement}</InfoRow>}
+    </>
+  );
+}
+
+/** Card compacto: ilustração, nome, resumo e custo. O resto no hover. */
+function UpgradeCard({ u, snap, amount, act }) {
+  const locked = u.status === 'locked';
+  const secret = locked && !(u.combo && u.combo.visible); // upgrade comum bloqueado: ainda um mistério
+  const head = (
+    <>
+      <UpgradeArt u={u} locked={secret} size={36} />
+      <div className="dc-upg__text">
+        <div className="dc-card__title">{secret ? '???' : u.name}</div>
+        {!secret && <div className="dc-upg__summary">{upgradeSummary(u)}</div>}
+      </div>
+    </>
+  );
+  return (
+    <div className={'dc-card dc-upg' + (snap.newUpgrades.includes(u.id) ? ' is-new' : '') + (locked ? ' is-locked' : '')}>
+      {secret ? <div className="dc-upg__head">{head}</div> : <InfoCard className="dc-upg__head" content={<UpgradeDetails u={u} />}>{head}</InfoCard>}
+      {locked && <div className="dc-card__desc">Requer {u.requirement}</div>}
+      {u.status === 'available' && (
+        <Button size="sm" variant={amount >= u.cost ? 'primary' : 'secondary'} disabled={amount < u.cost} onClick={() => act({ type: 'upgrade', id: u.id })}>
+          {formatNum(u.cost)} Compute
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** Upgrades instalados: chips com ilustração; os detalhes (e quanto um combo rende) ficam no hover. */
+function InstalledChips({ title, list }) {
+  if (!list.length) return null;
+  return (
+    <div className="dc-owned-list">
+      <div className="tk-menu__heading">{title} ({list.length})</div>
+      {list.map((u) => (
+        <InfoCard key={u.id} content={<UpgradeDetails u={u} />}>
+          <span className="dc-chip dc-chip--art"><UpgradeArt u={u} size={18} />{u.name}</span>
+        </InfoCard>
+      ))}
+    </div>
+  );
+}
+
 export function UpgradesPanel({ snap, amount, act }) {
-  const available = snap.upgrades.filter((u) => u.status === 'available');
-  const locked = snap.upgrades.filter((u) => u.status === 'locked').slice(0, 2);
-  const owned = snap.upgrades.filter((u) => u.status === 'owned');
+  const regular = snap.upgrades.filter((u) => u.kind !== 'combo');
+  const available = regular.filter((u) => u.status === 'available');
+  const locked = regular.filter((u) => u.status === 'locked').slice(0, 2);
+  // Combos: em cards os disponíveis e os próximos já revelados (com o requisito); os ativos viram chips.
+  const combos = snap.upgrades.filter((u) => u.kind === 'combo');
+  const shown = combos.filter((u) => u.combo.visible);
+  const pending = [...shown.filter((u) => u.status === 'available'), ...shown.filter((u) => u.status === 'locked')];
+  const active = shown.filter((u) => u.status === 'owned');
   return (
     <div className="dc-upgrades">
-      {!available.length && <div className="dc-empty">Nenhum upgrade disponível agora — continue produzindo.</div>}
-      <div className="dc-grid">
-        {available.map((u) => (
-          <div key={u.id} className={'dc-card' + (snap.newUpgrades.includes(u.id) ? ' is-new' : '')}>
-            <div className="dc-card__kind">{KIND[u.kind]}</div>
-            <div className="dc-card__title">{u.name}</div>
-            <div className="dc-card__desc">{u.description}</div>
-            <Button size="sm" variant={amount >= u.cost ? 'primary' : 'secondary'} disabled={amount < u.cost} onClick={() => act({ type: 'upgrade', id: u.id })}>
-              {formatNum(u.cost)} Compute
-            </Button>
-          </div>
-        ))}
-        {locked.map((u) => (
-          <div key={u.id} className="dc-card is-locked">
-            <div className="dc-card__kind">{KIND[u.kind]}</div>
-            <div className="dc-card__title">???</div>
-            <div className="dc-card__desc">Requer {u.requirement}</div>
-          </div>
-        ))}
-      </div>
-      {owned.length > 0 && (
-        <div className="dc-owned-list">
-          <div className="tk-menu__heading">Instalados ({owned.length})</div>
-          {owned.map((u) => <span key={u.id} className="dc-chip"><Icon name="check" size={12} />{u.name}</span>)}
+      <section>
+        <div className="tk-menu__heading">Upgrades</div>
+        {!available.length && <div className="dc-empty">Nenhum upgrade disponível agora — continue produzindo.</div>}
+        <div className="dc-grid">
+          {[...available, ...locked].map((u) => <UpgradeCard key={u.id} u={u} snap={snap} amount={amount} act={act} />)}
         </div>
-      )}
+        <InstalledChips title="Instalados" list={regular.filter((u) => u.status === 'owned')} />
+      </section>
+
+      <section>
+        <div className="dc-upgrades__head">
+          <span className="tk-menu__heading"><Icon name="git-merge" size={12} /> Combos</span>
+          <span className="dc-chip">{active.length}/{combos.length} ativos</span>
+          <span className="dc-upgrades__hint">Um gerador mais barato fortalece um mais caro.</span>
+        </div>
+        {pending.length > 0 && <div className="dc-grid">{pending.map((u) => <UpgradeCard key={u.id} u={u} snap={snap} amount={amount} act={act} />)}</div>}
+        <InstalledChips title="Ativos" list={active} />
+        {shown.length < combos.length && <div className="dc-empty">{combos.length - shown.length} combo(s) aparecem com os próximos tiers.</div>}
+      </section>
     </div>
   );
 }
