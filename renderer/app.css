@@ -867,13 +867,44 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-mapbox__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dc-mapbox__head > span { font-size: 11.5px; color: var(--tk-text-3); }
 .dc-mapbox__text { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--tk-text-2); }
-.dc-choices { display: flex; flex-wrap: wrap; gap: 8px; }
 .dc-shop { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
 .dc-shop__item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); font-size: 12.5px; }
 .dc-shop__item > span:not(.dc-chip) { flex: 1; }
 .dc-shop__item.is-bought { opacity: .6; }
 /* Mapa e preparação na mesma célula: o mapa mantém a largura toda e os painéis flutuam sobre as bordas da floresta
    (decoração), grudados no topo enquanto o mapa rola. */
+/* Ponto de decisão: modal com cards ilustrados */
+.dc-decision { display: flex; flex-direction: column; gap: 14px; }
+.dc-decision__story { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 13px; line-height: 1.5; color: var(--tk-text-2); }
+.dc-decision__story p { margin: 0; }
+.dc-decision__cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); grid-auto-flow: column; gap: 12px; }
+.dc-decision__cards.is-many { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dc-choice {
+  display: flex; flex-direction: column; overflow: hidden; padding: 0; text-align: left; cursor: pointer; font: inherit; color: var(--tk-text);
+  border: 1px solid color-mix(in srgb, var(--hue) 35%, var(--tk-border)); border-radius: var(--tk-radius-lg); background: var(--tk-surface-2);
+  transition: transform .15s, border-color .15s, box-shadow .15s;
+}
+.dc-choice:hover:not(:disabled), .dc-choice:focus-visible { transform: translateY(-3px); border-color: var(--hue); box-shadow: 0 8px 24px color-mix(in srgb, var(--hue) 25%, transparent); }
+.dc-choice:disabled { opacity: .5; cursor: not-allowed; filter: grayscale(.5); }
+.dc-choice__art {
+  position: relative; display: flex; align-items: center; justify-content: center; height: 110px; color: var(--hue);
+  background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--hue) 30%, transparent), transparent 65%), linear-gradient(180deg, #13261B, #0B1710);
+  border-bottom: 1px solid color-mix(in srgb, var(--hue) 25%, var(--tk-border));
+}
+.dc-decision__cards.is-many .dc-choice__art { height: 84px; }
+.dc-choice__icon { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--hue) 70%, transparent)); transition: transform .2s; }
+.dc-choice:hover:not(:disabled) .dc-choice__icon { transform: scale(1.1) rotate(-4deg); }
+.dc-choice__deco { position: absolute; opacity: .55; }
+.dc-choice__deco.is-a { top: 16px; left: 22%; }
+.dc-choice__deco.is-b { bottom: 18px; right: 24%; }
+.dc-choice__body { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px 14px; }
+.dc-choice__body b { font-size: 14px; }
+.dc-choice__body > span { font-size: 12px; line-height: 1.45; color: var(--tk-text-2); }
+.dc-choice__cost { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font: 500 11px var(--tk-font-mono); color: var(--hue); }
+.dc-choice__why { font-size: 11px; color: var(--tk-warning); }
+.dc-decision__later { flex-direction: row; align-items: center; gap: 8px; }
+.dc-decision__later span { color: var(--tk-text-3); font-size: 12px; margin-right: auto; }
+@media (prefers-reduced-motion: reduce) { .dc-choice, .dc-choice__icon { transition: none; } .dc-choice:hover:not(:disabled) { transform: none; } }
 .dc-stage { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
 .dc-stage__map { grid-area: 1 / 1; min-width: 0; }
 .dc-prep__side {

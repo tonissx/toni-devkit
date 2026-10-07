@@ -388,10 +388,10 @@ function mapView(s, now, c) {
     if (m.pending.kind === 'event') {
       const ev = c.event[node.event];
       pending = { kind: 'event', node: node.id, title: ev.title, text: ev.text, finder: ev.finder,
-        choices: ev.choices.map((ch, i) => ({ index: i, text: ch.text, cost: (ch.cost || 0) * base,
+        choices: ev.choices.map((ch, i) => ({ index: i, text: ch.text, cost: (ch.cost || 0) * base, reward: ch.rewards[0] || null,
           disabled: (ch.cost || 0) * base > amount || (ch.needs === 'commonPatch' && !hasCommon) })) };
     } else if (m.pending.kind === 'rest') {
-      pending = { kind: 'rest', node: node.id, title: 'Descanso', choices: c.REST_OPTIONS.map((o, i) => ({ index: i, text: o.text, cost: 0, disabled: false })) };
+      pending = { kind: 'rest', node: node.id, title: 'Descanso', choices: c.REST_OPTIONS.map((o, i) => ({ index: i, text: o.text, cost: 0, reward: o.rewards[0] || null, disabled: false })) };
     } else {
       pending = { kind: 'shop', node: node.id, title: 'Loja', offers: node.offers.map((o) => ({
         index: o.index, kind: o.kind, price: o.price, bought: o.bought, affordable: o.price <= amount,

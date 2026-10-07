@@ -7,7 +7,7 @@ import { InfoCard } from './InfoCard.jsx';
 import { Arena, SoundToggle } from './Arena.jsx';
 import { ForestProps } from './ForestArt.jsx';
 
-const { Button, Icon, ProgressBar } = DS;
+const { Button, Icon, ProgressBar, Modal } = DS;
 const pct = (v) => Math.round(v * 100) + '%';
 const COMBAT = ['battle', 'elite', 'boss'];
 const CHANCE_CLASS = { 'favorável': 'is-good', 'arriscado': 'is-risky', 'muito arriscado': 'is-bad' };
@@ -287,21 +287,85 @@ function PendingPanel({ map, snap, act }) {
       </section>
     );
   }
+  return <DecisionModal p={p} snap={snap} act={act} />;
+}
+
+/** Ilustração de cada tipo de recompensa (cena em gradiente com um ícone grande). */
+const CHOICE_ART = {
+  patch: { icon: 'puzzle', hue: '#7CF5B0', deco: 'sparkles' },
+  swapPatch: { icon: 'repeat', hue: '#8EC5FF', deco: 'sparkles' },
+  item: { icon: 'flask-conical', hue: '#FFD27A', deco: 'package' },
+  part: { icon: 'cog', hue: '#C9A227', deco: 'wrench' },
+  petLevel: { icon: 'trending-up', hue: '#B98CFF', deco: 'star' },
+  battleBuff: { icon: 'swords', hue: '#FF9F7A', deco: 'flame' },
+  restock: { icon: 'package-plus', hue: '#FFD27A', deco: 'boxes' },
+  healAll: { icon: 'heart-pulse', hue: '#FF7B9C', deco: 'sparkles' },
+  skip: { icon: 'footprints', hue: '#9AA3B2', deco: 'trees' },
+};
+const RARITY_NAME = { common: 'comum', rare: 'raro', epic: 'épico' };
+/** Tipo e frase curta do que a escolha dá. */
+function choiceInfo(ch) {
+  const r = ch.reward;
+  if (!r) return { art: 'skip', gives: 'Nada muda. O caminho segue pela floresta.' };
+  if (r.patch) return { art: 'patch', gives: `Ganha um Patch ${RARITY_NAME[r.patch] || r.patch}.` };
+  if (r.swapPatch) return { art: 'swapPatch', gives: `Um Patch comum vira ${RARITY_NAME[r.swapPatch] || r.swapPatch}.` };
+  if (r.item) return { art: 'item', gives: 'Ganha um consumível.' };
+  if (r.part) return { art: 'part', gives: 'Ganha uma peça de gerador.' };
+  if (r.petLevel) return { art: 'petLevel', gives: 'O DevPet de menor nível do esquadrão sobe 1 nível.' };
+  if (r.battleBuff) return { art: 'battleBuff', gives: `Esquadrão +${Math.round(r.battleBuff.atk * 100)}% de ataque na próxima batalha.` };
+  if (r.restock) return { art: 'restock', gives: '+1 de cada consumível (até o teto).' };
+  if (r.healAll) return { art: 'healAll', gives: 'Todo o time volta com a vida cheia.' };
+  return { art: 'skip', gives: '' };
+}
+
+/** Ponto de decisão (evento ou descanso): modal com um card ilustrado por escolha. Fechar só adia — a escolha espera no mapa. */
+function DecisionModal({ p, snap, act }) {
+  const [open, setOpen] = React.useState(true);
+  React.useEffect(() => setOpen(true), [p.node]);
+  const finder = p.finder && snap.pets.find((x) => x.id === p.finder);
+  if (!open) {
+    return (
+      <div className="dc-mapbox dc-decision__later">
+        <Icon name={p.kind === 'rest' ? 'coffee' : 'circle-help'} size={14} /> <b>{p.title}</b><span>Uma escolha espera por você.</span>
+        <Button size="sm" variant="primary" onClick={() => setOpen(true)}>Decidir</Button>
+      </div>
+    );
+  }
   return (
-    <section className="dc-mapbox">
-      <div className="dc-mapbox__head">
-        {p.finder ? <Pet snap={snap} id={p.finder} size={34} /> : <Icon name={p.kind === 'rest' ? 'coffee' : 'circle-help'} size={14} />}
-        <b>{p.title}</b>
+    <Modal open title={p.title.toUpperCase()} icon={p.kind === 'rest' ? 'coffee' : 'circle-help'} onClose={() => setOpen(false)} width={p.choices.length > 2 ? 760 : 620}>
+      <div className="dc-decision">
+        {(p.text || finder) && (
+          <div className="dc-decision__story">
+            {finder && <Pet snap={snap} id={p.finder} size={44} />}
+            <p>{finder && <b>{finder.name} encontrou algo. </b>}{p.text || 'Uma pausa ao lado da fogueira. Escolha como o esquadrão aproveita.'}</p>
+          </div>
+        )}
+        {!p.text && !finder && <p className="dc-decision__story">Uma pausa ao lado da fogueira. Escolha como o esquadrão aproveita.</p>}
+        <div className={'dc-decision__cards' + (p.choices.length > 2 ? ' is-many' : '')}>
+          {p.choices.map((ch) => {
+            const info = choiceInfo(ch);
+            const art = CHOICE_ART[info.art];
+            const [title, rest] = ch.text.includes(':') ? ch.text.split(/:\s*/, 2) : [ch.text, null];
+            return (
+              <button key={ch.index} type="button" className={'dc-choice is-' + info.art} disabled={ch.disabled} style={{ '--hue': art.hue }}
+                onClick={() => act({ type: 'mapChoose', index: ch.index })}>
+                <span className="dc-choice__art" aria-hidden="true">
+                  <Icon name={art.deco} size={18} className="dc-choice__deco is-a" />
+                  <Icon name={art.deco} size={13} className="dc-choice__deco is-b" />
+                  <Icon name={art.icon} size={44} className="dc-choice__icon" />
+                </span>
+                <span className="dc-choice__body">
+                  <b>{title}</b>
+                  <span>{rest ? rest.charAt(0).toUpperCase() + rest.slice(1) + '.' : info.gives}</span>
+                  {ch.cost > 0 && <small className="dc-choice__cost"><Icon name="cpu" size={11} /> {formatNum(ch.cost)} Compute</small>}
+                  {ch.disabled && <small className="dc-choice__why">{ch.cost > 0 ? 'Compute insuficiente' : 'Requisito não atendido'}</small>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
-      {p.text && <p className="dc-mapbox__text">{p.text}</p>}
-      <div className="dc-choices">
-        {p.choices.map((ch) => (
-          <Button key={ch.index} variant="secondary" disabled={ch.disabled} onClick={() => act({ type: 'mapChoose', index: ch.index })}>
-            {ch.text}{ch.cost > 0 ? ` · ${formatNum(ch.cost)}` : ''}
-          </Button>
-        ))}
-      </div>
-    </section>
+    </Modal>
   );
 }
 
