@@ -68,7 +68,7 @@ export function ItemPopups({ queue, held, onDone }) {
         <span className="dc-gain__icon">{cur.part ? <PartIcon id={cur.part} size={26} /> : <Icon name={cur.icon} size={26} />}</span>
         <span className="dc-gain__text">
           <small>{cur.label}</small>
-          <b>{cur.name}{cur.count > 1 && <span key={cur.count} className="dc-gain__count"> ×{cur.count}</span>}</b>
+          <b>{cur.name}{cur.count > 1 && <span key={cur.count} className="dc-gain__count">×{cur.count}</span>}</b>
           <span>{cur.description}</span>
         </span>
         {more > 0 && <span className="dc-gain__more">+{more}</span>}
