@@ -6,20 +6,21 @@
  * Link para nota inexistente vira nó "fantasma". Layout: forças simples (repulsão, molas, gravidade)
  * com "temperatura" (alpha) que esfria até parar — o painel só anima enquanto está quente.
  */
-const { wikiLinks } = require('./note.js');
+const { wikiLinks, taskStats } = require('./note.js');
 const { normalize } = require('../commands/search.js');
 
 /**
  * notes: [{ id, title, folder, type, tags, content }] (title = título exibido).
  * index: Map(normalize(título | alias) → id) — o mesmo de resolveLink.
  * exclude(note) → true para deixar a nota fora (ex.: templates).
- * → { nodes: [{ id, title, folder, type, tags, degree, ghost }], links: [{ source, target }] }
+ * → { nodes: [{ id, title, folder, type, tags, degree, ghost, tasksOpen, tasksDone }], links: [{ source, target }] }
  */
 function buildGraph(notes, index, exclude = () => false) {
   const nodes = new Map();
   for (const n of notes) {
     if (exclude(n)) continue;
-    nodes.set(n.id, { id: n.id, title: n.title, folder: n.folder || '', type: n.type || 'note', tags: n.tags || [], degree: 0, ghost: false });
+    const { open, done } = n.type === 'snippet' ? { open: 0, done: 0 } : taskStats(n.content); // como em tasks(): "- [ ]" de snippet não é tarefa
+    nodes.set(n.id, { id: n.id, title: n.title, folder: n.folder || '', type: n.type || 'note', tags: n.tags || [], degree: 0, ghost: false, tasksOpen: open, tasksDone: done });
   }
   const seen = new Set();
   const links = [];
@@ -39,7 +40,7 @@ function buildGraph(notes, index, exclude = () => false) {
       const target = index.get(key);
       if (target) { if (nodes.has(target)) connect(n.id, target); continue; } // alvo excluído (template): sem aresta
       const gid = 'ghost:' + key;
-      if (!nodes.has(gid)) nodes.set(gid, { id: gid, title, folder: '', type: 'ghost', tags: [], degree: 0, ghost: true });
+      if (!nodes.has(gid)) nodes.set(gid, { id: gid, title, folder: '', type: 'ghost', tags: [], degree: 0, ghost: true, tasksOpen: 0, tasksDone: 0 });
       connect(n.id, gid);
     }
   }

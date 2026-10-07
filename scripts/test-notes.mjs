@@ -117,6 +117,17 @@ test('graph: buildGraph links by title/alias, no duplicates/self-loops, ghosts f
   assert.deepEqual(G.neighborhood(g, 'x', 1), { nodes: [], links: [] });
 });
 
+test('graph: nodes carry task counts (snippets, ghosts and code blocks do not count)', () => {
+  const notes = [
+    { id: 'a', title: 'A', content: '- [x] um\n- [ ] dois\n- [X] três\n[[Falta]]\n```\n- [ ] no código\n```' },
+    { id: 'b', title: 'B', content: 'sem tarefas' },
+    { id: 's', title: 'S', type: 'snippet', content: '- [ ] modelo' },
+  ];
+  const g = G.buildGraph(notes, new Map([['a', 'a'], ['b', 'b'], ['s', 's']]));
+  const by = Object.fromEntries(g.nodes.map((n) => [n.id, [n.tasksDone, n.tasksOpen]]));
+  assert.deepEqual(by, { a: [2, 1], b: [0, 0], s: [0, 0], 'ghost:falta': [0, 0] });
+});
+
 test('graph: layout settles without NaN, linked nodes end closer, pinned nodes stay, positions survive updates', () => {
   const nodes = Array.from({ length: 30 }, (_, i) => ({ id: 'n' + i }));
   const links = Array.from({ length: 10 }, (_, i) => ({ source: 'n' + i, target: 'n' + (i + 1) }));
