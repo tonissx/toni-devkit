@@ -860,7 +860,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @keyframes dc-gain-in { from { opacity: 0; transform: translate(-50%, 20px) scale(.92); } }
 @keyframes dc-gain-icon { 50% { transform: scale(1.08) rotate(-4deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .dc-trail.is-open, .dc-node.is-reachable, .dc-prop__steam, .dc-gain, .dc-gain__icon, .dc-party__pet svg, .dc-foes__foe svg, .dc-flame, .dc-landmark__shadow { animation: none !important; }
+  .dc-trail.is-open, .dc-node.is-reachable, .dc-node.is-waiting, .dc-prop__steam, .dc-gain, .dc-gain__icon, .dc-party__pet svg, .dc-foes__foe svg, .dc-flame, .dc-landmark__shadow { animation: none !important; }
 }
 .dc-mapbox { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-bg); }
 .dc-mapbox.is-cleared { flex-direction: row; align-items: center; border-color: color-mix(in srgb, #F5C542 50%, var(--tk-border)); color: var(--tk-text-2); }
@@ -936,6 +936,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-prep__side .dc-prep__cost { margin-left: 0; }
 .dc-prep__actions { display: flex; justify-content: flex-end; gap: 6px; }
 /* ponto escolhido para a luta e seus inimigos (atributos ao passar o mouse) */
+.dc-node.is-waiting { cursor: pointer; border-color: #FFD27A; animation: dc-node-pulse 2s ease-in-out infinite; } /* escolha pendente: clique reabre */
 .dc-node.is-selected { border-color: #FFD27A; box-shadow: 0 0 0 5px rgba(255, 210, 122, .3), 0 0 22px rgba(255, 210, 122, .45); }
 .dc-foes__hit { display: block; pointer-events: auto; cursor: help; }
 .dc-foes.is-target .dc-foes__foe { filter: drop-shadow(0 4px 3px rgba(0, 0, 0, .5)) drop-shadow(0 0 6px rgba(255, 120, 80, .55)); }

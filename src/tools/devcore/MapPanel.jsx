@@ -170,6 +170,7 @@ function Landmark({ n, x, y }) {
 }
 
 function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
+  const waiting = !!(map.pending && map.pending.kind !== 'shop'); // escolha pendente no ponto atual
   const ref = React.useRef(null);
   const boxRef = React.useRef(null);
   const [w, setW] = React.useState(900);
@@ -250,8 +251,8 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
         {map.nodes.map((n) => (
           <span key={n.id} className={'dc-map__slot' + (n.type === 'boss' ? ' is-boss' : '')} style={{ left: x(n), top: y(n) }}>
             <InfoCard content={<NodeDetails n={n} />} focusable={false}>
-              <button type="button" className={'dc-node is-' + n.type + ' is-' + n.status + (n.status === 'reachable' && !n.affordable ? ' is-poor' : '') + (n.id === selected ? ' is-selected' : '')}
-                aria-disabled={n.status !== 'reachable'} onClick={() => n.status === 'reachable' && onNode(n)}
+              <button type="button" className={'dc-node is-' + n.type + ' is-' + n.status + (n.status === 'reachable' && !n.affordable ? ' is-poor' : '') + (n.id === selected ? ' is-selected' : '') + (waiting && n.status === 'current' ? ' is-waiting' : '')}
+                aria-disabled={n.status !== 'reachable' && !(waiting && n.status === 'current')} onClick={() => (n.status === 'reachable' || (waiting && n.status === 'current')) && onNode(n)}
                 aria-label={`${n.typeName}, coluna ${n.col + 1}${n.cost ? ', ' + formatNum(n.cost) + ' Compute' : ''}`}>
                 <Icon name={n.icon} size={n.type === 'boss' ? 30 : 22} />
               </button>
@@ -268,7 +269,7 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
 }
 
 /** Evento, descanso ou loja em que o jogador está. */
-function PendingPanel({ map, snap, act }) {
+function PendingPanel({ map, snap, act, open = true, setOpen = () => {} }) {
   const p = map.pending;
   if (p.kind === 'shop') {
     return (
@@ -287,7 +288,7 @@ function PendingPanel({ map, snap, act }) {
       </section>
     );
   }
-  return <DecisionModal p={p} snap={snap} act={act} />;
+  return <DecisionModal p={p} snap={snap} act={act} open={open} setOpen={setOpen} />;
 }
 
 /** Ilustração de cada tipo de recompensa (cena em gradiente com um ícone grande). */
@@ -319,9 +320,7 @@ function choiceInfo(ch) {
 }
 
 /** Ponto de decisão (evento ou descanso): modal com um card ilustrado por escolha. Fechar só adia — a escolha espera no mapa. */
-function DecisionModal({ p, snap, act }) {
-  const [open, setOpen] = React.useState(true);
-  React.useEffect(() => setOpen(true), [p.node]);
+function DecisionModal({ p, snap, act, open, setOpen }) {
   const finder = p.finder && snap.pets.find((x) => x.id === p.finder);
   if (!open) {
     return (
@@ -544,10 +543,12 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
 export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio = () => {}, onArena = () => {} }) {
   const live = snap.map;
   const [prep, setPrep] = React.useState(null);
+  const [decision, setDecision] = React.useState(true); // modal da escolha pendente aberto (fechar no X só adia)
   const [seen, setSeen] = React.useState(live.lastBattle ? live.lastBattle.id : 0);
   const battle = live.lastBattle && live.lastBattle.id > seen ? live.lastBattle : null;
   // Sem spoiler: enquanto a arena mostra a luta, o painel fica como estava antes dela (placar, Patches, posição,
   // preparação). A luta já vem calculada do engine; o resultado só aparece depois de "Continuar".
+  React.useEffect(() => { setDecision(true); }, [live.pending ? live.pending.node : null]);
   const frozen = React.useRef(live);
   if (!battle) frozen.current = live;
   const map = battle ? frozen.current : live;
@@ -559,6 +560,7 @@ export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio
   if (!map.unlocked) return <div className="dc-empty">O mapa de {map.area.name} abre com {map.requirement}.</div>;
 
   const onNode = (n) => {
+    if (map.pending && n.id === map.pending.node) return setDecision(true);
     if (COMBAT.includes(n.type)) setPrep(n.id);
     else { setPrep(null); act({ type: 'mapMove', node: n.id }); }
   };
@@ -596,7 +598,7 @@ export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio
         {prepNode && <PrepPanel key={prepNode.id} map={map} snap={snap} node={prepNode} act={act} onCancel={() => setPrep(null)} />}
       </div>
       {!map.at && !map.cleared && <div className="dc-row__desc">Escolha um ponto da primeira coluna para começar. Passe o mouse num ponto para ver custo, inimigos e recompensa.</div>}
-      {map.pending && <PendingPanel map={map} snap={snap} act={act} />}
+      {map.pending && <PendingPanel key={map.pending.node} map={map} snap={snap} act={act} open={decision} setOpen={setDecision} />}
       {battle && <Arena battle={battle} snap={snap} area={map.area} onClose={closeArena} sound={audio.on} onSound={setSound} />}
     </div>
   );
