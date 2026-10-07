@@ -743,9 +743,9 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-patch.is-rare { color: #6EA8FF; }
 .dc-patch.is-epic { color: #F5C542; }
 /* Tabuleiro em perspectiva (estilo Inscryption): mesa inclinada, fichas em pé, objetos da área, trilhas pontilhadas */
-.dc-board { --tilt: 32deg; perspective: 1300px; perspective-origin: 50% -10%; padding: 120px 8px 0; margin-top: -40px; overflow: hidden; }
+.dc-board { --tilt: 32deg; perspective: 1300px; perspective-origin: 50% -10%; padding: 120px 8px 0; margin-top: -40px; overflow: hidden; pointer-events: none; } /* a folga do topo (para a perspectiva) sobe sobre a faixa de Patches: não pode roubar o mouse */
 .dc-board__table {
-  position: relative; transform: rotateX(var(--tilt)); transform-origin: 50% 100%; transform-style: preserve-3d;
+  position: relative; pointer-events: auto; transform: rotateX(var(--tilt)); transform-origin: 50% 100%; transform-style: preserve-3d;
   border-radius: 16px; box-shadow: 0 40px 60px -20px rgba(0, 0, 0, .65);
 }
 .dc-board--localhost { background: repeating-linear-gradient(92deg, #3B2A1D 0 14px, #43301F 14px 30px, #38281B 30px 41px); } /* mesa de madeira */
