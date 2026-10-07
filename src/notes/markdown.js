@@ -8,6 +8,7 @@ import { Marked } from 'marked';
 import { tokenize } from '../tools/diff-checker/syntax.js';
 import { toggleTaskAt } from './note.js';
 import { isoDate } from './edit.js';
+import { priorityInfo } from './priority.js';
 import { secretNameFromBlock, kindOf, isDbLike } from '../vault/entry.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -92,7 +93,7 @@ export function renderMarkdown(md, { resolve = () => null, secret = () => undefi
       },
       renderer: (t) => (t.due
         ? `<span class="md-due${t.due < isoDate() ? ' is-late' : ''}" title="Prazo">📅 ${esc(t.due.slice(8, 10) + '/' + t.due.slice(5, 7))}</span>`
-        : `<span class="md-pri is-p${t.pri}" title="Prioridade ${t.pri}">!${t.pri}</span>`),
+        : `<span class="md-pri is-p${t.pri}" title="${esc(priorityInfo(Number(t.pri)).title)}">⚑ ${esc(priorityInfo(Number(t.pri)).label)}</span>`),
     }],
     renderer: {
       html: ({ text }) => esc(text),

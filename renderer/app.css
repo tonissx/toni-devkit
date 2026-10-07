@@ -336,11 +336,19 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-pill { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 6px; border-radius: 4px; font: 500 10.5px var(--tk-font-mono); background: var(--tk-surface-3); color: var(--tk-text-2); }
 .nts-pill.is-p1 { color: var(--tk-red); background: color-mix(in srgb, var(--tk-red) 12%, transparent); }
 .nts-pill.is-p2 { color: var(--tk-amber); background: color-mix(in srgb, var(--tk-amber) 12%, transparent); }
+.nts-pill.is-p3 { color: var(--tk-blue); background: color-mix(in srgb, var(--tk-blue) 12%, transparent); }
+/* Etiqueta de prioridade: bandeira + rótulo. Alta tem a bandeira cheia (o nível não depende só da cor); "Sem prioridade" é discreta, tracejada. */
+.nts-pill.nts-pri { font: 500 11px var(--tk-font-sans); }
+.nts-pri.is-p1 svg { fill: currentColor; }
+.nts-pri.is-p0 { color: var(--tk-text-3); background: none; box-shadow: inset 0 0 0 1px var(--tk-border); }
+.nts-pri.is-p0 svg { opacity: .7; }
 .nts-pill.is-late { color: var(--tk-red); background: color-mix(in srgb, var(--tk-red) 12%, transparent); }
 .md-preview .md-due, .md-preview .md-pri { display: inline-block; padding: 0 5px; margin: 0 2px; border-radius: 4px; font: 500 11px/18px var(--tk-font-mono); background: var(--tk-surface-3); color: var(--tk-text-2); }
 .md-preview .md-due.is-late, .md-preview .md-pri.is-p1 { color: var(--tk-red); background: color-mix(in srgb, var(--tk-red) 12%, transparent); }
 .md-preview li:has(> .md-task:checked) .md-due.is-late { color: var(--tk-text-2); background: var(--tk-surface-3); }
 .md-preview .md-pri.is-p2 { color: var(--tk-amber); background: color-mix(in srgb, var(--tk-amber) 12%, transparent); }
+.md-preview .md-pri.is-p3 { color: var(--tk-blue); background: color-mix(in srgb, var(--tk-blue) 12%, transparent); }
+.md-preview .md-pri { font-family: var(--tk-font-sans); }
 .nts-row__tasks { margin-left: 6px; color: var(--tk-accent-text); font: 400 10.5px var(--tk-font-mono); }
 .nts-error { display: block; margin-bottom: 6px; font: 400 12px var(--tk-font-mono); }
 
