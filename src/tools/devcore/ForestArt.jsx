@@ -79,15 +79,32 @@ export const DataPond = ({ s = 1 }) => (
   </svg>
 );
 
-/** Pinheiro low-poly leve (sem animação): duas faces de tons diferentes, como uma miniatura de papelão. */
+/**
+ * Pinheiro low-poly leve (sem animação), como uma miniatura de papelão: três camadas de galhos com bordas irregulares,
+ * ponta um pouco torta, duas faces de tons diferentes e textura de agulhas (riscos escuros e pontos de luz).
+ * `v` (0–999) sorteia as irregularidades, então duas árvores vizinhas nunca são iguais.
+ */
 const PINE_TONES = [['#1C4A33', '#2C6B47'], ['#173F2C', '#24593D'], ['#1F5638', '#33794F'], ['#143826', '#21503A'], ['#22603E', '#3A8657']];
-export const Pine = React.memo(({ s = 1, tone = 0 }) => {
+export const Pine = React.memo(({ s = 1, tone = 0, v = 0 }) => {
   const [dark, light] = PINE_TONES[tone % PINE_TONES.length];
+  const j = (k) => ((((v + 1) * (k * 2 + 3) * 7919) % 9) - 4) * 0.45; // irregularidade −1,8…1,8
+  const tip = 15 + j(0) * 0.8;                                         // ponta torta
+  // Bordas das camadas (y da ponta de cada galho e y do recuo logo acima da camada seguinte).
+  const L = [[7 + j(1), 18 + j(2) * 0.5], [10 + j(3) * 0.5, 16.5], [3.5 + j(4), 32 + j(5) * 0.5], [8 + j(6) * 0.5, 30.5], [0.8 + j(7) * 0.4, 46]];
+  const R = [[23 + j(8), 18 + j(9) * 0.5], [20 + j(10) * 0.5, 16.5], [26.5 + j(11), 32 + j(12) * 0.5], [22 + j(13) * 0.5, 30.5], [29.2 + j(14) * 0.4, 46]];
+  const face = (pts) => `M${tip} 2 ` + pts.map(([x, y]) => `L${x.toFixed(1)} ${y.toFixed(1)}`).join(' ') + ' L15 46 Z';
   return (
     <svg width={30 * s} height={52 * s} viewBox="0 0 30 52" aria-hidden="true">
-      <rect x="13" y="42" width="4" height="10" fill="#3B2A1E" />
-      <path d="M15 2 L2 44 H15 Z" fill={dark} /><path d="M15 2 L28 44 H15 Z" fill={light} />
-      <path d="M15 2 L8 22 H15 Z" fill={light} opacity=".35" />
+      <path d={`M13.4 52 Q${14 + j(15) * 0.3} 47 13.8 42 H16.2 Q${16 + j(15) * 0.3} 47 16.6 52 Z`} fill="#3B2A1E" />
+      <path d={face(L)} fill={dark} />
+      <path d={face(R)} fill={light} />
+      {/* sombra embaixo de cada camada de galhos */}
+      <path d={`M${L[0][0].toFixed(1)} ${L[0][1].toFixed(1)} L${L[1][0].toFixed(1)} 16.5 L15 19 L${R[1][0].toFixed(1)} 16.5 L${R[0][0].toFixed(1)} ${R[0][1].toFixed(1)} L15 21.5 Z`} fill="#0B2015" opacity=".35" />
+      <path d={`M${L[2][0].toFixed(1)} ${L[2][1].toFixed(1)} L${L[3][0].toFixed(1)} 30.5 L15 33 L${R[3][0].toFixed(1)} 30.5 L${R[2][0].toFixed(1)} ${R[2][1].toFixed(1)} L15 35.5 Z`} fill="#0B2015" opacity=".35" />
+      {/* textura: agulhas (riscos) na face clara e pontos de luz na face escura */}
+      <path d={`M17 ${11 + j(16) * 0.3} l3 3 M18 24 l4 3.5 M17.5 ${38 + j(17) * 0.3} l5 4 M21 35 l3 2.5 M19 20 l2 1.5`} stroke={dark} strokeWidth="1.1" strokeLinecap="round" opacity=".85" />
+      <path d={`M13 12 l-2.5 3 M12 25 l-3.5 3.5 M12.5 39 l-4.5 4 M9 36 l-2.5 2.5`} stroke={light} strokeWidth="1" strokeLinecap="round" opacity=".6" />
+      <path d={`M${tip} 2.5 L${(tip + 15) / 2 - 3} 20`} stroke={light} strokeWidth=".7" opacity=".3" />
     </svg>
   );
 });
@@ -103,7 +120,7 @@ function hashStr(str) {
 function pieceFor(h) {
   const r = h % 100;
   const s = 0.72 + ((h >>> 8) % 34) / 100;            // tamanho 0,72–1,05
-  if (r < 74) return { C: Pine, upright: true, w: 30 * s * 1.45, props: { s: s * 1.45, tone: (h >>> 4) % 5 } };
+  if (r < 74) return { C: Pine, upright: true, w: 30 * s * 1.45, props: { s: s * 1.45, tone: (h >>> 4) % 5, v: (h >>> 16) % 1000 } };
   if (r < 82) return { C: FiberPine, upright: true, w: 52 * s * 0.95, props: { s: s * 0.95 } };
   if (r < 89) return { C: CircuitTree, upright: true, w: 70 * s * 0.9, props: { s: s * 0.9 } };
   if (r < 93) return { C: UsbShroom, upright: true, w: 34, props: { s: 1 } };
@@ -138,7 +155,7 @@ export const ForestProps = React.memo(function ForestProps({ spots, w, h }) {
       </svg>
       {pieces.map(({ sp, P }) => {
         return (
-          <span key={sp.id} className={'dc-prop ' + (P.upright ? 'is-upright is-anchored is-dense' : 'is-flat is-centered')} style={{ left: sp.x, top: sp.y, zIndex: Math.round(sp.y) }}>
+          <span key={sp.id} className={'dc-prop ' + (P.upright ? 'is-upright is-anchored is-dense' : 'is-flat is-centered')} style={{ left: sp.x, top: sp.y, zIndex: Math.round(sp.y), '--lean': P.upright ? (((sp.h >>> 20) % 13) - 6) + 'deg' : undefined }}>
             <P.C {...P.props} />
           </span>
         );

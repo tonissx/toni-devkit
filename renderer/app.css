@@ -795,7 +795,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @keyframes dc-party-walk { from { transform: translateY(0) rotate(-4deg); } to { transform: translateY(-6px) rotate(4deg); } }
 .dc-prop.is-upright { transform: rotateX(calc(-1 * var(--tilt))); transform-origin: 50% 100%; filter: drop-shadow(0 8px 6px rgba(0, 0, 0, .45)); }
 /* Ancoradas pela base (em pé) ou pelo centro (deitadas) no ponto do tabuleiro */
-.dc-prop.is-upright.is-anchored { transform: translate(-50%, -100%) rotateX(calc(-1 * var(--tilt))); }
+.dc-prop.is-upright.is-anchored { transform: translate(-50%, -100%) rotateX(calc(-1 * var(--tilt))) rotateZ(var(--lean, 0deg)); } /* cada árvore um pouco torta */
 .dc-prop.is-upright.is-anchored svg, .dc-prop.is-centered svg { display: block; }
 .dc-prop.is-dense { filter: none; } /* centenas de árvores: sem sombra (desempenho) */
 .dc-prop.is-flat.is-centered { transform: translate(-50%, -50%); opacity: .9; }
