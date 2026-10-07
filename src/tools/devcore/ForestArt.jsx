@@ -119,11 +119,11 @@ export const Campfire = ({ s = 1 }) => (
     <path d="M48 50 L20 40" stroke="#6B4630" strokeWidth="5" strokeLinecap="round" />
     <path d="M18 41 l3 1 M42 41 l-3 1" stroke="#3B2A1E" strokeWidth="1.2" />
     {/* chamas */}
-    <g className="dc-flame">
+    <g transform="translate(32 46) scale(.7) translate(-32 -46)"><g className="dc-flame">
       <path d="M32 6 C40 18 44 26 41 36 Q38 46 32 46 Q26 46 23 36 C21 27 27 22 28 14 C30 20 31 22 33 20 C34 15 33 11 32 6 Z" fill="#F2702E" />
       <path d="M32 18 C37 26 38 32 36 38 Q34 44 32 44 Q29 44 28 38 C27 33 30 30 30 25 C31 28 33 28 32 18 Z" fill="#FFB547" />
       <path d="M32 30 C34 34 34 38 33 41 Q32 43 31 41 C30 38 31 35 32 30 Z" fill="#FFF0B8" />
-    </g>
+    </g></g>
     {/* caneca de café com vapor */}
     <g transform="translate(50 30)">
       <path className="dc-prop__steam" d="M4 2 q-2 -4 0 -7 q2 -3 0 -6 M8 2 q-2 -4 0 -7" stroke="#E8EEF5" strokeWidth="1.2" fill="none" opacity=".7" strokeLinecap="round" />
