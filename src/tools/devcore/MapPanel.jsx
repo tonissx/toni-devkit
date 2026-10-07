@@ -356,14 +356,19 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
 }
 
 export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio = () => {}, onArena = () => {} }) {
-  const map = snap.map;
+  const live = snap.map;
   const [prep, setPrep] = React.useState(null);
-  const [seen, setSeen] = React.useState(map.lastBattle ? map.lastBattle.id : 0);
-  const battle = map.lastBattle && map.lastBattle.id > seen ? map.lastBattle : null;
+  const [seen, setSeen] = React.useState(live.lastBattle ? live.lastBattle.id : 0);
+  const battle = live.lastBattle && live.lastBattle.id > seen ? live.lastBattle : null;
+  // Sem spoiler: enquanto a arena mostra a luta, o painel fica como estava antes dela (placar, Patches, posição,
+  // preparação). A luta já vem calculada do engine; o resultado só aparece depois de "Continuar".
+  const frozen = React.useRef(live);
+  if (!battle) frozen.current = live;
+  const map = battle ? frozen.current : live;
   const prepNode = prep && map.nodes.find((n) => n.id === prep && n.status === 'reachable');
-  React.useEffect(() => { if (battle && battle.win) setPrep(null); }, [battle && battle.id]);
   React.useEffect(() => { onArena(!!battle); return () => onArena(false); }, [!!battle]);
   const setSound = (on) => setAudio((a) => ({ ...a, on }));
+  const closeArena = () => { if (battle.win) setPrep(null); setSeen(battle.id); };
 
   if (!map.unlocked) return <div className="dc-empty">O mapa de {map.area.name} abre com {map.requirement}.</div>;
 
@@ -402,7 +407,7 @@ export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio
       {!map.at && !map.cleared && <div className="dc-row__desc">Escolha um ponto da primeira coluna para começar. Passe o mouse num ponto para ver custo, inimigos e recompensa.</div>}
       {map.pending && <PendingPanel map={map} snap={snap} act={act} />}
       {prepNode && <PrepPanel key={prepNode.id} map={map} snap={snap} node={prepNode} act={act} onCancel={() => setPrep(null)} />}
-      {battle && <Arena battle={battle} snap={snap} area={map.area} onClose={() => setSeen(battle.id)} sound={audio.on} onSound={setSound} />}
+      {battle && <Arena battle={battle} snap={snap} area={map.area} onClose={closeArena} sound={audio.on} onSound={setSound} />}
     </div>
   );
 }

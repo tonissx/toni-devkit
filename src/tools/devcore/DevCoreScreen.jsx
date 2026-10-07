@@ -134,6 +134,18 @@ export function DevCoreScreen({ toast, request }) {
   React.useEffect(() => { configureAudio(audio); }, [audio.on, audio.volume]);
   const [gains, setGains] = React.useState([]);       // itens ganhos/comprados → popups
   const [arenaOpen, setArenaOpen] = React.useState(false); // recompensas de batalha esperam a arena fechar
+  // Avisos que entregariam o resultado da luta (ex.: área concluída) esperam a arena abrir e fechar: a luta já vem
+  // calculada do engine, mas o jogador só deve saber o fim depois da animação.
+  const [afterBattle, setAfterBattle] = React.useState([]);
+  const arenaSeen = React.useRef(false);
+  React.useEffect(() => {
+    if (arenaOpen) { arenaSeen.current = true; return; }
+    if (arenaSeen.current && afterBattle.length) {
+      arenaSeen.current = false;
+      for (const [title, text] of afterBattle) toast(title, text);
+      setAfterBattle([]);
+    }
+  }, [arenaOpen, afterBattle.length]);
   const now = useClock(500);
 
   const take = React.useCallback((s) => { setSnap(s); setReceivedAt(Date.now()); }, []);
@@ -159,7 +171,7 @@ export function DevCoreScreen({ toast, request }) {
     }
     for (const e of log || []) {
       if (e.type === 'mapOpen') toast('Mapa liberado', `${e.name}: batalhas, eventos e Patches na aba Mapa`);
-      if (e.type === 'battle' && e.cleared) toast('Área concluída', 'O Legacy Monolith caiu!');
+      if (e.type === 'battle' && e.cleared) setAfterBattle((q) => [...q, ['Área concluída', 'O Legacy Monolith caiu!']]); // só depois da arena
       if (e.type !== 'quest') continue;
       const item = e.item && (s.inventory.find((k) => k.id === e.item) || {}).name;
       toast('Missão concluída', e.title + (item ? ' · +1 ' + item : ''));
