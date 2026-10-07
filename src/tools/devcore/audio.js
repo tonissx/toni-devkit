@@ -87,8 +87,30 @@ const organ = (t, m, d, out) => { tone(t, m, d, { type: 'sine', gain: 0.07, atta
 const harpsichord = (t, m, d, out) => tone(t, m, d, { type: 'square', gain: 0.045, decay: 0.22, filter: 3200, out });
 const strings = (t, m, d, out) => { tone(t, m, d, { type: 'sawtooth', gain: 0.03, attack: 0.18, filter: 1500, detune: -6, out }); tone(t, m, d, { type: 'sawtooth', gain: 0.03, attack: 0.18, filter: 1500, detune: 6, out }); };
 const bass = (t, m, d, out) => tone(t, m, d, { type: 'triangle', gain: 0.16, decay: d * 0.9, out });
-const kick = (t, out) => { tone(t, 45, 0.18, { type: 'sine', gain: 0.32, slideTo: 28, decay: 0.18, out }); };
-const snare = (t, out) => noise(t, 0.12, { gain: 0.08, hp: 1800, out });
+/* bateria: bumbo com peso (pancada + estalo), caixa com corpo, chimbal, prato e tons */
+const kick = (t, out, accent = 1) => {
+  tone(t, 47, 0.32, { type: 'sine', gain: 0.5 * accent, slideTo: 26, decay: 0.3, out });
+  tone(t, 35, 0.22, { type: 'triangle', gain: 0.18 * accent, decay: 0.2, out });
+  noise(t, 0.012, { gain: 0.12 * accent, hp: 3000, out });
+};
+const snare = (t, out, accent = 1) => {
+  tone(t, 55, 0.11, { type: 'triangle', gain: 0.16 * accent, slideTo: 50, decay: 0.1, out });
+  noise(t, 0.17, { gain: 0.17 * accent, hp: 1400, out });
+};
+const hat = (t, out, accent = 1, open = false) => noise(t, open ? 0.2 : 0.035, { gain: (open ? 0.05 : 0.04) * accent, hp: 7500, out });
+const crash = (t, out) => { noise(t, 1.4, { gain: 0.08, hp: 4500, out }); noise(t, 0.4, { gain: 0.05, hp: 2500, out }); };
+const tom = (t, m, out) => tone(t, m, 0.26, { type: 'sine', gain: 0.3, slideTo: m - 6, decay: 0.26, out });
+
+/**
+ * Padrões da bateria (16 passos por compasso). kick/snare: passos com batida; ghost: caixa fraca; fill: virada de tons no
+ * último compasso do loop (passo → nota). Localhost: groove sincopado e pesado; chefe: bumbo duplo e caixa mais densa.
+ */
+const DRUMS = {
+  localhost: { kick: [0, 3, 8, 10, 11], snare: [4, 12], ghost: [7, 15], hats: 2, openHat: [14], crashEvery: 2,
+    fill: { 12: 52, 13: 50, 14: 47, 15: 43 } },
+  boss: { kick: [0, 1, 3, 6, 8, 9, 11, 14], snare: [4, 12], ghost: [2, 7, 10, 15], hats: 1, openHat: [6, 14], crashEvery: 1,
+    fill: { 8: 55, 9: 55, 10: 52, 11: 52, 12: 48, 13: 48, 14: 43, 15: 43 } },
+};
 const lead = (t, m, d, out) => { tone(t, m, d, { type: 'square', gain: 0.05, attack: 0.01, filter: 2600, out }); tone(t, m, d, { type: 'triangle', gain: 0.05, attack: 0.01, out }); };
 
 /* ─────────────── temas (originais) ───────────────
@@ -130,6 +152,13 @@ export function startMusic(theme) {
   const out = ctx.createGain();
   out.gain.value = 1;
   out.connect(musicBus);
+  // Bateria num barramento próprio com compressor: soa mais "colada" e com mais peso sem estourar o resto.
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -18; comp.knee.value = 6; comp.ratio.value = 4; comp.attack.value = 0.003; comp.release.value = 0.15;
+  const drums = ctx.createGain();
+  drums.gain.value = 0.9;
+  drums.connect(comp); comp.connect(out);
+  const D = DRUMS[theme] || DRUMS.localhost;
   let n = 0;
   let next = ctx.currentTime + 0.08;
   const total = T.chords.length * 16;
@@ -145,9 +174,17 @@ export function startMusic(theme) {
       harpsichord(next, T.chromatic && s % 8 === 7 ? chord[2] + 25 : tone8, step * 0.9, out);
       // Baixo: pulsando em colcheias (tenso) ou em semínimas.
       if (T.pulse ? s % 2 === 0 : s % 4 === 0) bass(next, chord[0] - 12 + (T.pulse && s % 8 === 6 ? 1 : 0), T.pulse ? step * 1.6 : step * 3.5, out);
-      if (s % 8 === 0 || (T.doubleKick && s % 8 === 3)) kick(next, out);
-      if (theme === 'boss' ? s % 4 === 2 : s % 8 === 4) snare(next, out);
-      if (T.timpani && s === 12) { kick(next, out); tone(next, 38, step * 3, { type: 'sine', gain: 0.2, decay: step * 3, out }); }
+      // Bateria: no último compasso do loop entra a virada de tons no lugar do groove.
+      const fill = bar === T.chords.length - 1 && D.fill[s] != null;
+      if (fill) tom(next, D.fill[s], drums);
+      else {
+        if (D.kick.includes(s)) kick(next, drums, s % 4 === 0 ? 1 : 0.8);
+        if (D.snare.includes(s)) snare(next, drums);
+        else if (D.ghost.includes(s)) snare(next, drums, 0.3);
+      }
+      if (s % D.hats === 0 && !fill) hat(next, drums, s % 4 === 0 ? 1.4 : s % 2 === 0 ? 1 : 0.6, D.openHat.includes(s));
+      if (s === 0 && bar % D.crashEvery === 0) { crash(next, drums); kick(next, drums); }
+      if (T.timpani && s === 12) tone(next, 38, step * 3, { type: 'sine', gain: 0.2, decay: step * 3, out });
       const note = T.melody[bar][s];
       if (note != null) {
         let len = 1;
@@ -160,7 +197,7 @@ export function startMusic(theme) {
   };
   schedule();
   const timer = setInterval(schedule, 25);
-  music = { timer, out };
+  music = { timer, out, drums };
 }
 
 /** Para a música (com um fade curto). */
