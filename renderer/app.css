@@ -872,8 +872,33 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-shop__item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); font-size: 12.5px; }
 .dc-shop__item > span:not(.dc-chip) { flex: 1; }
 .dc-shop__item.is-bought { opacity: .6; }
-.dc-prep__cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; }
-.dc-prep .tk-menu__heading { padding-left: 0; }
+.dc-stage { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "map"; gap: 12px; align-items: start; }
+.dc-stage.is-prep { grid-template-columns: 200px minmax(0, 1fr) 250px; grid-template-areas: "left map right"; }
+.dc-stage__map { grid-area: map; min-width: 0; }
+/* preparação nas laterais do mapa: acompanham a rolagem do mapa */
+.dc-prep__side {
+  position: sticky; top: 0; display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 150px); overflow-y: auto;
+  padding: 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-bg);
+}
+.dc-prep__side.is-left { grid-area: left; }
+.dc-prep__side.is-right { grid-area: right; }
+.dc-prep__side .tk-menu__heading { padding-left: 0; }
+.dc-prep__side .dc-info-anchor { display: block; }
+.dc-prep__head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 13px; }
+.dc-prep__head small { flex-basis: 100%; font-size: 11px; color: var(--tk-text-3); }
+.dc-prep__side .dc-roster { flex-direction: column; flex-wrap: nowrap; margin: 0; }
+.dc-prep__side .dc-roster__pet { width: 100%; }
+.dc-prep__side .dc-slots { grid-template-columns: 1fr; margin: 0; }
+.dc-prep__side .dc-slots__foe { flex-direction: row; justify-self: center; gap: 4px; }
+.dc-prep__side .dc-slotbox { min-height: 0; gap: 4px; }
+.dc-prep__side .dc-slotbox__empty { padding: 10px 6px; }
+.dc-prep__side .dc-prep__foot { flex-direction: column; align-items: stretch; gap: 6px; }
+.dc-prep__side .dc-prep__cost { margin-left: 0; }
+.dc-prep__actions { display: flex; justify-content: flex-end; gap: 6px; }
+/* ponto escolhido para a luta e seus inimigos (atributos ao passar o mouse) */
+.dc-node.is-selected { border-color: #FFD27A; box-shadow: 0 0 0 5px rgba(255, 210, 122, .3), 0 0 22px rgba(255, 210, 122, .45); }
+.dc-foes__hit { display: block; pointer-events: auto; cursor: help; }
+.dc-foes.is-target .dc-foes__foe { filter: drop-shadow(0 4px 3px rgba(0, 0, 0, .5)) drop-shadow(0 0 6px rgba(255, 120, 80, .55)); }
 .dc-roster { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .dc-roster__pet {
   display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; column-gap: 6px; align-items: center; text-align: left;
@@ -1068,7 +1093,10 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   .dc-node.is-reachable, .dc-arena__unit.is-hit, .dc-arena__pop { animation: none; }
   .dc-arena__unit { transition: none; }
 }
-@media (max-width: 760px) { .dc-prep__cols { grid-template-columns: 1fr; } }
+@media (max-width: 900px) {
+  .dc-stage.is-prep { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "map" "right"; }
+  .dc-prep__side { position: static; max-height: none; }
+}
 
 /* Upgrades: ilustrações e seção de combos */
 .dc-upgrades { display: flex; flex-direction: column; gap: 18px; }

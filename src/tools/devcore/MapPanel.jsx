@@ -127,18 +127,20 @@ function Party({ map, party, hold, place, geom }) {
  * Miniaturas dos inimigos em pé atrás do ponto (como as dos pets): só nos pontos alcançáveis (a próxima escolha) e no
  * chefe, sempre visível no topo até ser derrotado. O resto do mapa fica só com o ícone; o detalhe segue no cartão.
  */
-function Foes({ n, x, y }) {
+function Foes({ n, x, y, target = false }) {
   const boss = n.type === 'boss';
   const size = boss ? 106 : n.type === 'elite' ? 36 : 32;
   const gap = boss ? 40 : 24;
   return (
-    <div className={'dc-foes' + (boss ? ' is-boss' : '')} style={{ left: x, top: y - (boss ? 34 : 24) }} aria-hidden="true">
+    <div className={'dc-foes' + (boss ? ' is-boss' : '') + (target ? ' is-target' : '')} style={{ left: x, top: y - (boss ? 34 : 24) }}>
       {n.enemies.map((e, i) => {
         const dx = (i - (n.enemies.length - 1) / 2) * gap;
         return (
           <React.Fragment key={i}>
             <span className="dc-foes__shadow" style={{ left: dx, width: size * 0.8 }} />
-            <span className="dc-foes__foe" style={{ left: dx, '--i': i }}><VillainSprite id={e.sprite} color={e.color} size={size} /></span>
+            <span className="dc-foes__foe" style={{ left: dx, '--i': i }}>
+              <InfoCard content={<EnemyRow e={e} />} label={e.name} focusable={false} className="dc-foes__hit"><VillainSprite id={e.sprite} color={e.color} size={size} /></InfoCard>
+            </span>
           </React.Fragment>
         );
       })}
@@ -157,7 +159,7 @@ function Landmark({ n, x, y }) {
   );
 }
 
-function MapGrid({ map, onNode, party = [], hold = false }) {
+function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
   const ref = React.useRef(null);
   const boxRef = React.useRef(null);
   const [w, setW] = React.useState(900);
@@ -238,7 +240,7 @@ function MapGrid({ map, onNode, party = [], hold = false }) {
         {map.nodes.map((n) => (
           <span key={n.id} className={'dc-map__slot' + (n.type === 'boss' ? ' is-boss' : '')} style={{ left: x(n), top: y(n) }}>
             <InfoCard content={<NodeDetails n={n} />} focusable={false}>
-              <button type="button" className={'dc-node is-' + n.type + ' is-' + n.status + (n.status === 'reachable' && !n.affordable ? ' is-poor' : '')}
+              <button type="button" className={'dc-node is-' + n.type + ' is-' + n.status + (n.status === 'reachable' && !n.affordable ? ' is-poor' : '') + (n.id === selected ? ' is-selected' : '')}
                 aria-disabled={n.status !== 'reachable'} onClick={() => n.status === 'reachable' && onNode(n)}
                 aria-label={`${n.typeName}, coluna ${n.col + 1}${n.cost ? ', ' + formatNum(n.cost) + ' Compute' : ''}`}>
                 <Icon name={n.icon} size={n.type === 'boss' ? 30 : 22} />
@@ -248,7 +250,7 @@ function MapGrid({ map, onNode, party = [], hold = false }) {
         ))}
         <AreaProps arena={map.area.arena} w={w} h={H} spots={spots} />
         {map.nodes.filter((n) => n.type === 'rest' || n.type === 'shop').map((n) => <Landmark key={n.id} n={n} x={x(n)} y={y(n)} />)}
-        {map.nodes.filter((n) => n.enemies && (n.type === 'boss' ? n.status !== 'visited' : n.status === 'reachable')).map((n) => <Foes key={n.id} n={n} x={x(n)} y={y(n)} />)}
+        {map.nodes.filter((n) => n.enemies && (n.type === 'boss' ? n.status !== 'visited' : n.status === 'reachable')).map((n) => <Foes key={n.id} n={n} x={x(n)} y={y(n)} target={n.id === selected} />)}
         <Party map={map} party={party} hold={hold} place={place} geom={geom} />
       </div>
     </div>
@@ -307,7 +309,7 @@ const ROLE_NAMES = { tank: 'Tanque', attacker: 'Atacante', support: 'Suporte', s
 const SLOT_ORDER = ['rear', 'center', 'vanguard'];   // na tela, como na arena: retaguarda → vanguarda → inimigos
 const SLOT_PREF = { vanguard: ['tank', 'attacker', 'speed', 'support'], center: ['attacker', 'speed', 'tank', 'support'], rear: ['support', 'speed', 'attacker', 'tank'] };
 
-/** Preparação da batalha: slots do esquadrão (arrastar e soltar), gatilhos, consumíveis; inimigos, previsão e custo. */
+/** Preparação da batalha nas laterais do mapa: elenco (esquerda); slots, gatilhos, consumíveis, previsão e custo (direita). */
 function PrepPanel({ map, snap, node, act, onCancel }) {
   const saved = map.squad;
   const roster = map.roster;
@@ -359,109 +361,110 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
   const toggleItem = (id) => set({ items: sq.items.includes(id) ? sq.items.filter((x) => x !== id) : sq.items.length < 2 ? [...sq.items, id] : sq.items });
   const f = map.forecast && map.forecast.node === node.id ? map.forecast : null;
   const drag = (id) => (e) => { e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'move'; };
+  const lifeBar = (p) => <span className={'dc-life' + (p.life < 0.5 ? ' is-low' : '')} title={'Vida ' + pct(p.life)}><ProgressBar value={p.life * 100} size="sm" /></span>;
+  // Duas colunas nas laterais do mapa (posicionadas pelo grid de .dc-stage): elenco à esquerda; slots, consumíveis e
+  // a luta à direita. Os inimigos ficam no próprio mapa (atributos ao passar o mouse).
   return (
-    <section className="dc-mapbox dc-prep">
-      <div className="dc-mapbox__head"><Icon name={node.icon} size={14} /> <b>{node.typeName}</b><span>Monte o esquadrão: a luta se resolve sozinha.</span></div>
-      <div className="dc-prep__cols">
-        <div>
-          <div className="tk-menu__heading">DevPets · arraste para um slot</div>
-          <div className="dc-roster" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); remove(e.dataTransfer.getData('text/plain')); }}>
-            {roster.map((p) => {
-              const on = !!slotOf(p.id);
-              return (
-                <InfoCard key={p.id} content={<><div className="dc-info__title">{p.name} · {p.roleName}</div>
-                  <div className="dc-info__row"><span>Nível</span><b>{p.level}</b></div>
-                  <div className="dc-info__row"><span>Vida · Ataque · Defesa</span><b>{p.hp} · {p.atk} · {p.def}</b></div>
-                  <div className="dc-info__row"><span>{p.ability.name}</span><b>{p.ability.text}</b></div>
-                  <div className="dc-info__row"><span>Vida</span><b>{pct(p.life)}{p.life < 1 ? ` · cheia em ${formatDuration(p.fullInMs)}` : ''}</b></div></>} focusable={false}>
-                  <button type="button" className={'dc-roster__pet' + (on ? ' is-on' : '') + (p.down ? ' is-down' : '')} aria-pressed={on} aria-disabled={p.down}
-                    draggable={!p.down} onDragStart={drag(p.id)} onClick={() => clickPet(p.id)}
-                    title={picked ? 'Colocar no slot selecionado' : on ? 'Tirar do esquadrão' : 'Colocar no esquadrão'}>
-                    <Pet snap={snap} id={p.id} size={34} />
-                    <span>{p.name}</span>
-                    <small>{p.down ? `fora de combate · volta em ${formatDuration(p.backInMs)}` : `${p.roleName} · nv ${p.level}`}</small>
-                    <span className={'dc-life' + (p.life < 0.5 ? ' is-low' : '')} title={'Vida ' + pct(p.life)}><ProgressBar value={p.life * 100} size="sm" /></span>
-                  </button>
-                </InfoCard>
-              );
-            })}
-          </div>
-          <div className="dc-slots" role="group" aria-label="Slots do esquadrão">
-            {SLOT_ORDER.map((sid) => {
-              const sl = map.slots.find((x) => x.id === sid);
-              const id = sq.slots[sid];
-              const p = id && roster.find((x) => x.id === id);
-              const extra = Object.entries(sl.roles || {});
-              const match = p && sl.roles && sl.roles[p.role];
-              return (
-                <div key={sid} className={'dc-slotbox is-' + sid + (picked === sid ? ' is-picked' : '') + (over === sid ? ' is-over' : '') + (match ? ' is-match' : '') + (p ? ' is-filled' : '')}
-                  onDragOver={(e) => { e.preventDefault(); setOver(sid); }} onDragLeave={() => setOver((o) => (o === sid ? null : o))}
-                  onDrop={(e) => { e.preventDefault(); setOver(null); place(e.dataTransfer.getData('text/plain'), sid); }}>
-                  <button type="button" className="dc-slotbox__head" aria-pressed={picked === sid} onClick={() => setPicked(picked === sid ? null : sid)}
-                    title="Selecionar este slot (depois clique num DevPet)">
-                    <b>{sl.name}</b><small>{sl.text}</small>
-                  </button>
-                  <div className="dc-slotbox__bonus">
-                    <span>{bonusText(sl.bonus)}</span>
-                    {extra.map(([r, bb]) => <span key={r} className={match && p.role === r ? 'is-on' : ''}>{ROLE_NAMES[r]}: {bonusText(bb)}</span>)}
-                  </div>
-                  {p ? (
-                    <div className="dc-slotbox__pet" draggable onDragStart={drag(id)}>
-                      <Pet snap={snap} id={id} size={40} />
-                      <div className="dc-slotbox__info">
-                        <b>{p.name}</b>
-                        <span className={'dc-slot__life' + (p.life < 0.5 ? ' is-low' : '')}>{pct(p.life)} de vida</span>
-                      </div>
-                      <button type="button" className="dc-slotbox__remove" aria-label={'Tirar ' + p.name + ' do slot'} onClick={() => remove(id)}><Icon name="x" size={12} /></button>
-                      <select className="dc-slot__trigger" value={sq.triggers[id] || 'start'} aria-label={'Gatilho de ' + p.ability.name}
-                        onChange={(e) => set({ triggers: { ...sq.triggers, [id]: e.target.value } })}>
-                        {map.triggers.map((t) => <option key={t.id} value={t.id}>{p.ability.name}: {t.name.toLowerCase()}</option>)}
-                      </select>
-                    </div>
-                  ) : <div className="dc-slotbox__empty">{picked === sid ? 'Clique num DevPet' : 'Arraste um DevPet'}</div>}
-                </div>
-              );
-            })}
-            <div className="dc-slots__foe" aria-hidden="true"><Icon name="swords" size={14} /> inimigos</div>
-          </div>
-          {roster.some((p) => p.life < 1) && (
-            <div className="dc-heal">
-              <Icon name="heart-pulse" size={13} />
-              <span>Health Check ×{map.healItems}: cura 50% de um pet{map.healItems ? '' : ' (fabrique na aba Ops)'}</span>
-              {roster.filter((p) => p.life < 1).map((p) => (
-                <Button key={p.id} size="sm" variant="ghost" disabled={!map.healItems} onClick={() => act({ type: 'use', item: 'health-check', pet: p.id })}>
-                  {p.name} {pct(p.life)}
-                </Button>
-              ))}
-            </div>
-          )}
-          <div className="tk-menu__heading">Consumíveis ({sq.items.length}/2)</div>
-          <div className="dc-prep__items">
-            {map.items.map((k) => (
-              <InfoCard key={k.id} content={<><div className="dc-info__title">{k.name}</div><p className="dc-info__text">{k.text}</p></>} focusable={false}>
-                <button type="button" className={'dc-prep__item' + (sq.items.includes(k.id) ? ' is-on' : '')} disabled={!k.n} aria-pressed={sq.items.includes(k.id)} onClick={() => toggleItem(k.id)}>
-                  <Icon name={k.icon} size={14} /> {k.name} <small>×{k.n}</small>
+    <>
+      <aside className="dc-prep__side is-left" aria-label="DevPets disponíveis">
+        <div className="tk-menu__heading">DevPets · arraste para um slot</div>
+        <div className="dc-roster" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); remove(e.dataTransfer.getData('text/plain')); }}>
+          {roster.map((p) => {
+            const on = !!slotOf(p.id);
+            return (
+              <InfoCard key={p.id} content={<><div className="dc-info__title">{p.name} · {p.roleName}</div>
+                <div className="dc-info__row"><span>Nível</span><b>{p.level}</b></div>
+                <div className="dc-info__row"><span>Vida · Ataque · Defesa</span><b>{p.hp} · {p.atk} · {p.def}</b></div>
+                <div className="dc-info__row"><span>{p.ability.name}</span><b>{p.ability.text}</b></div>
+                <div className="dc-info__row"><span>Vida</span><b>{pct(p.life)}{p.life < 1 ? ` · cheia em ${formatDuration(p.fullInMs)}` : ''}</b></div></>} focusable={false}>
+                <button type="button" className={'dc-roster__pet' + (on ? ' is-on' : '') + (p.down ? ' is-down' : '')} aria-pressed={on} aria-disabled={p.down}
+                  draggable={!p.down} onDragStart={drag(p.id)} onClick={() => clickPet(p.id)}
+                  title={picked ? 'Colocar no slot selecionado' : on ? 'Tirar do esquadrão' : 'Colocar no esquadrão'}>
+                  <Pet snap={snap} id={p.id} size={34} />
+                  <span>{p.name}</span>
+                  <small>{p.down ? `fora de combate · volta em ${formatDuration(p.backInMs)}` : `${p.roleName} · nv ${p.level}`}</small>
+                  {lifeBar(p)}
                 </button>
               </InfoCard>
+            );
+          })}
+        </div>
+      </aside>
+      <aside className="dc-prep__side is-right" aria-label="Preparação da batalha">
+        <div className="dc-prep__head"><Icon name={node.icon} size={14} /> <b>{node.typeName}</b><small>Monte o esquadrão: a luta se resolve sozinha. Passe o mouse nos inimigos do mapa para ver os atributos.</small></div>
+        <div className="dc-slots" role="group" aria-label="Slots do esquadrão">
+          <div className="dc-slots__foe" aria-hidden="true"><Icon name="chevrons-up" size={13} /> inimigos</div>
+          {[...SLOT_ORDER].reverse().map((sid) => {
+            const sl = map.slots.find((x) => x.id === sid);
+            const id = sq.slots[sid];
+            const p = id && roster.find((x) => x.id === id);
+            const extra = Object.entries(sl.roles || {});
+            const match = p && sl.roles && sl.roles[p.role];
+            return (
+              <div key={sid} className={'dc-slotbox is-' + sid + (picked === sid ? ' is-picked' : '') + (over === sid ? ' is-over' : '') + (match ? ' is-match' : '') + (p ? ' is-filled' : '')}
+                onDragOver={(e) => { e.preventDefault(); setOver(sid); }} onDragLeave={() => setOver((o) => (o === sid ? null : o))}
+                onDrop={(e) => { e.preventDefault(); setOver(null); place(e.dataTransfer.getData('text/plain'), sid); }}>
+                <InfoCard content={<><div className="dc-info__title">{sl.name}</div><p className="dc-info__text">{sl.text}</p>
+                  <div className="dc-slotbox__bonus"><span>{bonusText(sl.bonus)}</span>
+                    {extra.map(([r, bb]) => <span key={r} className={match && p.role === r ? 'is-on' : ''}>{ROLE_NAMES[r]}: {bonusText(bb)}</span>)}</div></>} focusable={false}>
+                  <button type="button" className="dc-slotbox__head" aria-pressed={picked === sid} onClick={() => setPicked(picked === sid ? null : sid)}
+                    title="Selecionar este slot (depois clique num DevPet)">
+                    <b>{sl.name}</b><small>{match ? 'bônus de ' + ROLE_NAMES[p.role].toLowerCase() + ' ativo' : bonusText(sl.bonus)}</small>
+                  </button>
+                </InfoCard>
+                {p ? (
+                  <div className="dc-slotbox__pet" draggable onDragStart={drag(id)}>
+                    <Pet snap={snap} id={id} size={36} />
+                    <div className="dc-slotbox__info">
+                      <b>{p.name}</b>
+                      <span className={'dc-slot__life' + (p.life < 0.5 ? ' is-low' : '')}>{pct(p.life)} de vida</span>
+                    </div>
+                    <button type="button" className="dc-slotbox__remove" aria-label={'Tirar ' + p.name + ' do slot'} onClick={() => remove(id)}><Icon name="x" size={12} /></button>
+                    <select className="dc-slot__trigger" value={sq.triggers[id] || 'start'} aria-label={'Gatilho de ' + p.ability.name}
+                      onChange={(e) => set({ triggers: { ...sq.triggers, [id]: e.target.value } })}>
+                      {map.triggers.map((t) => <option key={t.id} value={t.id}>{p.ability.name}: {t.name.toLowerCase()}</option>)}
+                    </select>
+                  </div>
+                ) : <div className="dc-slotbox__empty">{picked === sid ? 'Clique num DevPet' : 'Arraste um DevPet'}</div>}
+              </div>
+            );
+          })}
+        </div>
+        {roster.some((p) => p.life < 1) && (
+          <div className="dc-heal">
+            <Icon name="heart-pulse" size={13} />
+            <span>Health Check ×{map.healItems}: cura 50% de um pet{map.healItems ? '' : ' (fabrique na aba Ops)'}</span>
+            {roster.filter((p) => p.life < 1).map((p) => (
+              <Button key={p.id} size="sm" variant="ghost" disabled={!map.healItems} onClick={() => act({ type: 'use', item: 'health-check', pet: p.id })}>
+                {p.name} {pct(p.life)}
+              </Button>
             ))}
           </div>
+        )}
+        <div className="tk-menu__heading">Consumíveis ({sq.items.length}/2)</div>
+        <div className="dc-prep__items">
+          {map.items.map((k) => (
+            <InfoCard key={k.id} content={<><div className="dc-info__title">{k.name}</div><p className="dc-info__text">{k.text}</p></>} focusable={false}>
+              <button type="button" className={'dc-prep__item' + (sq.items.includes(k.id) ? ' is-on' : '')} disabled={!k.n} aria-pressed={sq.items.includes(k.id)} onClick={() => toggleItem(k.id)}>
+                <Icon name={k.icon} size={14} /> {k.name} <small>×{k.n}</small>
+              </button>
+            </InfoCard>
+          ))}
         </div>
-        <div>
-          <div className="tk-menu__heading">Inimigos</div>
-          {node.enemies.map((e, i) => <EnemyRow key={i} e={e} />)}
+        <div className="dc-prep__foot">
+          {f ? <span className={'dc-forecast ' + CHANCE_CLASS[f.label]}><Icon name="activity" size={13} /> {Math.round(f.chance * 100)}% · {f.label}</span>
+            : <span className="dc-forecast">Escolha ao menos um DevPet</span>}
+          {f && f.timeouts >= 0.25 && <span className="dc-trait"><Icon name="timer" size={12} /> {Math.round(f.timeouts * 100)}% das simulações perdem por tempo: falta dano</span>}
+          {map.battleBuff && <span className="dc-chip is-ok">+{Math.round(map.battleBuff.atk * 100)}% de ataque nesta batalha</span>}
+          <span className="dc-prep__rounds" title="Sem derrubar os inimigos até aqui, a luta conta como derrota">Limite: {map.maxRounds} rodadas</span>
+          <span className="dc-prep__cost">Entrada: <b>{formatNum(node.cost)}</b> Compute</span>
+          <div className="dc-prep__actions">
+            <Button variant="ghost" onClick={onCancel}>Cancelar</Button>
+            <Button variant="primary" icon="swords" disabled={!placed.length || !node.affordable} onClick={() => act({ type: 'mapFight', node: node.id, squad: sq })}>Lutar</Button>
+          </div>
         </div>
-      </div>
-      <div className="dc-prep__foot">
-        {f ? <span className={'dc-forecast ' + CHANCE_CLASS[f.label]}><Icon name="activity" size={13} /> {Math.round(f.chance * 100)}% · {f.label}</span>
-          : <span className="dc-forecast">Escolha ao menos um DevPet</span>}
-        {f && f.timeouts >= 0.25 && <span className="dc-trait"><Icon name="timer" size={12} /> {Math.round(f.timeouts * 100)}% das simulações perdem por tempo: falta dano</span>}
-        <span className="dc-prep__rounds" title="Sem derrubar os inimigos até aqui, a luta conta como derrota">Limite: {map.maxRounds} rodadas</span>
-        {map.battleBuff && <span className="dc-chip is-ok">+{Math.round(map.battleBuff.atk * 100)}% de ataque nesta batalha</span>}
-        <span className="dc-prep__cost">Entrada: <b>{formatNum(node.cost)}</b> Compute</span>
-        <Button variant="ghost" onClick={onCancel}>Cancelar</Button>
-        <Button variant="primary" icon="swords" disabled={!placed.length || !node.affordable} onClick={() => act({ type: 'mapFight', node: node.id, squad: sq })}>Lutar</Button>
-      </div>
-    </section>
+      </aside>
+    </>
   );
 }
 
@@ -511,12 +514,16 @@ export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio
         ))}
       </div>
       {map.cleared && <div className="dc-mapbox is-cleared"><Icon name="crown" size={16} /> <b>{map.area.name} concluída!</b> O Legacy Monolith caiu. A próxima área (Staging) chega em breve.</div>}
-      <MapGrid map={map} onNode={onNode} hold={!!battle}
-        party={(map.squad.pets.length ? map.squad.pets : [...map.roster].sort((a, b) => b.level - a.level).slice(0, 3).map((p) => p.id))
-          .map((id) => snap.pets.find((p) => p.id === id && p.owned)).filter(Boolean)} />
+      <div className={'dc-stage' + (prepNode ? ' is-prep' : '')}>
+        <div className="dc-stage__map">
+          <MapGrid map={map} onNode={onNode} hold={!!battle} selected={prepNode ? prepNode.id : null}
+            party={(map.squad.pets.length ? map.squad.pets : [...map.roster].sort((a, b) => b.level - a.level).slice(0, 3).map((p) => p.id))
+              .map((id) => snap.pets.find((p) => p.id === id && p.owned)).filter(Boolean)} />
+        </div>
+        {prepNode && <PrepPanel key={prepNode.id} map={map} snap={snap} node={prepNode} act={act} onCancel={() => setPrep(null)} />}
+      </div>
       {!map.at && !map.cleared && <div className="dc-row__desc">Escolha um ponto da primeira coluna para começar. Passe o mouse num ponto para ver custo, inimigos e recompensa.</div>}
       {map.pending && <PendingPanel map={map} snap={snap} act={act} />}
-      {prepNode && <PrepPanel key={prepNode.id} map={map} snap={snap} node={prepNode} act={act} onCancel={() => setPrep(null)} />}
       {battle && <Arena battle={battle} snap={snap} area={map.area} onClose={closeArena} sound={audio.on} onSound={setSound} />}
     </div>
   );
