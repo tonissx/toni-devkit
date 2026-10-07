@@ -199,7 +199,7 @@ function Monolith({ c, locked }) {
           <path d="M46 13 Q51 11 54 15 Q50 15 46.5 17.5 Z" fill="#35692F" />
           <path d="M3.5 39 Q8 36 14.5 38 L14 40 Q9 38.5 4 41 Z" fill="#4E8F45" />
           {/* rachaduras brilhando também nos braços */}
-          <path className="v-crack" d="M9 20 L11 24 L9 27 M57 39 L59 42" stroke="#FF3B3B" strokeWidth=".9" fill="none" strokeLinecap="round" />
+          <path className="v-crack" d="M9 20 L11 24 L9 27 M57 39 L59 42" stroke="#FFA526" strokeWidth="1.2" fill="none" strokeLinecap="round" />
         </>}
         </g>
         <g transform="translate(0 -8)">
@@ -211,7 +211,7 @@ function Monolith({ c, locked }) {
         <path d="M21 34 h6 M21 37 h9 M21 40 h4 M41 46 h4 M40 49 h6" stroke="#0D0F14" strokeWidth="1.2" strokeLinecap="round" opacity=".7" />
         {/* rachaduras: escuras e, por dentro, brilho vermelho pulsando */}
         <path d="M27 10 L29 15 L26 19 M24 30 L27 33 L24 37 M44 30 L39 38 L43 45 L39 54 M17 44 L23 46 L21 52" stroke="#0D0F14" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        {!locked && <path className="v-crack" d="M27 10 L29 15 L26 19 M24 30 L27 33 L24 37 M44 30 L39 38 L43 45 L39 54 M17 44 L23 46 L21 52" stroke="#FF3B3B" strokeWidth="1" fill="none" strokeLinecap="round" strokeLinejoin="round" />}
+        {!locked && <path className="v-crack" d="M27 10 L29 15 L26 19 M24 30 L27 33 L24 37 M44 30 L39 38 L43 45 L39 54 M17 44 L23 46 L21 52" stroke="#FFA526" strokeWidth="1.3" fill="none" strokeLinecap="round" strokeLinejoin="round" />}
         {!locked && <>
           {/* musgo: no topo quebrado, escorrendo pelas bordas e nas saliências */}
           <path d="M17 14 L22 8 L25 11 L30 5 L35 9 L40 6 L44 12 L47 11 L47.3 15 Q44 17 41 14 Q38 18 34 14 Q31 17 28 13 Q24 17 21 15 Q19 18 17 17 Z" fill="#3E7A3A" />
@@ -225,10 +225,10 @@ function Monolith({ c, locked }) {
           <circle cx="32.5" cy="20" r="1.2" fill="#5FA04E" /><circle cx="46.3" cy="30" r="1.2" fill="#5FA04E" /><circle cx="45.2" cy="39" r="1.3" fill="#5FA04E" />
           {/* sobrancelha pesada e olhos em fenda */}
           <path d="M19 19 L31 23.5 M45 19 L33 23.5" stroke="#0D0F14" strokeWidth="3.2" strokeLinecap="round" />
-          <path className="v-glow" d="M21 24 L30 26.5 L22 27.5 Z" fill="#FF4A3D" />
-          <path className="v-glow" d="M43 24 L34 26.5 L42 27.5 Z" fill="#FF4A3D" />
-          <ellipse cx="25.5" cy="26" rx="6" ry="3" fill="#FF3B3B" opacity=".22" />
-          <ellipse cx="38.5" cy="26" rx="6" ry="3" fill="#FF3B3B" opacity=".22" />
+          <path className="v-glow" d="M21 24 L30 26.5 L22 27.5 Z" fill="#FFD24A" />
+          <path className="v-glow" d="M43 24 L34 26.5 L42 27.5 Z" fill="#FFD24A" />
+          <ellipse cx="25.5" cy="26" rx="6" ry="3" fill="#FF7A00" opacity=".4" />
+          <ellipse cx="38.5" cy="26" rx="6" ry="3" fill="#FF7A00" opacity=".4" />
           {/* boca: fenda serrilhada */}
           <path d="M25 42 L28 44 L31 42 L34 44 L37 42 L40 44" stroke="#0D0F14" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
         </>}

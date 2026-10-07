@@ -622,10 +622,10 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .villain-svg .v-body { transform-origin: center bottom; animation: v-menace 1.6s ease-in-out infinite; }
 .villain-svg .v-drip { transform-origin: center top; animation: v-drip 1.8s ease-in infinite; }
 .villain-svg .v-drip--b { animation-delay: .9s; }
-.villain-svg .v-crack { animation: v-crack 2.4s ease-in-out infinite; filter: drop-shadow(0 0 1.5px #FF3B3B); }
+.villain-svg .v-crack { animation: v-crack 2.4s ease-in-out infinite; filter: drop-shadow(0 0 2px #FF6A00) drop-shadow(0 0 1px #FFB347); }
 .villain-svg .v-mist { transform-origin: center; animation: v-mist 3.2s ease-in-out infinite; }
 .villain-svg .v-debris { animation: v-debris 3.6s ease-in-out infinite; }
-@keyframes v-crack { 50% { opacity: .35; } }
+@keyframes v-crack { 50% { opacity: .65; } } /* lava: pulsa sem apagar */
 @keyframes v-mist { 50% { transform: scale(1.12, 1.25); opacity: .55; } }
 @keyframes v-debris { 50% { transform: translateY(-2.5px); } }
 .villain-svg .v-glitch--a { animation: v-glitch .35s steps(2) infinite; }
