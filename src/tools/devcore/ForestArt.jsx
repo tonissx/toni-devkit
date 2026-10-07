@@ -102,25 +102,41 @@ function hashStr(str) {
 /** Peça de um lugar da floresta, sorteada pelo hash: quase sempre pinheiro; às vezes uma peça tecnológica. */
 function pieceFor(h) {
   const r = h % 100;
-  const s = 0.55 + ((h >>> 8) % 30) / 100;            // tamanho 0,55–0,85
-  if (r < 74) return { C: Pine, upright: true, props: { s: s * 1.15, tone: (h >>> 4) % 5 } };
-  if (r < 82) return { C: FiberPine, upright: true, props: { s: s * 0.75 } };
-  if (r < 89) return { C: CircuitTree, upright: true, props: { s: s * 0.7 } };
-  if (r < 93) return { C: UsbShroom, upright: true, props: { s: 0.8 } };
-  if (r < 96) return { C: CapStump, upright: true, props: { s: 0.85 } };
-  if (r < 98) return { C: CableFern, upright: true, props: { s: 0.8 } };
-  return { C: (h & 1) ? ChipRock : DataPond, upright: false, props: { s: 0.6 } };
+  const s = 0.72 + ((h >>> 8) % 34) / 100;            // tamanho 0,72–1,05
+  if (r < 74) return { C: Pine, upright: true, w: 30 * s * 1.45, props: { s: s * 1.45, tone: (h >>> 4) % 5 } };
+  if (r < 82) return { C: FiberPine, upright: true, w: 52 * s * 0.95, props: { s: s * 0.95 } };
+  if (r < 89) return { C: CircuitTree, upright: true, w: 70 * s * 0.9, props: { s: s * 0.9 } };
+  if (r < 93) return { C: UsbShroom, upright: true, w: 34, props: { s: 1 } };
+  if (r < 96) return { C: CapStump, upright: true, w: 30, props: { s: 1.05 } };
+  if (r < 98) return { C: CableFern, upright: true, w: 46, props: { s: 1 } };
+  return { C: (h & 1) ? ChipRock : DataPond, upright: false, props: { s: 0.75 } };
 }
 
 /**
  * A floresta no tabuleiro (densa, como a mata do mapa do Inscryption): uma peça em cada lugar livre (`spots`, longe
  * dos pontos e das trilhas) e vaga-lumes de LED por cima. Memorizada: só redesenha quando o traçado ou a largura mudam.
  */
-export const ForestProps = React.memo(function ForestProps({ spots }) {
+export const ForestProps = React.memo(function ForestProps({ spots, w, h }) {
+  const pieces = spots.map((sp) => ({ sp, P: pieceFor(sp.h) }));
   return (
     <>
-      {spots.map((sp) => {
-        const P = pieceFor(sp.h);
+      {/* Sombras no chão (uma camada só, barata): elipse suave projetada para o lado de cada peça em pé, mais o contato com o chão. */}
+      <svg className="dc-board__shadows" width={w} height={h} aria-hidden="true">
+        <defs>
+          <radialGradient id="dc-shadow-grad">
+            <stop offset="0" stopColor="#000" stopOpacity=".75" />
+            <stop offset=".6" stopColor="#000" stopOpacity=".4" />
+            <stop offset="1" stopColor="#000" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        {pieces.filter(({ P }) => P.upright).map(({ sp, P }) => (
+          <g key={sp.id}>
+            <ellipse cx={sp.x + P.w * 0.5} cy={sp.y + P.w * 0.08} rx={P.w * 0.75} ry={P.w * 0.3} fill="url(#dc-shadow-grad)" />
+            <ellipse cx={sp.x} cy={sp.y - 1} rx={P.w * 0.34} ry={P.w * 0.2} fill="url(#dc-shadow-grad)" />{/* contato com o chão */}
+          </g>
+        ))}
+      </svg>
+      {pieces.map(({ sp, P }) => {
         return (
           <span key={sp.id} className={'dc-prop ' + (P.upright ? 'is-upright is-anchored is-dense' : 'is-flat is-centered')} style={{ left: sp.x, top: sp.y, zIndex: Math.round(sp.y) }}>
             <P.C {...P.props} />
@@ -132,7 +148,7 @@ export const ForestProps = React.memo(function ForestProps({ spots }) {
       </div>
     </>
   );
-}, (a, b) => a.spots === b.spots);
+}, (a, b) => a.spots === b.spots && a.w === b.w && a.h === b.h);
 
 /** Fundo da arena: clareira na Floresta Localhost à noite (árvores de circuito, vaga-lumes). */
 export function ForestBackdrop() {

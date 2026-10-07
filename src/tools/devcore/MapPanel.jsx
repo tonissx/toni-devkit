@@ -111,9 +111,12 @@ function Party({ map, party, hold, place, geom }) {
   return (
     <div className={'dc-party' + (walking ? ' is-walking' : '')} style={{ left: pos.x, top: pos.y }} aria-hidden="true">
       {party.map((p, i) => (
-        <span key={p.id} className="dc-party__pet" style={{ '--i': i, left: (i - (party.length - 1) / 2) * 34 }}>
+        <React.Fragment key={p.id}>
+        <span className="dc-party__shadow" style={{ left: (i - (party.length - 1) / 2) * 34 }} />
+        <span className="dc-party__pet" style={{ '--i': i, left: (i - (party.length - 1) / 2) * 34 }}>
           <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} aura={auraOf(p)} size={44} className="is-static" />
         </span>
+        </React.Fragment>
       ))}
     </div>
   );
@@ -174,7 +177,7 @@ function MapGrid({ map, onNode, party = [], hold = false }) {
     for (const p of paths) for (let i = 0; i <= 12; i++) { const q = onCurve(p.k, i / 12); avoid.push({ x: q.x, y: q.y, r: 26 }); }
     avoid.push({ x: start.x, y: start.y, r: 60 });
     const out = [];
-    const step = 44;
+    const step = 50;
     for (let gy = 18; gy < H - 4; gy += step * 0.8) {
       for (let gx = 10; gx < w - 4; gx += step) {
         const id = gx + ':' + gy;
@@ -182,6 +185,9 @@ function MapGrid({ map, onNode, party = [], hold = false }) {
         const px = gx + ((h % 17) - 8) + ((Math.floor(gy / (step * 0.8)) % 2) * step) / 2;
         const py = gy + (((h >>> 5) % 13) - 6);
         if (avoid.some((a) => (a.x - px) ** 2 + (a.y - py) ** 2 < a.r * a.r)) continue;
+        // Mais rala nos cantos: a chance de pular cresce com a distância do centro (cantos ~ metade).
+        const e = Math.hypot((px - w / 2) / (w / 2), (py - H / 2) / (H / 2));
+        if (((h >>> 12) % 100) / 100 < Math.min(0.55, Math.max(0, (e - 0.7) * 0.8))) continue;
         out.push({ id, x: px, y: py, h });
       }
     }
