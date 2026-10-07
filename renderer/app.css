@@ -330,6 +330,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-task__main { min-width: 0; flex: 1; }
 .nts-task__text { display: block; max-width: 100%; padding: 0; border: 0; background: none; color: var(--tk-text); font: 400 13px/1.4 var(--tk-font-sans); text-align: left; cursor: pointer; }
 .nts-task__text:hover { color: var(--tk-accent-text); }
+.nts-task__text code { font: 400 12px var(--tk-font-mono); padding: 1px 5px; border-radius: 4px; background: var(--tk-surface-3); color: var(--tk-text); }
 .nts-task.is-done .nts-task__text { color: var(--tk-text-3); text-decoration: line-through; }
 .nts-task__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .nts-task__note { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--tk-text-3); }

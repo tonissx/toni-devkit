@@ -121,5 +121,32 @@ export function renderMarkdown(md, { resolve = () => null, secret = () => undefi
   return { html: marked.parse(String(md || '')), blocks };
 }
 
+/**
+ * Markdown em linha (**negrito**, *itálico*, ~~riscado~~, `código`) → HTML, para textos curtos como o
+ * de uma tarefa. Seguro (HTML cru é escapado) e sem elementos clicáveis — o texto fica dentro de um
+ * <button> —: links e [[links]] viram só o texto/rótulo, imagens viram o texto alternativo.
+ */
+export function renderInline(text) {
+  const marked = new Marked({ gfm: true });
+  marked.use({
+    extensions: [{
+      name: 'wikilink',
+      level: 'inline',
+      start: (src) => { const i = src.indexOf('[['); return i === -1 ? undefined : i; },
+      tokenizer(src) {
+        const m = WIKI_RE.exec(src);
+        return m ? { type: 'wikilink', raw: m[0], label: (m[2] || m[1]).trim() } : undefined;
+      },
+      renderer: (t) => esc(t.label),
+    }],
+    renderer: {
+      html: ({ text: raw }) => esc(raw),
+      link({ tokens }) { return this.parser.parseInline(tokens); },
+      image({ text: alt }) { return esc(alt || ''); },
+    },
+  });
+  return marked.parseInline(String(text || ''));
+}
+
 /** Marca/desmarca a n-ésima tarefa "- [ ]" do markdown (ignorando blocos de código). */
 export const toggleTask = toggleTaskAt;
