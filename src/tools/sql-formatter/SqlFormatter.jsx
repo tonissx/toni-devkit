@@ -30,12 +30,12 @@ const OUTPUT_OPTIONS = [
   { value: 'php', label: 'PHP' },
 ];
 
-const SAMPLE = `select f.chapa, p.nome, s.descricao as secao, count(a.idanotacao) as qtd_anotacoes -- anotações por funcionário
-from pfunc f inner join ppessoa p on p.codigo = f.codpessoa left join psecao s on s.codcoligada = f.codcoligada and s.codigo = f.codsecao
-left join zmd_anotacao a on a.chapa = f.chapa and a.codcoligada = f.codcoligada
-where f.codcoligada = 1 and f.codsituacao not in ('D', 'I') and f.dataadmissao >= '2024-01-01'
-group by f.chapa, p.nome, s.descricao having count(a.idanotacao) > 0 order by qtd_anotacoes desc, p.nome;
-update pfunc set codsecao = '01.02.003' where codcoligada = 1 and chapa in (select chapa from ztransferencia where status = 'A');`;
+const SAMPLE = `select c.id, c.nome, r.descricao as regiao, count(p.id) as qtd_pedidos -- pedidos por cliente
+from clientes c inner join pessoas pe on pe.id = c.pessoa_id left join regioes r on r.empresa_id = c.empresa_id and r.codigo = c.regiao
+left join pedidos p on p.cliente_id = c.id and p.empresa_id = c.empresa_id
+where c.empresa_id = 1 and c.situacao not in ('I', 'B') and c.criado_em >= '2024-01-01'
+group by c.id, c.nome, r.descricao having count(p.id) > 0 order by qtd_pedidos desc, c.nome;
+update clientes set regiao = 'SUL-03' where empresa_id = 1 and id in (select cliente_id from transferencias where status = 'A');`;
 
 const bytes = (s) => new Blob([s]).size;
 const fmtBytes = (n) => (n < 1024 ? n + ' B' : (n / 1024).toFixed(1) + ' KB');

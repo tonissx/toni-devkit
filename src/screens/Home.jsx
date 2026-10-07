@@ -306,7 +306,7 @@ function LinksPanel({ links, go, toast }) {
       actions={<Button size="sm" variant="ghost" onClick={() => go('settings')}>Gerenciar</Button>}>
       {!links && <div className="home-msg"><Spinner size={14} /> Carregando…</div>}
       {links && list.length === 0 && (
-        <div className="home-msg">Uma URL atrás de um alias (ex.: <code>solic</code> → solicitação do Fluig pelo número). Cadastre em Configurações → Links rápidos.</div>
+        <div className="home-msg">Uma URL atrás de um alias (ex.: <code>solic</code> → chamado do tracker pelo número). Cadastre em Configurações → Links rápidos.</div>
       )}
       <div className="home-list">{list.map((l) => <LinkRow key={l.id} link={l} toast={toast} />)}</div>
     </Card>

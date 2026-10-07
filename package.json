@@ -2,9 +2,9 @@
   "name": "toni-devkit",
   "productName": "Toni Devkit",
   "version": "0.1.0",
-  "description": "Toni Devkit — caixa de ferramentas desktop para devs (Electron). Primeira ferramenta: SQL Formatter no padrão sqlformat.org.",
+  "description": "Toni Devkit — caixa de ferramentas offline para devs: SQL, XML, JSON, Diff, Git visual, Notes e palette global.",
   "author": "Antonio Gonçalves",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -26,6 +26,7 @@
     "test:ai": "node --test scripts/test-ai.mjs scripts/test-ai-tasks.mjs scripts/test-json-types.mjs scripts/test-sql-risks.mjs",
     "test:vault": "node --test scripts/test-vault.mjs",
     "devcore:sim": "node scripts/devcore-sim.mjs",
+    "docs:capture": "npm run build && node scripts/docs-capture/capture.mjs",
     "version:compute": "node scripts/compute-version.mjs",
     "dist": "npm run build && electron-builder --win --x64 --publish never",
     "dist:dir": "npm run build && electron-builder --dir",
@@ -46,7 +47,7 @@
     "react-dom": "18.3.1"
   },
   "build": {
-    "appId": "br.com.navship.tonidevkit",
+    "appId": "io.github.tonissx.tonidevkit",
     "productName": "Toni Devkit",
     "publish": {
       "provider": "github",
