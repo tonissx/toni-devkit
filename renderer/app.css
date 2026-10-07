@@ -882,6 +882,13 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md);
   background: color-mix(in srgb, var(--tk-bg) 86%, transparent); backdrop-filter: blur(6px); box-shadow: var(--tk-shadow-pop);
 }
+.dc-prep__side { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--tk-text-3) 45%, transparent) transparent; scrollbar-gutter: stable; }
+.dc-prep__side::-webkit-scrollbar { width: 6px; }
+.dc-prep__side::-webkit-scrollbar-track { background: transparent; margin: 8px 0; }
+.dc-prep__side::-webkit-scrollbar-thumb { border-radius: 999px; background: color-mix(in srgb, var(--tk-text-3) 45%, transparent); }
+.dc-prep__side::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--tk-accent) 60%, transparent); }
+.dc-forecast.is-omen { font-family: inherit; font-style: italic; line-height: 1.35; align-items: flex-start; }
+.dc-forecast.is-omen svg { flex: none; margin-top: 2px; }
 .dc-prep__side.is-left { justify-self: start; width: 190px; }
 .dc-prep__side.is-right { justify-self: end; width: 240px; }
 .dc-prep__side .tk-menu__heading { padding-left: 0; }

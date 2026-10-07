@@ -11,6 +11,16 @@ const { Button, Icon, ProgressBar } = DS;
 const pct = (v) => Math.round(v * 100) + '%';
 const COMBAT = ['battle', 'elite', 'boss'];
 const CHANCE_CLASS = { 'favorável': 'is-good', 'arriscado': 'is-risky', 'muito arriscado': 'is-bad' };
+/** Presságio da luta: a chance de vitória (prevista pelo engine) vira uma frase vaga — o número fica escondido. */
+const OMENS = [
+  [0.9, 'eye', 'Os bugs hesitam. A floresta parece estar do seu lado.'],
+  [0.7, 'wind', 'Os ventos do deploy sopram a seu favor.'],
+  [0.5, 'scroll-text', 'Os logs não dizem nada com certeza.'],
+  [0.3, 'triangle-alert', 'Um aviso amarelo pisca entre as árvores.'],
+  [0.1, 'skull', 'O stack trace já sussurra o nome do seu esquadrão.'],
+  [0, 'flame', 'Nenhum teste passaria nesta build.'],
+];
+const omenOf = (chance) => OMENS.find(([min]) => chance >= min);
 
 /** Sprite de um pet (cores do visual escolhido); pet que o jogador ainda não tem aparece como silhueta. */
 function Pet({ snap, id, size = 40 }) {
@@ -391,9 +401,8 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
         </div>
       </aside>
       <aside className="dc-prep__side is-right" aria-label="Preparação da batalha">
-        <div className="dc-prep__head"><Icon name={node.icon} size={14} /> <b>{node.typeName}</b><small>Monte o esquadrão: a luta se resolve sozinha. Passe o mouse nos inimigos do mapa para ver os atributos.</small></div>
+        <div className="dc-prep__head"><Icon name={node.icon} size={14} /> <b>{node.typeName}</b></div>
         <div className="dc-slots" role="group" aria-label="Slots do esquadrão">
-          <div className="dc-slots__foe" aria-hidden="true"><Icon name="chevrons-up" size={13} /> inimigos</div>
           {[...SLOT_ORDER].reverse().map((sid) => {
             const sl = map.slots.find((x) => x.id === sid);
             const id = sq.slots[sid];
@@ -452,9 +461,9 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
           ))}
         </div>
         <div className="dc-prep__foot">
-          {f ? <span className={'dc-forecast ' + CHANCE_CLASS[f.label]}><Icon name="activity" size={13} /> {Math.round(f.chance * 100)}% · {f.label}</span>
+          {f ? <span className={'dc-forecast is-omen ' + CHANCE_CLASS[f.label]}><Icon name={omenOf(f.chance)[1]} size={13} /> {omenOf(f.chance)[2]}</span>
             : <span className="dc-forecast">Escolha ao menos um DevPet</span>}
-          {f && f.timeouts >= 0.25 && <span className="dc-trait"><Icon name="timer" size={12} /> {Math.round(f.timeouts * 100)}% das simulações perdem por tempo: falta dano</span>}
+          {f && f.timeouts >= 0.25 && <span className="dc-trait"><Icon name="timer" size={12} /> O relógio corre contra vocês: falta dano para terminar a tempo.</span>}
           {map.battleBuff && <span className="dc-chip is-ok">+{Math.round(map.battleBuff.atk * 100)}% de ataque nesta batalha</span>}
           <span className="dc-prep__rounds" title="Sem derrubar os inimigos até aqui, a luta conta como derrota">Limite: {map.maxRounds} rodadas</span>
           <span className="dc-prep__cost">Entrada: <b>{formatNum(node.cost)}</b> Compute</span>
