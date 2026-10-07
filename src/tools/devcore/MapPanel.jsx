@@ -139,8 +139,8 @@ function Party({ map, party, hold, place, geom }) {
  */
 function Foes({ n, x, y, target = false }) {
   const boss = n.type === 'boss';
-  const size = boss ? 106 : n.type === 'elite' ? 36 : 32;
-  const gap = boss ? 40 : 24;
+  const size = boss ? 106 : n.type === 'elite' ? 47 : 32; // elite 30% maior que antes (36)
+  const gap = boss ? 40 : n.type === 'elite' ? 31 : 24;
   return (
     <div className={'dc-foes' + (boss ? ' is-boss' : '') + (target ? ' is-target' : '')} style={{ left: x, top: y - (boss ? 34 : 24) }}>
       {n.enemies.map((e, i) => {
