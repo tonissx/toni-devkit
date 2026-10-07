@@ -8,7 +8,7 @@
  * maxRounds sem vencer (derrota).
  *
  * Log (compacto, para a arena): { r, k, a?, t?, v?, c? }
- *   k: atk · miss · heal · ab (habilidade) · item · down · split · decoy · revive · fortify · end
+ *   k: atk · miss · heal · ab (habilidade) · item · down · split · decoy · revive · fortify · end (v: 1 vitória, 0 derrota)
  *   a: uid de quem age · t: uid do alvo · v: valor (dano/cura) · c: crítico
  */
 const { CONTENT } = require('../content/index.js');
@@ -247,9 +247,11 @@ function resolve(setup, seed, c = CONTENT) {
     if (!aliveEnemies().length) { win = true; break; }
     if (!alivePets().length) break;
   }
-  log.push({ r: Math.min(r, B.maxRounds), k: 'end', v: win ? 1 : 0 });
+  // Motivo do fim: vitória, esquadrão derrubado ou tempo esgotado (maxRounds sem derrubar os inimigos).
+  const reason = win ? 'win' : alivePets().length ? 'timeout' : 'wiped';
+  log.push({ r: Math.min(r, B.maxRounds), k: 'end', v: win ? 1 : 0, why: reason });
   return {
-    win, rounds: Math.min(r, B.maxRounds), log, usedItems: used,
+    win, reason, maxRounds: B.maxRounds, rounds: Math.min(r, B.maxRounds), log, usedItems: used,
     // hp: vida no início (a arena começa daí) · end: vida que sobrou (o mapa grava nos pets)
     units: units.map((u) => {
       const start = (setup.pets.find((x) => x.uid === u.uid) || setup.enemies.find((x) => x.uid === u.uid) || u).hp;
@@ -258,13 +260,21 @@ function resolve(setup, seed, c = CONTENT) {
   };
 }
 
-/** Chance de vitória: a mesma preparação com previewRuns sementes. → { chance, label } */
+/**
+ * Chance de vitória: a mesma preparação com previewRuns sementes.
+ * → { chance, label, timeouts } (timeouts: fração das simulações perdidas por tempo esgotado — sinal de "falta dano")
+ */
 function preview(setup, seed, c = CONTENT) {
   const n = c.BATTLE.previewRuns;
   let wins = 0;
-  for (let i = 0; i < n; i++) if (resolve(setup, (seed + Math.imul(i + 1, 7919)) >>> 0, c).win) wins++;
+  let timeouts = 0;
+  for (let i = 0; i < n; i++) {
+    const r = resolve(setup, (seed + Math.imul(i + 1, 7919)) >>> 0, c);
+    if (r.win) wins++;
+    else if (r.reason === 'timeout') timeouts++;
+  }
   const chance = wins / n;
-  return { chance, label: chance >= c.BATTLE.chance.good ? 'favorável' : chance >= c.BATTLE.chance.risky ? 'arriscado' : 'muito arriscado' };
+  return { chance, label: chance >= c.BATTLE.chance.good ? 'favorável' : chance >= c.BATTLE.chance.risky ? 'arriscado' : 'muito arriscado', timeouts: timeouts / n };
 }
 
 module.exports = { petHp, petDown, msUntilHp, setPetHp, scaleAt, petStats, enemyStats, setupBattle, resolve, preview, patchBattle, countered };

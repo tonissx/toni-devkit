@@ -424,6 +424,7 @@ function mapView(s, now, c) {
     lastBattle: lb ? { ...lb, rewards: lb.rewards.map((r) => ({ ...r, text: rewardText(r, c) })),
       units: lb.units.map((u) => (u.side === 'enemy' ? { ...u, sprite: c.enemy[u.id].sprite, color: c.enemy[u.id].color } : u)) } : null,
     stats: { wins: s.arena.wins, losses: s.arena.losses },
+    maxRounds: c.BATTLE.maxRounds,
   };
 }
 

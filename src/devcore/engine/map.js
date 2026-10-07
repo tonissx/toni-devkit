@@ -303,7 +303,7 @@ function mapAct(s, action, now, c, log) {
       A.losses += 1;
     }
     m.battles += 1;
-    m.lastBattle = { id: m.battles, node: node.id, kind: node.type, win: result.win, rounds: result.rounds, units: result.units, log: result.log, usedItems: result.usedItems, rewards, cost };
+    m.lastBattle = { id: m.battles, node: node.id, kind: node.type, win: result.win, reason: result.reason, maxRounds: result.maxRounds, rounds: result.rounds, units: result.units, log: result.log, usedItems: result.usedItems, rewards, cost };
     log.push({ type: 'battle', node: node.id, kind: node.type, win: result.win, rewards, cleared: m.cleared });
     return null;
   }

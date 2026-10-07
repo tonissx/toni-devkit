@@ -344,6 +344,8 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
       <div className="dc-prep__foot">
         {f ? <span className={'dc-forecast ' + CHANCE_CLASS[f.label]}><Icon name="activity" size={13} /> {Math.round(f.chance * 100)}% · {f.label}</span>
           : <span className="dc-forecast">Escolha ao menos um DevPet</span>}
+        {f && f.timeouts >= 0.25 && <span className="dc-trait"><Icon name="timer" size={12} /> {Math.round(f.timeouts * 100)}% das simulações perdem por tempo: falta dano</span>}
+        <span className="dc-prep__rounds" title="Sem derrubar os inimigos até aqui, a luta conta como derrota">Limite: {map.maxRounds} rodadas</span>
         {map.battleBuff && <span className="dc-chip is-ok">+{Math.round(map.battleBuff.atk * 100)}% de ataque nesta batalha</span>}
         <span className="dc-prep__cost">Entrada: <b>{formatNum(node.cost)}</b> Compute</span>
         <Button variant="ghost" onClick={onCancel}>Cancelar</Button>

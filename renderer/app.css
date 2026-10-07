@@ -854,6 +854,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-prep__item:disabled { opacity: .45; cursor: default; }
 .dc-prep__foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--tk-border); }
 .dc-prep__cost { margin-left: auto; font-size: 12px; color: var(--tk-text-3); }
+.dc-prep__rounds { font: 400 11px var(--tk-font-mono); color: var(--tk-text-3); }
 .dc-prep__cost b { font-family: var(--tk-font-mono); color: var(--tk-text); }
 .dc-forecast { display: inline-flex; align-items: center; gap: 5px; font: 500 12px var(--tk-font-mono); color: var(--tk-text-3); }
 .dc-forecast.is-good { color: var(--tk-accent-text); }

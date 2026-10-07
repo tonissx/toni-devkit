@@ -103,9 +103,23 @@ test('batalha: gatilhos das habilidades e consumíveis automáticos', () => {
 
 test('batalha: previsão é a fração de vitórias em N sementes', () => {
   const strong = battle.preview(battle.setupBattle(make({ pets: { byte: 10, noxi: 10, query: 10 } }), squadOf(['byte', 'noxi', 'query']), ['bug'], 0, 'localhost'), 1);
-  assert.deepEqual(strong, { chance: 1, label: 'favorável' });
+  assert.deepEqual(strong, { chance: 1, label: 'favorável', timeouts: 0 });
   const weak = battle.preview(battle.setupBattle(make({ pets: { byte: 1 } }), squadOf(['byte']), ['legacy-monolith'], 9, 'localhost', CONTENT, 'boss'), 1);
-  assert.deepEqual(weak, { chance: 0, label: 'muito arriscado' });
+  assert.equal(weak.chance, 0);
+  assert.equal(weak.label, 'muito arriscado');
+});
+
+test('batalha: o fim diz o motivo — vitória, esquadrão derrubado ou tempo esgotado (limite de rodadas)', () => {
+  const s = make({ pets: { byte: 10, armo: 12 } });
+  assert.equal(fight(s, squadOf(['byte']), ['typo'], 0).reason, 'win');
+  assert.equal(fight(make({ pets: { byte: 1 } }), squadOf(['byte']), ['zero', 'zero'], 6, 'elite').reason, 'wiped');
+  // Armo (tanque) quase não apanha e quase não bate: três Monoliths fortificando seguram até o limite.
+  const r = fight(s, squadOf(['armo']), ['legacy-monolith', 'legacy-monolith', 'legacy-monolith'], 0);
+  assert.equal(r.reason, 'timeout');
+  assert.equal(r.rounds, CONTENT.BATTLE.maxRounds);
+  assert.deepEqual(r.log.at(-1), { r: CONTENT.BATTLE.maxRounds, k: 'end', v: 0, why: 'timeout' });
+  const p = battle.preview(battle.setupBattle(s, squadOf(['armo']), ['legacy-monolith', 'legacy-monolith', 'legacy-monolith'], 0, 'localhost'), 1);
+  assert.ok(p.timeouts >= 0.75, 'a previsão conta as derrotas por tempo: ' + p.timeouts);
 });
 
 /* ─────────────── mapa ─────────────── */

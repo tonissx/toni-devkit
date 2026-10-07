@@ -72,6 +72,10 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   const abilityName = (id) => (snap.pets.find((p) => p.owned && p.ability.id === id) || { ability: { name: id } }).ability.name; // pets não encontrados não têm `ability`
   const itemName = (id) => (snap.inventory.find((k) => k.id === id) || { name: id }).name;
   const round = cur ? cur.r : log[log.length - 1].r;
+  const max = battle.maxRounds || 30;
+  const timeout = !battle.win && (battle.reason === 'timeout' || (log[log.length - 1].why === 'timeout'));
+  // Inimigos ainda de pé no fim (para explicar o tempo esgotado).
+  const standing = battle.units.filter((u) => u.side === 'enemy' && u.end > 0);
 
   const Unit = ({ u }) => {
     if (!visible[u.uid]) return null;
@@ -97,7 +101,9 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   const enemies = battle.units.filter((u) => u.side === 'enemy');
   return (
     <Modal open title={'ARENA · ' + area.name.toUpperCase()} icon="swords" onClose={onClose} width={760}
-      description={done ? (battle.win ? 'Vitória!' : 'Derrota — nada foi perdido além da entrada. Ajuste o esquadrão e tente de novo.') : `Rodada ${round}`}
+      description={done
+        ? (battle.win ? 'Vitória!' : timeout ? `Tempo esgotado: ${max} rodadas sem derrubar os inimigos.` : 'Derrota — o esquadrão caiu. Nada foi perdido além da entrada.')
+        : `Rodada ${round} de ${max}`}
       footer={<>
         {onSound && <SoundToggle sound={soundOn} onSound={onSound} />}
         {done
@@ -110,7 +116,8 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
         <div className="dc-arena__side is-enemies">{enemies.map((u) => <Unit key={u.uid} u={u} />)}</div>
         {done && (
           <div className={'dc-arena__result' + (battle.win ? ' is-win' : ' is-loss')}>
-            <b>{battle.win ? 'Vitória' : 'Derrota'}</b>
+            <b>{battle.win ? 'Vitória' : timeout ? 'Tempo esgotado' : 'Derrota'}</b>
+            {timeout && <span>{max} rodadas e {standing.map((u) => `${u.name} ainda de pé (${u.end} de vida)`).join(', ')}. Falta dano: habilidades no início, Coffee e Hotfix, mais atacantes.</span>}
             {battle.win && battle.rewards.length > 0 && <span>{battle.rewards.map((r) => r.text).join(' · ')}</span>}
             {battle.usedItems.length > 0 && <span className="dc-arena__used"><Icon name="package" size={12} /> usados: {battle.usedItems.map(itemName).join(', ')}</span>}
           </div>
