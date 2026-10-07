@@ -788,6 +788,11 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-party__shadow { position: absolute; width: 44px; height: 26px; transform: translate(-50%, -60%) translateZ(1px); border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, .8), rgba(0, 0, 0, .35) 60%, transparent); }
 /* Esquadrão andando pelo tabuleiro (em pé, como as fichas) */
 .dc-party { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 2000; transform-style: preserve-3d; }
+.dc-foes { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 1600; transform-style: preserve-3d; } /* inimigos do ponto: na frente das árvores */
+.dc-foes__foe { position: absolute; bottom: 0; transform: translateX(-50%) rotateX(calc(-1 * var(--tilt))); transform-origin: 50% 100%; filter: drop-shadow(0 4px 3px rgba(0, 0, 0, .5)); }
+.dc-foes__foe svg { display: block; animation: dc-party-idle 2s ease-in-out infinite; animation-delay: calc(var(--i) * -0.5s); }
+.dc-foes__shadow { position: absolute; height: 14px; transform: translate(-50%, -50%) translateZ(1px); border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, .75), rgba(0, 0, 0, .3) 60%, transparent); }
+.dc-foes.is-boss .dc-foes__shadow { height: 24px; }
 .dc-party__pet { position: absolute; bottom: 0; transform: translateX(-50%) rotateX(calc(-1 * var(--tilt))); transform-origin: 50% 100%; filter: drop-shadow(0 4px 3px rgba(0, 0, 0, .5)); }
 .dc-party__pet svg { display: block; animation: dc-party-idle 2.4s ease-in-out infinite; animation-delay: calc(var(--i) * -0.6s); }
 .dc-party.is-walking .dc-party__pet svg { animation: dc-party-walk .32s ease-in-out infinite alternate; animation-delay: calc(var(--i) * -0.11s); }
@@ -838,7 +843,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @keyframes dc-gain-in { from { opacity: 0; transform: translate(-50%, 20px) scale(.92); } }
 @keyframes dc-gain-icon { 50% { transform: scale(1.08) rotate(-4deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .dc-trail.is-open, .dc-node.is-reachable, .dc-prop__steam, .dc-gain, .dc-gain__icon, .dc-party__pet svg { animation: none !important; }
+  .dc-trail.is-open, .dc-node.is-reachable, .dc-prop__steam, .dc-gain, .dc-gain__icon, .dc-party__pet svg, .dc-foes__foe svg { animation: none !important; }
 }
 .dc-mapbox { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-bg); }
 .dc-mapbox.is-cleared { flex-direction: row; align-items: center; border-color: color-mix(in srgb, #F5C542 50%, var(--tk-border)); color: var(--tk-text-2); }

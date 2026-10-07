@@ -122,6 +122,29 @@ function Party({ map, party, hold, place, geom }) {
   );
 }
 
+/**
+ * Miniaturas dos inimigos em pé atrás do ponto (como as dos pets): só nos pontos alcançáveis (a próxima escolha) e no
+ * chefe, sempre visível no topo até ser derrotado. O resto do mapa fica só com o ícone; o detalhe segue no cartão.
+ */
+function Foes({ n, x, y }) {
+  const boss = n.type === 'boss';
+  const size = boss ? 96 : n.type === 'elite' ? 36 : 32;
+  const gap = boss ? 40 : 24;
+  return (
+    <div className={'dc-foes' + (boss ? ' is-boss' : '')} style={{ left: x, top: y - (boss ? 34 : 24) }} aria-hidden="true">
+      {n.enemies.map((e, i) => {
+        const dx = (i - (n.enemies.length - 1) / 2) * gap;
+        return (
+          <React.Fragment key={i}>
+            <span className="dc-foes__shadow" style={{ left: dx, width: size * 0.8 }} />
+            <span className="dc-foes__foe" style={{ left: dx, '--i': i }}><VillainSprite id={e.sprite} color={e.color} size={size} /></span>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 function MapGrid({ map, onNode, party = [], hold = false }) {
   const ref = React.useRef(null);
   const boxRef = React.useRef(null);
@@ -212,6 +235,7 @@ function MapGrid({ map, onNode, party = [], hold = false }) {
           </span>
         ))}
         <AreaProps arena={map.area.arena} w={w} h={H} spots={spots} />
+        {map.nodes.filter((n) => n.enemies && (n.type === 'boss' ? n.status !== 'visited' : n.status === 'reachable')).map((n) => <Foes key={n.id} n={n} x={x(n)} y={y(n)} />)}
         <Party map={map} party={party} hold={hold} place={place} geom={geom} />
       </div>
     </div>
