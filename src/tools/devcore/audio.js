@@ -94,26 +94,27 @@ const lead = (t, m, d, out) => { tone(t, m, d, { type: 'square', gain: 0.05, att
 /* ─────────────── temas (originais) ───────────────
  * chords: tríade por compasso (MIDI) · melody: 16 passos por compasso (semicolcheias; null = pausa) */
 const THEMES = {
-  // Localhost: ré menor, Dm–B♭–F–C, cravo em arpejo e um órgão cantando por cima.
+  // Localhost: tenso e perigoso — ré menor harmônica, acorde napolitano (E♭), dominante com dó sustenido,
+  // baixo pulsando em colcheias, cravo com vizinhas cromáticas e um trítono na melodia.
   localhost: {
-    bpm: 128,
-    chords: [[50, 53, 57], [46, 50, 53], [53, 57, 60], [48, 52, 55]],
+    bpm: 140, pulse: true, chromatic: true,
+    chords: [[50, 53, 57], [51, 55, 58], [50, 53, 57], [45, 49, 52]],
     melody: [
-      [74, null, null, 72, 74, null, 77, null, 76, null, 74, null, 72, null, 69, null],
-      [70, null, null, 69, 70, null, 74, null, 72, null, 70, null, 69, null, 65, null],
-      [72, null, null, 74, 77, null, 81, null, 79, null, 77, null, 76, null, 77, null],
-      [76, null, 74, null, 72, null, 71, null, 72, null, 74, null, 76, null, null, null],
+      [74, null, 75, null, 74, null, null, 69, 70, null, 69, null, 68, null, 69, null],
+      [75, null, null, 74, 75, null, 79, null, 78, null, 75, null, 74, null, null, null],
+      [77, null, 76, 77, 74, null, null, null, 80, null, 81, null, 77, null, 74, null],
+      [73, null, null, 76, 73, null, 69, null, 70, null, 73, null, 76, 75, 73, null],
     ],
   },
-  // Chefe: mais rápido, ré menor harmônica (A maior com dó sustenido), baixo marcado e caixa nos tempos.
+  // Chefe: ainda mais rápido, bumbo dobrado, tímpanos e trítono (sol sustenido) no clímax.
   boss: {
-    bpm: 152,
-    chords: [[50, 53, 57], [55, 58, 62], [45, 49, 52], [50, 53, 57]],
+    bpm: 160, pulse: true, chromatic: true, doubleKick: true, timpani: true,
+    chords: [[50, 53, 57], [51, 55, 58], [44, 47, 50], [45, 49, 52]],
     melody: [
-      [74, 73, 74, null, 77, null, 74, null, 81, null, 77, null, 74, null, 73, null],
-      [74, null, 79, null, 82, null, 79, null, 77, 76, 77, null, 74, null, null, null],
-      [76, null, 73, null, 69, null, 73, null, 76, null, 81, null, 79, null, 76, null],
-      [77, 76, 74, null, 73, null, 74, null, 69, null, null, null, 62, null, null, null],
+      [74, 75, 74, null, 81, null, 80, null, 77, null, 74, null, 75, null, 74, null],
+      [82, null, 79, null, 75, null, 79, null, 82, 83, 82, null, 79, null, null, null],
+      [80, null, 77, null, 74, null, 71, null, 80, null, 83, null, 80, null, 77, null],
+      [81, 80, 79, null, 77, null, 76, null, 73, null, null, null, 69, null, 62, null],
     ],
   },
 };
@@ -138,12 +139,15 @@ export function startMusic(theme) {
       const s = n % 16;
       const chord = T.chords[bar];
       if (s === 0) { strings(next, chord[0] + 12, step * 16, out); strings(next, chord[2] + 12, step * 16, out); organ(next, chord[1] + 12, step * 16, out); }
-      // Cravo: arpejo da tríade em semicolcheias (sobe e desce).
+      // Cravo: arpejo da tríade em semicolcheias; nos temas tensos, a vizinha cromática (meio tom acima) no fim de cada meio compasso.
       const arp = [0, 1, 2, 1, 0, 2, 1, 2];
-      harpsichord(next, chord[arp[s % 8]] + 24, step * 0.9, out);
-      if (s % 4 === 0) bass(next, chord[0] - 12, step * 3.5, out);
-      if (s % 8 === 0) kick(next, out);
+      const tone8 = chord[arp[s % 8]] + 24;
+      harpsichord(next, T.chromatic && s % 8 === 7 ? chord[2] + 25 : tone8, step * 0.9, out);
+      // Baixo: pulsando em colcheias (tenso) ou em semínimas.
+      if (T.pulse ? s % 2 === 0 : s % 4 === 0) bass(next, chord[0] - 12 + (T.pulse && s % 8 === 6 ? 1 : 0), T.pulse ? step * 1.6 : step * 3.5, out);
+      if (s % 8 === 0 || (T.doubleKick && s % 8 === 3)) kick(next, out);
       if (theme === 'boss' ? s % 4 === 2 : s % 8 === 4) snare(next, out);
+      if (T.timpani && s === 12) { kick(next, out); tone(next, 38, step * 3, { type: 'sine', gain: 0.2, decay: step * 3, out }); }
       const note = T.melody[bar][s];
       if (note != null) {
         let len = 1;

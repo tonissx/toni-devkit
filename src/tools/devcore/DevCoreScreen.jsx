@@ -155,7 +155,7 @@ export function DevCoreScreen({ toast, request }) {
         out.push({ at: t, type: 'defeated', villain: e.villain, category: b.category, text: b.defeatedLine || 'derrotado!' });
         out.push({ at: t, type: 'upgrade' }); // metade dos pets comemora
       }
-      else if (e.type === 'ability') out.push({ at: t, type: 'ability', pet: e.pet, text: (s.pets.find((p) => p.ability.id === e.id) || { ability: {} }).ability.name });
+      else if (e.type === 'ability') out.push({ at: t, type: 'ability', pet: e.pet, text: (s.pets.find((p) => p.owned && p.ability.id === e.id) || { ability: {} }).ability.name });
     }
     for (const e of log || []) {
       if (e.type === 'mapOpen') toast('Mapa liberado', `${e.name}: batalhas, eventos e Patches na aba Mapa`);
@@ -210,7 +210,8 @@ export function DevCoreScreen({ toast, request }) {
   const act = React.useCallback(async (action) => {
     const r = await api().act(action);
     take(r.snapshot);
-    react(r.log, r.snapshot);
+    // O log desta ação chega também pelo aviso do serviço (onChanged, que vai para todas as janelas): reagir aqui
+    // duplicava popups, sons e reações. As reações vêm só de lá.
     if (r.error) toast('DevCore', r.error, 'error');
     return r;
   }, []);

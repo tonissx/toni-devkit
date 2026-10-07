@@ -69,7 +69,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   }
   const cur = !done ? log[i] : null;
   const pet = (id) => snap.pets.find((p) => p.id === id);
-  const abilityName = (id) => (snap.pets.find((p) => p.ability.id === id) || { ability: { name: id } }).ability.name;
+  const abilityName = (id) => (snap.pets.find((p) => p.owned && p.ability.id === id) || { ability: { name: id } }).ability.name; // pets não encontrados não têm `ability`
   const itemName = (id) => (snap.inventory.find((k) => k.id === id) || { name: id }).name;
   const round = cur ? cur.r : log[log.length - 1].r;
 

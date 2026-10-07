@@ -104,7 +104,54 @@ function AreaProps({ arena, w }) {
  * O mapa como tabuleiro em perspectiva (estilo Inscryption): mesa inclinada, pontos em pé como fichas, objetos da área
  * e trilhas pontilhadas e curvas (SVG em pixels — os pontos do tracejado não distorcem).
  */
-function MapGrid({ map, onNode }) {
+/** Curva de uma trilha a→b: ponto de controle no meio, deslocado na perpendicular (estável por trilha). */
+function trailCurve(x1, y1, x2, y2, key, shortcut) {
+  const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+  const bend = ((hashStr(key) % 7) - 3) * 7 + (shortcut ? 26 : 0);
+  return { x1, y1, x2, y2, cx: (x1 + x2) / 2 - ((y2 - y1) / len) * bend, cy: (y1 + y2) / 2 + ((x2 - x1) / len) * bend };
+}
+/** Ponto da curva em t (Bézier quadrática). */
+const onCurve = (k, t) => ({ x: (1 - t) ** 2 * k.x1 + 2 * (1 - t) * t * k.cx + t * t * k.x2, y: (1 - t) ** 2 * k.y1 + 2 * (1 - t) * t * k.cy + t * t * k.y2 });
+const WALK_MS = 1500;
+
+/**
+ * Esquadrão no tabuleiro: em pé ao lado do ponto atual; ao avançar, anda pela trilha curva até o ponto novo.
+ * hold: segura a caminhada (a arena está aberta) — ela acontece quando a arena fecha.
+ */
+function Party({ map, party, hold, place, geom }) {
+  const [shown, setShown] = React.useState(map.at);   // ponto onde o esquadrão está desenhado
+  const [pos, setPos] = React.useState(() => place(map.at));
+  const [walking, setWalking] = React.useState(false);
+  React.useEffect(() => {
+    if (hold) return undefined;
+    if (shown === map.at) { setPos(place(map.at)); return undefined; }
+    const k = geom(shown, map.at);
+    const t0 = performance.now();
+    let raf = 0;
+    setWalking(true);
+    const frame = (now) => {
+      const t = Math.min(1, (now - t0) / WALK_MS);
+      const e = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2; // ease-in-out
+      setPos(onCurve(k, e));
+      if (t < 1) raf = requestAnimationFrame(frame);
+      else { setWalking(false); setShown(map.at); }
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [map.at, hold, shown, place]);
+  if (!party.length) return null;
+  return (
+    <div className={'dc-party' + (walking ? ' is-walking' : '')} style={{ left: pos.x, top: pos.y }} aria-hidden="true">
+      {party.map((p, i) => (
+        <span key={p.id} className="dc-party__pet" style={{ '--i': i, left: (i - (party.length - 1) / 2) * 34 }}>
+          <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} aura={auraOf(p)} size={44} className="is-static" />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function MapGrid({ map, onNode, party = [], hold = false }) {
   const ref = React.useRef(null);
   const [w, setW] = React.useState(900);
   React.useLayoutEffect(() => {
@@ -118,6 +165,17 @@ function MapGrid({ map, onNode }) {
   const x = (n) => PAD_X + ((n.col + 0.5) / cols) * (w - 2 * PAD_X);
   const y = (n) => PAD_Y + ((n.lane + 0.5) / map.area.lanes) * (BOARD_H - 2 * PAD_Y);
   const byId = Object.fromEntries(map.nodes.map((n) => [n.id, n]));
+  // Onde o esquadrão fica: um pouco à frente do ponto (para não cobrir a ficha); antes de começar, à esquerda da coluna 0.
+  const start = { x: PAD_X * 0.45, y: BOARD_H / 2 };
+  const nodeAt = (id) => (id == null ? null : byId[id]);
+  const place = React.useCallback((id) => { const n = nodeAt(id); return n ? { x: x(n), y: y(n) + 34 } : { ...start, y: start.y + 34 }; }, [w, map.at]);
+  const geom = (from, to) => {
+    const a = nodeAt(from);
+    const b = nodeAt(to);
+    const p0 = a ? { x: x(a), y: y(a) } : start;
+    const k = trailCurve(p0.x, p0.y, x(b), y(b), (a ? a.id : 'start') + '>' + b.id, a && a.shortcut === b.id);
+    return { ...k, y1: k.y1 + 34, cy: k.cy + 34, y2: k.y2 + 34 };
+  };
   const paths = [];
   for (const n of map.nodes) {
     for (const id of [...n.next, ...(n.shortcut ? [n.shortcut] : [])]) {
@@ -125,12 +183,8 @@ function MapGrid({ map, onNode }) {
       const walked = (n.status === 'visited' || n.status === 'current') && (t.status === 'visited' || t.status === 'current');
       const open = n.status === 'current' && t.status === 'reachable';
       // Curva: ponto de controle no meio, deslocado na perpendicular (sinal e tamanho estáveis por trilha).
-      const [x1, y1, x2, y2] = [x(n), y(n), x(t), y(t)];
-      const len = Math.hypot(x2 - x1, y2 - y1) || 1;
-      const bend = ((hashStr(n.id + '>' + id) % 7) - 3) * 7 + (id === n.shortcut ? 26 : 0);
-      const cx = (x1 + x2) / 2 - ((y2 - y1) / len) * bend;
-      const cy = (y1 + y2) / 2 + ((x2 - x1) / len) * bend;
-      paths.push({ key: n.id + '>' + id, d: `M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}`, cls: (walked ? ' is-walked' : open ? ' is-open' : '') + (id === n.shortcut ? ' is-shortcut' : '') });
+      const k = trailCurve(x(n), y(n), x(t), y(t), n.id + '>' + id, id === n.shortcut);
+      paths.push({ key: n.id + '>' + id, d: `M${k.x1} ${k.y1} Q${k.cx} ${k.cy} ${k.x2} ${k.y2}`, cls: (walked ? ' is-walked' : open ? ' is-open' : '') + (id === n.shortcut ? ' is-shortcut' : '') });
     }
   }
   return (
@@ -138,6 +192,7 @@ function MapGrid({ map, onNode }) {
       <div ref={ref} className={'dc-board__table dc-board--' + map.area.arena} style={{ height: BOARD_H }}>
         <div className="dc-board__mat" />
         <AreaProps arena={map.area.arena} w={w} />
+        <Party map={map} party={party} hold={hold} place={place} geom={geom} />
         <svg className="dc-board__paths" width={w} height={BOARD_H} aria-hidden="true">
           {paths.map((p) => <path key={p.key} className={'dc-trail' + p.cls} d={p.d} />)}
         </svg>
@@ -339,7 +394,9 @@ export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio
         ))}
       </div>
       {map.cleared && <div className="dc-mapbox is-cleared"><Icon name="crown" size={16} /> <b>{map.area.name} concluída!</b> O Legacy Monolith caiu. A próxima área (Staging) chega em breve.</div>}
-      <MapGrid map={map} onNode={onNode} />
+      <MapGrid map={map} onNode={onNode} hold={!!battle}
+        party={(map.squad.pets.length ? map.squad.pets : [...map.roster].sort((a, b) => b.level - a.level).slice(0, 3).map((p) => p.id))
+          .map((id) => snap.pets.find((p) => p.id === id && p.owned)).filter(Boolean)} />
       {!map.at && !map.cleared && <div className="dc-row__desc">Escolha um ponto da primeira coluna para começar. Passe o mouse num ponto para ver custo, inimigos e recompensa.</div>}
       {map.pending && <PendingPanel map={map} snap={snap} act={act} />}
       {prepNode && <PrepPanel key={prepNode.id} map={map} snap={snap} node={prepNode} act={act} onCancel={() => setPrep(null)} />}
