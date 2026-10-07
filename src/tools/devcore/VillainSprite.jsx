@@ -179,7 +179,29 @@ function Monolith({ c, locked }) {
   return (
     <g>
       {!locked && <ellipse className="v-mist" cx="32" cy="57" rx="22" ry="5" fill="#1A0B1E" opacity=".75" />}
+      {/* pernas: dois blocos de pedra atarracados, plantados no chão */}
+      <path d="M20 46 L29 46 L30 60 L18.5 60 Z" fill={c} stroke="#0D0F14" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M35 46 L44 46 L45.5 60 L34 60 Z" fill={c} stroke="#0D0F14" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M18.8 57 H30 M34.2 57 H45.4" stroke="#0D0F14" strokeWidth="1" opacity=".6" />
+      <path d="M35 46 L44 46 L45.5 60 L40 60 Z" fill="#000" opacity=".3" />
       <g className="v-body">
+        {/* braços de pedra em blocos (atrás do corpo): o esquerdo pendurado, o direito à frente, punhos de pedregulho */}
+        <path d="M18 13 L10 16 L6.5 28 L13 29.5 L18 21 Z" fill={c} stroke="#0D0F14" strokeWidth="1.4" strokeLinejoin="round" />
+        <path d="M6.5 28 L13 29.5 L13.5 39 L5.5 39.5 Z" fill={c} stroke="#0D0F14" strokeWidth="1.4" strokeLinejoin="round" />
+        <path d="M3.5 39 L14.5 38 L16 46 L11.5 50 L5 49.5 L2.5 44.5 Z" fill={c} stroke="#0D0F14" strokeWidth="1.4" strokeLinejoin="round" />
+        <path d="M46 13 L54 15 L58.5 26.5 L52 28.5 L46 21 Z" fill={c} stroke="#0D0F14" strokeWidth="1.4" strokeLinejoin="round" />
+        <path d="M52 28.5 L58.5 26.5 L61 37 L53.5 38.5 Z" fill={c} stroke="#0D0F14" strokeWidth="1.4" strokeLinejoin="round" />
+        <path d="M51 37.5 L62 36 L64 43 L60 47.5 L53.5 47 L50 42.5 Z" fill={c} stroke="#0D0F14" strokeWidth="1.4" strokeLinejoin="round" />
+        <path d="M46 13 L54 15 L58.5 26.5 L56 27 Z M52 28.5 L58.5 26.5 L61 37 L58 37.5 Z M51 37.5 L62 36 L64 43 L60 47.5 L57 47.2 Z" fill="#000" opacity=".3" />
+        <path d="M6 44 l3 0.5 M8 47 l3 -0.5 M54 42 l3 0.5 M56 45 l3 -0.5" stroke="#0D0F14" strokeWidth="1" strokeLinecap="round" />
+        {!locked && <>
+          <path d="M10 16 Q13 11.5 18 13 L17.5 17 Q13.5 15 10 18.5 Z" fill="#3E7A3A" />
+          <path d="M46 13 Q51 11 54 15 Q50 15 46.5 17.5 Z" fill="#35692F" />
+          <path d="M3.5 39 Q8 36 14.5 38 L14 40 Q9 38.5 4 41 Z" fill="#4E8F45" />
+          {/* rachaduras brilhando também nos braços */}
+          <path className="v-crack" d="M9 20 L11 24 L9 27 M57 39 L59 42" stroke="#FF3B3B" strokeWidth=".9" fill="none" strokeLinecap="round" />
+        </>}
+        <g transform="translate(0 -6)">
         {/* corpo: topo quebrado e irregular, face sombreada à direita */}
         <path d="M15 58 L17 13 L22 8 L25 11 L30 5 L35 9 L40 6 L44 12 L47 11 L49 58 Z" fill={c} stroke="#0D0F14" strokeWidth="1.6" strokeLinejoin="round" />
         <path d="M37 9 L40 6 L44 12 L47 11 L49 58 L38 58 Z" fill="#000" opacity=".32" />
@@ -209,6 +231,7 @@ function Monolith({ c, locked }) {
           {/* boca: fenda serrilhada */}
           <path d="M25 42 L28 44 L31 42 L34 44 L37 42 L40 44" stroke="#0D0F14" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
         </>}
+        </g>
       </g>
       {!locked && <g>
         {/* grama e um cogumelo na base */}
@@ -216,10 +239,8 @@ function Monolith({ c, locked }) {
         <rect x="53.6" y="55" width="1.6" height="3.5" fill="#E8E1CF" /><path d="M51.5 55.5 Q54.4 51 57.3 55.5 Z" fill="#B8453A" />
       </g>}
       {!locked && <g className="v-debris" fontFamily="monospace" fontWeight="700" fill="#FF6B5E">
-        <text x="5" y="20" fontSize="6" opacity=".7">GOTO</text>
-        <text x="49" y="30" fontSize="6" opacity=".6">{'<td>'}</text>
-        <rect x="9" y="38" width="3" height="3" fill="#2A2F3A" transform="rotate(20 10 39)" />
-        <rect x="53" y="14" width="2.5" height="2.5" fill="#2A2F3A" transform="rotate(-15 54 15)" />
+        <text x="0" y="7" fontSize="6" opacity=".7">GOTO</text>
+        <text x="50" y="6" fontSize="6" opacity=".6">{'<td>'}</text>
       </g>}
     </g>
   );
