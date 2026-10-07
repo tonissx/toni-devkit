@@ -1,9 +1,25 @@
 import { DS } from '../../lib/ds.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
 import { VillainSprite } from './VillainSprite.jsx';
+import { startMusic, stopMusic, sfx } from './audio.js';
 
 const { Modal, Button, Icon, ProgressBar } = DS;
 const STEP_MS = 420;
+
+/** Efeito sonoro de um evento do log. */
+function sound(e) {
+  if (e.k === 'atk') return e.a && e.a[0] === 'e' ? 'enemyHit' : e.c ? 'crit' : 'hit';
+  return { miss: 'miss', heal: 'heal', revive: 'heal', ab: 'ability', item: 'item', down: 'down', decoy: 'miss', split: 'down' }[e.k] || null;
+}
+
+/** Botão de som (liga/desliga) — o estado fica nas preferências do DevCore. */
+export function SoundToggle({ sound: on, onSound }) {
+  return (
+    <Button size="sm" variant="ghost" icon={on ? 'volume-2' : 'volume-x'} title={on ? 'Som ligado' : 'Som desligado'} aria-pressed={on} onClick={() => onSound(!on)}>
+      {on ? 'Som' : 'Mudo'}
+    </Button>
+  );
+}
 
 /** Texto curto de um evento do log (balão sobre a unidade). */
 function bubble(e, abilityName, itemName) {
@@ -23,10 +39,16 @@ function bubble(e, abilityName, itemName) {
  * Arena temática da área: reproduz o log da batalha calculada pelo engine (não decide nada).
  * Pets à esquerda (frente mais perto do centro), inimigos à direita. Dá para pular.
  */
-export function Arena({ battle, snap, area, onClose }) {
+export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) {
   const [i, setI] = React.useState(0);
   const log = battle.log;
   const done = i >= log.length;
+  // Música: tema da área (ou do chefe) enquanto a luta passa; fanfarra de vitória/derrota no fim.
+  React.useEffect(() => { startMusic(battle.kind === 'boss' ? 'boss' : area.id); return () => stopMusic(); }, []);
+  React.useEffect(() => {
+    if (done) { stopMusic(); sfx(battle.win ? 'victory' : 'defeat'); return; }
+    if (i > 0) { const s = sound(log[i - 1]); if (s) sfx(s); }
+  }, [i, done]);
   React.useEffect(() => {
     if (done) return undefined;
     const t = setTimeout(() => setI((x) => x + 1), log[i] && (log[i].k === 'fortify' || log[i].k === 'down') ? STEP_MS / 2 : STEP_MS);
@@ -76,9 +98,12 @@ export function Arena({ battle, snap, area, onClose }) {
   return (
     <Modal open title={'ARENA · ' + area.name.toUpperCase()} icon="swords" onClose={onClose} width={760}
       description={done ? (battle.win ? 'Vitória!' : 'Derrota — nada foi perdido além da entrada. Ajuste o esquadrão e tente de novo.') : `Rodada ${round}`}
-      footer={done
-        ? <Button variant="primary" onClick={onClose}>Continuar</Button>
-        : <Button variant="ghost" icon="fast-forward" onClick={() => setI(log.length)}>Pular</Button>}>
+      footer={<>
+        {onSound && <SoundToggle sound={soundOn} onSound={onSound} />}
+        {done
+          ? <Button variant="primary" onClick={onClose}>Continuar</Button>
+          : <Button variant="ghost" icon="fast-forward" onClick={() => setI(log.length)}>Pular</Button>}
+      </>}>
       <div className={'dc-arena dc-arena--' + area.arena} aria-label={'Arena ' + area.name}>
         <div className="dc-arena__side is-pets">{[...pets].sort((a, b) => a.front - b.front).map((u) => <Unit key={u.uid} u={u} />)}</div>
         <div className="dc-arena__vs">VS</div>

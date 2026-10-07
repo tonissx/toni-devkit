@@ -166,7 +166,7 @@ function grantRewards(s, rewards, rand, c, now = null) {
   for (const r of rewards) {
     if (r.patch) { const id = grantPatch(s, r.patch, rand, c); out.push(id ? { type: 'patch', id } : { type: 'none' }); }
     if (r.item) { const id = grantItem(s, rand, c); out.push(id ? { type: 'item', id } : { type: 'none' }); }
-    if (r.part) { const d = dropPart(s, rand, {}, c); out.push(d.type === 'part' && !d.dup ? { type: 'part', gen: d.gen, name: d.name } : { type: 'scrap' }); }
+    if (r.part) { const d = dropPart(s, rand, {}, c); out.push(d.type === 'part' && !d.dup ? { type: 'part', gen: d.gen, name: d.name, part: d.part } : { type: 'scrap' }); }
     if (r.petLevel) { const id = petToLevel(s, c); if (id) { s.run.pets[id].level += r.petLevel; out.push({ type: 'petLevel', pet: id, level: s.run.pets[id].level }); } }
     if (r.battleBuff) { s.run.battleBuff = { atk: ((s.run.battleBuff && s.run.battleBuff.atk) || 0) + r.battleBuff.atk }; out.push({ type: 'battleBuff', atk: s.run.battleBuff.atk }); }
     if (r.healAll) { for (const id of Object.keys(s.run.pets)) setPetHp(s, id, 1, now); out.push({ type: 'healAll' }); }

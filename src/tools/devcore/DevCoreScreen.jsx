@@ -7,6 +7,8 @@ import { GeneratorsPanel, UpgradesPanel, PetsPanel, TechPanel } from './Panels.j
 import { OpsPanel } from './OpsPanel.jsx';
 import { RateWithDetails } from './RateDetails.jsx';
 import { MapPanel } from './MapPanel.jsx';
+import { ItemPopups, gainsFrom } from './ItemPopups.jsx';
+import { configureAudio } from './audio.js';
 
 const { Tabs, Modal, Button, ProgressBar, Spinner, Icon } = DS;
 
@@ -127,6 +129,11 @@ export function DevCoreScreen({ toast, request }) {
   const [receivedAt, setReceivedAt] = React.useState(Date.now());
   const [reactions, setReactions] = React.useState([]);
   const [freshUnseen, setFreshUnseen] = React.useState([]); // descobertas "NOVO" desta visita
+  // Som (música e efeitos das batalhas, popups): ligado em volume baixo por padrão; a preferência fica salva.
+  const [audio, setAudio] = usePersisted('devcore.audio', { on: true, volume: 0.35 });
+  React.useEffect(() => { configureAudio(audio); }, [audio.on, audio.volume]);
+  const [gains, setGains] = React.useState([]);       // itens ganhos/comprados → popups
+  const [arenaOpen, setArenaOpen] = React.useState(false); // recompensas de batalha esperam a arena fechar
   const now = useClock(500);
 
   const take = React.useCallback((s) => { setSnap(s); setReceivedAt(Date.now()); }, []);
@@ -157,6 +164,8 @@ export function DevCoreScreen({ toast, request }) {
       const item = e.item && (s.inventory.find((k) => k.id === e.item) || {}).name;
       toast('Missão concluída', e.title + (item ? ' · +1 ' + item : ''));
     }
+    const got = gainsFrom(log, s);
+    if (got.length) setGains((g) => [...g, ...got]);
     if (out.length) setReactions((r) => [...r.filter((x) => t - x.at < REACTION_MS), ...out]);
     if ((log || []).some((e) => e.type === 'discovery')) setFreshUnseen((f) => [...new Set([...f, ...log.filter((e) => e.type === 'discovery').map((e) => e.id)])]);
   }, []);
@@ -246,7 +255,7 @@ export function DevCoreScreen({ toast, request }) {
         </div>
       </header>
 
-      <Scene snap={snap} reactions={reactions} now={now} />
+      {ui.tab !== 'map' && <Scene snap={snap} reactions={reactions} now={now} />}
 
       <div className="dc-tabs">
         <Tabs items={tabs} value={ui.tab} onChange={(tab) => setUi((u) => ({ ...u, tab }))} />
@@ -258,10 +267,11 @@ export function DevCoreScreen({ toast, request }) {
         {ui.tab === 'upgrades' && <UpgradesPanel snap={snap} amount={liveAmount} act={act} />}
         {ui.tab === 'tech' && <TechPanel snap={snap} freshUnseen={freshUnseen} />}
         {ui.tab === 'ops' && <OpsPanel snap={snap} amount={liveAmount} act={act} now={serverNow} />}
-        {ui.tab === 'map' && snap.map.unlocked && <MapPanel snap={snap} act={act} />}
+        {ui.tab === 'map' && snap.map.unlocked && <MapPanel snap={snap} act={act} audio={audio} setAudio={setAudio} onArena={setArenaOpen} />}
         </PanelBoundary>
       </div>
 
+      <ItemPopups queue={gains} held={arenaOpen} onDone={(key) => setGains((g) => g.filter((x) => x.key !== key))} />
       {snap.welcome && <WelcomeBack snap={snap} onClose={() => act({ type: 'ackWelcome' })} />}
     </div>
   );

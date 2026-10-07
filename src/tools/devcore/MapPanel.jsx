@@ -3,7 +3,7 @@ import { formatNum, formatDuration } from '../../devcore/engine/format.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
 import { VillainSprite } from './VillainSprite.jsx';
 import { InfoCard } from './InfoCard.jsx';
-import { Arena } from './Arena.jsx';
+import { Arena, SoundToggle } from './Arena.jsx';
 
 const { Button, Icon, ProgressBar } = DS;
 const pct = (v) => Math.round(v * 100) + '%';
@@ -50,36 +50,112 @@ function NodeDetails({ n }) {
   );
 }
 
-/** O mapa: pontos e ligações (SVG por cima, em % da área). */
+/** Hash inteiro estável (curvatura de cada trilha). */
+function hashStr(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+
+const BOARD_H = 400;   // altura do tabuleiro (px, antes da inclinação)
+const PAD_X = 46;
+const PAD_Y = 48;
+
+/** Objetos 3D da área espalhados pelo tabuleiro (decoração; ver docs §4.5). upright: em pé, de frente para a câmera. */
+function AreaProps({ arena, w }) {
+  if (arena !== 'localhost') return null;
+  return (
+    <>
+      {/* Monitor ao fundo, em pé, com código na tela */}
+      <svg className="dc-prop is-upright" style={{ left: w * 0.62, top: -118 }} width="230" height="150" viewBox="0 0 230 150" aria-hidden="true">
+        <rect x="5" y="5" width="220" height="118" rx="8" fill="#232A36" stroke="#3A4354" strokeWidth="3" />
+        <rect x="15" y="15" width="200" height="98" rx="3" fill="#121823" />
+        <rect x="26" y="26" width="70" height="6" rx="3" fill="#4FC3C8" opacity=".8" />
+        <rect x="38" y="40" width="40" height="6" rx="3" fill="#C792EA" opacity=".8" /><rect x="84" y="40" width="70" height="6" rx="3" fill="#E8E8F0" opacity=".55" />
+        <rect x="38" y="54" width="96" height="6" rx="3" fill="#E8E8F0" opacity=".55" />
+        <rect x="38" y="68" width="54" height="6" rx="3" fill="#F78C6C" opacity=".8" />
+        <rect x="26" y="82" width="22" height="6" rx="3" fill="#4FC3C8" opacity=".8" />
+        <rect x="100" y="123" width="30" height="18" fill="#2A303C" /><rect x="80" y="139" width="70" height="8" rx="3" fill="#2A303C" />
+      </svg>
+      {/* Caneca, em pé, com vapor */}
+      <svg className="dc-prop is-upright" style={{ left: 6, top: BOARD_H - 92 }} width="62" height="74" viewBox="0 0 62 74" aria-hidden="true">
+        <path className="dc-prop__steam" d="M20 16 q-6 -8 0 -14 M32 16 q-6 -8 0 -14" stroke="#C9C9D2" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".5" />
+        <rect x="8" y="22" width="38" height="46" rx="6" fill="#C0392B" />
+        <path d="M46 32 h6 a8 8 0 0 1 0 18 h-6" stroke="#C0392B" strokeWidth="5" fill="none" />
+        <rect x="14" y="34" width="26" height="6" rx="3" fill="#F5E6C8" opacity=".85" />
+      </svg>
+      {/* Post-its, deitados no canto de cima à direita (livre: o chefe fica só na trilha do meio) */}
+      <div className="dc-prop is-flat dc-postit" style={{ left: w - 128, top: 34, transform: 'rotate(-7deg)' }}>TODO: fix</div>
+      <div className="dc-prop is-flat dc-postit is-blue" style={{ left: w - 74, top: 46, transform: 'rotate(6deg)' }}>git push</div>
+      {/* Teclado, deitado na borda da frente */}
+      <svg className="dc-prop is-flat" style={{ left: w * 0.36, top: BOARD_H - 26 }} width="260" height="56" viewBox="0 0 260 56" aria-hidden="true">
+        <rect width="260" height="56" rx="8" fill="#20252F" stroke="#323A48" />
+        {Array.from({ length: 3 }, (_, r) => Array.from({ length: 14 }, (__, k) => <rect key={r + '-' + k} x={8 + k * 17.5} y={8 + r * 15} width="14" height="11" rx="2" fill="#2E3542" />))}
+      </svg>
+      {/* Cabo enrolado */}
+      <svg className="dc-prop is-flat" style={{ left: w - 150, top: BOARD_H - 40 }} width="150" height="44" viewBox="0 0 150 44" aria-hidden="true">
+        <path d="M0 30 C 30 4, 50 44, 80 22 S 130 6, 150 28" stroke="#1A1D24" strokeWidth="5" fill="none" strokeLinecap="round" />
+      </svg>
+    </>
+  );
+}
+
+/**
+ * O mapa como tabuleiro em perspectiva (estilo Inscryption): mesa inclinada, pontos em pé como fichas, objetos da área
+ * e trilhas pontilhadas e curvas (SVG em pixels — os pontos do tracejado não distorcem).
+ */
 function MapGrid({ map, onNode }) {
+  const ref = React.useRef(null);
+  const [w, setW] = React.useState(900);
+  React.useLayoutEffect(() => {
+    if (!ref.current) return undefined;
+    setW(ref.current.offsetWidth);
+    const ro = new ResizeObserver(() => ref.current && setW(ref.current.offsetWidth));
+    ro.observe(ref.current);
+    return () => ro.disconnect();
+  }, []);
   const cols = map.area.columns + 1;
-  const x = (n) => ((n.col + 0.5) / cols) * 100;
-  const y = (n) => ((n.lane + 0.5) / map.area.lanes) * 100;
+  const x = (n) => PAD_X + ((n.col + 0.5) / cols) * (w - 2 * PAD_X);
+  const y = (n) => PAD_Y + ((n.lane + 0.5) / map.area.lanes) * (BOARD_H - 2 * PAD_Y);
   const byId = Object.fromEntries(map.nodes.map((n) => [n.id, n]));
-  const edges = [];
+  const paths = [];
   for (const n of map.nodes) {
     for (const id of [...n.next, ...(n.shortcut ? [n.shortcut] : [])]) {
       const t = byId[id];
       const walked = (n.status === 'visited' || n.status === 'current') && (t.status === 'visited' || t.status === 'current');
       const open = n.status === 'current' && t.status === 'reachable';
-      edges.push({ key: n.id + '>' + id, x1: x(n), y1: y(n), x2: x(t), y2: y(t), cls: (walked ? ' is-walked' : open ? ' is-open' : '') + (id === n.shortcut ? ' is-shortcut' : '') });
+      // Curva: ponto de controle no meio, deslocado na perpendicular (sinal e tamanho estáveis por trilha).
+      const [x1, y1, x2, y2] = [x(n), y(n), x(t), y(t)];
+      const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+      const bend = ((hashStr(n.id + '>' + id) % 7) - 3) * 7 + (id === n.shortcut ? 26 : 0);
+      const cx = (x1 + x2) / 2 - ((y2 - y1) / len) * bend;
+      const cy = (y1 + y2) / 2 + ((x2 - x1) / len) * bend;
+      paths.push({ key: n.id + '>' + id, d: `M${x1} ${y1} Q${cx} ${cy} ${x2} ${y2}`, cls: (walked ? ' is-walked' : open ? ' is-open' : '') + (id === n.shortcut ? ' is-shortcut' : '') });
     }
   }
   return (
-    <div className="dc-map" role="group" aria-label={'Mapa ' + map.area.name}>
-      <svg className="dc-map__edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        {edges.map((e) => <line key={e.key} className={'dc-map__edge' + e.cls} x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2} vectorEffect="non-scaling-stroke" />)}
-      </svg>
-      {map.nodes.map((n) => (
-        <span key={n.id} className="dc-map__slot" style={{ left: x(n) + '%', top: y(n) + '%' }}>
-          <InfoCard content={<NodeDetails n={n} />} focusable={false}>
-            <button type="button" className={'dc-node is-' + n.type + ' is-' + n.status + (n.status === 'reachable' && !n.affordable ? ' is-poor' : '')}
-              aria-disabled={n.status !== 'reachable'} onClick={() => n.status === 'reachable' && onNode(n)} aria-label={`${n.typeName}, coluna ${n.col + 1}${n.cost ? ', ' + formatNum(n.cost) + ' Compute' : ''}`}>
-              <Icon name={n.icon} size={n.type === 'boss' ? 20 : 15} />
-            </button>
-          </InfoCard>
-        </span>
-      ))}
+    <div className="dc-board" role="group" aria-label={'Mapa ' + map.area.name}>
+      <div ref={ref} className={'dc-board__table dc-board--' + map.area.arena} style={{ height: BOARD_H }}>
+        <div className="dc-board__mat" />
+        <AreaProps arena={map.area.arena} w={w} />
+        <svg className="dc-board__paths" width={w} height={BOARD_H} aria-hidden="true">
+          {paths.map((p) => <path key={p.key} className={'dc-trail' + p.cls} d={p.d} />)}
+        </svg>
+        {map.nodes.map((n) => (
+          <React.Fragment key={n.id}>
+            <span className="dc-token-shadow" style={{ left: x(n), top: y(n) }} />
+            <span className={'dc-map__slot' + (n.type === 'boss' ? ' is-boss' : '')} style={{ left: x(n), top: y(n) }}>
+              <InfoCard content={<NodeDetails n={n} />} focusable={false}>
+                <button type="button" className={'dc-node is-' + n.type + ' is-' + n.status + (n.status === 'reachable' && !n.affordable ? ' is-poor' : '')}
+                  aria-disabled={n.status !== 'reachable'} onClick={() => n.status === 'reachable' && onNode(n)}
+                  aria-label={`${n.typeName}, coluna ${n.col + 1}${n.cost ? ', ' + formatNum(n.cost) + ' Compute' : ''}`}>
+                  <Icon name={n.icon} size={n.type === 'boss' ? 24 : 17} />
+                </button>
+              </InfoCard>
+            </span>
+          </React.Fragment>
+        ))}
+      </div>
     </div>
   );
 }
@@ -222,13 +298,15 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
   );
 }
 
-export function MapPanel({ snap, act }) {
+export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio = () => {}, onArena = () => {} }) {
   const map = snap.map;
   const [prep, setPrep] = React.useState(null);
   const [seen, setSeen] = React.useState(map.lastBattle ? map.lastBattle.id : 0);
   const battle = map.lastBattle && map.lastBattle.id > seen ? map.lastBattle : null;
   const prepNode = prep && map.nodes.find((n) => n.id === prep && n.status === 'reachable');
   React.useEffect(() => { if (battle && battle.win) setPrep(null); }, [battle && battle.id]);
+  React.useEffect(() => { onArena(!!battle); return () => onArena(false); }, [!!battle]);
+  const setSound = (on) => setAudio((a) => ({ ...a, on }));
 
   if (!map.unlocked) return <div className="dc-empty">O mapa de {map.area.name} abre com {map.requirement}.</div>;
 
@@ -245,6 +323,11 @@ export function MapPanel({ snap, act }) {
         </div>
         <span className="dc-chip" title="Batalhas na vida">{map.stats.wins} vitória{map.stats.wins === 1 ? '' : 's'} · {map.stats.losses} derrota{map.stats.losses === 1 ? '' : 's'}</span>
         {map.battleBuff && <span className="dc-chip is-ok">Próxima batalha +{Math.round(map.battleBuff.atk * 100)}% de ataque</span>}
+        <span className="dc-sound">
+          <SoundToggle sound={audio.on} onSound={setSound} />
+          <input type="range" min="0" max="1" step="0.05" value={audio.volume} disabled={!audio.on} aria-label="Volume do som"
+            onChange={(e) => setAudio((a) => ({ ...a, volume: Number(e.target.value) }))} />
+        </span>
       </div>
       <div className="dc-patches">
         <span className="tk-menu__heading">Patches da run</span>
@@ -260,7 +343,7 @@ export function MapPanel({ snap, act }) {
       {!map.at && !map.cleared && <div className="dc-row__desc">Escolha um ponto da primeira coluna para começar. Passe o mouse num ponto para ver custo, inimigos e recompensa.</div>}
       {map.pending && <PendingPanel map={map} snap={snap} act={act} />}
       {prepNode && <PrepPanel key={prepNode.id} map={map} snap={snap} node={prepNode} act={act} onCancel={() => setPrep(null)} />}
-      {battle && <Arena battle={battle} snap={snap} area={map.area} onClose={() => setSeen(battle.id)} />}
+      {battle && <Arena battle={battle} snap={snap} area={map.area} onClose={() => setSeen(battle.id)} sound={audio.on} onSound={setSound} />}
     </div>
   );
 }
