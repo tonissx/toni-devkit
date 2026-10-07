@@ -128,6 +128,34 @@ test('graph: nodes carry task counts (snippets, ghosts and code blocks do not co
   assert.deepEqual(by, { a: [2, 1], b: [0, 0], s: [0, 0], 'ghost:falta': [0, 0] });
 });
 
+test('graph: separate clusters settle apart (no overlap), loose notes form their own group, layout is deterministic', () => {
+  const nodes = [], links = [];
+  [12, 8, 20].forEach((size, c) => {
+    for (let i = 0; i < size; i++) {
+      nodes.push({ id: `c${c}n${i}` });
+      if (i > 0) links.push({ source: `c${c}n${i}`, target: `c${c}n${Math.floor(i / 2)}` });
+    }
+  });
+  for (let i = 0; i < 6; i++) nodes.push({ id: `solta${i}` });
+  const settle = () => { const L = G.createLayout({ nodes, links }); while (G.step(L)); return L; };
+  const L = settle();
+  const groupOf = (n) => (n.id.startsWith('solta') ? 'solta' : n.id.split('n')[0]);
+  const by = new Map();
+  for (const n of L.nodes) { const k = groupOf(n); (by.get(k) || by.set(k, []).get(k)).push(n); }
+  assert.deepEqual([...by.keys()].sort(), ['c0', 'c1', 'c2', 'solta']);
+  assert.equal(new Set(L.nodes.map((n) => n.grp)).size, 4, 'um grupo por ilha + um para as soltas');
+  const circle = (ns) => {
+    const cx = ns.reduce((s, n) => s + n.x, 0) / ns.length, cy = ns.reduce((s, n) => s + n.y, 0) / ns.length;
+    return { cx, cy, r: Math.max(...ns.map((n) => Math.hypot(n.x - cx, n.y - cy))) };
+  };
+  const cs = [...by.values()].map(circle);
+  for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) {
+    const gap = Math.hypot(cs[i].cx - cs[j].cx, cs[i].cy - cs[j].cy) - cs[i].r - cs[j].r;
+    assert.ok(gap > 0, `grupos ${i} e ${j} se sobrepõem (folga ${gap.toFixed(0)})`);
+  }
+  assert.deepEqual(settle().nodes.map((n) => [n.x, n.y]), L.nodes.map((n) => [n.x, n.y]), 'mesmo grafo → mesmo desenho');
+});
+
 test('graph: layout settles without NaN, linked nodes end closer, pinned nodes stay, positions survive updates', () => {
   const nodes = Array.from({ length: 30 }, (_, i) => ({ id: 'n' + i }));
   const links = Array.from({ length: 10 }, (_, i) => ({ source: 'n' + i, target: 'n' + (i + 1) }));

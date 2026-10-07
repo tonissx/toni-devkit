@@ -83,7 +83,9 @@ function neighborhood(graph, id, depth = 1) {
 const REPEL = 2600;      // repulsão entre nós
 const SPRING = 0.06;     // força das molas (arestas)
 const LINK_LEN = 70;     // comprimento de repouso da mola
-const GRAVITY = 0.012;   // puxa tudo levemente para o centro (0, 0)
+const GRAVITY = 0.012;   // puxa cada nó levemente para a âncora do seu grupo
+const GROUP_GAP = 50;    // folga mínima entre os círculos de grupos vizinhos
+const LOOSE_PULL = 4;    // notas soltas (sem link) são puxadas mais forte, senão formam uma nuvem enorme
 const DAMPING = 0.55;    // atrito
 const DECAY = 0.982;     // quanto o alpha esfria por passo (~300 passos até parar)
 const ALPHA_MIN = 0.006;
@@ -99,21 +101,78 @@ function hash01(s) {
 }
 
 /**
+ * Grupos = componentes conectados (ilhas de notas ligadas por [[links]]). As notas sem nenhum link
+ * não formam ilha: juntas viram um grupo só ("soltas"), que fica à parte em vez de cair no centro.
+ * → { of: Int32Array (índice do nó → grupo), sizes: [n por grupo], loose: índice do grupo "soltas" ou -1 }
+ */
+function groupNodes(count, links) {
+  const parent = Array.from({ length: count }, (_, i) => i);
+  const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+  const linked = new Uint8Array(count);
+  for (const [a, b] of links) { linked[a] = linked[b] = 1; parent[find(a)] = find(b); }
+  const ids = new Map(), of = new Int32Array(count), sizes = [];
+  let loose = -1;
+  for (let i = 0; i < count; i++) {
+    let g;
+    if (!linked[i]) { if (loose < 0) { loose = sizes.length; sizes.push(0); } g = loose; }
+    else { const r = find(i); if (!ids.has(r)) { ids.set(r, sizes.length); sizes.push(0); } g = ids.get(r); }
+    of[i] = g; sizes[g]++;
+  }
+  return { of, sizes, loose };
+}
+
+/** Raio (medido nas simulações) que um grupo de n notas ocupa depois de acomodado. */
+const groupRadius = (n, loose) => (loose ? 70 + 90 * Math.sqrt(n) : 120 + 135 * Math.sqrt(n));
+
+/**
+ * Âncora de cada grupo: círculos empacotados sem sobreposição, o maior no centro e os demais em
+ * espiral ao redor. Determinístico (desempate pelo menor id), para o desenho não mudar a cada abertura.
+ */
+function anchorGroups(groups, ids) {
+  const { sizes, loose, of } = groups;
+  const first = sizes.map(() => '');
+  of.forEach((g, i) => { if (!first[g] || ids[i] < first[g]) first[g] = ids[i]; });
+  const order = sizes.map((_, g) => g).sort((a, b) => (a === loose) - (b === loose) || sizes[b] - sizes[a] || (first[a] < first[b] ? -1 : 1));
+  const placed = [], at = new Array(sizes.length);
+  for (const g of order) {
+    const r = groupRadius(sizes[g], g === loose);
+    let x = 0, y = 0;
+    if (placed.length) {
+      for (let t = 0, d = placed[0].r + r + GROUP_GAP; ; t++, d += 6) {
+        const a = t * 2.399963;
+        x = Math.cos(a) * d; y = Math.sin(a) * d;
+        if (placed.every((p) => Math.hypot(p.x - x, p.y - y) >= p.r + r + GROUP_GAP)) break;
+      }
+    }
+    placed.push({ x, y, r });
+    at[g] = { x, y };
+  }
+  return at;
+}
+
+/**
  * Layout para um grafo. prev (layout anterior) mantém as posições de quem já existia — o grafo
- * muda sem "explodir". Nós novos nascem perto de um vizinho já posicionado ou numa espiral.
+ * muda sem "explodir". Nós novos nascem perto de um vizinho já posicionado, ou ao redor da âncora do
+ * seu grupo. Cada grupo é puxado para a própria âncora (não para o centro), então as ilhas não se empilham.
  */
 function createLayout(graph, prev = null) {
   const old = new Map();
   if (prev) for (const p of prev.nodes) old.set(p.id, p);
-  const nodes = graph.nodes.map((n, i) => {
-    const o = old.get(n.id);
-    if (o) return { ...n, x: o.x, y: o.y, vx: 0, vy: 0, fixed: o.fixed };
-    const a = i * 2.399963 + hash01(n.id) * 0.5; // ângulo áureo
-    const r = 12 * Math.sqrt(i + 1);
-    return { ...n, x: Math.cos(a) * r, y: Math.sin(a) * r, vx: 0, vy: 0, fixed: false, fresh: true };
-  });
-  const at = new Map(nodes.map((n, i) => [n.id, i]));
+  const at = new Map(graph.nodes.map((n, i) => [n.id, i]));
   const links = graph.links.map((l) => [at.get(l.source), at.get(l.target)]).filter(([a, b]) => a != null && b != null);
+  const groups = groupNodes(graph.nodes.length, links);
+  const anchors = anchorGroups(groups, graph.nodes.map((n) => n.id));
+  const seen = new Array(anchors.length).fill(0); // quantos já nasceram em cada grupo (espiral local)
+  const nodes = graph.nodes.map((n, i) => {
+    const g = groups.of[i], an = anchors[g];
+    const o = old.get(n.id);
+    const grp = { grp: g, ax: an.x, ay: an.y, gk: g === groups.loose ? LOOSE_PULL : 1 };
+    if (o) return { ...n, x: o.x, y: o.y, vx: 0, vy: 0, fixed: o.fixed, ...grp };
+    const k = seen[g]++;
+    const a = k * 2.399963 + hash01(n.id) * 0.5; // ângulo áureo
+    const r = 12 * Math.sqrt(k + 1);
+    return { ...n, x: an.x + Math.cos(a) * r, y: an.y + Math.sin(a) * r, vx: 0, vy: 0, fixed: false, fresh: true, ...grp };
+  });
   // Nós novos com um vizinho já posicionado nascem ao lado dele.
   for (const [a, b] of links) {
     const [na, nb] = [nodes[a], nodes[b]];
@@ -134,6 +193,7 @@ function place(n, near) {
 /** Aplica repulsão entre i e j. */
 function repel(ns, i, j, k) {
   const a = ns[i], b = ns[j];
+  if (a.grp !== b.grp) return; // grupos diferentes não se empurram: quem os separa são as âncoras
   let dx = a.x - b.x, dy = a.y - b.y;
   let d2 = dx * dx + dy * dy;
   if (d2 > CUTOFF * CUTOFF) return;
@@ -170,8 +230,9 @@ function step(L) {
     q.vx -= dx * f; q.vy -= dy * f;
   }
   for (const p of ns) {
-    p.vx = (p.vx - p.x * GRAVITY * alpha) * DAMPING;
-    p.vy = (p.vy - p.y * GRAVITY * alpha) * DAMPING;
+    const pull = GRAVITY * p.gk * alpha;
+    p.vx = (p.vx - (p.x - p.ax) * pull) * DAMPING;
+    p.vy = (p.vy - (p.y - p.ay) * pull) * DAMPING;
     if (p.fixed) { p.vx = 0; p.vy = 0; continue; }
     const s = Math.hypot(p.vx, p.vy);
     if (s > MAX_SPEED) { p.vx *= MAX_SPEED / s; p.vy *= MAX_SPEED / s; }
