@@ -1,10 +1,85 @@
 import { DS } from '../../lib/ds.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
 import { VillainSprite } from './VillainSprite.jsx';
+import { PartIcon } from './PartArt.jsx';
 import { startMusic, stopMusic, sfx } from './audio.js';
 
 const { Modal, Button, Icon, ProgressBar } = DS;
 const STEP_MS = 420;
+
+/**
+ * Desempenho de cada pet na luta (do log): dano causado e recebido, cura, abates (último golpe), habilidades.
+ * → [{ uid, id, name, dealt, taken, healed, kos, abilities, end, maxHp, mvp }]
+ */
+function petPerformance(battle) {
+  const pets = battle.units.filter((u) => u.side === 'pet');
+  const st = Object.fromEntries(pets.map((u) => [u.uid, { dealt: 0, taken: 0, healed: 0, kos: 0, abilities: 0 }]));
+  const lastHit = {};
+  for (const e of battle.log) {
+    if (e.k === 'atk') { if (st[e.a]) st[e.a].dealt += e.v; if (st[e.t]) st[e.t].taken += e.v; if (e.t) lastHit[e.t] = e.a; }
+    if (e.k === 'heal' && st[e.a]) st[e.a].healed += e.v;
+    if (e.k === 'ab' && st[e.a]) st[e.a].abilities += 1;
+    if (e.k === 'down' && e.t && e.t[0] === 'e' && st[lastHit[e.t]]) st[lastHit[e.t]].kos += 1;
+  }
+  const rows = pets.map((u) => ({ uid: u.uid, id: u.id, name: u.name, end: u.end, maxHp: u.maxHp, ...st[u.uid] }));
+  const best = [...rows].sort((a, b) => b.dealt - a.dealt || b.healed - a.healed)[0];
+  return rows.map((r) => ({ ...r, mvp: !!best && r.uid === best.uid && (best.dealt > 0 || best.healed > 0) }));
+}
+
+/** Ícone de uma recompensa (Patch, consumível, peça, sucata). */
+function RewardIcon({ r, snap }) {
+  if (r.type === 'part' && r.part) return <PartIcon id={r.part} size={18} />;
+  if (r.type === 'patch' || r.type === 'swap') { const p = snap.map.patches.find((x) => x.id === r.id); return <Icon name={p ? p.icon : 'sparkles'} size={16} />; }
+  if (r.type === 'item') { const k = snap.inventory.find((x) => x.id === r.id); return <Icon name={k ? k.icon : 'package'} size={16} />; }
+  return <Icon name="package" size={16} />;
+}
+
+/** Resumo depois da luta: recompensas e o desempenho de cada pet (MVP = quem mais causou dano). */
+function BattleSummary({ battle, snap, itemName }) {
+  const perf = petPerformance(battle);
+  const pet = (id) => snap.pets.find((p) => p.id === id && p.owned);
+  const fmt = (n) => Math.round(n).toLocaleString('pt-BR');
+  return (
+    <div className="dc-arena-summary">
+      {battle.win && (
+        <section>
+          <div className="tk-menu__heading">Recompensas</div>
+          <div className="dc-arena-summary__rewards">
+            {battle.rewards.length
+              ? battle.rewards.map((r, i) => <span key={i} className={'dc-reward is-' + r.type}><RewardIcon r={r} snap={snap} />{r.text}</span>)
+              : <span className="dc-row__desc">Nada desta vez.</span>}
+          </div>
+        </section>
+      )}
+      <section>
+        <div className="tk-menu__heading">Desempenho do esquadrão · {battle.rounds} rodada{battle.rounds === 1 ? '' : 's'}</div>
+        <table className="dc-perf">
+          <thead><tr><th>DevPet</th><th>Dano</th><th>Recebido</th><th>Cura</th><th>Abates</th><th>Habilidade</th><th>Vida final</th></tr></thead>
+          <tbody>
+            {perf.map((r) => {
+              const p = pet(r.id);
+              return (
+                <tr key={r.uid} className={r.mvp ? 'is-mvp' : ''}>
+                  <td className="dc-perf__pet">
+                    {p && <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} size={26} className="is-static" />}
+                    {r.name}{r.mvp && <span className="dc-chip is-ok">MVP</span>}
+                  </td>
+                  <td>{fmt(r.dealt)}</td>
+                  <td>{fmt(r.taken)}</td>
+                  <td>{r.healed ? fmt(r.healed) : '—'}</td>
+                  <td>{r.kos || '—'}</td>
+                  <td>{r.abilities ? '✓' : '—'}</td>
+                  <td className={r.end <= 0 ? 'is-down' : r.end < r.maxHp * 0.5 ? 'is-low' : ''}>{r.end <= 0 ? 'caiu' : Math.round((r.end / r.maxHp) * 100) + '%'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+      {battle.usedItems.length > 0 && <div className="dc-arena__used is-summary"><Icon name="package" size={12} /> Consumíveis usados: {battle.usedItems.map(itemName).join(', ')}</div>}
+    </div>
+  );
+}
 
 /** Efeito sonoro de um evento do log. */
 function sound(e) {
@@ -141,7 +216,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           ? <Button variant="primary" onClick={onClose}>Continuar</Button>
           : <Button variant="ghost" icon="fast-forward" onClick={() => setI(log.length)}>Pular</Button>}
       </>}>
-      <div className={'dc-arena dc-arena--' + area.arena + (burstHit ? ' is-shake' : '')} aria-label={'Arena ' + area.name}>
+      <div className={'dc-arena dc-arena--' + area.arena + (burstHit ? ' is-shake' : '') + (done ? ' is-done' : '')} aria-label={'Arena ' + area.name}>
         <div className={'dc-arena__side is-pets' + (on.shield ? ' is-shielded' : '') + (on.buff ? ' is-buffed' : '') + (on.haste ? ' is-hasted' : '')}>
           {on.shield && <span className="dc-fx-shield" aria-hidden="true" />}
           {curFx && curFx.type === 'cleanse' && <span className="dc-fx-wave" aria-hidden="true" />}
@@ -162,11 +237,10 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
             <b>{battle.win ? 'Vitória' : timeout ? 'Tempo esgotado' : 'Derrota'}</b>
             {timeout && battle.timeoutLore && <span className="dc-arena__lore">{battle.timeoutLore}</span>}
             {timeout && <span className="dc-arena__hint">{standing.map((u) => `${u.name}: ${u.end} de vida`).join(' · ')} · dica: mais dano — habilidades no início, Coffee e Hotfix, mais atacantes.</span>}
-            {battle.win && battle.rewards.length > 0 && <span>{battle.rewards.map((r) => r.text).join(' · ')}</span>}
-            {battle.usedItems.length > 0 && <span className="dc-arena__used"><Icon name="package" size={12} /> usados: {battle.usedItems.map(itemName).join(', ')}</span>}
           </div>
         )}
       </div>
+      {done && <BattleSummary battle={battle} snap={snap} itemName={itemName} />}
     </Modal>
   );
 }

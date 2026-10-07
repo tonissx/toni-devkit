@@ -188,6 +188,22 @@ test('mapa: lutar cobra a entrada; derrota mantém a posição, vitória avança
   assert.deepEqual(map.reachable(r.state), r.state.run.map.nodes['0-1'].next);
 });
 
+test('mapa: com o estoque cheio, a vitória (e o evento) rende peça ou sucata — nunca nada', () => {
+  const full = Object.fromEntries(CONTENT.CONSUMABLES.map((k) => [k.id, k.cap]));
+  for (let seed = 0; seed < 12; seed++) {
+    const s = make({ pets: { byte: 10, noxi: 10, query: 10 }, inventory: full });
+    s.seed += seed * 7919;
+    const r = run(s, { type: 'mapFight', node: '0-0', squad: squadOf(['byte', 'noxi', 'query']) }).state.run.map.lastBattle;
+    assert.ok(r.win && r.rewards.length > 0, 'vitória sem recompensa (seed ' + seed + ')');
+    assert.ok(r.rewards.every((x) => ['part', 'scrap', 'patch'].includes(x.type)), JSON.stringify(r.rewards));
+  }
+  let s = before('event', { event: 'so-down', inventory: full });
+  s = run(s, { type: 'mapMove', node: '1-0' }).state;
+  const r = run(s, { type: 'mapChoose', index: 0 });
+  const got = r.log.find((e) => e.type === 'mapChoice').rewards;
+  assert.ok(got.length === 1 && ['part', 'scrap'].includes(got[0].type), 'comprar consumível com o estoque cheio vira peça: ' + JSON.stringify(got));
+});
+
 test('mapa: validações — alcance, Compute, preparação e tipo de ponto', () => {
   const s = make({ pets: { byte: 5 }, compute: 10 });
   assert.equal(run(s, { type: 'mapFight', node: '0-0', squad: squadOf(['byte']) }).error, 'Compute insuficiente');

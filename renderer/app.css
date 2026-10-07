@@ -916,6 +916,27 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @keyframes dc-arena-hit { 30% { transform: translateX(6px); } 60% { transform: translateX(-4px); } }
 @keyframes dc-arena-pop { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
+/* Resumo depois da luta: recompensas e desempenho do esquadrão */
+.dc-arena.is-done { height: 170px; padding-top: 12px; transition: height .3s ease; } /* encolhe: o resumo cabe sem rolar */
+.dc-arena.is-done::before { display: none; }
+.dc-arena.is-done .dc-arena__result { inset: auto 16px 44px; }
+.dc-arena-summary { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.dc-arena-summary .tk-menu__heading { padding-left: 0; }
+.dc-arena-summary__rewards { display: flex; flex-wrap: wrap; gap: 8px; }
+.dc-reward { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: var(--tk-radius-md); border: 1px solid var(--tk-border-strong); background: var(--tk-surface-3); font-size: 12.5px; color: var(--tk-text); animation: dc-gain-in .35s both; }
+.dc-reward .lucide, .dc-reward svg { color: var(--tk-accent-text); }
+.dc-reward.is-patch { border-color: color-mix(in srgb, #F5C542 45%, var(--tk-border-strong)); }
+.dc-reward.is-part svg { color: #C792EA; }
+.dc-perf { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.dc-perf th { text-align: right; padding: 4px 8px; font: 500 10.5px var(--tk-font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--tk-text-3); border-bottom: 1px solid var(--tk-border); }
+.dc-perf th:first-child, .dc-perf td:first-child { text-align: left; }
+.dc-perf td { text-align: right; padding: 5px 8px; font-family: var(--tk-font-mono); color: var(--tk-text-2); border-bottom: 1px solid var(--tk-border); }
+.dc-perf__pet { display: flex; align-items: center; gap: 8px; font-family: var(--tk-font-sans) !important; color: var(--tk-text) !important; }
+.dc-perf tr.is-mvp td { background: color-mix(in srgb, var(--tk-accent) 8%, transparent); }
+.dc-perf td.is-low { color: var(--tk-warning); }
+.dc-perf td.is-down { color: #FF6B6B; }
+.dc-arena__used.is-summary { color: var(--tk-text-3); }
+
 /* Efeitos das habilidades na arena (indicam o que está ativo) */
 .dc-arena__side.is-pets { position: relative; }
 .dc-fx-banner {
