@@ -28,7 +28,7 @@ const ENEMIES = [
     lines: ['ninguém me viu chegar...', 'CVE? ainda não.'],
     timeout: 'O Zero apagou os próprios logs e saiu pela porta dos fundos. Oficialmente, ele nunca esteve aqui — e o incidente foi fechado como "não reproduzível".' },
   // Chefe da Área 1
-  { id: 'legacy-monolith', name: 'Legacy Monolith', sprite: 'monolith', color: '#2E3440', hp: 280, atk: 10, def: 8, spd: 6, traits: ['fortify'], boss: true,
+  { id: 'legacy-monolith', name: 'Legacy Monolith', sprite: 'monolith', color: '#6A6E66', hp: 280, atk: 10, def: 8, spd: 6, traits: ['fortify'], boss: true,
     lines: ['eu funciono desde 2009', 'não mexa no que funciona', 'refatorar? nunca.'],
     timeout: 'Faltando um commit para derrubá-lo, o Legacy Monolith foi declarado "crítico para o negócio" pela diretoria. O refactor foi congelado até o próximo trimestre, o time voltou para o backlog e o monólito segue de pé — mais rachado, mais teimoso e esperando a próxima tentativa.' },
 ];

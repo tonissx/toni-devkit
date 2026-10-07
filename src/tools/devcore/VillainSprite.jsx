@@ -172,8 +172,8 @@ function Dep({ c, eye, locked }) {
 
 /** Legacy Monolith — bloco de pedra antigo, rachado, de olhos pesados (chefe do Localhost). */
 /**
- * Legacy Monolith: bloco de obsidiana com o topo quebrado, rachaduras de código antigo brilhando em vermelho, olhos em
- * fenda, névoa escura na base e fragmentos de código legado (GOTO, <td>) flutuando em volta.
+ * Legacy Monolith: pedra antiga da Floresta Localhost com o topo quebrado, musgo e cipós, rachaduras de código antigo
+ * brilhando em vermelho, olhos em fenda, névoa escura na base e fragmentos de código legado (GOTO, <td>) em volta.
  */
 function Monolith({ c, locked }) {
   return (
@@ -190,6 +190,16 @@ function Monolith({ c, locked }) {
         <path d="M27 10 L29 15 L26 19 M24 30 L27 33 L24 37 M44 30 L39 38 L43 45 L39 54 M17 44 L23 46 L21 52" stroke="#0D0F14" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         {!locked && <path className="v-crack" d="M27 10 L29 15 L26 19 M24 30 L27 33 L24 37 M44 30 L39 38 L43 45 L39 54 M17 44 L23 46 L21 52" stroke="#FF3B3B" strokeWidth="1" fill="none" strokeLinecap="round" strokeLinejoin="round" />}
         {!locked && <>
+          {/* musgo: no topo quebrado, escorrendo pelas bordas e nas saliências */}
+          <path d="M17 14 L22 8 L25 11 L30 5 L35 9 L40 6 L44 12 L47 11 L47.3 15 Q44 17 41 14 Q38 18 34 14 Q31 17 28 13 Q24 17 21 15 Q19 18 17 17 Z" fill="#3E7A3A" />
+          <path d="M22 9.5 L25 12 L30 6.5 L33 9 Q30 11 27 10.5 Q24 13 22 9.5 Z" fill="#5FA04E" />
+          <path d="M17 16 Q15.5 24 17.5 30 Q19 25 18.6 17 Z" fill="#3E7A3A" />
+          <path d="M47.2 15 Q49.5 21 47.6 27 Q46.4 22 46.6 16 Z" fill="#35692F" />
+          <path d="M15.5 52 Q20 47 26 51 Q22 54 15.3 55 Z" fill="#3E7A3A" />
+          <path d="M40 53 Q45 49 49 51 L49.2 56 Q44 56 40 53 Z" fill="#35692F" />
+          {/* cipós descendo pela face */}
+          <path d="M33 14 Q34 17 32.5 20 M44.5 14 Q46.5 22 46.2 30 Q46 35 45.2 39" stroke="#4E8F45" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+          <circle cx="32.5" cy="20" r="1.2" fill="#5FA04E" /><circle cx="46.3" cy="30" r="1.2" fill="#5FA04E" /><circle cx="45.2" cy="39" r="1.3" fill="#5FA04E" />
           {/* sobrancelha pesada e olhos em fenda */}
           <path d="M19 19 L31 23.5 M45 19 L33 23.5" stroke="#0D0F14" strokeWidth="3.2" strokeLinecap="round" />
           <path className="v-glow" d="M21 24 L30 26.5 L22 27.5 Z" fill="#FF4A3D" />
@@ -200,6 +210,11 @@ function Monolith({ c, locked }) {
           <path d="M25 42 L28 44 L31 42 L34 44 L37 42 L40 44" stroke="#0D0F14" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
         </>}
       </g>
+      {!locked && <g>
+        {/* grama e um cogumelo na base */}
+        <path d="M12 58 l1.5 -5 l1 5 l1.5 -4 l1 4 M48 58 l1.5 -4.5 l1 4.5 l1.5 -5.5 l1 5.5" stroke="#4E8F45" strokeWidth="1.2" fill="none" strokeLinejoin="round" />
+        <rect x="53.6" y="55" width="1.6" height="3.5" fill="#E8E1CF" /><path d="M51.5 55.5 Q54.4 51 57.3 55.5 Z" fill="#B8453A" />
+      </g>}
       {!locked && <g className="v-debris" fontFamily="monospace" fontWeight="700" fill="#FF6B5E">
         <text x="5" y="20" fontSize="6" opacity=".7">GOTO</text>
         <text x="49" y="30" fontSize="6" opacity=".6">{'<td>'}</text>
