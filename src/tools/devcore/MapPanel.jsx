@@ -2,6 +2,7 @@ import { DS } from '../../lib/ds.js';
 import { formatNum, formatDuration } from '../../devcore/engine/format.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
 import { VillainSprite } from './VillainSprite.jsx';
+import { Campfire, ShopStall } from './ForestArt.jsx';
 import { InfoCard } from './InfoCard.jsx';
 import { Arena, SoundToggle } from './Arena.jsx';
 import { ForestProps } from './ForestArt.jsx';
@@ -145,6 +146,17 @@ function Foes({ n, x, y }) {
   );
 }
 
+/** Marcos do mapa em pé atrás do ponto: fogueira com café no descanso, barraca na loja (sempre visíveis). */
+function Landmark({ n, x, y }) {
+  const fire = n.type === 'rest';
+  return (
+    <div className={'dc-landmark' + (fire ? ' is-fire' : '') + (n.status === 'visited' ? ' is-visited' : '')} style={{ left: x, top: y - 24 }} aria-hidden="true">
+      <span className="dc-landmark__shadow" />
+      <span className="dc-landmark__art">{fire ? <Campfire s={0.8} /> : <ShopStall s={0.68} />}</span>
+    </div>
+  );
+}
+
 function MapGrid({ map, onNode, party = [], hold = false }) {
   const ref = React.useRef(null);
   const boxRef = React.useRef(null);
@@ -235,6 +247,7 @@ function MapGrid({ map, onNode, party = [], hold = false }) {
           </span>
         ))}
         <AreaProps arena={map.area.arena} w={w} h={H} spots={spots} />
+        {map.nodes.filter((n) => n.type === 'rest' || n.type === 'shop').map((n) => <Landmark key={n.id} n={n} x={x(n)} y={y(n)} />)}
         {map.nodes.filter((n) => n.enemies && (n.type === 'boss' ? n.status !== 'visited' : n.status === 'reachable')).map((n) => <Foes key={n.id} n={n} x={x(n)} y={y(n)} />)}
         <Party map={map} party={party} hold={hold} place={place} geom={geom} />
       </div>

@@ -109,6 +109,57 @@ export const Pine = React.memo(({ s = 1, tone = 0, v = 0 }) => {
   );
 });
 
+/** Fogueira do descanso: lenha cruzada, chamas tremulando e uma caneca de café fumegando ao lado. */
+export const Campfire = ({ s = 1 }) => (
+  <svg width={64 * s} height={56 * s} viewBox="0 0 64 56" aria-hidden="true">
+    {/* pedras em volta */}
+    {[[14, 50], [22, 53], [32, 54], [42, 53], [50, 50]].map(([x, y], i) => <ellipse key={i} cx={x} cy={y} rx="5" ry="3.2" fill={i % 2 ? '#5B6270' : '#6E7684'} />)}
+    {/* lenha */}
+    <path d="M16 50 L44 40" stroke="#5A3B26" strokeWidth="5" strokeLinecap="round" />
+    <path d="M48 50 L20 40" stroke="#6B4630" strokeWidth="5" strokeLinecap="round" />
+    <path d="M18 41 l3 1 M42 41 l-3 1" stroke="#3B2A1E" strokeWidth="1.2" />
+    {/* chamas */}
+    <g className="dc-flame">
+      <path d="M32 6 C40 18 44 26 41 36 Q38 46 32 46 Q26 46 23 36 C21 27 27 22 28 14 C30 20 31 22 33 20 C34 15 33 11 32 6 Z" fill="#F2702E" />
+      <path d="M32 18 C37 26 38 32 36 38 Q34 44 32 44 Q29 44 28 38 C27 33 30 30 30 25 C31 28 33 28 32 18 Z" fill="#FFB547" />
+      <path d="M32 30 C34 34 34 38 33 41 Q32 43 31 41 C30 38 31 35 32 30 Z" fill="#FFF0B8" />
+    </g>
+    {/* caneca de café com vapor */}
+    <g transform="translate(50 30)">
+      <path className="dc-prop__steam" d="M4 2 q-2 -4 0 -7 q2 -3 0 -6 M8 2 q-2 -4 0 -7" stroke="#E8EEF5" strokeWidth="1.2" fill="none" opacity=".7" strokeLinecap="round" />
+      <rect x="0" y="4" width="11" height="13" rx="2" fill="#E8EEF5" />
+      <path d="M11 7 h2.5 a2.5 2.5 0 0 1 0 6 H11" stroke="#E8EEF5" strokeWidth="1.8" fill="none" />
+      <rect x="1.5" y="5.5" width="8" height="2.5" fill="#6B4630" />
+      <path d="M3 11 h5" stroke="#7CF5B0" strokeWidth="1.2" />
+    </g>
+  </svg>
+);
+
+/** Loja: barraca de mercador com toldo listrado, balcão, monitor com o cifrão e caixotes de peças. */
+export const ShopStall = ({ s = 1 }) => (
+  <svg width={70 * s} height={64 * s} viewBox="0 0 70 64" aria-hidden="true">
+    {/* postes */}
+    <rect x="9" y="14" width="3" height="48" fill="#4A3426" /><rect x="58" y="14" width="3" height="48" fill="#4A3426" />
+    {/* toldo listrado com borda em ondas */}
+    <path d="M4 16 L10 4 H60 L66 16 Z" fill="#2A3A55" />
+    {[0, 1, 2, 3, 4].map((i) => <path key={i} d={`M${10 + i * 10} 4 h5 l${i < 2 ? -1.5 : i > 2 ? 1.5 : 0} 12 h-5 Z`} fill="#7CF5B0" opacity=".85" />)}
+    <path d="M4 16 q3.5 5 7 0 q3.5 5 7 0 q3.5 5 7 0 q3.5 5 7 0 q3.5 5 7 0 q3.5 5 7 0 q3.5 5 7 0 q3.5 5 7 0 q3.5 5 7 0 Z" fill="#2A3A55" />
+    {/* monitor com o cifrão */}
+    <rect x="26" y="24" width="18" height="13" rx="1.5" fill="#1B212C" stroke="#9AA3B2" strokeWidth="1.2" />
+    <text x="35" y="34.5" textAnchor="middle" fontSize="10" fontWeight="700" fontFamily="monospace" fill="#FFD166" className="dc-led">$</text>
+    <rect x="33" y="37" width="4" height="4" fill="#9AA3B2" />
+    {/* balcão */}
+    <rect x="6" y="41" width="58" height="6" rx="1" fill="#8A5A3A" />
+    <rect x="8" y="47" width="54" height="15" fill="#6B4630" />
+    <path d="M8 52 H62 M8 57 H62" stroke="#4A3426" strokeWidth="1" />
+    {/* produtos no balcão: pendrive, poção-café, chip */}
+    <rect x="13" y="35" width="5" height="6" rx="1" fill="#C8CDD6" /><rect x="14" y="33" width="3" height="2" fill="#5B6270" />
+    <path d="M49 35 h6 v6 h-6 Z" fill="#2B3240" /><path d="M48 37 h1 M48 39 h1 M55 37 h1 M55 39 h1" stroke="#9AA3B2" />
+    {/* caixote ao lado */}
+    <rect x="58" y="50" width="11" height="12" fill="#A0703F" /><path d="M58 50 l11 12 M69 50 l-11 12" stroke="#6B4630" strokeWidth="1" />
+  </svg>
+);
+
 /** Hash estável (escolha da peça por lugar). */
 function hashStr(str) {
   let h = 2166136261;

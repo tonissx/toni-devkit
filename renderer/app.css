@@ -788,6 +788,17 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-party__shadow { position: absolute; width: 44px; height: 26px; transform: translate(-50%, -60%) translateZ(1px); border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, .8), rgba(0, 0, 0, .35) 60%, transparent); }
 /* Esquadrão andando pelo tabuleiro (em pé, como as fichas) */
 .dc-party { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 2000; transform-style: preserve-3d; }
+.dc-landmark { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 1400; transform-style: preserve-3d; } /* fogueira / loja do ponto */
+.dc-landmark__art { position: absolute; bottom: 0; transform: translateX(-50%) rotateX(calc(-1 * var(--tilt))); transform-origin: 50% 100%; filter: drop-shadow(0 4px 3px rgba(0, 0, 0, .5)); }
+.dc-landmark__art svg { display: block; }
+.dc-landmark__shadow { position: absolute; width: 60px; height: 18px; transform: translate(-50%, -50%) translateZ(1px); border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, .7), rgba(0, 0, 0, .25) 60%, transparent); }
+/* a fogueira ilumina o chão em volta */
+.dc-landmark.is-fire .dc-landmark__shadow { width: 150px; height: 90px; background: radial-gradient(closest-side, rgba(255, 150, 60, .32), rgba(255, 120, 40, .12) 55%, transparent); animation: dc-fire-glow 2.2s ease-in-out infinite; }
+.dc-landmark.is-visited .dc-landmark__art { opacity: .55; filter: grayscale(.6) drop-shadow(0 4px 3px rgba(0, 0, 0, .5)); }
+.dc-landmark.is-visited.is-fire .dc-landmark__shadow { animation: none; opacity: .3; }
+.dc-flame { transform-origin: 32px 46px; animation: dc-flame 0.9s ease-in-out infinite alternate; }
+@keyframes dc-flame { from { transform: scale(1, 1) skewX(-3deg); } to { transform: scale(.94, 1.08) skewX(3deg); } }
+@keyframes dc-fire-glow { 50% { opacity: .7; } }
 .dc-foes { position: absolute; width: 0; height: 0; pointer-events: none; z-index: 1600; transform-style: preserve-3d; } /* inimigos do ponto: na frente das árvores */
 .dc-foes__foe { position: absolute; bottom: 0; transform: translateX(-50%) rotateX(calc(-1 * var(--tilt))); transform-origin: 50% 100%; filter: drop-shadow(0 4px 3px rgba(0, 0, 0, .5)); }
 .dc-foes__foe svg { display: block; animation: dc-party-idle 2s ease-in-out infinite; animation-delay: calc(var(--i) * -0.5s); }
@@ -843,7 +854,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @keyframes dc-gain-in { from { opacity: 0; transform: translate(-50%, 20px) scale(.92); } }
 @keyframes dc-gain-icon { 50% { transform: scale(1.08) rotate(-4deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .dc-trail.is-open, .dc-node.is-reachable, .dc-prop__steam, .dc-gain, .dc-gain__icon, .dc-party__pet svg, .dc-foes__foe svg { animation: none !important; }
+  .dc-trail.is-open, .dc-node.is-reachable, .dc-prop__steam, .dc-gain, .dc-gain__icon, .dc-party__pet svg, .dc-foes__foe svg, .dc-flame, .dc-landmark__shadow { animation: none !important; }
 }
 .dc-mapbox { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-bg); }
 .dc-mapbox.is-cleared { flex-direction: row; align-items: center; border-color: color-mix(in srgb, #F5C542 50%, var(--tk-border)); color: var(--tk-text-2); }
