@@ -908,6 +908,8 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-arena__result b { font-size: 18px; letter-spacing: .06em; }
 .dc-arena__result.is-win b { color: #7CF5B0; }
 .dc-arena__result.is-loss b { color: #FF8A8A; }
+.dc-arena__lore { max-width: 560px; text-align: center; font-style: italic; line-height: 1.5; color: rgba(255, 255, 255, .9); }
+.dc-arena__hint { font-size: 11px; color: rgba(255, 255, 255, .55); text-align: center; }
 .dc-arena__used { display: inline-flex; align-items: center; gap: 4px; color: rgba(255, 255, 255, .7); font-size: 11.5px; }
 @keyframes dc-arena-hit { 30% { transform: translateX(6px); } 60% { transform: translateX(-4px); } }
 @keyframes dc-arena-pop { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }

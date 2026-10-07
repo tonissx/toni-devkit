@@ -120,6 +120,14 @@ test('batalha: o fim diz o motivo — vitória, esquadrão derrubado ou tempo es
   assert.deepEqual(r.log.at(-1), { r: CONTENT.BATTLE.maxRounds, k: 'end', v: 0, why: 'timeout' });
   const p = battle.preview(battle.setupBattle(s, squadOf(['armo']), ['legacy-monolith', 'legacy-monolith', 'legacy-monolith'], 0, 'localhost'), 1);
   assert.ok(p.timeouts >= 0.75, 'a previsão conta as derrotas por tempo: ' + p.timeouts);
+  // No mapa: tempo esgotado ganha a desculpa de "lore" de quem ficou de pé (o chefe primeiro).
+  const m = make({ pets: { armo: 12 } });
+  m.run.map.nodes['0-0'].group = ['legacy-monolith', 'legacy-monolith', 'legacy-monolith'];
+  const after = run(m, { type: 'mapFight', node: '0-0', squad: squadOf(['armo']) }).state;
+  const lb = snapshot(after, T0).map.lastBattle;
+  if (lb.reason === 'timeout') assert.equal(lb.timeoutLore, CONTENT.enemy['legacy-monolith'].timeout);
+  const won = snapshot(run(make({ pets: { byte: 10 } }), { type: 'mapFight', node: '0-0', squad: squadOf(['byte']) }).state, T0).map.lastBattle;
+  assert.equal(won.timeoutLore, null);
 });
 
 /* ─────────────── mapa ─────────────── */

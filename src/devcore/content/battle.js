@@ -82,4 +82,12 @@ const TRAITS = {
   pierce: { name: 'Perfuração', text: 'Ignora a defesa', counter: { anyOf: ['armo'] }, counterText: 'Armo no esquadrão devolve a defesa' },
 };
 
-module.exports = { ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS };
+/** Desculpas de "lore" para o tempo esgotado em batalhas comuns (escolhida pela batalha; ver enemies.js `timeout`). */
+const BATTLE_TIMEOUT_LORE = [
+  'O expediente acabou. Os bugs que sobraram foram para o backlog com a etiqueta "depois a gente vê" — e vão estar esperando amanhã.',
+  'A sprint fechou antes da luta. O que restou virou débito técnico e ganhou um ticket que ninguém vai abrir.',
+  'O build quebrou no meio da batalha e todo mundo foi ver o CI. Quando voltaram, os inimigos tinham fugido para outro branch.',
+  'A reunião das 17h chamou o esquadrão. Os inimigos aproveitaram para fazer merge na main sem review.',
+];
+
+module.exports = { BATTLE_TIMEOUT_LORE, ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS };

@@ -14,7 +14,7 @@ const { INCIDENTS } = require('./incidents.js');
 const { CONSUMABLES } = require('./consumables.js');
 const { BLUEPRINTS } = require('./blueprints.js');
 const { QUESTS } = require('./quests.js');
-const { ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS } = require('./battle.js');
+const { ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS, BATTLE_TIMEOUT_LORE } = require('./battle.js');
 const { ENEMIES } = require('./enemies.js');
 const { AREAS, NODE_TYPES } = require('./areas.js');
 const { PATCHES, RARITIES } = require('./patches.js');
@@ -26,7 +26,7 @@ const CONTENT = {
   BALANCE, RESOURCES, CATEGORIES, TIERS, GENERATORS, UPGRADES, PETS, RARITY, ABILITIES, SYNERGIES, DISCOVERIES, STAGES, SKINS,
   INCIDENTS, CONSUMABLES, BLUEPRINTS, QUESTS,
   // Mapa e batalhas (docs/devcore-mapa-singularity.md)
-  ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS, ENEMIES, AREAS, NODE_TYPES, PATCHES, RARITIES,
+  ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS, BATTLE_TIMEOUT_LORE, ENEMIES, AREAS, NODE_TYPES, PATCHES, RARITIES,
   EVENTS, REST_OPTIONS, SHOP, BATTLE_REWARDS,
   enemy: byId(ENEMIES), area: byId(AREAS), patch: byId(PATCHES), event: byId(EVENTS),
   quest: byId(QUESTS),

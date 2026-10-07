@@ -331,6 +331,16 @@ function rewardText(r, c) {
   return '';
 }
 
+/** Tempo esgotado: a desculpa do inimigo mais importante ainda de pé (chefe primeiro), ou uma genérica. */
+function timeoutLore(lb, c) {
+  if (lb.win || lb.reason !== 'timeout') return null;
+  const standing = lb.units.filter((u) => u.side === 'enemy' && u.end > 0).map((u) => c.enemy[u.id]).filter(Boolean);
+  const star = standing.find((e) => e.boss && e.timeout) || standing.find((e) => e.timeout);
+  if (star) return star.timeout;
+  const L = c.BATTLE_TIMEOUT_LORE;
+  return L[lb.id % L.length];
+}
+
 /** O que um tipo de ponto rende (texto para o hover). */
 function rewardHint(type, c) {
   const R = c.BATTLE_REWARDS;
@@ -421,7 +431,7 @@ function mapView(s, now, c) {
     items: Object.entries(c.BATTLE_ITEMS).map(([id, k]) => ({ id, name: c.consumable[id].name, icon: c.consumable[id].icon, text: k.text, n: s.run.inventory[id] || 0 })),
     healItems: s.run.inventory['health-check'] || 0,  // Health Check em estoque (cura fora da batalha)
     triggers: c.TRIGGERS,
-    lastBattle: lb ? { ...lb, rewards: lb.rewards.map((r) => ({ ...r, text: rewardText(r, c) })),
+    lastBattle: lb ? { ...lb, rewards: lb.rewards.map((r) => ({ ...r, text: rewardText(r, c) })), timeoutLore: timeoutLore(lb, c),
       units: lb.units.map((u) => (u.side === 'enemy' ? { ...u, sprite: c.enemy[u.id].sprite, color: c.enemy[u.id].color } : u)) } : null,
     stats: { wins: s.arena.wins, losses: s.arena.losses },
     maxRounds: c.BATTLE.maxRounds,

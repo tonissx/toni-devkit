@@ -102,7 +102,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   return (
     <Modal open title={'ARENA · ' + area.name.toUpperCase()} icon="swords" onClose={onClose} width={760}
       description={done
-        ? (battle.win ? 'Vitória!' : timeout ? `Tempo esgotado: ${max} rodadas sem derrubar os inimigos.` : 'Derrota — o esquadrão caiu. Nada foi perdido além da entrada.')
+        ? (battle.win ? 'Vitória!' : timeout ? `Tempo esgotado (${max} rodadas). Nada foi perdido além da entrada.` : 'Derrota — o esquadrão caiu. Nada foi perdido além da entrada.')
         : `Rodada ${round} de ${max}`}
       footer={<>
         {onSound && <SoundToggle sound={soundOn} onSound={onSound} />}
@@ -117,7 +117,8 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
         {done && (
           <div className={'dc-arena__result' + (battle.win ? ' is-win' : ' is-loss')}>
             <b>{battle.win ? 'Vitória' : timeout ? 'Tempo esgotado' : 'Derrota'}</b>
-            {timeout && <span>{max} rodadas e {standing.map((u) => `${u.name} ainda de pé (${u.end} de vida)`).join(', ')}. Falta dano: habilidades no início, Coffee e Hotfix, mais atacantes.</span>}
+            {timeout && battle.timeoutLore && <span className="dc-arena__lore">{battle.timeoutLore}</span>}
+            {timeout && <span className="dc-arena__hint">{standing.map((u) => `${u.name}: ${u.end} de vida`).join(' · ')} · dica: mais dano — habilidades no início, Coffee e Hotfix, mais atacantes.</span>}
             {battle.win && battle.rewards.length > 0 && <span>{battle.rewards.map((r) => r.text).join(' · ')}</span>}
             {battle.usedItems.length > 0 && <span className="dc-arena__used"><Icon name="package" size={12} /> usados: {battle.usedItems.map(itemName).join(', ')}</span>}
           </div>
