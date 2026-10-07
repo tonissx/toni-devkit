@@ -984,6 +984,16 @@ test('markdown: @date and !1..!3 become chips; lookalikes stay text', async () =
   assert.equal((html.match(/md-pri/g) || []).length, 1);
 });
 
+test('markdown: renderInline formats inline marks, flattens links, and neutralizes HTML', async () => {
+  const { renderInline } = await loadMarkdown();
+  assert.equal(renderInline('pagar **boleto** e *revisar* ~~isso~~ `x < y`'),
+    'pagar <strong>boleto</strong> e <em>revisar</em> <del>isso</del> <code>x &lt; y</code>');
+  const flat = renderInline('ver [[Nota A|a nota]] e [[Outra]] em [site](https://a.com) <img src=x onerror=alert(1)> ![alt](.assets/x.png)');
+  assert.ok(!/<a |<img/.test(flat), 'nada clicável dentro do botão: ' + flat);
+  assert.ok(flat.includes('a nota') && flat.includes('Outra') && flat.includes('site') && flat.includes('&lt;img'));
+  assert.equal(renderInline(''), '');
+});
+
 test('markdown: toggleTask flips the n-th task, skipping code blocks', async () => {
   const { toggleTask } = await loadMarkdown();
   const md = '```\n- [ ] dentro do código\n```\n- [ ] a\n  - [x] b\n1. [ ] c';

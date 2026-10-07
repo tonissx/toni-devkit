@@ -5,6 +5,7 @@ import { THEMES, resolveTheme } from '../lib/themes.js';
 import { isoDate } from '../notes/edit.js';
 import { cleanError, shortTime } from '../notes/client.js';
 import { needsValue } from '../links/link.js';
+import { TaskText } from '../tools/notes/TaskText.jsx';
 import { formatNum } from '../devcore/engine/format.js';
 import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, PANELS } from '../home/dashboard.js';
 
@@ -179,7 +180,7 @@ function TasksPanel({ tasks, today, open, toast }) {
           <div key={t.noteId + ':' + t.index} className="nts-task">
             <input type="checkbox" className="md-task" checked={false} onChange={() => toggle(t)} aria-label="Concluir tarefa" />
             <div className="nts-task__main">
-              <button type="button" className="nts-task__text" onClick={() => open('notes', { id: t.noteId })} title="Abrir a nota">{t.text || '(sem texto)'}</button>
+              <button type="button" className="nts-task__text" onClick={() => open('notes', { id: t.noteId })} title="Abrir a nota"><TaskText text={t.text} /></button>
               <div className="nts-task__meta">
                 {t.priority && <span className={'nts-pill is-p' + t.priority} title={'Prioridade ' + t.priority}>!{t.priority}</span>}
                 {t.due && <span className={'nts-pill is-due' + (t.bucket === 'late' ? ' is-late' : '')} title={t.due}><Icon name="calendar" size={11} /> {dueLabel(t.due, today)}</span>}
