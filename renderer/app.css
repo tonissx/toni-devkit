@@ -741,7 +741,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 }
 
 /* Mapa da área (aba Mapa): pontos, ligações, preparação e arena */
-.dc-mapview { display: flex; flex-direction: column; gap: 12px; }
+.dc-mapview { display: flex; flex-direction: column; gap: 12px; container: dc-stage / inline-size; }
 .dc-mapview__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dc-mapview__head > div { flex: 1; min-width: 200px; }
 .dc-patches { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -872,16 +872,18 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-shop__item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); font-size: 12.5px; }
 .dc-shop__item > span:not(.dc-chip) { flex: 1; }
 .dc-shop__item.is-bought { opacity: .6; }
-.dc-stage { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "map"; gap: 12px; align-items: start; }
-.dc-stage.is-prep { grid-template-columns: 200px minmax(0, 1fr) 250px; grid-template-areas: "left map right"; }
-.dc-stage__map { grid-area: map; min-width: 0; }
-/* preparação nas laterais do mapa: acompanham a rolagem do mapa */
+/* Mapa e preparação na mesma célula: o mapa mantém a largura toda e os painéis flutuam sobre as bordas da floresta
+   (decoração), grudados no topo enquanto o mapa rola. */
+.dc-stage { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.dc-stage__map { grid-area: 1 / 1; min-width: 0; }
 .dc-prep__side {
-  position: sticky; top: 0; display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 150px); overflow-y: auto;
-  padding: 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-bg);
+  grid-area: 1 / 1; position: sticky; top: 8px; z-index: 5; display: flex; flex-direction: column; gap: 8px; margin: 8px;
+  max-height: calc(100vh - 160px); overflow-y: auto; padding: 10px;
+  border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md);
+  background: color-mix(in srgb, var(--tk-bg) 86%, transparent); backdrop-filter: blur(6px); box-shadow: var(--tk-shadow-pop);
 }
-.dc-prep__side.is-left { grid-area: left; }
-.dc-prep__side.is-right { grid-area: right; }
+.dc-prep__side.is-left { justify-self: start; width: 190px; }
+.dc-prep__side.is-right { justify-self: end; width: 240px; }
 .dc-prep__side .tk-menu__heading { padding-left: 0; }
 .dc-prep__side .dc-info-anchor { display: block; }
 .dc-prep__head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 13px; }
@@ -1093,9 +1095,17 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   .dc-node.is-reachable, .dc-arena__unit.is-hit, .dc-arena__pop { animation: none; }
   .dc-arena__unit { transition: none; }
 }
-@media (max-width: 900px) {
-  .dc-stage.is-prep { grid-template-columns: minmax(0, 1fr); grid-template-areas: "left" "map" "right"; }
-  .dc-prep__side { position: static; max-height: none; }
+@container dc-stage (max-width: 960px) { /* largura do próprio mapa (o app tem barra lateral) */
+  .dc-stage.is-prep { grid-template-areas: "left" "map" "right"; }
+  .dc-stage.is-prep .dc-stage__map { grid-area: map; }
+  .dc-prep__side { position: static; max-height: none; width: auto !important; justify-self: stretch !important; margin: 8px 0; }
+  .dc-prep__side.is-left { grid-area: left; }
+  .dc-prep__side.is-right { grid-area: right; }
+  .dc-prep__side .dc-roster { flex-direction: row; flex-wrap: wrap; }
+  .dc-prep__side .dc-roster .dc-info-anchor { display: inline-block; }
+  .dc-prep__side .dc-roster__pet { width: auto; min-width: 150px; }
+  .dc-prep__side .dc-slots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dc-prep__side .dc-slots__foe { display: none; }
 }
 
 /* Upgrades: ilustrações e seção de combos */
