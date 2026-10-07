@@ -913,6 +913,77 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-arena__used { display: inline-flex; align-items: center; gap: 4px; color: rgba(255, 255, 255, .7); font-size: 11.5px; }
 @keyframes dc-arena-hit { 30% { transform: translateX(6px); } 60% { transform: translateX(-4px); } }
 @keyframes dc-arena-pop { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* Efeitos das habilidades na arena (indicam o que está ativo) */
+.dc-arena__side.is-pets { position: relative; }
+.dc-fx-banner {
+  position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%); z-index: 3; pointer-events: none; text-align: center;
+  font: 800 26px/1 var(--tk-font-sans); letter-spacing: .06em; text-transform: uppercase; color: #fff;
+  text-shadow: 0 0 12px var(--pet), 0 0 28px var(--pet), 0 2px 0 rgba(0, 0, 0, .6); animation: dc-fx-banner .9s cubic-bezier(.2, 1.3, .4, 1) both;
+}
+.dc-fx-banner small { display: block; margin-bottom: 4px; font: 600 11px var(--tk-font-mono); letter-spacing: .18em; color: var(--pet); text-shadow: none; }
+@keyframes dc-fx-banner { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.6); } 25% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -62%) scale(1); } }
+/* Quem está lançando: anel na cor do pet */
+.dc-arena__unit.is-casting::before {
+  content: ''; position: absolute; left: 50%; top: 30px; width: 70px; height: 70px; border-radius: 50%; transform: translate(-50%, -50%);
+  border: 3px solid var(--pet, #fff); box-shadow: 0 0 18px var(--pet, #fff); animation: dc-fx-ring .8s ease-out both; pointer-events: none;
+}
+@keyframes dc-fx-ring { from { opacity: 1; transform: translate(-50%, -50%) scale(.3); } to { opacity: 0; transform: translate(-50%, -50%) scale(1.6); } }
+/* Compile Burst: carregado (brilho laranja pulsando) e o golpe carregado (impacto + tremor) */
+.dc-arena__unit.is-charged svg { filter: drop-shadow(0 0 6px #FF9F43) drop-shadow(0 0 14px #FF6B35); animation: dc-fx-charge .5s ease-in-out infinite alternate; }
+@keyframes dc-fx-charge { to { filter: drop-shadow(0 0 10px #FFD84D) drop-shadow(0 0 22px #FF6B35); } }
+.dc-fx-burst { position: absolute; left: 50%; top: 28px; width: 90px; height: 90px; transform: translate(-50%, -50%); pointer-events: none; z-index: 2;
+  background: radial-gradient(circle, #FFF3B0 0 12%, #FFB347 30%, rgba(255, 107, 53, .5) 50%, transparent 70%); animation: dc-fx-burst .45s ease-out both; }
+@keyframes dc-fx-burst { from { opacity: 1; transform: translate(-50%, -50%) scale(.2); } to { opacity: 0; transform: translate(-50%, -50%) scale(1.5); } }
+.dc-arena.is-shake { animation: dc-fx-shake .35s; }
+@keyframes dc-fx-shake { 20% { transform: translate(-4px, 2px); } 40% { transform: translate(4px, -2px); } 60% { transform: translate(-3px, 1px); } 80% { transform: translate(2px, -1px); } }
+/* Index: mira sobre o inimigo marcado */
+.dc-fx-reticle { position: absolute; left: 50%; top: 28px; width: 62px; height: 62px; transform: translate(-50%, -50%); pointer-events: none; z-index: 2;
+  border: 2px dashed #B68CFF; border-radius: 50%; animation: dc-fx-spin 3s linear infinite; }
+.dc-fx-reticle::before, .dc-fx-reticle::after { content: ''; position: absolute; background: #B68CFF; }
+.dc-fx-reticle::before { left: 50%; top: -6px; width: 2px; height: 74px; transform: translateX(-50%); opacity: .6; }
+.dc-fx-reticle::after { top: 50%; left: -6px; height: 2px; width: 74px; transform: translateY(-50%); opacity: .6; }
+.dc-arena__unit.is-boss .dc-fx-reticle { width: 90px; height: 90px; top: 40px; }
+@keyframes dc-fx-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+/* Recall / cura: brilhos verdes subindo */
+.dc-fx-sparkles { position: absolute; left: 50%; top: 40px; width: 60px; height: 60px; transform: translateX(-50%); pointer-events: none; z-index: 2; }
+.dc-fx-sparkles i { position: absolute; bottom: 0; width: 6px; height: 6px; border-radius: 50%; background: #7CF5B0; box-shadow: 0 0 8px #7CF5B0; animation: dc-fx-rise .8s ease-out both; }
+.dc-fx-sparkles i:nth-child(1) { left: 8px; } .dc-fx-sparkles i:nth-child(2) { left: 20px; animation-delay: .1s; } .dc-fx-sparkles i:nth-child(3) { left: 32px; animation-delay: .05s; }
+.dc-fx-sparkles i:nth-child(4) { left: 44px; animation-delay: .15s; } .dc-fx-sparkles i:nth-child(5) { left: 26px; animation-delay: .22s; }
+@keyframes dc-fx-rise { from { opacity: 1; transform: translateY(0) scale(1); } to { opacity: 0; transform: translateY(-50px) scale(.4); } }
+/* Scale Out: domo de escudo sobre o time */
+.dc-fx-shield { position: absolute; inset: -10px -8px 4px; border-radius: 50% 50% 14px 14px; pointer-events: none; z-index: 2;
+  border: 2px solid rgba(110, 200, 255, .8); background: radial-gradient(ellipse at 50% 30%, rgba(110, 200, 255, .22), rgba(110, 200, 255, .05) 70%);
+  box-shadow: 0 0 22px rgba(110, 200, 255, .45), inset 0 0 18px rgba(110, 200, 255, .3); animation: dc-fx-shield 1.6s ease-in-out infinite; }
+@keyframes dc-fx-shield { 50% { box-shadow: 0 0 32px rgba(110, 200, 255, .65), inset 0 0 26px rgba(110, 200, 255, .45); } }
+/* Orchestrate / Coffee: aura vermelha de ataque nos pets */
+.dc-arena__side.is-buffed .dc-arena__unit.is-pet svg { filter: drop-shadow(0 0 5px #FF5C5C) drop-shadow(0 -4px 8px rgba(255, 92, 92, .6)); }
+.dc-arena__side.is-buffed .dc-arena__unit.is-pet::after { content: '⚔'; position: absolute; top: -4px; right: 4px; font-size: 12px; color: #FF8A8A; text-shadow: 0 0 6px #FF5C5C; animation: dc-fx-bob 1s ease-in-out infinite; }
+@keyframes dc-fx-bob { 50% { transform: translateY(-3px); } }
+/* Parallelize: rastros de velocidade */
+.dc-arena__side.is-hasted .dc-arena__unit.is-pet svg { animation: dc-fx-haste .25s linear infinite; }
+@keyframes dc-fx-haste { 0% { filter: drop-shadow(-6px 0 0 rgba(110, 139, 255, .55)) drop-shadow(-12px 0 0 rgba(110, 139, 255, .25)); } 100% { filter: drop-shadow(-9px 0 0 rgba(110, 139, 255, .45)) drop-shadow(-16px 0 0 rgba(110, 139, 255, .18)); } }
+/* Branch Off: clone fantasma na frente do time */
+.dc-fx-decoy { position: relative; align-self: flex-end; margin-bottom: 26px; opacity: .45; filter: grayscale(.3) drop-shadow(0 0 8px #F05133); animation: dc-fx-decoy 1.2s ease-in-out infinite; order: 99; }
+@keyframes dc-fx-decoy { 50% { opacity: .25; transform: translateX(3px); } }
+/* Lint Pass: onda branca de limpeza atravessando o time */
+.dc-fx-wave { position: absolute; inset: 0 -10px; pointer-events: none; z-index: 2;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55) 45%, rgba(79, 195, 200, .4) 55%, transparent); animation: dc-fx-wave .7s ease-out both; }
+@keyframes dc-fx-wave { from { transform: translateX(-100%); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+
+/* Habilidades de produção (cena e aba DevPets): aura enquanto ativa, anel ao ativar */
+.dc-pet.is-powered .pet-svg { filter: drop-shadow(0 0 6px var(--pet)) drop-shadow(0 0 14px var(--pet)); } /* só brilho: o .pet-svg já anima (andar, trabalhar) */
+@keyframes dc-fx-powered { to { filter: drop-shadow(0 0 10px var(--pet)) drop-shadow(0 0 22px var(--pet)); } }
+.dc-pet .dc-fx-ring { position: absolute; left: 50%; bottom: 18px; width: 64px; height: 64px; border-radius: 50%; transform: translate(-50%, 50%);
+  border: 3px solid var(--pet); box-shadow: 0 0 16px var(--pet); animation: dc-fx-ring .9s ease-out both; pointer-events: none; }
+.dc-pet-card.is-powered { border-color: var(--pet); box-shadow: 0 0 0 1px var(--pet), 0 0 18px color-mix(in srgb, var(--pet) 45%, transparent); animation: dc-fx-card 1.6s ease-in-out infinite; }
+.dc-pet-card.is-powered .pet-svg { filter: drop-shadow(0 0 6px var(--pet)); }
+@keyframes dc-fx-card { 50% { box-shadow: 0 0 0 1px var(--pet), 0 0 28px color-mix(in srgb, var(--pet) 60%, transparent); } }
+@media (prefers-reduced-motion: reduce) {
+  .dc-fx-banner, .dc-arena__unit.is-casting::before, .dc-fx-burst, .dc-arena.is-shake, .dc-fx-reticle, .dc-fx-sparkles i, .dc-fx-shield,
+  .dc-fx-decoy, .dc-fx-wave, .dc-pet.is-powered .pet-svg, .dc-pet .dc-fx-ring, .dc-pet-card.is-powered,
+  .dc-arena__unit.is-charged svg, .dc-arena__side.is-hasted .dc-arena__unit.is-pet svg, .dc-arena__side.is-buffed .dc-arena__unit.is-pet::after { animation: none !important; }
+}
 @media (prefers-reduced-motion: reduce) {
   .dc-node.is-reachable, .dc-arena__unit.is-hit, .dc-arena__pop { animation: none; }
   .dc-arena__unit { transition: none; }

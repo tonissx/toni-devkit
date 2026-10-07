@@ -432,6 +432,7 @@ function mapView(s, now, c) {
     healItems: s.run.inventory['health-check'] || 0,  // Health Check em estoque (cura fora da batalha)
     triggers: c.TRIGGERS,
     lastBattle: lb ? { ...lb, rewards: lb.rewards.map((r) => ({ ...r, text: rewardText(r, c) })), timeoutLore: timeoutLore(lb, c),
+      abilityFx: Object.fromEntries(Object.entries(c.BATTLE_ABILITIES).map(([id, a]) => [id, { type: a.type, rounds: a.rounds || 0 }])),
       units: lb.units.map((u) => (u.side === 'enemy' ? { ...u, sprite: c.enemy[u.id].sprite, color: c.enemy[u.id].color } : u)) } : null,
     stats: { wins: s.arena.wins, losses: s.arena.losses },
     maxRounds: c.BATTLE.maxRounds,

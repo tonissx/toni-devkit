@@ -101,10 +101,13 @@ export function Scene({ snap, reactions, now }) {
         // Linhas de balão distintas: 2ª figura do lugar sobe duas linhas; estações vizinhas alternam uma.
         const lift = ((k - 1) * 2 + (col % 2)) * 22;
         const activity = moving ? 'walking' : d.activity;
+        const powered = p.ability && p.ability.activeUntil > now;            // habilidade de produção ativa
+        const casting = reactions.some((e) => e.type === 'ability' && e.pet === p.id && now - e.at < 1600); // acabou de ativar
         return (
           // Nas pontas da cena o balão se alinha para dentro (não é cortado pela borda).
-          <div key={d.id} className={'dc-pet is-' + activity + edge(d.spot)}
-            style={{ left: `calc(${centerOf(d.spot)}% + ${offset}px)`, '--bubble-lift': lift + 'px' }}>
+          <div key={d.id} className={'dc-pet is-' + activity + edge(d.spot) + (powered ? ' is-powered' : '') + (casting ? ' is-casting' : '')}
+            style={{ left: `calc(${centerOf(d.spot)}% + ${offset}px)`, '--bubble-lift': lift + 'px', '--pet': p.color }}>
+            {casting && <span className="dc-fx-ring" aria-hidden="true" />}
             <div className="dc-pet__bubble"><b>{p.name}</b> · {moving ? 'on the way...' : d.line}</div>
             <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} aura={auraOf(p)} size={52} />
           </div>

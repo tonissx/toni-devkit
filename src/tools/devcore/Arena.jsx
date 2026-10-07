@@ -51,7 +51,9 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   }, [i, done]);
   React.useEffect(() => {
     if (done) return undefined;
-    const t = setTimeout(() => setI((x) => x + 1), log[i] && (log[i].k === 'fortify' || log[i].k === 'down') ? STEP_MS / 2 : STEP_MS);
+    // Habilidades ficam mais tempo na tela (faixa com o nome + efeito); quedas e fortificação passam rápido.
+    const k = log[i] && log[i].k;
+    const t = setTimeout(() => setI((x) => x + 1), k === 'ab' ? STEP_MS * 2.2 : k === 'fortify' || k === 'down' ? STEP_MS / 2 : STEP_MS);
     return () => clearTimeout(t);
   }, [i, done]);
 
@@ -60,7 +62,25 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   const alive = {};
   const visible = {};
   for (const u of battle.units) { hp[u.uid] = u.hp != null ? u.hp : u.maxHp; alive[u.uid] = true; visible[u.uid] = !u.child; }  // começa da vida atual
+  // Estados ativos das habilidades (para os efeitos visuais): escudo, buff de ataque, aceleração, marcados, carregados, clones.
+  const fx = battle.abilityFx || {};
+  const st = { shieldUntil: 0, buffUntil: 0, hasteUntil: 0, marked: new Set(), charged: new Set(), decoys: 0 };
   for (const e of log.slice(0, i)) {
+    if (e.k === 'ab') {
+      const f = fx[e.v] || {};
+      if (f.type === 'shield') st.shieldUntil = e.r + f.rounds - 1;
+      if (f.type === 'atkBuff') st.buffUntil = Math.max(st.buffUntil, e.r + f.rounds - 1);
+      if (f.type === 'haste') st.hasteUntil = e.r + f.rounds - 1;
+      if (f.type === 'burst') st.charged.add(e.a);
+      if (f.type === 'decoy') st.decoys += 1;
+      if (f.type === 'mark') { // o engine marca o inimigo de mais vida naquele instante
+        const t = battle.units.filter((u) => u.side === 'enemy' && alive[u.uid] && visible[u.uid]).sort((a, b) => hp[b.uid] - hp[a.uid])[0];
+        if (t) st.marked.add(t.uid);
+      }
+    }
+    if (e.k === 'item' && e.v === 'coffee') st.buffUntil = Math.max(st.buffUntil, e.r + 2);
+    if (e.k === 'atk' && st.charged.has(e.a)) st.charged.delete(e.a);
+    if (e.k === 'decoy') st.decoys = Math.max(0, st.decoys - 1);
     if (e.k === 'atk' && e.t) hp[e.t] = Math.max(0, hp[e.t] - e.v);
     if (e.k === 'heal') hp[e.t] = Math.min(battle.units.find((u) => u.uid === e.t).maxHp, hp[e.t] + e.v);
     if (e.k === 'down') alive[e.t] = false;
@@ -72,6 +92,12 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   const abilityName = (id) => (snap.pets.find((p) => p.owned && p.ability.id === id) || { ability: { name: id } }).ability.name; // pets não encontrados não têm `ability`
   const itemName = (id) => (snap.inventory.find((k) => k.id === id) || { name: id }).name;
   const round = cur ? cur.r : log[log.length - 1].r;
+  const on = { shield: st.shieldUntil >= round, buff: st.buffUntil >= round, haste: st.hasteUntil >= round };
+  // Efeitos do evento atual: faixa da habilidade, golpe carregado (Compile Burst), onda de limpeza.
+  const curFx = cur && cur.k === 'ab' ? (fx[cur.v] || {}) : null;
+  const caster = curFx ? battle.units.find((u) => u.uid === cur.a) : null;
+  const casterPet = caster ? pet(caster.id) : null;
+  const burstHit = cur && cur.k === 'atk' && st.charged.has(cur.a);
   const max = battle.maxRounds || 30;
   const timeout = !battle.win && (battle.reason === 'timeout' || (log[log.length - 1].why === 'timeout'));
   // Inimigos ainda de pé no fim (para explicar o tempo esgotado).
@@ -86,7 +112,12 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     const popAt = cur && (['atk', 'miss', 'heal', 'revive', 'fortify', 'split'].includes(cur.k) ? cur.t : cur.a);
     const say = popAt === u.uid ? bubble(cur, abilityName, itemName) : '';
     return (
-      <div className={'dc-arena__unit is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (acting ? ' is-acting' : '') + (hit ? ' is-hit' : '') + (u.front ? ' is-front' : '') + (u.boss ? ' is-boss' : '')}>
+      <div className={'dc-arena__unit is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (acting ? ' is-acting' : '') + (hit ? ' is-hit' : '') + (u.front ? ' is-front' : '') + (u.boss ? ' is-boss' : '')
+        + (st.charged.has(u.uid) ? ' is-charged' : '') + (st.marked.has(u.uid) && alive[u.uid] ? ' is-marked' : '') + (burstHit && cur.t === u.uid ? ' is-burst-hit' : '')
+        + (acting && curFx ? ' is-casting' : '')} style={p ? { '--pet': p.color } : undefined}>
+        {st.marked.has(u.uid) && alive[u.uid] && <span className="dc-fx-reticle" aria-hidden="true" />}
+        {cur && cur.k === 'heal' && cur.t === u.uid && <span className="dc-fx-sparkles" aria-hidden="true"><i /><i /><i /><i /><i /></span>}
+        {burstHit && cur.t === u.uid && <span className="dc-fx-burst" aria-hidden="true" />}
         {say && <span className={'dc-arena__pop' + (cur.k === 'heal' || cur.k === 'revive' ? ' is-heal' : '') + (cur.c ? ' is-crit' : '')}>{say}</span>}
         {u.side === 'pet'
           ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} stage={p ? p.stage.id : 0} aura={p ? auraOf(p) : undefined} size={56} className="is-static" />
@@ -110,8 +141,20 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           ? <Button variant="primary" onClick={onClose}>Continuar</Button>
           : <Button variant="ghost" icon="fast-forward" onClick={() => setI(log.length)}>Pular</Button>}
       </>}>
-      <div className={'dc-arena dc-arena--' + area.arena} aria-label={'Arena ' + area.name}>
-        <div className="dc-arena__side is-pets">{[...pets].sort((a, b) => a.front - b.front).map((u) => <Unit key={u.uid} u={u} />)}</div>
+      <div className={'dc-arena dc-arena--' + area.arena + (burstHit ? ' is-shake' : '')} aria-label={'Arena ' + area.name}>
+        <div className={'dc-arena__side is-pets' + (on.shield ? ' is-shielded' : '') + (on.buff ? ' is-buffed' : '') + (on.haste ? ' is-hasted' : '')}>
+          {on.shield && <span className="dc-fx-shield" aria-hidden="true" />}
+          {curFx && curFx.type === 'cleanse' && <span className="dc-fx-wave" aria-hidden="true" />}
+          {Array.from({ length: st.decoys }, (_, k) => (
+            <span key={'decoy' + k} className="dc-fx-decoy" aria-hidden="true"><PetSprite id="git" color={(pet('git') || {}).color || '#F05133'} eye={(pet('git') || {}).eye} size={48} className="is-static" /></span>
+          ))}
+          {[...pets].sort((a, b) => a.front - b.front).map((u) => <Unit key={u.uid} u={u} />)}
+        </div>
+        {curFx && caster && (
+          <div key={'banner' + i} className={'dc-fx-banner is-' + curFx.type} style={{ '--pet': casterPet ? casterPet.color : '#fff' }} aria-live="polite">
+            <small>{caster.name}</small>{abilityName(cur.v)}
+          </div>
+        )}
         <div className="dc-arena__vs">VS</div>
         <div className="dc-arena__side is-enemies">{enemies.map((u) => <Unit key={u.uid} u={u} />)}</div>
         {done && (

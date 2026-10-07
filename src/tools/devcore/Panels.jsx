@@ -343,7 +343,7 @@ export function PetsPanel({ snap, amount, act, now }) {
     <QuestsCard quests={snap.quests} />
     <div className="dc-grid is-pets">
       {snap.pets.map((p) => (p.owned ? (
-        <div key={p.id} className="dc-pet-card" style={{ '--pet': p.color }}>
+        <div key={p.id} className={'dc-pet-card' + (p.ability.activeUntil > now ? ' is-powered' : '')} style={{ '--pet': p.color }}>
           <div className="dc-pet-card__head">
             <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} aura={auraOf(p)} size={56} className="is-static" />
             <div>
