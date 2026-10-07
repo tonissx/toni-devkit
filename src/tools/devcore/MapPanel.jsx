@@ -129,7 +129,7 @@ function Party({ map, party, hold, place, geom }) {
  */
 function Foes({ n, x, y }) {
   const boss = n.type === 'boss';
-  const size = boss ? 96 : n.type === 'elite' ? 36 : 32;
+  const size = boss ? 106 : n.type === 'elite' ? 36 : 32;
   const gap = boss ? 40 : 24;
   return (
     <div className={'dc-foes' + (boss ? ' is-boss' : '')} style={{ left: x, top: y - (boss ? 34 : 24) }} aria-hidden="true">

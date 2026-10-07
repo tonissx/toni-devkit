@@ -197,7 +197,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
         {say && <span className={'dc-arena__pop' + (cur.k === 'heal' || cur.k === 'revive' ? ' is-heal' : '') + (cur.c ? ' is-crit' : '')}>{say}</span>}
         {u.side === 'pet'
           ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} stage={p ? p.stage.id : 0} aura={p ? auraOf(p) : undefined} size={56} className="is-static" />
-          : <VillainSprite id={u.sprite} color={u.color} state={alive[u.uid] ? 'active' : 'defeated'} size={u.boss ? 84 : 56} />}
+          : <VillainSprite id={u.sprite} color={u.color} state={alive[u.uid] ? 'active' : 'defeated'} size={u.boss ? 92 : 56} />}
         <span className="dc-arena__name">{u.name}</span>
         <ProgressBar value={(hp[u.uid] / u.maxHp) * 100} size="sm" />
       </div>

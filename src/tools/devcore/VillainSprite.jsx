@@ -171,19 +171,41 @@ function Dep({ c, eye, locked }) {
 }
 
 /** Legacy Monolith — bloco de pedra antigo, rachado, de olhos pesados (chefe do Localhost). */
+/**
+ * Legacy Monolith: bloco de obsidiana com o topo quebrado, rachaduras de código antigo brilhando em vermelho, olhos em
+ * fenda, névoa escura na base e fragmentos de código legado (GOTO, <td>) flutuando em volta.
+ */
 function Monolith({ c, locked }) {
   return (
     <g>
+      {!locked && <ellipse className="v-mist" cx="32" cy="57" rx="22" ry="5" fill="#1A0B1E" opacity=".75" />}
       <g className="v-body">
-        <path d="M17 58 L19 10 Q32 4 45 10 L47 58 Z" fill={c} stroke="#3C4656" strokeWidth="1.4" />
-        <path d="M24 14 L27 24 L23 31 M41 40 L37 47 L40 55 M19 36 L26 38" stroke="#3C4656" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-        <rect x="22" y="44" width="20" height="3" rx="1.5" fill="#3C4656" opacity=".7" />
+        {/* corpo: topo quebrado e irregular, face sombreada à direita */}
+        <path d="M15 58 L17 13 L22 8 L25 11 L30 5 L35 9 L40 6 L44 12 L47 11 L49 58 Z" fill={c} stroke="#0D0F14" strokeWidth="1.6" strokeLinejoin="round" />
+        <path d="M37 9 L40 6 L44 12 L47 11 L49 58 L38 58 Z" fill="#000" opacity=".32" />
+        <path d="M17 13 L22 8 L25 11 L22 20 Z" fill="#fff" opacity=".07" />
+        {/* runas/linhas de código gravadas */}
+        <path d="M21 34 h6 M21 37 h9 M21 40 h4 M41 46 h4 M40 49 h6" stroke="#0D0F14" strokeWidth="1.2" strokeLinecap="round" opacity=".7" />
+        {/* rachaduras: escuras e, por dentro, brilho vermelho pulsando */}
+        <path d="M27 10 L29 15 L26 19 M24 30 L27 33 L24 37 M44 30 L39 38 L43 45 L39 54 M17 44 L23 46 L21 52" stroke="#0D0F14" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        {!locked && <path className="v-crack" d="M27 10 L29 15 L26 19 M24 30 L27 33 L24 37 M44 30 L39 38 L43 45 L39 54 M17 44 L23 46 L21 52" stroke="#FF3B3B" strokeWidth="1" fill="none" strokeLinecap="round" strokeLinejoin="round" />}
         {!locked && <>
-          <rect x="23" y="25" width="7" height="4" rx="1.5" fill="#FFD27A" className="v-glow" />
-          <rect x="34" y="25" width="7" height="4" rx="1.5" fill="#FFD27A" className="v-glow" />
-          <path d="M22 22 L31 24 M42 22 L33 24" stroke="#2A3240" strokeWidth="2.4" strokeLinecap="round" />
+          {/* sobrancelha pesada e olhos em fenda */}
+          <path d="M19 19 L31 23.5 M45 19 L33 23.5" stroke="#0D0F14" strokeWidth="3.2" strokeLinecap="round" />
+          <path className="v-glow" d="M21 24 L30 26.5 L22 27.5 Z" fill="#FF4A3D" />
+          <path className="v-glow" d="M43 24 L34 26.5 L42 27.5 Z" fill="#FF4A3D" />
+          <ellipse cx="25.5" cy="26" rx="6" ry="3" fill="#FF3B3B" opacity=".22" />
+          <ellipse cx="38.5" cy="26" rx="6" ry="3" fill="#FF3B3B" opacity=".22" />
+          {/* boca: fenda serrilhada */}
+          <path d="M25 42 L28 44 L31 42 L34 44 L37 42 L40 44" stroke="#0D0F14" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
         </>}
       </g>
+      {!locked && <g className="v-debris" fontFamily="monospace" fontWeight="700" fill="#FF6B5E">
+        <text x="5" y="20" fontSize="6" opacity=".7">GOTO</text>
+        <text x="49" y="30" fontSize="6" opacity=".6">{'<td>'}</text>
+        <rect x="9" y="38" width="3" height="3" fill="#2A2F3A" transform="rotate(20 10 39)" />
+        <rect x="53" y="14" width="2.5" height="2.5" fill="#2A2F3A" transform="rotate(-15 54 15)" />
+      </g>}
     </g>
   );
 }
