@@ -37,15 +37,30 @@ export function gainsFrom(log, snap) {
 }
 
 /**
- * Junta ganhos novos à fila: o mesmo item (mesma origem: batalha ou não) soma na quantidade do popup que já existe —
- * comprar 3 Coffees seguidos mostra um "Coffee ×3", não três avisos.
+ * Junta ganhos novos à fila (separando os de batalha dos demais):
+ * - o mesmo item que está na tela soma na quantidade ("Coffee ×3", não três avisos);
+ * - um item diferente entra na hora no lugar do atual — esperar o anterior sumir dá sensação de atraso;
+ * - itens que chegam juntos no mesmo lote (recompensas de uma vitória) aparecem em sequência.
  */
 export function mergeGains(queue, gains) {
-  const out = [...queue];
+  // Mesmo item no mesmo lote: soma antes.
+  const incoming = [];
   for (const g of gains) {
-    const i = out.findIndex((x) => x.group === g.group && x.afterBattle === g.afterBattle);
-    if (i === -1) out.push(g);
-    else out[i] = { ...out[i], count: out[i].count + g.count };
+    const j = incoming.findIndex((x) => x.group === g.group && x.afterBattle === g.afterBattle);
+    if (j === -1) incoming.push({ ...g });
+    else incoming[j].count += g.count;
+  }
+  let out = [...queue];
+  const added = new Set();
+  for (const g of incoming) {
+    const first = out.find((x) => x.afterBattle === g.afterBattle && !added.has(x.key));
+    if (first && first.group === g.group && !added.size) {
+      out = out.map((x) => (x.key === first.key ? { ...x, count: x.count + g.count } : x));
+      continue;
+    }
+    out = out.filter((x) => x.afterBattle !== g.afterBattle || added.has(x.key));
+    out.push(g);
+    added.add(g.key);
   }
   return out;
 }
@@ -63,7 +78,7 @@ export function ItemPopups({ queue, held, onDone }) {
   if (!cur) return null;
   const more = queue.filter((g) => !(held && g.afterBattle)).length - 1;
   return (
-    <div className={'dc-gain is-' + cur.rarity} role="status" aria-live="polite">
+    <div key={cur.key} className={'dc-gain is-' + cur.rarity} role="status" aria-live="polite">
       <button type="button" className="dc-gain__card" onClick={() => onDone(cur.key)} title="Fechar">
         <span className="dc-gain__icon">{cur.part ? <PartIcon id={cur.part} size={26} /> : <Icon name={cur.icon} size={26} />}</span>
         <span className="dc-gain__text">
