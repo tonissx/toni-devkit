@@ -12,7 +12,7 @@
     "watch": "node scripts/build-renderer.mjs --watch",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",
-    "test": "node scripts/test-sql.mjs && node --test scripts/test-git-avatars.mjs scripts/test-git-logstats.mjs scripts/test-xml.mjs scripts/test-diff.mjs scripts/test-json.mjs scripts/test-palette.mjs scripts/test-binds.mjs scripts/test-notes.mjs scripts/test-devcore.mjs scripts/test-compute-version.mjs scripts/test-updater.mjs scripts/test-vault.mjs scripts/test-links.mjs scripts/test-home.mjs scripts/test-stickies.mjs scripts/test-git.mjs scripts/test-ai.mjs scripts/test-ai-tasks.mjs scripts/test-json-types.mjs scripts/test-sql-risks.mjs",
+    "test": "node scripts/test-sql.mjs && node --test scripts/test-git-avatars.mjs scripts/test-xml.mjs scripts/test-diff.mjs scripts/test-json.mjs scripts/test-palette.mjs scripts/test-binds.mjs scripts/test-notes.mjs scripts/test-devcore.mjs scripts/test-compute-version.mjs scripts/test-updater.mjs scripts/test-vault.mjs scripts/test-links.mjs scripts/test-home.mjs scripts/test-stickies.mjs scripts/test-git.mjs scripts/test-ai.mjs scripts/test-ai-tasks.mjs scripts/test-json-types.mjs scripts/test-sql-risks.mjs",
     "test:xml": "node --test scripts/test-xml.mjs",
     "test:diff": "node --test scripts/test-diff.mjs",
     "test:json": "node --test scripts/test-json.mjs",

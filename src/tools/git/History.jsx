@@ -32,29 +32,7 @@ function hue(key) {
 /** Largura da coluna do grafo: as raias entre duas margens. */
 const graphWidth = (layout) => (Math.min(MAX_LANES, Math.max(1, layout.width)) - 1) * LANE + PAD * 2;
 
-/** Arquivos alterados + linhas (+/−) e uma mini-barra de 5 quadradinhos com a proporção de adições. */
-function CommitStat({ s, merge }) {
-  if (merge) return <span className="gt-row__stat is-none" title="Merge: o que entrou está nos commits da outra linha">—</span>;
-  if (s === undefined) return <span className="gt-row__stat is-none" aria-hidden="true" />;
-  if (!s) return <span className="gt-row__stat is-none" title="Commit sem alterações de arquivos">—</span>;
-  const total = s.added + s.deleted;
-  // Quadradinhos verdes = fatia das adições (pelo menos 1 se houve adição); o resto é vermelho.
-  const green = !total || !s.added ? 0 : Math.min(s.deleted ? 4 : 5, Math.max(1, Math.round((5 * s.added) / total)));
-  const filled = total ? 5 : 0;
-  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  const title = `${plural(s.files, 'arquivo', 'arquivos')} · ${plural(s.added, 'linha adicionada', 'linhas adicionadas')} · ${plural(s.deleted, 'removida', 'removidas')}`;
-  return (
-    <span className="gt-row__stat" title={title}>
-      <span className="gt-stat__files"><Icon name="file" size={12} />{s.files}</span>
-      <span className="gt-stat__lines"><b className="is-add">+{s.added}</b><b className="is-del">−{s.deleted}</b></span>
-      <span className="gt-stat__bar" aria-hidden="true">
-        {[0, 1, 2, 3, 4].map((i) => <i key={i} className={i < green ? 'is-add' : i < filled ? 'is-del' : ''} />)}
-      </span>
-    </span>
-  );
-}
-
-const photoOf = (photos, c) => (photos && c.email ? photos[c.email.trim().toLowerCase()] : null);
+const photoOf =(photos, c) => (photos && c.email ? photos[c.email.trim().toLowerCase()] : null);
 
 /** O grafo inteiro num SVG só, atrás da coluna de raias. */
 function Graph({ layout, commits, headHash, photos }) {
@@ -207,20 +185,6 @@ export function History({ repo, status, run, focus }) {
   const layout = React.useMemo(() => layoutGraph(commits || []), [commits]);
   // Fotos do Gravatar (Configurações): lidas ao abrir a aba; quem não tem foto continua com as iniciais.
   const useGravatar = React.useMemo(() => !!load('prefs', {}).gitAvatars, []);
-  // Arquivos e linhas por commit: chegam depois da lista (o diff é mais lento que o log) e não mudam para um mesmo hash.
-  const [stats, setStats] = React.useState({});
-  React.useEffect(() => {
-    if (!commits) return undefined;
-    const todo = commits.filter((c) => c.parents.length < 2 && !(c.hash in stats)).map((c) => c.hash);
-    if (!todo.length) return undefined;
-    let alive = true;
-    (async () => {
-      for (let i = 0; i < todo.length && alive; i += 100) {
-        try { const got = await gitApi().logStats(repo, todo.slice(i, i + 100)); if (alive) setStats((s) => ({ ...s, ...got })); } catch { return; }
-      }
-    })();
-    return () => { alive = false; };
-  }, [commits, repo]);
   const [photos, setPhotos] = React.useState({});
   React.useEffect(() => {
     if (!useGravatar || !commits) return undefined;
@@ -269,7 +233,6 @@ export function History({ repo, status, run, focus }) {
                     if (e.key === 'ArrowUp' && i > 0) { e.preventDefault(); setSel(commits[i - 1].hash); e.currentTarget.previousSibling && e.currentTarget.previousSibling.focus(); }
                   }}>
                   <span className="gt-row__subject"><RefBadges refs={c.refs} />{c.subject}</span>
-                  <CommitStat s={stats[c.hash]} merge={c.parents.length > 1} />
                   <span className="gt-row__author">{c.author}</span>
                   <span className="gt-row__date" title={fullDate(c.time)}>{ago(c.time)}</span>
                   <span className="gt-row__hash">{short(c.hash)}</span>

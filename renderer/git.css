@@ -258,25 +258,8 @@
 .gt-graph__lines path { fill: none; stroke-width: 2; }
 .gt-graph__avatar-text { fill: #fff; font-size: 9.5px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
 .gt-graph__halo { fill: none; stroke-width: 2; opacity: .45; }
-.gt-row { position: absolute; left: 0; right: 0; height: 38px; display: grid; grid-template-columns: minmax(0, 1fr) 160px 96px 78px 60px; align-items: center; gap: 10px;
+.gt-row { position: absolute; left: 0; right: 0; height: 38px; display: grid; grid-template-columns: minmax(0, 1fr) 96px 78px 60px; align-items: center; gap: 10px;
   padding-right: 14px; cursor: pointer; font-size: 12.5px; color: var(--tk-text); outline: 0; }
-/* arquivos e linhas por commit; some quando a lista fica estreita demais para caber junto do assunto */
-.gt-history__main { container-type: inline-size; container-name: gthist; }
-@container gthist (max-width: 780px) {
-  .gt-row { grid-template-columns: minmax(0, 1fr) 96px 78px 60px; }
-  .gt-row__stat { display: none !important; }
-}
-.gt-row__stat { display: flex; align-items: center; gap: 8px; font: 11.5px var(--tk-font-mono); color: var(--tk-text-3); white-space: nowrap; min-width: 0; }
-.gt-row__stat.is-none { justify-content: center; opacity: .6; }
-.gt-stat__files { display: inline-flex; align-items: center; gap: 3px; flex: none; min-width: 32px; }
-.gt-stat__lines { display: inline-flex; gap: 5px; flex: none; }
-.gt-stat__lines b { font-weight: 500; }
-.gt-stat__lines .is-add, .gt-stat__bar i.is-add { color: var(--tk-green); }
-.gt-stat__lines .is-del, .gt-stat__bar i.is-del { color: var(--tk-red); }
-.gt-stat__bar { display: inline-flex; gap: 1px; flex: none; margin-left: auto; }
-.gt-stat__bar i { width: 5px; height: 10px; border-radius: 1px; background: var(--tk-surface-3); }
-.gt-stat__bar i.is-add { background: var(--tk-green); }
-.gt-stat__bar i.is-del { background: var(--tk-red); }
 .gt-row:hover { background: var(--tk-surface-2); }
 .gt-row.is-sel, .gt-row:focus-visible { background: var(--tk-surface-active, var(--tk-surface-3)); }
 .gt-row.is-head .gt-row__subject { font-weight: 600; }
