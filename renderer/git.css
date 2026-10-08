@@ -73,6 +73,10 @@
 .gt-found__item { display: inline-flex; flex-direction: column; }
 .gt-found__item small { font: 11px var(--tk-font-mono); color: var(--tk-text-3); }
 
+/* worktree travado: motivo e se quem travou ainda existe */
+.gt-lock { display: flex; align-items: center; gap: 5px; margin-top: 2px; color: var(--tk-text-3); }
+.gt-lock.is-alive { color: var(--tk-amber); }
+
 /* área principal */
 .gt-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
 /* Abas: com ícones quando cabem; abaixo dessa largura, só o texto (10 abas com ícone não cabem numa janela normal). */

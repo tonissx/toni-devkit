@@ -288,7 +288,7 @@ const parseCleanPreview = (out) => String(out || '').split('\n').map((l) => /^Wo
  */
 function parseWorktrees(out) {
   return String(out || '').replace(/\r/g, '').split('\n\n').map((b) => b.trim()).filter(Boolean).map((b, i) => {
-    const w = { path: '', head: null, branch: null, detached: false, locked: false, prunable: false, main: i === 0 };
+    const w = { path: '', head: null, branch: null, detached: false, locked: false, lockReason: '', prunable: false, main: i === 0 };
     for (const line of b.split('\n')) {
       const [k, ...rest] = line.split(' ');
       const v = rest.join(' ');
@@ -296,15 +296,21 @@ function parseWorktrees(out) {
       else if (k === 'HEAD') w.head = v;
       else if (k === 'branch') w.branch = v.replace(/^refs\/heads\//, '');
       else if (k === 'detached') w.detached = true;
-      else if (k === 'locked') w.locked = true;
+      else if (k === 'locked') { w.locked = true; w.lockReason = v; } // "locked" ou "locked <motivo>"
       else if (k === 'prunable') w.prunable = true;
     }
     return w;
   });
 }
 
+/** Pid citado no motivo da trava ("claude session x (pid 1234)") ou null — o Claude Code trava o worktree enquanto a sessão vive. */
+function lockOwnerPid(reason) {
+  const m = /\bpid[\s=:]*(\d{1,10})\b/i.exec(String(reason || ''));
+  return m ? Number(m[1]) : null;
+}
+
 module.exports = {
-  parseWorktrees,
+  parseWorktrees, lockOwnerPid,
   parseBlame, PICKAXE_FORMAT, parsePickaxe, parseBisectLog, parseCleanPreview,
   US, RS, LOG_FORMAT, BRANCH_FORMAT, REFLOG_FORMAT, STASH_FORMAT,
   parseStatus, parseDecorations, parseLog, parseBranches, describeReflog, parseReflog, parseStashes, parseNumstat,
