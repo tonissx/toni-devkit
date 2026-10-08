@@ -759,6 +759,8 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-mapview__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .dc-mapview__head > div { flex: 1; min-width: 200px; }
 .dc-patches { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* O mapa sobe (margem negativa) para tirar o vazio da inclinação: o que vem antes dele fica numa camada acima. */
+.dc-mapview__head, .dc-patches, .dc-mapview > .dc-mapbox { position: relative; z-index: 6; }
 .dc-patches .tk-menu__heading { padding-left: 0; margin-right: 4px; }
 .dc-patch.is-rare { color: #6EA8FF; }
 .dc-patch.is-epic { color: #F5C542; }
