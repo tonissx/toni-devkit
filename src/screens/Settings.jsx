@@ -194,6 +194,9 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater, toast }) 
           <Row label="Sidebar recolhida" hint="Mostra só os ícones das ferramentas">
             <Toggle checked={prefs.collapsed} onChange={(collapsed) => setPrefs((p) => ({ ...p, collapsed }))} />
           </Row>
+          <Row label="Foto do Gravatar no histórico do Git" hint="Mostra a foto de cada autor no grafo. Envia ao gravatar.com só o hash do e-mail (nunca o e-mail); quem não tem foto fica com as iniciais">
+            <Toggle checked={!!prefs.gitAvatars} onChange={(gitAvatars) => setPrefs((p) => ({ ...p, gitAvatars }))} />
+          </Row>
         </Card>
         <PaletteCard />
         <LinksCard toast={toast} />

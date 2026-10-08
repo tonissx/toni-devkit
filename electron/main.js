@@ -17,6 +17,7 @@ const { createLinksService } = require('./links/service');
 const { createVaultService } = require('./vault/service');
 const { createStickiesService } = require('./stickies/service');
 const { createGitService } = require('./git/service');
+const { createAvatarService } = require('./git/avatars');
 const { createAiService } = require('./ai/service');
 const { primaryIndex } = require('../src/vault/entry.js');
 
@@ -580,6 +581,9 @@ const GIT_API = ['version', 'list', 'add', 'remove', 'scan', 'open', 'summaries'
 for (const fn of GIT_API) {
   ipcMain.handle('git:' + fn, async (_e, ...args) => { await gitReady; return gitSvc[fn](...args); });
 }
+// Fotos do Gravatar (opcional, ligado em Configurações): a busca é aqui para a CSP da tela continuar fechada.
+const gitAvatars = createAvatarService();
+ipcMain.handle('git:avatars', (_e, emails) => gitAvatars.get(Array.isArray(emails) ? emails : []));
 // Adicionar escolhendo a pasta no diálogo do sistema.
 ipcMain.handle('git:pick', async (e) => {
   await gitReady;

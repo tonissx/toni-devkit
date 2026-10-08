@@ -1,6 +1,7 @@
 // Git — Histórico: grafo de commits (raias coloridas pela paleta do tema), filtros por texto e autor, e o painel do
 // commit escolhido (mensagem, arquivos, diff) com ações: criar branch aqui e voltar a branch para este ponto.
 import { DS } from '../../lib/ds.js';
+import { load } from '../../lib/store.js';
 import { layoutGraph } from '../../git/graph.js';
 import { validBranchName } from '../../git/ops.js';
 import { gitApi, useRepoData, ago, fullDate, short, RefBadges, FilePath, laneColor, OpButton } from './shared.jsx';
@@ -27,8 +28,10 @@ function hue(key) {
   return n % 360;
 }
 
+const photoOf = (photos, c) => (photos && c.email ? photos[c.email.trim().toLowerCase()] : null);
+
 /** O grafo inteiro num SVG só, atrás da coluna de raias. */
-function Graph({ layout, commits, headHash }) {
+function Graph({ layout, commits, headHash, photos }) {
   const lanes = Math.min(MAX_LANES, layout.width);
   const w = lanes * LANE + 10;
   const x = (c) => 8 + Math.min(c, MAX_LANES - 1) * LANE;
@@ -56,6 +59,12 @@ function Graph({ layout, commits, headHash }) {
                 <>
                   <circle cx={x(row.col)} cy={y(r)} r={AVATAR} fill={`hsl(${hue(commits[r].email || commits[r].author)} 45% 38%)`} stroke={laneColor(row.color)} strokeWidth={2} />
                   <text x={x(row.col)} y={y(r)} className="gt-graph__avatar-text">{initials(commits[r].author)}</text>
+                  {photoOf(photos, commits[r]) && (
+                    <>
+                      <clipPath id={'gt-av-' + r}><circle cx={x(row.col)} cy={y(r)} r={AVATAR - 1} /></clipPath>
+                      <image href={photoOf(photos, commits[r])} x={x(row.col) - AVATAR} y={y(r) - AVATAR} width={AVATAR * 2} height={AVATAR * 2} clipPath={`url(#gt-av-${r})`} preserveAspectRatio="xMidYMid slice" />
+                    </>
+                  )}
                 </>
               )}
           </g>
@@ -171,6 +180,17 @@ export function History({ repo, status, run, focus }) {
   const [sel, setSel] = React.useState(null);
   const { data: commits, error, loading } = useRepoData(repo, (r) => gitApi().log(r, { limit: PAGE * pages, grep: query.grep || undefined, author: query.author || undefined }), [query.grep, query.author, pages]);
   const layout = React.useMemo(() => layoutGraph(commits || []), [commits]);
+  // Fotos do Gravatar (Configurações): lidas ao abrir a aba; quem não tem foto continua com as iniciais.
+  const useGravatar = React.useMemo(() => !!load('prefs', {}).gitAvatars, []);
+  const [photos, setPhotos] = React.useState({});
+  React.useEffect(() => {
+    if (!useGravatar || !commits) return undefined;
+    const todo = [...new Set(commits.map((c) => (c.email || '').trim().toLowerCase()).filter((e) => e && !(e in photos)))];
+    if (!todo.length) return undefined;
+    let alive = true;
+    gitApi().avatars(todo).then((got) => { if (alive) setPhotos((p) => ({ ...p, ...got })); }, () => {});
+    return () => { alive = false; };
+  }, [commits, useGravatar]);
   React.useEffect(() => { if (focus && focus.hash) setSel(focus.hash); }, [focus && focus.nonce]);
   React.useEffect(() => { if (!sel && commits && commits[0]) setSel(commits[0].hash); }, [commits]);
   const lanesW = Math.min(MAX_LANES, layout.width) * LANE + 10;
@@ -201,7 +221,7 @@ export function History({ repo, status, run, focus }) {
         <div className="gt-log tk-scroll" ref={listRef}>
           {commits && (
             <div className="gt-log__inner" style={{ height: commits.length * ROW }}>
-              <Graph layout={layout} commits={commits} headHash={status.branch.oid} />
+              <Graph layout={layout} commits={commits} headHash={status.branch.oid} photos={photos} />
               {commits.map((c, i) => (
                 <div key={c.hash} className={'gt-row' + (selected && selected.hash === c.hash ? ' is-sel' : '') + (c.hash === status.branch.oid ? ' is-head' : '')}
                   style={{ top: i * ROW, paddingLeft: lanesW }} onClick={() => setSel(c.hash)} role="button" tabIndex={0}
