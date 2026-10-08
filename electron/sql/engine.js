@@ -9,6 +9,7 @@
 const path = require('node:path');
 const fs = require('node:fs');
 const { unwrapJsConcat } = require('./jsConcat');
+const { convertLineComments } = require('./lineComments');
 
 /** Em builds empacotados, arquivos nativos/wasm ficam em app.asar.unpacked. */
 const unpacked = (p) => p.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
@@ -84,7 +85,7 @@ function init() {
 async function format(sql, options) {
   const eng = await init();
   const unwrapped = unwrapJsConcat(sql);
-  const effectiveSql = unwrapped ? unwrapped.sql : String(sql ?? '');
+  const effectiveSql = convertLineComments(unwrapped ? unwrapped.sql : String(sql ?? ''));
   const opts = toSqlparseOptions(options);
   const t0 = performance.now();
   const result = eng.format(effectiveSql, JSON.stringify(opts));
