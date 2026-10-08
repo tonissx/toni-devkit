@@ -112,7 +112,7 @@ function bubble(e, abilityName, itemName) {
 }
 
 /** Uma linha da fila de eventos: ícone, lado (cor) e o texto com os nomes destacados. */
-function FeedLine({ e, unit, abilityName, itemName }) {
+function FeedLine({ e, unit, abilityName, itemName, age }) {
   const N = ({ uid }) => {
     if (uid === 'item') return <b className="is-item">Hotfix</b>;
     const u = unit(uid);
@@ -137,36 +137,26 @@ function FeedLine({ e, unit, abilityName, itemName }) {
   else if (e.k === 'decoy') { icon = 'ghost'; body = <><N uid={e.a} /> acertou um clone em vez de <N uid={e.t} /></>; }
   else return null;
   return (
-    <li className={'dc-feed__line is-' + e.k + ' by-' + side}>
+    <li className={'dc-feed__line is-' + e.k + ' by-' + side + (age === 0 ? ' is-new' : '')} style={{ opacity: Math.max(0.12, 1 - age * 0.13) }}>
       <Icon name={icon} size={12} />
       <span>{body}</span>
+      <small className="dc-feed__round">R{e.r}</small>
     </li>
   );
 }
 
 /**
- * Fila de eventos da luta (mais recente no topo, agrupada por rodada): quem atacou quem, habilidades ativadas,
- * consumíveis, curas, quedas. Acompanha a reprodução (só o que já aconteceu na tela).
+ * Fila de eventos integrada à arena (coluna da esquerda, sobre o cenário): cada evento é um card com degradê; o mais
+ * novo fica embaixo e os anteriores sobem perdendo opacidade. Acompanha a reprodução (só o que já aconteceu na tela).
  */
+const FEED_MAX = 9;
 function BattleFeed({ log, upto, unit, abilityName, itemName }) {
-  const shown = log.slice(0, upto).map((e, idx) => ({ e, idx })).filter(({ e }) => e.k !== 'end');
-  const rounds = [];
-  for (const it of shown) {
-    const last = rounds[rounds.length - 1];
-    if (last && last.r === it.e.r) last.items.push(it); else rounds.push({ r: it.e.r, items: [it] });
-  }
+  const shown = log.slice(0, upto).map((e, idx) => ({ e, idx })).filter(({ e }) => e.k !== 'end').slice(-FEED_MAX);
   return (
-    <aside className="dc-feed" aria-label="Eventos da luta">
-      <div className="dc-feed__head"><Icon name="scroll-text" size={13} /> Eventos</div>
-      <div className="dc-feed__list" role="log">
-        {!shown.length && <p className="dc-feed__empty">A luta vai começar…</p>}
-        {[...rounds].reverse().map((g) => (
-          <section key={g.r}>
-            <h4>Rodada {g.r}</h4>
-            <ul>{[...g.items].reverse().map(({ e, idx }) => <FeedLine key={idx} e={e} unit={unit} abilityName={abilityName} itemName={itemName} />)}</ul>
-          </section>
-        ))}
-      </div>
+    <aside className="dc-arena__feed" aria-label="Eventos da luta">
+      <ul className="dc-feed__list" role="log">
+        {shown.map(({ e, idx }, j) => <FeedLine key={idx} e={e} age={shown.length - 1 - j} unit={unit} abilityName={abilityName} itemName={itemName} />)}
+      </ul>
     </aside>
   );
 }
@@ -267,7 +257,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   const pets = battle.units.filter((u) => u.side === 'pet');
   const enemies = battle.units.filter((u) => u.side === 'enemy');
   return (
-    <Modal open title={'ARENA · ' + area.name.toUpperCase()} icon="swords" onClose={onClose} width={1040}
+    <Modal open title={'ARENA · ' + area.name.toUpperCase()} icon="swords" onClose={onClose} width={900}
       description={done
         ? (battle.win ? 'Vitória!' : timeout ? `Tempo esgotado (${max} rodadas). Nada foi perdido além da entrada.` : 'Derrota — o esquadrão caiu. Nada foi perdido além da entrada.')
         : `Rodada ${round} de ${max}`}
@@ -277,9 +267,9 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           ? <Button variant="primary" onClick={onClose}>Continuar</Button>
           : <Button variant="ghost" icon="fast-forward" onClick={() => setI(log.length)}>Pular</Button>}
       </>}>
-      <div className="dc-arena-wrap">
       <div className={'dc-arena dc-arena--' + area.arena + (burstHit ? ' is-shake' : '') + (done ? ' is-done' : '')} aria-label={'Arena ' + area.name}>
         {area.arena === 'localhost' && <ForestBackdrop />}
+        <BattleFeed log={log} upto={done ? log.length : i + 1} unit={(uid) => battle.units.find((u) => u.uid === uid)} abilityName={abilityName} itemName={itemName} />
         <div className={'dc-arena__side is-pets' + (on.shield ? ' is-shielded' : '') + (on.buff ? ' is-buffed' : '') + (on.haste ? ' is-hasted' : '')}>
           {on.shield && <span className="dc-fx-shield" aria-hidden="true" />}
           {curFx && curFx.type === 'cleanse' && <span className="dc-fx-wave" aria-hidden="true" />}
@@ -302,8 +292,6 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
             {timeout && <span className="dc-arena__hint">{standing.map((u) => `${u.name}: ${u.end} de vida`).join(' · ')} · dica: mais dano — habilidades no início, Coffee e Hotfix, mais atacantes.</span>}
           </div>
         )}
-      </div>
-      <BattleFeed log={log} upto={done ? log.length : i + 1} unit={(uid) => battle.units.find((u) => u.uid === uid)} abilityName={abilityName} itemName={itemName} />
       </div>
       {done && <BattleSummary battle={battle} snap={snap} itemName={itemName} />}
     </Modal>
