@@ -256,9 +256,9 @@
 .gt-log__inner { position: relative; }
 .gt-graph { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; }
 .gt-graph__lines path { fill: none; stroke-width: 2; }
-.gt-graph__avatar-text { fill: #fff; font-size: 10.5px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+.gt-graph__avatar-text { fill: #fff; font-size: 9.5px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
 .gt-graph__halo { fill: none; stroke-width: 2; opacity: .45; }
-.gt-row { position: absolute; left: 0; right: 0; height: 40px; display: grid; grid-template-columns: minmax(0, 1fr) 96px 78px 60px; align-items: center; gap: 10px;
+.gt-row { position: absolute; left: 0; right: 0; height: 38px; display: grid; grid-template-columns: minmax(0, 1fr) 96px 78px 60px; align-items: center; gap: 10px;
   padding-right: 14px; cursor: pointer; font-size: 12.5px; color: var(--tk-text); outline: 0; }
 .gt-row:hover { background: var(--tk-surface-2); }
 .gt-row.is-sel, .gt-row:focus-visible { background: var(--tk-surface-active, var(--tk-surface-3)); }
