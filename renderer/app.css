@@ -794,10 +794,23 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 }
 .dc-board__tease.is-staging::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(200, 225, 220, .16), rgba(200, 225, 220, .05) 60%, transparent); filter: blur(4px); animation: dc-fog 9s ease-in-out infinite; }
 @keyframes dc-fog { 50% { opacity: .55; transform: translateX(12px); } }
-.dc-tease__beast { opacity: .8; filter: drop-shadow(0 0 8px rgba(160, 200, 190, .25)) !important; } /* vulto escuro na névoa: só os olhos brilham */
-.dc-tease__beast text { display: none; }
-.dc-tease__beast svg { display: block; }
-.dc-tease__sign { filter: drop-shadow(0 6px 4px rgba(0, 0, 0, .5)); }
+/* Cortina de névoa sombria (em pé, atrás do chefe) e a silhueta do próximo chefe: só os olhos brilham */
+.dc-tease__fog {
+  height: 420px; filter: none !important;
+  background:
+    radial-gradient(ellipse 40% 26% at 30% 82%, rgba(150, 170, 165, .16), transparent 70%),
+    radial-gradient(ellipse 36% 22% at 72% 86%, rgba(150, 170, 165, .12), transparent 70%),
+    linear-gradient(to top, rgba(12, 16, 18, 0) 0, rgba(12, 16, 18, .75) 14%, rgba(8, 10, 13, .96) 34%, #06070A 60%);
+  animation: dc-fog-drift 12s ease-in-out infinite;
+}
+@keyframes dc-fog-drift { 50% { background-position: 24px 0, -20px 0, 0 0; } }
+.dc-tease__beast { filter: none !important; -webkit-mask-image: linear-gradient(to top, transparent 0, #000 38%); mask-image: linear-gradient(to top, transparent 0, #000 38%); }
+.dc-tease__beast svg { display: block; overflow: visible; }
+.dc-tease__beast text, .dc-tease__beast path[fill="#F2EEDF"], .dc-tease__beast .v-ripple, .dc-tease__beast circle[fill="#120B1E"] { display: none; }
+.dc-tease__beast [stroke="#120B1E"] { stroke: #000; }
+.dc-tease__beast .v-glow { fill: #FFD24A; animation: dc-eye-glow 3.5s ease-in-out infinite; filter: drop-shadow(0 0 3px #FFB02E) drop-shadow(0 0 7px rgba(255, 176, 46, .7)); }
+@keyframes dc-eye-glow { 0%, 100% { opacity: 1; } 46% { opacity: 1; } 50% { opacity: .15; } 54% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .dc-tease__fog, .dc-tease__beast .v-glow { animation: none; } }
 /* Fogos-fátuos do CI: luzes que flutuam e alternam verde (✓) / vermelho (✗) */
 .dc-wisps { position: absolute; inset: 0 0 auto 0; height: 100%; pointer-events: none; z-index: 3; }
 .dc-wisps i { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #9CFFCB; box-shadow: 0 0 10px 3px rgba(94, 231, 160, .55); animation: dc-wisp 6s ease-in-out infinite; }

@@ -3,7 +3,6 @@ import { formatNum, formatDuration } from '../../devcore/engine/format.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
 import { VillainSprite } from './VillainSprite.jsx';
 import { Campfire, ShopStall } from './ForestArt.jsx';
-import { Cypress, CiLantern } from './SwampArt.jsx';
 import { InfoCard } from './InfoCard.jsx';
 import { Arena, SoundToggle } from './Arena.jsx';
 import { ForestProps } from './ForestArt.jsx';
@@ -81,31 +80,27 @@ const boardH = (map) => padTop(map) + (map.area.columns + 1) * ROW_H + PAD_BOTTO
 const BOARD_H = 400;    // altura de referência para decorações antigas (não usada no tabuleiro vertical)
 
 /**
- * A próxima área espiando atrás do chefe (faixa do topo): água turva e névoa do Pântano, uma placa apontando o caminho
- * e, no fundo da névoa, a silhueta do próximo chefe — só o bastante para dar curiosidade.
+ * A próxima área espiando atrás do chefe: uma cortina de névoa sombria, em pé, logo atrás do chefe (no 3D, tudo o que
+ * fica atrás dela some) e, saindo da névoa, só a silhueta escura do próximo chefe com os olhos brilhando.
  */
 function BoardTease({ map, w, line }) {
   return (
     <>
       <div className={'dc-board__tease is-' + map.next.arena} style={{ height: line + 60 }} aria-hidden="true" />
-      <span className="dc-prop is-upright is-anchored dc-tease__sign" style={{ left: w / 2 + 92, top: line + 16, zIndex: Math.round(line + 16) }} aria-hidden="true">
-        <svg width="62" height="52" viewBox="0 0 62 52"><path d="M28 52 V14" stroke="#4A3A2C" strokeWidth="3" /><path d="M6 6 H50 L58 14 L50 22 H6 Z" fill="#6B4A30" stroke="#2B1D10" strokeWidth="1.2" /><text x="10" y="17" fontSize="9" fontWeight="700" fontFamily="monospace" fill="#E8DCC0">STAGING</text></svg>
+      <span className="dc-prop is-upright is-anchored dc-tease__fog" style={{ left: w / 2, top: line, width: w + 80, zIndex: Math.round(line) }} aria-hidden="true" />
+      <span className="dc-prop is-upright is-anchored dc-tease__beast" style={{ left: w / 2 + 150, top: line + 8, zIndex: Math.round(line + 8) }} aria-hidden="true">
+        <VillainSprite id="hydra-main" color="#07060B" size={190} />
       </span>
-      <span className="dc-prop is-upright is-anchored" style={{ left: w / 2 - 118, top: line - 4, zIndex: Math.round(line - 4) }} aria-hidden="true"><CiLantern s={1.1} ok={false} /></span>
-      <span className="dc-prop is-upright is-anchored dc-tease__beast" style={{ left: w / 2 + 170, top: 120, zIndex: 120 }} aria-hidden="true" title={'Algo espreita além do chefe: ' + map.next.name}>
-        <VillainSprite id="hydra-main" color="#17121F" size={150} />
+      <span className="dc-prop is-upright is-anchored dc-tease__beast" style={{ left: w / 2 + 215, top: line + 4, zIndex: Math.round(line + 4) }} aria-hidden="true">
+        <VillainSprite id="hydra-feature" color="#07060B" size={165} />
       </span>
-      <span className="dc-prop is-upright is-anchored dc-tease__beast" style={{ left: w / 2 + 222, top: 116, zIndex: 116 }} aria-hidden="true">
-        <VillainSprite id="hydra-feature" color="#1C1414" size={130} />
-      </span>
-      <span className="dc-prop is-upright is-anchored" style={{ left: w / 2 - 190, top: 150, zIndex: 150, opacity: 0.7 }} aria-hidden="true"><Cypress s={1.2} v={2} /></span>
     </>
   );
 }
 
 /** Objetos 3D da área espalhados pelo tabuleiro (decoração; ver docs §4.5). spots: lugares livres entre as trilhas. */
 function AreaProps({ arena, w, h, spots, tease = 0 }) {
-  if (arena === 'localhost') return <ForestProps w={w} h={h} spots={spots} wisps={tease || null} />;
+  if (arena === 'localhost') return <ForestProps w={w} h={h} spots={spots} />;
   if (arena === 'staging') return <ForestProps w={w} h={h} spots={spots} fireflies={false} wisps="all" />;
   return null;
 }
