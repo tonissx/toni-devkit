@@ -10,7 +10,8 @@ import { useAiMode, useAiTask, aiOn, AiButton, AiPanel } from '../../ai/ui.jsx';
 
 const { Icon, Spinner } = DS;
 const ROW = 36;   // altura de uma linha
-const LANE = 22;  // largura de uma raia
+const LANE = 28;  // largura de uma raia (avatar de 22px com a borda + 6px de respiro entre vizinhos)
+const PAD = 16;   // margem do grafo: cabe o avatar e o halo do HEAD sem cortar na borda
 const AVATAR = 10; // raio do avatar do autor no grafo
 const MAX_LANES = 14;
 const PAGE = 300;
@@ -28,13 +29,15 @@ function hue(key) {
   return n % 360;
 }
 
-const photoOf = (photos, c) => (photos && c.email ? photos[c.email.trim().toLowerCase()] : null);
+/** Largura da coluna do grafo: as raias entre duas margens. */
+const graphWidth = (layout) => (Math.min(MAX_LANES, Math.max(1, layout.width)) - 1) * LANE + PAD * 2;
+
+const photoOf =(photos, c) => (photos && c.email ? photos[c.email.trim().toLowerCase()] : null);
 
 /** O grafo inteiro num SVG só, atrás da coluna de raias. */
 function Graph({ layout, commits, headHash, photos }) {
-  const lanes = Math.min(MAX_LANES, layout.width);
-  const w = lanes * LANE + 10;
-  const x = (c) => 8 + Math.min(c, MAX_LANES - 1) * LANE;
+  const w = graphWidth(layout);
+  const x = (c) => PAD + Math.min(c, MAX_LANES - 1) * LANE;
   const y = (r) => r * ROW + ROW / 2;
   const paths = [];
   layout.rows.forEach((row, r) => {
@@ -193,7 +196,7 @@ export function History({ repo, status, run, focus }) {
   }, [commits, useGravatar]);
   React.useEffect(() => { if (focus && focus.hash) setSel(focus.hash); }, [focus && focus.nonce]);
   React.useEffect(() => { if (!sel && commits && commits[0]) setSel(commits[0].hash); }, [commits]);
-  const lanesW = Math.min(MAX_LANES, layout.width) * LANE + 10;
+  const lanesW = graphWidth(layout);
   const listRef = React.useRef(null);
   React.useEffect(() => {
     // Commit escolhido de fora (pai, Visão geral): rola até ele.
