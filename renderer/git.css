@@ -26,7 +26,29 @@
 .gt-rail { width: 236px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--tk-border); background: var(--tk-surface-1); }
 .gt-rail__head { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px 8px; }
 .gt-rail__list { flex: 1; min-height: 0; overflow: auto; padding: 0 8px; }
-.gt-rail__foot { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-top: 1px solid var(--tk-border); }
+.gt-rail { transition: width .15s ease; }
+.gt-rail__tools { position: relative; display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
+.gt-rail__btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 0; border-radius: var(--tk-radius-md); background: none; color: var(--tk-text-3); cursor: pointer; }
+.gt-rail__btn:hover:not(:disabled) { background: var(--tk-surface-2); color: var(--tk-text); }
+.gt-rail__btn:disabled { opacity: .5; cursor: default; }
+.gt-rail__menu { position: absolute; top: calc(100% + 4px); right: 0; z-index: 20; min-width: 190px; display: flex; flex-direction: column; padding: 4px;
+  border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-2); box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
+.gt-rail__menu button { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 0; border-radius: var(--tk-radius-md); background: none; color: var(--tk-text); font: 13px var(--tk-font-sans); text-align: left; cursor: pointer; }
+.gt-rail__menu button:hover { background: var(--tk-surface-3); }
+/* recolhida: uma coluna de siglas; o nome, a branch e o caminho ficam no tooltip */
+.gt-rail.is-collapsed { width: 52px; }
+.gt-rail.is-collapsed .gt-rail__head { flex-direction: column-reverse; gap: 4px; padding: 12px 0 8px; }
+.gt-rail.is-collapsed .gt-rail__tools { flex-direction: column; margin-left: 0; }
+.gt-rail.is-collapsed .gt-rail__menu { right: auto; left: calc(100% - 4px); top: 0; }
+.gt-rail.is-collapsed .gt-rail__list { padding: 0 6px; overflow-x: hidden; }
+.gt-rail.is-collapsed .gt-repo { justify-content: center; padding: 6px 0; }
+.gt-rail.is-collapsed .gt-repo.is-sel { box-shadow: none; }
+.gt-rail.is-collapsed .gt-repo.is-sel .gt-repo__abbr { border-color: var(--tk-accent); color: var(--tk-accent-text); }
+.gt-rail.is-collapsed .gt-repo__main, .gt-rail.is-collapsed .gt-repo__rm { display: none; }
+.gt-rail.is-collapsed .gt-repo__badge { position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; padding: 0 4px; font-size: 9.5px; line-height: 16px; pointer-events: none; }
+.gt-rail.is-collapsed .gt-repo-wrap:hover .gt-repo__badge, .gt-rail.is-collapsed .gt-repo-wrap:focus-within .gt-repo__badge { visibility: visible; }
+.gt-repo__abbr { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1.5px solid var(--tk-border); border-radius: var(--tk-radius-md);
+  background: var(--tk-surface-2); color: var(--tk-text); font: 600 12px var(--tk-font-mono); }
 .gt-repo { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; margin-bottom: 2px; border: 0; border-radius: var(--tk-radius-md);
   background: none; color: var(--tk-text-3); text-align: left; cursor: pointer; }
 .gt-repo:hover { background: var(--tk-surface-2); }
