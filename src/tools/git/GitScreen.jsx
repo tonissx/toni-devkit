@@ -39,9 +39,45 @@ function AddModal({ found, onClose, onAdd }) {
   );
 }
 
-function RepoRail({ repos, current, onOpen, onAddDone, onRemove, toast }) {
+/** "Antonio Gonçalves" / "toni-devkit" -> "AG" / "TD": a sigla do repositório na rail recolhida. */
+const repoInitials = (name) => {
+  const p = String(name || '?').split(/[\s._-]+/).filter(Boolean);
+  return ((p[0] || '?')[0] + (p.length > 1 ? p[1][0] : (p[0] || '')[1] || '')).toUpperCase();
+};
+
+// Largura da lista de repositórios: arrastar a borda define; abaixo de RAIL_SNAP vira a coluna de siglas (RAIL_COMPACT).
+const RAIL_COMPACT = 52, RAIL_MIN = 170, RAIL_MAX = 420, RAIL_SNAP = 120, RAIL_DEFAULT = 236;
+const railWidth = (raw) => (raw < RAIL_SNAP ? RAIL_COMPACT : Math.min(RAIL_MAX, Math.max(RAIL_MIN, Math.round(raw))));
+
+function RepoRail({ repos, current, width, onResize, onOpen, onAddDone, onRemove, toast }) {
+  const railRef = React.useRef(null);
+  const [live, setLive] = React.useState(null); // largura durante o arrasto (só grava ao soltar)
+  const w = live ?? width;
+  const collapsed = w <= RAIL_COMPACT;
+  const drag = {
+    onPointerDown: (e) => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); setLive(width); },
+    onPointerMove: (e) => { if (live != null && railRef.current) setLive(railWidth(e.clientX - railRef.current.getBoundingClientRect().left)); },
+    onPointerUp: () => { if (live != null) { onResize(live); setLive(null); } },
+    onLostPointerCapture: () => setLive(null),
+    onDoubleClick: () => onResize(collapsed ? RAIL_DEFAULT : RAIL_COMPACT), // alterna entre o padrão e as siglas
+    onKeyDown: (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      onResize(e.key === 'ArrowRight' ? (width <= RAIL_COMPACT ? RAIL_MIN : railWidth(width + 16)) : railWidth(width - 16));
+    },
+  };
   const [busy, setBusy] = React.useState(false);
   const [found, setFound] = React.useState(null);
+  const [menu, setMenu] = React.useState(false);
+  const menuRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!menu) return undefined;
+    const close = (e) => { if (!menuRef.current || !menuRef.current.contains(e.target)) setMenu(false); };
+    const esc = (e) => { if (e.key === 'Escape') setMenu(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
+  }, [menu]);
   const api = gitApi();
   const addFolder = async () => {
     const dir = await api.pick();
@@ -61,16 +97,27 @@ function RepoRail({ repos, current, onOpen, onAddDone, onRemove, toast }) {
     if (last) onAddDone(last);
   };
   return (
-    <aside className="gt-rail">
+    <aside ref={railRef} className={'gt-rail' + (collapsed ? ' is-collapsed' : '') + (live != null ? ' is-dragging' : '')} style={{ width: w }}>
       <div className="gt-rail__head">
-        <span className="home-section__title">Repositórios</span>
-        {busy && <Spinner size={12} />}
+        {!collapsed && <span className="home-section__title">Repositórios</span>}
+        {!collapsed && busy && <Spinner size={12} />}
+        <span className="gt-rail__tools" ref={menuRef}>
+          <button type="button" className="gt-rail__btn" title="Adicionar repositório" aria-label="Adicionar repositório" aria-expanded={menu} onClick={() => setMenu((v) => !v)} disabled={busy}><Icon name="plus" size={14} /></button>
+          {menu && (
+            <div className="gt-rail__menu" role="menu">
+              <button type="button" role="menuitem" onClick={() => { setMenu(false); addFolder(); }}><Icon name="folder-plus" size={14} /><span>Adicionar pasta</span></button>
+              <button type="button" role="menuitem" onClick={() => { setMenu(false); scan(); }} title="Procura repositórios em Documentos, source\repos e na pasta do usuário"><Icon name="folder-search" size={14} /><span>Procurar no PC</span></button>
+            </div>
+          )}
+        </span>
       </div>
       <div className="gt-rail__list tk-scroll">
         {repos && repos.map((r) => (
           <div key={r.path} className="gt-repo-wrap">
-            <button type="button" className={'gt-repo' + (r.path === current ? ' is-sel' : '')} onClick={() => onOpen(r.path)} title={r.path}>
-              <Icon name="folder-git-2" size={15} />
+            <button type="button" className={'gt-repo' + (r.path === current ? ' is-sel' : '')} onClick={() => onOpen(r.path)}
+              title={collapsed ? `${r.name} — ${r.error || (r.detached ? 'HEAD solto' : r.branch || '—')}${r.conflicts > 0 ? ` · ${r.conflicts} em conflito` : r.changes > 0 ? ` · ${r.changes} mudança(s)` : ''}\n${r.path}` : r.path}
+              aria-label={collapsed ? r.name : undefined}>
+              {collapsed ? <span className="gt-repo__abbr">{repoInitials(r.name)}</span> : <Icon name="folder-git-2" size={15} />}
               <span className="gt-repo__main">
                 <span className="gt-repo__name">{r.name}</span>
                 <span className="gt-repo__branch">{r.error ? <span className="gt-err">{r.error}</span> : <><Icon name="git-branch" size={10} /> {r.detached ? 'HEAD solto' : r.branch || '—'}{r.operation ? ` · ${r.operation} em andamento` : ''}</>}</span>
@@ -83,10 +130,8 @@ function RepoRail({ repos, current, onOpen, onAddDone, onRemove, toast }) {
         ))}
         {repos && !repos.length && <div className="gt-msg">Nenhum repositório ainda.</div>}
       </div>
-      <div className="gt-rail__foot">
-        <button type="button" className="gt-op is-accent is-md" onClick={addFolder} disabled={busy}><Icon name="folder-plus" size={14} /><span>Adicionar pasta</span></button>
-        <button type="button" className="gt-op is-ghost is-md" onClick={scan} disabled={busy} title="Procura repositórios em Documentos, source\repos e na pasta do usuário"><Icon name="folder-search" size={14} /><span>Procurar no PC</span></button>
-      </div>
+      <div className="gt-rail__grip" role="separator" aria-orientation="vertical" aria-label="Largura da lista de repositórios (arraste; duplo clique alterna entre siglas e padrão)"
+        aria-valuemin={RAIL_COMPACT} aria-valuemax={RAIL_MAX} aria-valuenow={w} tabIndex={0} title="Arraste para ajustar a largura · duplo clique alterna" {...drag} />
       {found && <AddModal found={found} onClose={() => setFound(null)} onAdd={addMany} />}
     </aside>
   );
@@ -161,6 +206,8 @@ export function GitScreen({ toast, request }) {
   const [focus, setFocus] = React.useState(null); // pedido para a aba aberta: { hash } · { amend } · { squash } · { recipe } + nonce
   const [merging, setMerging] = React.useState(null); // branch sendo mesclada (painel com prévia)
   const repo = repos && repos.some((r) => r.path === ui.repo) ? ui.repo : repos && repos[0] ? repos[0].path : null;
+  // Largura da lista de repositórios: a que a pessoa arrastou (lembrada); sem escolha ainda, siglas só em janela estreita.
+  const railW = ui.railW ?? (ui.rail === 'collapsed' || window.innerWidth < 1100 ? RAIL_COMPACT : RAIL_DEFAULT);
 
   const loadRepos = React.useCallback(() => api.summaries().then(setRepos, () => setRepos([])), []);
   const removeRepo = async (r) => {
@@ -258,7 +305,7 @@ export function GitScreen({ toast, request }) {
 
   return (
     <div className="gt">
-      <RepoRail repos={repos} current={repo} onOpen={(p) => setUi((u) => ({ ...u, repo: p }))} onAddDone={(p) => { setUi((u) => ({ ...u, repo: p, tab: 'overview' })); loadRepos(); }} onRemove={removeRepo} toast={toast} />
+      <RepoRail repos={repos} current={repo} width={railW} onResize={(railW) => setUi((u) => ({ ...u, railW }))} onOpen={(p) => setUi((u) => ({ ...u, repo: p }))} onAddDone={(p) => { setUi((u) => ({ ...u, repo: p, tab: 'overview' })); loadRepos(); }} onRemove={removeRepo} toast={toast} />
       <div className="gt-main">
         {!repos ? <div className="gt-msg"><Spinner size={14} /> Carregando…</div>
           : !repo ? (
