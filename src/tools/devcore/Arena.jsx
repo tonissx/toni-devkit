@@ -6,7 +6,7 @@ import { ForestBackdrop } from './ForestArt.jsx';
 import { startMusic, stopMusic, sfx } from './audio.js';
 
 const { Modal, Button, Icon, ProgressBar } = DS;
-const STEP_MS = 420;
+const STEP_MS = 700; // ritmo da luta (era 420: 40% mais devagar, dá tempo de ler a fila de eventos)
 
 /**
  * Desempenho de cada pet na luta (do log): dano causado e recebido, cura, abates (último golpe), habilidades.
@@ -111,6 +111,66 @@ function bubble(e, abilityName, itemName) {
   return '';
 }
 
+/** Uma linha da fila de eventos: ícone, lado (cor) e o texto com os nomes destacados. */
+function FeedLine({ e, unit, abilityName, itemName }) {
+  const N = ({ uid }) => {
+    if (uid === 'item') return <b className="is-item">Hotfix</b>;
+    const u = unit(uid);
+    return u ? <b className={'is-' + u.side}>{u.name}</b> : <b>?</b>;
+  };
+  const side = e.a && e.a !== 'item' && unit(e.a) ? unit(e.a).side : 'neutral';
+  let icon = 'dot';
+  let body = null;
+  if (e.k === 'atk') {
+    icon = e.a === 'item' ? 'bug-off' : e.c ? 'zap' : 'sword';
+    body = <><N uid={e.a} /> {e.a === 'item' ? 'atingiu' : 'atacou'} <N uid={e.t} />{e.c && <em className="is-crit"> crítico</em>} <span className="is-dmg">−{e.v}</span></>;
+  } else if (e.k === 'miss') { icon = 'wind'; body = <><N uid={e.t} /> esquivou do ataque de <N uid={e.a} /></>; }
+  else if (e.k === 'heal') {
+    icon = 'heart-plus';
+    body = e.a && e.a !== e.t && unit(e.a) ? <><N uid={e.a} /> curou <N uid={e.t} /> <span className="is-heal">+{e.v}</span></> : <><N uid={e.t} /> recuperou <span className="is-heal">+{e.v}</span></>;
+  } else if (e.k === 'ab') { icon = 'sparkles'; body = <><N uid={e.a} /> ativou <em className="is-ability">{abilityName(e.v)}</em></>; }
+  else if (e.k === 'item') { icon = 'package-open'; body = <>Consumível usado: <em className="is-itemname">{itemName(e.v)}</em></>; }
+  else if (e.k === 'down') { icon = 'skull'; body = <><N uid={e.t} /> caiu</>; }
+  else if (e.k === 'revive') { icon = 'rotate-ccw'; body = <>Rollback: <N uid={e.t} /> voltou com <span className="is-heal">{e.v}</span> de vida</>; }
+  else if (e.k === 'split') { icon = 'copy'; body = <><N uid={e.a} /> se dividiu: <N uid={e.t} /> apareceu</>; }
+  else if (e.k === 'fortify') { icon = 'shield'; body = <><N uid={e.t} /> se fortificou (defesa {e.v})</>; }
+  else if (e.k === 'decoy') { icon = 'ghost'; body = <><N uid={e.a} /> acertou um clone em vez de <N uid={e.t} /></>; }
+  else return null;
+  return (
+    <li className={'dc-feed__line is-' + e.k + ' by-' + side}>
+      <Icon name={icon} size={12} />
+      <span>{body}</span>
+    </li>
+  );
+}
+
+/**
+ * Fila de eventos da luta (mais recente no topo, agrupada por rodada): quem atacou quem, habilidades ativadas,
+ * consumíveis, curas, quedas. Acompanha a reprodução (só o que já aconteceu na tela).
+ */
+function BattleFeed({ log, upto, unit, abilityName, itemName }) {
+  const shown = log.slice(0, upto).map((e, idx) => ({ e, idx })).filter(({ e }) => e.k !== 'end');
+  const rounds = [];
+  for (const it of shown) {
+    const last = rounds[rounds.length - 1];
+    if (last && last.r === it.e.r) last.items.push(it); else rounds.push({ r: it.e.r, items: [it] });
+  }
+  return (
+    <aside className="dc-feed" aria-label="Eventos da luta">
+      <div className="dc-feed__head"><Icon name="scroll-text" size={13} /> Eventos</div>
+      <div className="dc-feed__list" role="log">
+        {!shown.length && <p className="dc-feed__empty">A luta vai começar…</p>}
+        {[...rounds].reverse().map((g) => (
+          <section key={g.r}>
+            <h4>Rodada {g.r}</h4>
+            <ul>{[...g.items].reverse().map(({ e, idx }) => <FeedLine key={idx} e={e} unit={unit} abilityName={abilityName} itemName={itemName} />)}</ul>
+          </section>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
 /**
  * Arena temática da área: reproduz o log da batalha calculada pelo engine (não decide nada).
  * Pets à esquerda (frente mais perto do centro), inimigos à direita. Dá para pular.
@@ -207,7 +267,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   const pets = battle.units.filter((u) => u.side === 'pet');
   const enemies = battle.units.filter((u) => u.side === 'enemy');
   return (
-    <Modal open title={'ARENA · ' + area.name.toUpperCase()} icon="swords" onClose={onClose} width={760}
+    <Modal open title={'ARENA · ' + area.name.toUpperCase()} icon="swords" onClose={onClose} width={1040}
       description={done
         ? (battle.win ? 'Vitória!' : timeout ? `Tempo esgotado (${max} rodadas). Nada foi perdido além da entrada.` : 'Derrota — o esquadrão caiu. Nada foi perdido além da entrada.')
         : `Rodada ${round} de ${max}`}
@@ -217,6 +277,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           ? <Button variant="primary" onClick={onClose}>Continuar</Button>
           : <Button variant="ghost" icon="fast-forward" onClick={() => setI(log.length)}>Pular</Button>}
       </>}>
+      <div className="dc-arena-wrap">
       <div className={'dc-arena dc-arena--' + area.arena + (burstHit ? ' is-shake' : '') + (done ? ' is-done' : '')} aria-label={'Arena ' + area.name}>
         {area.arena === 'localhost' && <ForestBackdrop />}
         <div className={'dc-arena__side is-pets' + (on.shield ? ' is-shielded' : '') + (on.buff ? ' is-buffed' : '') + (on.haste ? ' is-hasted' : '')}>
@@ -241,6 +302,8 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
             {timeout && <span className="dc-arena__hint">{standing.map((u) => `${u.name}: ${u.end} de vida`).join(' · ')} · dica: mais dano — habilidades no início, Coffee e Hotfix, mais atacantes.</span>}
           </div>
         )}
+      </div>
+      <BattleFeed log={log} upto={done ? log.length : i + 1} unit={(uid) => battle.units.find((u) => u.uid === uid)} abilityName={abilityName} itemName={itemName} />
       </div>
       {done && <BattleSummary battle={battle} snap={snap} itemName={itemName} />}
     </Modal>
