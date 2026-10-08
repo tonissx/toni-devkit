@@ -19,6 +19,7 @@
  *   mapFight { node, squad }  mapa: batalha (paga a entrada; derrota só custa a entrada) — ver engine/map.js
  *   mapMove { node }          mapa: deploy expresso, evento, loja ou descanso
  *   mapChoose { index }       mapa: opção do evento/descanso · mapBuy { offer }: compra na loja
+ *   mapAdvance                mapa: área concluída → atravessa para a próxima (areas.js `next`)
  *   mapSquad { squad, node? } mapa: salva a preparação (a view mostra a previsão para `node`)
  */
 const { CONTENT } = require('../content/index.js');

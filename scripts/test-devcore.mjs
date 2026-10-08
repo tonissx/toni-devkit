@@ -275,7 +275,7 @@ test('balance: pacing stays inside the MVP targets', () => {
 /* ─────────────── Event Bus e serviço (processo principal) ─────────────── */
 const { createBus } = require('../electron/events.js');
 const { createDevCoreService } = require('../electron/devcore/service.js');
-const { mkdtempSync, rmSync, readFileSync, writeFileSync } = require('node:fs');
+const { mkdtempSync, rmSync, readFileSync, writeFileSync, readdirSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const pathMod = require('node:path');
 
@@ -293,6 +293,21 @@ test('bus: whitelist, throttle per name+key, payload sanitized', () => {
   assert.deepEqual(got[0], ['tool.used', { tool: 'sql' }]); // conteúdo descartado
   assert.equal(bus.emit('tool.used', { tool: '../../etc' }), true);
   assert.deepEqual(got.at(-1)[1], {});
+});
+
+test('service: toda ação que a UI do DevCore envia está liberada no processo principal', async () => {
+  const dir = mkdtempSync(pathMod.join(tmpdir(), 'devcore-ui-'));
+  try {
+    const svc = createDevCoreService({ file: pathMod.join(dir, 'devcore.json'), now: () => T0 });
+    await svc.init();
+    const ui = pathMod.join(pathMod.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..', 'src', 'tools', 'devcore');
+    const types = new Set();
+    for (const f of readdirSync(ui).filter((x) => x.endsWith('.jsx'))) {
+      for (const m of readFileSync(pathMod.join(ui, f), 'utf8').matchAll(/act\(\{ type: '(\w+)'/g)) types.add(m[1]);
+    }
+    assert.ok(types.has('mapAdvance') && types.has('mapFight'), [...types].join(','));
+    for (const type of types) assert.notEqual((await svc.act({ type })).error, 'Ação não permitida', type);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('service: boot/persist/offline welcome/heartbeat/UI actions/events', async () => {

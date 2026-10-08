@@ -4,7 +4,7 @@
  * O mapa é gerado pela semente da run quando a área abre (Localhost: Tier 2). O jogador começa antes da coluna 0 e só
  * anda para a frente, para um ponto ligado ao atual (elite com atalho também liga à coluna +2).
  *
- * Ações (ver engine/index.js): mapFight { node, squad } · mapMove { node } · mapChoose { index } · mapBuy { offer }
+ * Ações (ver engine/index.js): mapFight { node, squad } · mapMove { node } · mapChoose { index } · mapBuy { offer } · mapAdvance
  *   · mapSquad { squad, node? } (salva a preparação; a view mostra a previsão para `node`)
  * Derrota nunca tira progresso: custa só o Compute de entrada, e o ponto continua lá.
  */
