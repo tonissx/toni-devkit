@@ -254,6 +254,8 @@ contextBridge.exposeInMainWorld('devkit', {
     summaries: () => ipcRenderer.invoke('git:summaries'),
     status: (repo) => ipcRenderer.invoke('git:status', repo),
     log: (repo, opts) => ipcRenderer.invoke('git:log', repo, opts),
+    /** Arquivos e linhas alteradas por commit → { [hash]: { files, added, deleted } | null } (null: merge ou vazio). */
+    logStats: (repo, hashes) => ipcRenderer.invoke('git:logStats', repo, hashes),
     /** Fotos do Gravatar por e-mail → { [email]: data URL | null }. Só o hash do e-mail sai da máquina. */
     avatars: (emails) => ipcRenderer.invoke('git:avatars', emails),
     commit: (repo, hash) => ipcRenderer.invoke('git:commit', repo, hash),

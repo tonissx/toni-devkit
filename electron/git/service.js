@@ -233,6 +233,17 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     return P.parseLog((await git(repo, args)).stdout);
   }
 
+  /**
+   * Arquivos e linhas alteradas por commit, para a coluna do Histórico. É uma chamada à parte do log (o diff custa
+   * mais que a lista): a tela mostra a lista logo e preenche os números quando chegam. → { [hash]: { files, added, deleted } | null }
+   */
+  async function logStats(repo, hashes) {
+    const list = (Array.isArray(hashes) ? hashes : []).filter((h) => /^[0-9a-f]{7,40}$/i.test(h)).slice(0, 400);
+    if (!list.length) return {};
+    const out = (await git(repo, ['log', '--no-walk=unsorted', '-M', '--numstat', '--format=%x1e%H', ...list])).stdout;
+    return P.parseLogStats(out);
+  }
+
   /** Detalhes de um commit: mensagem completa e arquivos alterados (contra o 1º pai). */
   async function commit(repo, hash) {
     if (!validRev(hash)) throw new Error('Commit inválido');
@@ -800,7 +811,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
 
   return {
     init, version, list, add, remove, scan, open, summaries,
-    status, log, commit, diff, branches, compare, stashes, stashFiles, reflog, overview, backups,
+    status, log, logStats, commit, diff, branches, compare, stashes, stashFiles, reflog, overview, backups,
     exec, restoreBackup, mergePreview, conflictFile, rebaseInfo, files,
     blame, searchText, bisectState, tags, cleanPreview, gitignore, rhythm, fileVersions, worktrees,
     unwatch, top: async (repo) => (await repoOf(repo)).top,

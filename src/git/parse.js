@@ -81,6 +81,28 @@ function parseLog(out) {
   });
 }
 
+/**
+ * Saída de `git log --no-walk --numstat --format=%x1e%H` → { [hash]: { files, added, deleted } | null }.
+ * Merge (sem diff no log) e commit vazio ficam null. Binário conta como arquivo, sem linhas.
+ */
+function parseLogStats(out) {
+  const stats = {};
+  for (const rec of String(out || '').split(RS)) {
+    const lines = rec.split('\n');
+    const hash = (lines.shift() || '').trim();
+    if (!hash) continue;
+    let files = 0, added = 0, deleted = 0;
+    for (const l of lines) {
+      const m = /^(-|\d+)\t(-|\d+)\t/.exec(l);
+      if (!m) continue;
+      files++;
+      if (m[1] !== '-') { added += +m[1]; deleted += +m[2]; }
+    }
+    stats[hash] = files ? { files, added, deleted } : null;
+  }
+  return stats;
+}
+
 /* ─────────────── branches (for-each-ref refs/heads) ─────────────── */
 
 const BRANCH_FORMAT = ['%(refname:short)', '%(objectname)', '%(upstream:short)', '%(upstream:track)', '%(committerdate:unix)', '%(subject)', '%(HEAD)', '%(authorname)'].join('%1f');
@@ -307,6 +329,6 @@ module.exports = {
   parseWorktrees,
   parseBlame, PICKAXE_FORMAT, parsePickaxe, parseBisectLog, parseCleanPreview,
   US, RS, LOG_FORMAT, BRANCH_FORMAT, REFLOG_FORMAT, STASH_FORMAT,
-  parseStatus, parseDecorations, parseLog, parseBranches, describeReflog, parseReflog, parseStashes, parseNumstat,
+  parseStatus, parseDecorations, parseLog, parseLogStats, parseBranches, describeReflog, parseReflog, parseStashes, parseNumstat,
   parsePatch, hunkPatch,
 };
