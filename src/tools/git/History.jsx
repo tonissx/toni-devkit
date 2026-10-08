@@ -8,10 +8,24 @@ import { GitDiff } from './GitDiff.jsx';
 import { useAiMode, useAiTask, aiOn, AiButton, AiPanel } from '../../ai/ui.jsx';
 
 const { Icon, Spinner } = DS;
-const ROW = 30;   // altura de uma linha
-const LANE = 14;  // largura de uma raia
+const ROW = 36;   // altura de uma linha
+const LANE = 22;  // largura de uma raia
+const AVATAR = 10; // raio do avatar do autor no grafo
 const MAX_LANES = 14;
 const PAGE = 300;
+
+/** Iniciais do autor ("Antonio Gonçalves" -> "AG"). */
+function initials(name) {
+  const p = String(name || '?').trim().split(/\s+/).filter(Boolean);
+  return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
+}
+
+/** Matiz estável por e-mail: o mesmo autor tem sempre a mesma cor, sem rede. */
+function hue(key) {
+  let n = 0;
+  for (const ch of String(key || '')) n = (n * 31 + ch.codePointAt(0)) >>> 0;
+  return n % 360;
+}
 
 /** O grafo inteiro num SVG só, atrás da coluna de raias. */
 function Graph({ layout, commits, headHash }) {
@@ -35,8 +49,15 @@ function Graph({ layout, commits, headHash }) {
         const head = commits[r].hash === headHash;
         return (
           <g key={row.hash}>
-            {head && <circle cx={x(row.col)} cy={y(r)} r={7.5} className="gt-graph__halo" stroke={laneColor(row.color)} />}
-            <circle cx={x(row.col)} cy={y(r)} r={merge ? 3.5 : 4.5} fill={merge ? 'var(--tk-surface-1)' : laneColor(row.color)} stroke={laneColor(row.color)} strokeWidth={merge ? 2 : 0} />
+            {head && <circle cx={x(row.col)} cy={y(r)} r={AVATAR + 3.5} className="gt-graph__halo" stroke={laneColor(row.color)} />}
+            {merge
+              ? <circle cx={x(row.col)} cy={y(r)} r={4.5} fill="var(--tk-surface-1)" stroke={laneColor(row.color)} strokeWidth={2} />
+              : (
+                <>
+                  <circle cx={x(row.col)} cy={y(r)} r={AVATAR} fill={`hsl(${hue(commits[r].email || commits[r].author)} 45% 38%)`} stroke={laneColor(row.color)} strokeWidth={2} />
+                  <text x={x(row.col)} y={y(r)} className="gt-graph__avatar-text">{initials(commits[r].author)}</text>
+                </>
+              )}
           </g>
         );
       })}
