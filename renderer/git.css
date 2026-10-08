@@ -26,7 +26,12 @@
 .gt-rail { width: 236px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--tk-border); background: var(--tk-surface-1); }
 .gt-rail__head { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px 8px; }
 .gt-rail__list { flex: 1; min-height: 0; overflow: auto; padding: 0 8px; }
-.gt-rail { transition: width .15s ease; }
+.gt-rail { position: relative; transition: width .12s ease; }
+.gt-rail.is-dragging { transition: none; user-select: none; }
+/* borda arrastável: faixa de 8px sobre a divisória (metade para fora), com destaque ao passar o mouse e ao arrastar */
+.gt-rail__grip { position: absolute; top: 0; bottom: 0; right: -4px; width: 8px; z-index: 5; cursor: col-resize; touch-action: none; outline: 0; }
+.gt-rail__grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background .12s; }
+.gt-rail__grip:hover::after, .gt-rail__grip:focus-visible::after, .gt-rail.is-dragging .gt-rail__grip::after { background: var(--tk-accent); }
 .gt-rail__tools { position: relative; display: inline-flex; align-items: center; gap: 2px; margin-left: auto; }
 .gt-rail__btn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 0; border-radius: var(--tk-radius-md); background: none; color: var(--tk-text-3); cursor: pointer; }
 .gt-rail__btn:hover:not(:disabled) { background: var(--tk-surface-2); color: var(--tk-text); }
@@ -36,7 +41,6 @@
 .gt-rail__menu button { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 0; border-radius: var(--tk-radius-md); background: none; color: var(--tk-text); font: 13px var(--tk-font-sans); text-align: left; cursor: pointer; }
 .gt-rail__menu button:hover { background: var(--tk-surface-3); }
 /* recolhida: uma coluna de siglas; o nome, a branch e o caminho ficam no tooltip */
-.gt-rail.is-collapsed { width: 52px; }
 .gt-rail.is-collapsed .gt-rail__head { flex-direction: column-reverse; gap: 4px; padding: 12px 0 8px; }
 .gt-rail.is-collapsed .gt-rail__tools { flex-direction: column; margin-left: 0; }
 .gt-rail.is-collapsed .gt-rail__menu { right: auto; left: calc(100% - 4px); top: 0; }
