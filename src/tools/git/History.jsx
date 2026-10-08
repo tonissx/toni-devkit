@@ -9,10 +9,10 @@ import { GitDiff } from './GitDiff.jsx';
 import { useAiMode, useAiTask, aiOn, AiButton, AiPanel } from '../../ai/ui.jsx';
 
 const { Icon, Spinner } = DS;
-const ROW = 36;   // altura de uma linha
-const LANE = 28;  // largura de uma raia (avatar de 22px com a borda + 6px de respiro entre vizinhos)
-const PAD = 16;   // margem do grafo: cabe o avatar e o halo do HEAD sem cortar na borda
-const AVATAR = 10; // raio do avatar do autor no grafo
+const AVATAR = 13; // raio do círculo do avatar; com a borda de 2px o avatar mede 28px
+const ROW = 40;   // altura de uma linha (igual ao height de .gt-row em git.css)
+const LANE = AVATAR * 2 + 8;  // largura de uma raia: avatar de 28px + 6px de respiro entre vizinhos
+const PAD = AVATAR + 5;       // margem do grafo: cabe o avatar e o halo do HEAD sem cortar na borda
 const MAX_LANES = 14;
 const PAGE = 300;
 
