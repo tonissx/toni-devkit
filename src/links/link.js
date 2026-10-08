@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Links rápidos: uma URL atrás de um alias, com `{q}` onde entra a parte variável.
- *   solic → https://fluig.navship.com.br/portal/p/001/pageworkflowview?app_ecm_workflowview_detailsProcessInstanceID={q}
+ *   solic → https://tracker.example.com/tickets?id={q}
  * Na palette, Tab (ou Enter) no link fixa o chip "solic ›" e o que se digita depois vira o {q}.
  * Sem {q} o link é um favorito: Enter abre direto.
  *
@@ -85,7 +85,7 @@ function pushRecent(list, value) {
 }
 
 /**
- * Captura rápida na palette: "link: solic https://…{q} Solicitação Fluig".
+ * Captura rápida na palette: "link: solic https://…{q} Chamado do tracker".
  * → { alias, url, name } | { error } | null (o texto não é captura)
  */
 const CAPTURE_RE = /^link\s*:\s*(.*)$/i;

@@ -5,6 +5,8 @@ import { THEMES, resolveTheme } from '../lib/themes.js';
 import { isoDate } from '../notes/edit.js';
 import { cleanError, shortTime } from '../notes/client.js';
 import { needsValue } from '../links/link.js';
+import { TaskText } from '../tools/notes/TaskText.jsx';
+import { PriorityTag } from '../tools/notes/PriorityTag.jsx';
 import { formatNum } from '../devcore/engine/format.js';
 import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, PANELS } from '../home/dashboard.js';
 
@@ -179,9 +181,9 @@ function TasksPanel({ tasks, today, open, toast }) {
           <div key={t.noteId + ':' + t.index} className="nts-task">
             <input type="checkbox" className="md-task" checked={false} onChange={() => toggle(t)} aria-label="Concluir tarefa" />
             <div className="nts-task__main">
-              <button type="button" className="nts-task__text" onClick={() => open('notes', { id: t.noteId })} title="Abrir a nota">{t.text || '(sem texto)'}</button>
+              <button type="button" className="nts-task__text" onClick={() => open('notes', { id: t.noteId })} title="Abrir a nota"><TaskText text={t.text} /></button>
               <div className="nts-task__meta">
-                {t.priority && <span className={'nts-pill is-p' + t.priority} title={'Prioridade ' + t.priority}>!{t.priority}</span>}
+                <PriorityTag priority={t.priority} />
                 {t.due && <span className={'nts-pill is-due' + (t.bucket === 'late' ? ' is-late' : '')} title={t.due}><Icon name="calendar" size={11} /> {dueLabel(t.due, today)}</span>}
                 <span className="nts-task__note"><Icon name="file-text" size={11} /> {t.noteTitle}</span>
               </div>
@@ -306,7 +308,7 @@ function LinksPanel({ links, go, toast }) {
       actions={<Button size="sm" variant="ghost" onClick={() => go('settings')}>Gerenciar</Button>}>
       {!links && <div className="home-msg"><Spinner size={14} /> Carregando…</div>}
       {links && list.length === 0 && (
-        <div className="home-msg">Uma URL atrás de um alias (ex.: <code>solic</code> → solicitação do Fluig pelo número). Cadastre em Configurações → Links rápidos.</div>
+        <div className="home-msg">Uma URL atrás de um alias (ex.: <code>solic</code> → chamado do tracker pelo número). Cadastre em Configurações → Links rápidos.</div>
       )}
       <div className="home-list">{list.map((l) => <LinkRow key={l.id} link={l} toast={toast} />)}</div>
     </Card>

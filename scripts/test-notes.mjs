@@ -117,6 +117,45 @@ test('graph: buildGraph links by title/alias, no duplicates/self-loops, ghosts f
   assert.deepEqual(G.neighborhood(g, 'x', 1), { nodes: [], links: [] });
 });
 
+test('graph: nodes carry task counts (snippets, ghosts and code blocks do not count)', () => {
+  const notes = [
+    { id: 'a', title: 'A', content: '- [x] um\n- [ ] dois\n- [X] três\n[[Falta]]\n```\n- [ ] no código\n```' },
+    { id: 'b', title: 'B', content: 'sem tarefas' },
+    { id: 's', title: 'S', type: 'snippet', content: '- [ ] modelo' },
+  ];
+  const g = G.buildGraph(notes, new Map([['a', 'a'], ['b', 'b'], ['s', 's']]));
+  const by = Object.fromEntries(g.nodes.map((n) => [n.id, [n.tasksDone, n.tasksOpen]]));
+  assert.deepEqual(by, { a: [2, 1], b: [0, 0], s: [0, 0], 'ghost:falta': [0, 0] });
+});
+
+test('graph: separate clusters settle apart (no overlap), loose notes form their own group, layout is deterministic', () => {
+  const nodes = [], links = [];
+  [12, 8, 20].forEach((size, c) => {
+    for (let i = 0; i < size; i++) {
+      nodes.push({ id: `c${c}n${i}` });
+      if (i > 0) links.push({ source: `c${c}n${i}`, target: `c${c}n${Math.floor(i / 2)}` });
+    }
+  });
+  for (let i = 0; i < 6; i++) nodes.push({ id: `solta${i}` });
+  const settle = () => { const L = G.createLayout({ nodes, links }); while (G.step(L)); return L; };
+  const L = settle();
+  const groupOf = (n) => (n.id.startsWith('solta') ? 'solta' : n.id.split('n')[0]);
+  const by = new Map();
+  for (const n of L.nodes) { const k = groupOf(n); (by.get(k) || by.set(k, []).get(k)).push(n); }
+  assert.deepEqual([...by.keys()].sort(), ['c0', 'c1', 'c2', 'solta']);
+  assert.equal(new Set(L.nodes.map((n) => n.grp)).size, 4, 'um grupo por ilha + um para as soltas');
+  const circle = (ns) => {
+    const cx = ns.reduce((s, n) => s + n.x, 0) / ns.length, cy = ns.reduce((s, n) => s + n.y, 0) / ns.length;
+    return { cx, cy, r: Math.max(...ns.map((n) => Math.hypot(n.x - cx, n.y - cy))) };
+  };
+  const cs = [...by.values()].map(circle);
+  for (let i = 0; i < cs.length; i++) for (let j = i + 1; j < cs.length; j++) {
+    const gap = Math.hypot(cs[i].cx - cs[j].cx, cs[i].cy - cs[j].cy) - cs[i].r - cs[j].r;
+    assert.ok(gap > 0, `grupos ${i} e ${j} se sobrepõem (folga ${gap.toFixed(0)})`);
+  }
+  assert.deepEqual(settle().nodes.map((n) => [n.x, n.y]), L.nodes.map((n) => [n.x, n.y]), 'mesmo grafo → mesmo desenho');
+});
+
 test('graph: layout settles without NaN, linked nodes end closer, pinned nodes stay, positions survive updates', () => {
   const nodes = Array.from({ length: 30 }, (_, i) => ({ id: 'n' + i }));
   const links = Array.from({ length: 10 }, (_, i) => ({ source: 'n' + i, target: 'n' + (i + 1) }));
@@ -940,9 +979,30 @@ test('markdown: @date and !1..!3 become chips; lookalikes stay text', async () =
   const { renderMarkdown } = await loadMarkdown();
   const { html } = renderMarkdown('- [ ] pagar @2020-01-05 !1 ok\n- [ ] email a@2020-01-05 e wow!1');
   assert.match(html, /<span class="md-due is-late" title="Prazo">📅 05\/01<\/span>/);
-  assert.match(html, /<span class="md-pri is-p1" title="Prioridade 1">!1<\/span>/);
+  assert.match(html, /<span class="md-pri is-p1" title="Prioridade alta \(!1\)">⚑ Alta<\/span>/);
   assert.equal((html.match(/md-due/g) || []).length, 1);
   assert.equal((html.match(/md-pri/g) || []).length, 1);
+});
+
+test('markdown: renderInline formats inline marks, flattens links, and neutralizes HTML', async () => {
+  const { renderInline } = await loadMarkdown();
+  assert.equal(renderInline('pagar **boleto** e *revisar* ~~isso~~ `x < y`'),
+    'pagar <strong>boleto</strong> e <em>revisar</em> <del>isso</del> <code>x &lt; y</code>');
+  const flat = renderInline('ver [[Nota A|a nota]] e [[Outra]] em [site](https://a.com) <img src=x onerror=alert(1)> ![alt](.assets/x.png)');
+  assert.ok(!/<a |<img/.test(flat), 'nada clicável dentro do botão: ' + flat);
+  assert.ok(flat.includes('a nota') && flat.includes('Outra') && flat.includes('site') && flat.includes('&lt;img'));
+  assert.equal(renderInline(''), '');
+});
+
+test('priority: !1/!2/!3 get descriptive labels; no (or unknown) priority falls back to "Sem prioridade"', () => {
+  const { priorityInfo } = require('../src/notes/priority.js');
+  assert.deepEqual([1, 2, 3].map((p) => priorityInfo(p).label), ['Alta', 'Média', 'Baixa']);
+  assert.deepEqual([1, 2, 3].map((p) => priorityInfo(p).level), [1, 2, 3]);
+  for (const none of [null, undefined, 0, 4, 'x']) {
+    assert.equal(priorityInfo(none).level, 0);
+    assert.equal(priorityInfo(none).label, 'Sem prioridade');
+  }
+  assert.match(priorityInfo(null).title, /!1.*!2.*!3/);   // a dica ensina a sintaxe
 });
 
 test('markdown: toggleTask flips the n-th task, skipping code blocks', async () => {

@@ -8,6 +8,7 @@ import { Marked } from 'marked';
 import { tokenize } from '../tools/diff-checker/syntax.js';
 import { toggleTaskAt } from './note.js';
 import { isoDate } from './edit.js';
+import { priorityInfo } from './priority.js';
 import { secretNameFromBlock, kindOf, isDbLike } from '../vault/entry.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -92,7 +93,7 @@ export function renderMarkdown(md, { resolve = () => null, secret = () => undefi
       },
       renderer: (t) => (t.due
         ? `<span class="md-due${t.due < isoDate() ? ' is-late' : ''}" title="Prazo">📅 ${esc(t.due.slice(8, 10) + '/' + t.due.slice(5, 7))}</span>`
-        : `<span class="md-pri is-p${t.pri}" title="Prioridade ${t.pri}">!${t.pri}</span>`),
+        : `<span class="md-pri is-p${t.pri}" title="${esc(priorityInfo(Number(t.pri)).title)}">⚑ ${esc(priorityInfo(Number(t.pri)).label)}</span>`),
     }],
     renderer: {
       html: ({ text }) => esc(text),
@@ -119,6 +120,33 @@ export function renderMarkdown(md, { resolve = () => null, secret = () => undefi
     },
   });
   return { html: marked.parse(String(md || '')), blocks };
+}
+
+/**
+ * Markdown em linha (**negrito**, *itálico*, ~~riscado~~, `código`) → HTML, para textos curtos como o
+ * de uma tarefa. Seguro (HTML cru é escapado) e sem elementos clicáveis — o texto fica dentro de um
+ * <button> —: links e [[links]] viram só o texto/rótulo, imagens viram o texto alternativo.
+ */
+export function renderInline(text) {
+  const marked = new Marked({ gfm: true });
+  marked.use({
+    extensions: [{
+      name: 'wikilink',
+      level: 'inline',
+      start: (src) => { const i = src.indexOf('[['); return i === -1 ? undefined : i; },
+      tokenizer(src) {
+        const m = WIKI_RE.exec(src);
+        return m ? { type: 'wikilink', raw: m[0], label: (m[2] || m[1]).trim() } : undefined;
+      },
+      renderer: (t) => esc(t.label),
+    }],
+    renderer: {
+      html: ({ text: raw }) => esc(raw),
+      link({ tokens }) { return this.parser.parseInline(tokens); },
+      image({ text: alt }) { return esc(alt || ''); },
+    },
+  });
+  return marked.parseInline(String(text || ''));
 }
 
 /** Marca/desmarca a n-ésima tarefa "- [ ]" do markdown (ignorando blocos de código). */

@@ -215,7 +215,7 @@ const actionCommands = [
   {
     id: 'links:manage',
     name: 'Links rápidos',
-    description: 'Cadastrar aliases para URLs (ex.: solic → solicitação do Fluig) — ou digite “link: alias url”',
+    description: 'Cadastrar aliases para URLs (ex.: solic → chamado do tracker) — ou digite “link: alias url”',
     icon: 'link',
     keywords: ['links', 'alias', 'atalho', 'url', 'favoritos', 'bookmark', 'quicklink'],
     run: (ctx) => ctx.openApp('settings'),

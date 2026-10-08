@@ -702,7 +702,7 @@ if (!app.requestSingleInstanceLock()) {
   // o mesmo ID. Instalado, é o atalho do instalador. Em dev, sem ID explícito o processo fica com o padrão
   // electron.app.Electron e herda o ícone de qualquer atalho "Electron" que exista; com um ID sem atalho, o
   // Windows usa o ícone da janela. O sufixo .dev evita agrupar com o Devkit instalado.
-  if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'br.com.navship.tonidevkit' : 'br.com.navship.tonidevkit.dev');
+  if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'io.github.tonissx.tonidevkit' : 'io.github.tonissx.tonidevkit.dev');
 
   app.whenReady().then(() => {
     initNotes();
