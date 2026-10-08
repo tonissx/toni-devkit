@@ -907,9 +907,9 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @media (prefers-reduced-motion: reduce) { .dc-choice, .dc-choice__icon { transition: none; } .dc-choice:hover:not(:disabled) { transform: none; } }
 /* Fila de eventos integrada à arena: coluna da esquerda sobre o cenário, cards com degradê que somem com a idade */
 .dc-arena { grid-template-columns: 240px 1fr auto 1fr !important; }
-.dc-arena__feed { grid-column: 1; grid-row: 1; align-self: stretch; z-index: 2; display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; overflow: hidden; margin: -12px 0 -28px -12px;
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30%); mask-image: linear-gradient(to bottom, transparent, #000 30%); }
-.dc-feed__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; }
+.dc-arena__feed { grid-column: 1; grid-row: 1; align-self: stretch; z-index: 2; display: flex; flex-direction: column; justify-content: flex-start; min-height: 0; overflow: hidden; margin: -12px 0 -28px -12px;
+  -webkit-mask-image: linear-gradient(to top, transparent, #000 30%); mask-image: linear-gradient(to top, transparent, #000 30%); }
+.dc-feed__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; justify-content: flex-start; gap: 4px; }
 .dc-feed__line {
   --tint: 154, 163, 178;
   display: flex; align-items: flex-start; gap: 6px; padding: 5px 8px; border-radius: 8px; font-size: 11px; line-height: 1.35; color: #D6DCE6;
@@ -921,7 +921,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-feed__line.is-ab { --tint: 185, 140, 255; }
 .dc-feed__line.is-item, .dc-feed__line[class*=" by-neutral"].is-atk { --tint: 255, 210, 122; }
 .dc-feed__line.is-new { animation: dc-feed-in .3s ease-out; }
-@keyframes dc-feed-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes dc-feed-in { from { opacity: 0; transform: translateY(-8px); } }
 .dc-feed__line svg { flex: none; margin-top: 1px; color: rgb(var(--tint)); }
 .dc-feed__line > span { flex: 1; min-width: 0; }
 .dc-feed__round { flex: none; font: 500 9.5px var(--tk-font-mono); color: rgba(255, 255, 255, .4); margin-top: 1px; }

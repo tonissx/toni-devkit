@@ -147,7 +147,7 @@ function FeedLine({ e, unit, abilityName, itemName, age }) {
 
 /**
  * Fila de eventos integrada à arena (coluna da esquerda, sobre o cenário): cada evento é um card com degradê; o mais
- * novo fica embaixo e os anteriores sobem perdendo opacidade. Acompanha a reprodução (só o que já aconteceu na tela).
+ * novo entra no topo e os anteriores descem perdendo opacidade. Acompanha a reprodução (só o que já aconteceu na tela).
  */
 const FEED_MAX = 9;
 function BattleFeed({ log, upto, unit, abilityName, itemName }) {
@@ -155,7 +155,7 @@ function BattleFeed({ log, upto, unit, abilityName, itemName }) {
   return (
     <aside className="dc-arena__feed" aria-label="Eventos da luta">
       <ul className="dc-feed__list" role="log">
-        {shown.map(({ e, idx }, j) => <FeedLine key={idx} e={e} age={shown.length - 1 - j} unit={unit} abilityName={abilityName} itemName={itemName} />)}
+        {[...shown].reverse().map(({ e, idx }, age) => <FeedLine key={idx} e={e} age={age} unit={unit} abilityName={abilityName} itemName={itemName} />)}
       </ul>
     </aside>
   );
