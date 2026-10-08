@@ -412,6 +412,8 @@ function mapView(s, now, c) {
   return {
     unlocked: true,
     area: { id: area.id, name: area.name, description: area.description, arena: area.arena, columns: area.columns, lanes: area.lanes },
+    next: area.next && c.area[area.next] ? { id: area.next, name: c.area[area.next].name, description: c.area[area.next].description, arena: c.area[area.next].arena } : null,
+    boss: { id: area.boss, name: c.enemy[area.boss].name.split(' · ')[0] },
     at: m.at, cleared: m.cleared, nodes, pending,
     patches: s.run.patches.map((id) => patchInfo(id, c)).filter(Boolean),
     battleBuff: s.run.battleBuff,

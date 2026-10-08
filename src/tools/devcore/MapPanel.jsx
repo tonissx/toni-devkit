@@ -3,6 +3,7 @@ import { formatNum, formatDuration } from '../../devcore/engine/format.js';
 import { PetSprite, auraOf } from './PetSprite.jsx';
 import { VillainSprite } from './VillainSprite.jsx';
 import { Campfire, ShopStall } from './ForestArt.jsx';
+import { Cypress, CiLantern } from './SwampArt.jsx';
 import { InfoCard } from './InfoCard.jsx';
 import { Arena, SoundToggle } from './Arena.jsx';
 import { ForestProps } from './ForestArt.jsx';
@@ -74,12 +75,38 @@ const ROW_H = 82;       // distância entre colunas do mapa (que viram linhas, d
 const LANE_W = 150;     // distância entre trilhas (lado a lado, centralizadas)
 const PAD_TOP = 70;
 const PAD_BOTTOM = 110; // espaço do esquadrão antes da primeira linha
-const boardH = (area) => PAD_TOP + (area.columns + 1) * ROW_H + PAD_BOTTOM;
+const PAD_TEASE = 270;  // com uma próxima área: faixa extra no topo, atrás do chefe, onde ela começa a aparecer
+const padTop = (map) => (map.next ? PAD_TEASE : PAD_TOP);
+const boardH = (map) => padTop(map) + (map.area.columns + 1) * ROW_H + PAD_BOTTOM;
 const BOARD_H = 400;    // altura de referência para decorações antigas (não usada no tabuleiro vertical)
 
+/**
+ * A próxima área espiando atrás do chefe (faixa do topo): água turva e névoa do Pântano, uma placa apontando o caminho
+ * e, no fundo da névoa, a silhueta do próximo chefe — só o bastante para dar curiosidade.
+ */
+function BoardTease({ map, w, line }) {
+  return (
+    <>
+      <div className={'dc-board__tease is-' + map.next.arena} style={{ height: line + 60 }} aria-hidden="true" />
+      <span className="dc-prop is-upright is-anchored dc-tease__sign" style={{ left: w / 2 + 92, top: line + 16, zIndex: Math.round(line + 16) }} aria-hidden="true">
+        <svg width="62" height="52" viewBox="0 0 62 52"><path d="M28 52 V14" stroke="#4A3A2C" strokeWidth="3" /><path d="M6 6 H50 L58 14 L50 22 H6 Z" fill="#6B4A30" stroke="#2B1D10" strokeWidth="1.2" /><text x="10" y="17" fontSize="9" fontWeight="700" fontFamily="monospace" fill="#E8DCC0">STAGING</text></svg>
+      </span>
+      <span className="dc-prop is-upright is-anchored" style={{ left: w / 2 - 118, top: line - 4, zIndex: Math.round(line - 4) }} aria-hidden="true"><CiLantern s={1.1} ok={false} /></span>
+      <span className="dc-prop is-upright is-anchored dc-tease__beast" style={{ left: w / 2 + 170, top: 120, zIndex: 120 }} aria-hidden="true" title={'Algo espreita além do chefe: ' + map.next.name}>
+        <VillainSprite id="hydra-main" color="#17121F" size={150} />
+      </span>
+      <span className="dc-prop is-upright is-anchored dc-tease__beast" style={{ left: w / 2 + 222, top: 116, zIndex: 116 }} aria-hidden="true">
+        <VillainSprite id="hydra-feature" color="#1C1414" size={130} />
+      </span>
+      <span className="dc-prop is-upright is-anchored" style={{ left: w / 2 - 190, top: 150, zIndex: 150, opacity: 0.7 }} aria-hidden="true"><Cypress s={1.2} v={2} /></span>
+    </>
+  );
+}
+
 /** Objetos 3D da área espalhados pelo tabuleiro (decoração; ver docs §4.5). spots: lugares livres entre as trilhas. */
-function AreaProps({ arena, w, h, spots }) {
-  if (arena === 'localhost') return <ForestProps w={w} h={h} spots={spots} />;
+function AreaProps({ arena, w, h, spots, tease = 0 }) {
+  if (arena === 'localhost') return <ForestProps w={w} h={h} spots={spots} wisps={tease || null} />;
+  if (arena === 'staging') return <ForestProps w={w} h={h} spots={spots} fireflies={false} wisps="all" />;
   return null;
 }
 
@@ -188,7 +215,9 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
     const gap = Math.max(0, Math.round(ref.current.getBoundingClientRect().top - boxRef.current.getBoundingClientRect().top) - 8);
     if (Math.abs(gap - lift) > 2) setLift(gap);
   }, [w]);
-  const H = boardH(map.area);
+  const H = boardH(map);
+  // Onde a próxima área começa (topo do tabuleiro, atrás do chefe): abaixo desta linha é a área atual.
+  const teaseLine = map.next ? padTop(map) - 20 : 0;
   const lanes = map.area.lanes;
   // Coluna do mapa → altura no tabuleiro (de baixo para cima); trilha → posição lateral, centralizada.
   const x = (n) => w / 2 + (n.lane - (lanes - 1) / 2) * LANE_W;
@@ -218,7 +247,7 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
   }
   // Floresta densa: uma árvore em cada ponto de uma grade (com variação) longe dos pontos e das trilhas.
   // Calculada uma vez por largura e traçado (o painel redesenha a cada meio segundo).
-  const layoutKey = w + ':' + map.nodes.map((n) => n.id + n.next.join(',')).join('|');
+  const layoutKey = w + ':' + map.area.id + ':' + map.nodes.map((n) => n.id + n.next.join(',')).join('|');
   const spots = React.useMemo(() => {
     const avoid = [];
     for (const n of map.nodes) avoid.push({ x: x(n), y: y(n) + 18, r: n.type === 'boss' ? 70 : 54 });
@@ -236,7 +265,11 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
         // Mais rala nos cantos: a chance de pular cresce com a distância do centro (cantos ~ metade).
         const e = Math.hypot((px - w / 2) / (w / 2), (py - H / 2) / (H / 2));
         if (((h >>> 12) % 100) / 100 < Math.min(0.55, Math.max(0, (e - 0.7) * 0.8))) continue;
-        out.push({ id, x: px, y: py, h });
+        // Zona: o Pântano inteiro; na Floresta, a faixa do topo vai virando pântano (transição suave).
+        const swampOdds = map.area.arena === 'staging' ? 1 : map.next ? Math.min(1, Math.max(0, (teaseLine - py) / 110 + 0.5)) : 0;
+        const zone = ((h >>> 9) % 100) / 100 < swampOdds ? 'swamp' : 'forest';
+        if (zone === 'swamp' && ((h >>> 14) % 100) < 30) continue; // pântano: mais água aberta, menos mato
+        out.push({ id, x: px, y: py, h, zone });
       }
     }
     return out;
@@ -245,6 +278,7 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
     <div ref={boxRef} className="dc-board" role="group" aria-label={'Mapa ' + map.area.name} style={{ marginTop: -lift }}>
       <div ref={ref} className={'dc-board__table dc-board--' + map.area.arena} style={{ height: H }}>
         <div className="dc-board__mat" />
+        {map.next && <BoardTease map={map} w={w} line={teaseLine} />}
         <svg className="dc-board__paths" width={w} height={H} aria-hidden="true">
           {paths.map((p) => <path key={p.key} className={'dc-trail' + p.cls} d={p.d} />)}
         </svg>
@@ -259,9 +293,9 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
             </InfoCard>
           </span>
         ))}
-        <AreaProps arena={map.area.arena} w={w} h={H} spots={spots} />
+        <AreaProps arena={map.area.arena} w={w} h={H} spots={spots} tease={teaseLine} />
         {map.nodes.filter((n) => n.type === 'rest' || n.type === 'shop').map((n) => <Landmark key={n.id} n={n} x={x(n)} y={y(n)} />)}
-        {map.nodes.filter((n) => n.enemies && (n.type === 'boss' ? n.status !== 'visited' : n.status === 'reachable')).map((n) => <Foes key={n.id} n={n} x={x(n)} y={y(n)} target={n.id === selected} />)}
+        {map.nodes.filter((n) => n.enemies && (n.type === 'boss' ? !map.cleared && n.status !== 'visited' : n.status === 'reachable')).map((n) => <Foes key={n.id} n={n} x={x(n)} y={y(n)} target={n.id === selected} />)}
         <Party map={map} party={party} hold={hold} place={place} geom={geom} />
       </div>
     </div>
@@ -588,7 +622,14 @@ export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio
           </InfoCard>
         ))}
       </div>
-      {map.cleared && <div className="dc-mapbox is-cleared"><Icon name="crown" size={16} /> <b>{map.area.name} concluída!</b> O Legacy Monolith caiu. A próxima área (Staging) chega em breve.</div>}
+      {map.cleared && (
+        <div className={'dc-mapbox is-cleared' + (map.next ? ' is-' + map.next.arena : '')}>
+          <Icon name="crown" size={16} />
+          <span><b>{map.area.name} concluída!</b> {map.boss.name} caiu.{' '}
+            {map.next ? <>Além dele começa o <b>{map.next.name}</b>. {map.next.description} Os Patches da run seguem com você.</> : 'A próxima área chega em breve.'}</span>
+          {map.next && <Button variant="primary" icon="footprints" onClick={() => act({ type: 'mapAdvance' })}>Atravessar para {map.next.name}</Button>}
+        </div>
+      )}
       <div className={'dc-stage' + (prepNode ? ' is-prep' : '')}>
         <div className="dc-stage__map">
           <MapGrid map={map} onNode={onNode} hold={!!battle} selected={prepNode ? prepNode.id : null}

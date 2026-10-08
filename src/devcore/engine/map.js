@@ -265,6 +265,16 @@ function mapAct(s, action, now, c, log) {
     return null;
   }
 
+  if (action.type === 'mapAdvance') {
+    const area = c.area[m.area];
+    if (!m.cleared) return 'Vença o chefe da área antes de seguir';
+    if (!area.next || !c.area[area.next]) return 'A próxima área ainda não existe';
+    const next = c.area[area.next];
+    s.run.map = createMap(s, next, c);
+    log.push({ type: 'mapOpen', area: next.id, name: next.name, from: area.id });
+    return null;
+  }
+
   // Movimento (mapMove / mapFight)
   if (m.cleared) return 'Área concluída';
   if (blocking) return m.pending.kind === 'event' ? 'Escolha uma opção do evento antes de seguir' : 'Escolha o benefício do descanso antes de seguir';

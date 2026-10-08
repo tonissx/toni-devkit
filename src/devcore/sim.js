@@ -88,18 +88,33 @@ function botSquad(s, enemies, kind, c, now = null) {
     if (ids.length) need.add(ids.sort((a, b) => power(b) - power(a))[0]);
   }
   const pets = [...need, ...owned.filter((id) => !need.has(id)).sort((a, b) => power(b) - power(a))].slice(0, c.BATTLE.squadSize);
-  // Slots pelo papel: tanque na vanguarda, atacante no centro, suporte/velocidade na retaguarda (o resto completa).
-  const pref = { vanguard: ['tank', 'attacker', 'speed', 'support'], center: ['attacker', 'speed', 'tank', 'support'], rear: ['support', 'speed', 'attacker', 'tank'] };
-  const left = [...pets];
-  const slots = {};
-  for (const sl of ['vanguard', 'center', 'rear']) {
-    const pick = pref[sl].map((role) => left.find((id) => c.PET_ROLES[id] === role)).find(Boolean);
-    slots[sl] = pick || null;
-    if (pick) left.splice(left.indexOf(pick), 1);
-  }
-  const triggers = Object.fromEntries(pets.map((id) => [id, c.PET_ROLES[id] === 'support' ? 'allyLow' : 'start']));
   const items = kind === 'battle' ? [] : ['hotfix', 'coffee', 'rollback'].filter((id) => (s.run.inventory[id] || 0) > 0).slice(0, c.BATTLE.maxItems);
-  return { slots, triggers, items };
+  const build = (trio) => {
+    // Slots pelo papel: tanque na vanguarda, atacante no centro, suporte/velocidade na retaguarda (o resto completa).
+    const pref = { vanguard: ['tank', 'attacker', 'speed', 'support'], center: ['attacker', 'speed', 'tank', 'support'], rear: ['support', 'speed', 'attacker', 'tank'] };
+    const left = [...trio];
+    const slots = {};
+    for (const sl of ['vanguard', 'center', 'rear']) {
+      const pick = pref[sl].map((role) => left.find((id) => c.PET_ROLES[id] === role)).find(Boolean);
+      slots[sl] = pick || null;
+      if (pick) left.splice(left.indexOf(pick), 1);
+    }
+    const triggers = Object.fromEntries(trio.map((id) => [id, c.PET_ROLES[id] === 'support' ? 'allyLow' : 'start']));
+    return { slots, triggers, items };
+  };
+  // Chefe: o robô testa os trios possíveis (como um jogador que experimenta) e fica com o de maior chance.
+  if (kind === 'boss' && enemies.length && owned.length > c.BATTLE.squadSize) {
+    let best = null;
+    for (let i = 0; i < owned.length; i++) for (let j = i + 1; j < owned.length; j++) for (let k = j + 1; k < owned.length; k++) {
+      const sq = build([owned[i], owned[j], owned[k]]);
+      const area = s.run.map ? s.run.map.area : c.AREAS[0].id;
+      const col = c.area[area].columns;
+      const chance = preview(setupBattle(s, sq, enemies, col, area, c, 'boss', now), 7, c).chance;
+      if (!best || chance > best.chance) best = { sq, chance };
+    }
+    return best.sq;
+  }
+  return build(pets);
 }
 
 /** Próximo passo do robô no mapa: { action, cost } ou null. Guarda Compute para lutas que valem a pena. */
@@ -153,6 +168,12 @@ function playMap(s, now, c, step, marks, reserveHours) {
     const lb = s.run.map.lastBattle;
     if (lb && lb.id !== before) { if (lb.win) marks.map.wins++; else marks.map.losses++; }
     if (s.run.map.cleared && marks.map.cleared == null) marks.map.cleared = now;
+    if (s.run.map.cleared) {
+      const id = s.run.map.area;
+      if (marks.map.areas[id] == null) marks.map.areas[id] = now;
+      // Área vencida: atravessa para a próxima (se existir) e segue jogando.
+      if (c.area[id].next) { s = step({ type: 'mapAdvance' }).state; continue; }
+    }
   }
   return 0;
 }
@@ -168,7 +189,7 @@ function simulate(profile, c = CONTENT) {
   let now = t0;
   const marks = { t2: null, t3: null, pets: {}, synergies: {}, purchases: 0, maxWaitSec: 0, maxCheapestSec: 0,
     incidents: { seen: 0, contained: 0, escaped: 0, hotfixed: 0 }, items: 0, parts: 0, firstMk2: null, firstMk3: null,
-    map: { opened: null, cleared: null, wins: 0, losses: 0, byDay: [] } };
+    map: { opened: null, cleared: null, areas: {}, wins: 0, losses: 0, byDay: [] } };
   const step = (action) => {
     const r = dispatch(s, action, now, c);
     s = r.state;

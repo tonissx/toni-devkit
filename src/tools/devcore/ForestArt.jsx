@@ -4,6 +4,8 @@
  * SVG puro (cores fixas da área); "em pé" (upright) ou deitado no tabuleiro (flat). Ver docs §4.5.
  */
 
+import { swampPiece, Wisps } from './SwampArt.jsx';
+
 const LED = '#7CF5B0';
 const CYAN = '#5EE7FF';
 
@@ -181,11 +183,13 @@ function pieceFor(h) {
 }
 
 /**
- * A floresta no tabuleiro (densa, como a mata do mapa do Inscryption): uma peça em cada lugar livre (`spots`, longe
- * dos pontos e das trilhas) e vaga-lumes de LED por cima. Memorizada: só redesenha quando o traçado ou a largura mudam.
+ * A mata no tabuleiro (densa, como a do mapa do Inscryption): uma peça em cada lugar livre (`spots`, longe dos pontos e
+ * das trilhas). Cada lugar tem uma zona — floresta ou pântano (sp.zone) — e o desenho segue a zona. Por cima, vaga-lumes
+ * de LED (floresta) e/ou fogos-fátuos do CI (pântano; wisps: altura da faixa ou 'all').
+ * Memorizada: só redesenha quando o traçado ou a largura mudam.
  */
-export const ForestProps = React.memo(function ForestProps({ spots, w, h }) {
-  const pieces = spots.map((sp) => ({ sp, P: pieceFor(sp.h) }));
+export const ForestProps = React.memo(function ForestProps({ spots, w, h, fireflies = true, wisps = null }) {
+  const pieces = spots.map((sp) => ({ sp, P: sp.zone === 'swamp' ? swampPiece(sp.h) : pieceFor(sp.h) }));
   return (
     <>
       {/* Sombras no chão (uma camada só, barata): elipse suave projetada para o lado de cada peça em pé, mais o contato com o chão. */}
@@ -211,12 +215,14 @@ export const ForestProps = React.memo(function ForestProps({ spots, w, h }) {
           </span>
         );
       })}
-      <div className="dc-fireflies" aria-hidden="true">
+      {fireflies && <div className="dc-fireflies" aria-hidden="true">
         {Array.from({ length: 16 }, (_, i) => <i key={i} style={{ left: `${(hashStr('ff' + i) % 96) + 2}%`, top: `${(hashStr('fy' + i) % 90) + 4}%`, animationDelay: `${(i * 0.7) % 5}s` }} />)}
-      </div>
+      </div>}
+      {wisps === 'all' && <Wisps n={18} seed="board" />}
+      {typeof wisps === 'number' && <Wisps n={6} seed="tease" band={wisps} />}
     </>
   );
-}, (a, b) => a.spots === b.spots && a.w === b.w && a.h === b.h);
+}, (a, b) => a.spots === b.spots && a.w === b.w && a.h === b.h && a.wisps === b.wisps);
 
 /** Fundo da arena: clareira na Floresta Localhost à noite (árvores de circuito, vaga-lumes). */
 export function ForestBackdrop() {

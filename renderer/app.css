@@ -648,6 +648,20 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @keyframes v-drip { 0% { transform: translateY(0) scaleY(.6); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(6px) scaleY(1); opacity: 0; } }
 @keyframes v-glitch { 50% { transform: translate(3px, -1px); } }
 @keyframes v-flicker { 0%, 88%, 100% { opacity: 1; } 90% { opacity: .2; } 94% { opacity: .8; } 96% { opacity: .3; } }
+/* Pântano: fogo-fátuo (passa/falha), libélulas, tronco boiando, ondas na água */
+.villain-svg .v-wisp-glow { transform-origin: center; animation: v-glow 2.4s ease-in-out infinite; }
+.villain-svg .v-pass { animation: v-passfail 1.6s steps(1) infinite; }
+.villain-svg .v-fail { animation: v-passfail 1.6s steps(1) infinite reverse; }
+@keyframes v-passfail { 0%, 49% { opacity: 1; } 50%, 100% { opacity: .1; } }
+.villain-svg .v-fly { animation: v-buzz .18s ease-in-out infinite alternate; }
+.villain-svg .v-fly--b { animation-delay: -.09s; }
+.villain-svg .v-bob { animation: v-bob 2.6s ease-in-out infinite; }
+@keyframes v-bob { 50% { transform: translateY(-2px) rotate(-1.5deg); } }
+.villain-svg .v-ripple { transform-origin: center; animation: v-ripple 2.6s ease-out infinite; }
+@keyframes v-ripple { from { transform: scale(.7); opacity: .6; } to { transform: scale(1.15); opacity: 0; } }
+.villain-svg .v-drift-a { animation: v-drift 1.3s steps(1) infinite; }
+.villain-svg .v-drift-b { animation: v-drift 1.3s steps(1) infinite reverse; }
+@keyframes v-drift { 0%, 49% { transform: scaleX(1); } 50%, 100% { transform: scaleX(.45); } }
 @keyframes v-buzz { to { transform: translate(2px, -2px) rotate(8deg); } }
 @keyframes v-argue { to { transform: rotate(10deg); } }
 @keyframes v-hover { 50% { transform: translateY(-4px); } }
@@ -756,6 +770,44 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 }
 .dc-board--localhost { background: repeating-linear-gradient(92deg, #3B2A1D 0 14px, #43301F 14px 30px, #38281B 30px 41px); } /* mesa de madeira */
 .dc-board__mat { position: absolute; inset: 22px 26px; pointer-events: none; border-radius: 12px; background: radial-gradient(ellipse at 50% 40%, #222A37, #161B24 75%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05); }
+/* Pântano Staging: mesa de madeira escura e úmida; chão de brejo — lama, água turva e manchas de lodo */
+.dc-board--staging { background: repeating-linear-gradient(92deg, #2B2219 0 14px, #31271C 14px 30px, #282017 30px 41px); }
+.dc-board--staging .dc-board__mat {
+  background:
+    radial-gradient(ellipse 20% 12% at 25% 28%, rgba(127, 217, 224, .10), transparent),
+    radial-gradient(ellipse 26% 14% at 72% 62%, rgba(127, 217, 224, .09), transparent),
+    radial-gradient(ellipse 18% 10% at 40% 80%, rgba(94, 231, 160, .07), transparent),
+    radial-gradient(ellipse 34% 22% at 55% 45%, #1F4746, transparent 70%),
+    radial-gradient(ellipse 55% 50% at 50% 55%, rgba(200, 255, 220, .07), transparent 70%),
+    radial-gradient(ellipse at 50% 50%, #1B3A36, #10231F 70%, #071311);
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, .8), inset 0 0 0 1px rgba(127, 217, 224, .08);
+}
+.dc-board--staging .dc-trail { stroke: rgba(222, 196, 150, .55); } /* passarelas de madeira */
+/* A próxima área espiando no topo do tabuleiro (atrás do chefe): água turva e névoa do Pântano */
+.dc-board__tease { position: absolute; left: 26px; right: 26px; top: 22px; pointer-events: none; border-radius: 12px 12px 0 0; }
+.dc-board__tease.is-staging {
+  background:
+    linear-gradient(to bottom, rgba(10, 22, 20, .2), transparent 30%),
+    radial-gradient(ellipse 30% 40% at 30% 35%, rgba(127, 217, 224, .16), transparent 70%),
+    radial-gradient(ellipse 34% 40% at 72% 40%, rgba(127, 217, 224, .12), transparent 70%),
+    linear-gradient(to bottom, #13302E 0, #183B39 55%, rgba(24, 59, 57, 0) 100%);
+}
+.dc-board__tease.is-staging::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(200, 225, 220, .16), rgba(200, 225, 220, .05) 60%, transparent); filter: blur(4px); animation: dc-fog 9s ease-in-out infinite; }
+@keyframes dc-fog { 50% { opacity: .55; transform: translateX(12px); } }
+.dc-tease__beast { opacity: .8; filter: drop-shadow(0 0 8px rgba(160, 200, 190, .25)) !important; } /* vulto escuro na névoa: só os olhos brilham */
+.dc-tease__beast text { display: none; }
+.dc-tease__beast svg { display: block; }
+.dc-tease__sign { filter: drop-shadow(0 6px 4px rgba(0, 0, 0, .5)); }
+/* Fogos-fátuos do CI: luzes que flutuam e alternam verde (✓) / vermelho (✗) */
+.dc-wisps { position: absolute; inset: 0 0 auto 0; height: 100%; pointer-events: none; z-index: 3; }
+.dc-wisps i { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #9CFFCB; box-shadow: 0 0 10px 3px rgba(94, 231, 160, .55); animation: dc-wisp 6s ease-in-out infinite; }
+.dc-wisps i.is-fail { background: #FF9C9C; box-shadow: 0 0 10px 3px rgba(255, 92, 92, .5); }
+@keyframes dc-wisp { 0%, 100% { transform: translate(0, 0); opacity: .9; } 35% { transform: translate(10px, -14px); opacity: .35; } 70% { transform: translate(-8px, -6px); opacity: 1; } }
+/* Arena do Pântano Staging: clareira alagada à noite, névoa baixa e fogos-fátuos */
+.dc-arena--staging { background: linear-gradient(to top, #12302D 0, #1A403C 38px, transparent 38px), radial-gradient(ellipse at 50% 0%, #1D3B44, #0A1618 70%); }
+.dc-arena--staging::after { content: ''; position: absolute; left: 0; right: 0; bottom: 30px; height: 70px; pointer-events: none; z-index: 1; background: linear-gradient(to top, rgba(190, 220, 215, .14), transparent); }
+.dc-arena__fog { position: absolute; left: -10%; right: -10%; bottom: 26px; height: 46px; background: radial-gradient(ellipse at 30% 60%, rgba(200, 230, 225, .16), transparent 60%), radial-gradient(ellipse at 75% 50%, rgba(200, 230, 225, .12), transparent 60%); animation: dc-fog 11s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .dc-wisps i, .dc-board__tease.is-staging::after, .dc-arena__fog { animation: none; } }
 /* Floresta Localhost: chão de musgo com manchas e um leve brilho de circuito */
 .dc-board--localhost .dc-board__mat {
   background:
@@ -863,7 +915,9 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   .dc-trail.is-open, .dc-node.is-reachable, .dc-node.is-waiting, .dc-prop__steam, .dc-gain, .dc-gain__icon, .dc-party__pet svg, .dc-foes__foe svg, .dc-flame, .dc-landmark__shadow { animation: none !important; }
 }
 .dc-mapbox { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-bg); }
-.dc-mapbox.is-cleared { flex-direction: row; align-items: center; border-color: color-mix(in srgb, #F5C542 50%, var(--tk-border)); color: var(--tk-text-2); }
+.dc-mapbox.is-cleared { flex-direction: row; align-items: center; gap: 10px; border-color: color-mix(in srgb, #F5C542 50%, var(--tk-border)); color: var(--tk-text-2); }
+.dc-mapbox.is-cleared > span { flex: 1; line-height: 1.45; }
+.dc-mapbox.is-cleared.is-staging { background: linear-gradient(90deg, var(--tk-bg), color-mix(in srgb, #1F4E52 45%, var(--tk-bg))); }
 .dc-mapbox__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dc-mapbox__head > span { font-size: 11.5px; color: var(--tk-text-3); }
 .dc-mapbox__text { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--tk-text-2); }

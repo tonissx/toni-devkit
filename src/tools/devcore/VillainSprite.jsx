@@ -247,7 +247,119 @@ function Monolith({ c, locked }) {
   );
 }
 
-const VILLAINS = { leaky: Leaky, flicker: Flicker, swarm: Swarm, forky: Forky, zero: Zero, bug: Bug, typo: Typo, dep: Dep, monolith: Monolith };
+/* ─────────────── Área 2 — Pântano Staging ─────────────── */
+
+/** Flaky Test — fogo-fátuo do pântano que pisca verde (✓) e vermelho (✗): passa ou falha sem motivo. */
+function Flaky({ c, locked }) {
+  return (
+    <g>
+      {!locked && <ellipse className="v-wisp-glow" cx="32" cy="30" rx="22" ry="22" fill={c} opacity=".18" />}
+      <g className="v-body v-wisp">
+        <path d="M32 6 C40 16 47 22 46 34 C45 46 38 52 32 52 C26 52 19 46 18 34 C17 22 24 16 32 6 Z" fill={c} opacity=".9" />
+        <path d="M32 14 C37 21 41 26 40 34 C39 42 35 46 32 46 C29 46 25 42 24 34 C23 26 27 21 32 14 Z" fill="#E9FFF4" opacity=".55" />
+        {!locked && <>
+          {/* rosto: um olho aberto, outro fechado (passa / falha) */}
+          <circle cx="27" cy="32" r="3.4" fill="#07130C" />
+          <circle cx="28" cy="31" r="1.1" fill="#E9FFF4" />
+          <path d="M34 32 h6" stroke="#07130C" strokeWidth="2.2" strokeLinecap="round" />
+          <path d="M27 40 q5 3 10 -1" stroke="#07130C" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          {/* ✓ e ✗ piscando em volta */}
+          <path className="v-pass" d="M9 18 l3 3 l6 -7" stroke="#7CF5B0" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <path className="v-fail" d="M47 12 l7 7 M54 12 l-7 7" stroke="#FF5C5C" strokeWidth="2.4" strokeLinecap="round" />
+        </>}
+      </g>
+      {/* cauda de luz até a água */}
+      <path d="M28 52 q4 4 2 7 M36 52 q-3 4 -1 6" stroke={c} strokeWidth="2" fill="none" strokeLinecap="round" opacity=".6" />
+    </g>
+  );
+}
+
+/** Race Condition — duas libélulas gêmeas trançando o voo, cada uma querendo chegar primeiro. */
+function Race({ c, locked }) {
+  const fly = (dx, dy, flip, cls) => (
+    <g className={'v-fly ' + cls} transform={`translate(${dx} ${dy}) scale(${flip} 1)`}>
+      <ellipse cx="-6" cy="-5" rx="9" ry="3.4" fill="#DDF6FF" opacity=".55" transform="rotate(-22 -6 -5)" />
+      <ellipse cx="-6" cy="3" rx="8" ry="3" fill="#DDF6FF" opacity=".45" transform="rotate(18 -6 3)" />
+      <path d="M-2 0 L-24 1.5" stroke={c} strokeWidth="3.4" strokeLinecap="round" />
+      <path d="M-10 0 h1.5 M-15 0.5 h1.5 M-20 1 h1.5" stroke="#0B2230" strokeWidth="1.2" />
+      <circle cx="2" cy="0" r="4.6" fill={c} />
+      {!locked && <><circle cx="4" cy="-1.5" r="2" fill="#0B2230" /><circle cx="4.6" cy="-2" r=".7" fill="#fff" /></>}
+    </g>
+  );
+  return (
+    <g>
+      <path d="M8 40 C20 20 30 52 44 30 S58 26 60 18" stroke={c} strokeWidth="1.2" fill="none" strokeDasharray="2 3" opacity=".5" />
+      {fly(40, 24, 1, 'v-fly--a')}
+      {fly(26, 40, -1, 'v-fly--b')}
+      {!locked && <text x="44" y="54" fontSize="8" fontFamily="monospace" fontWeight="700" fill={c} opacity=".8">1º?</text>}
+    </g>
+  );
+}
+
+/** Config Drift — tronco à deriva coberto de musgo, com um arquivo .env pregado que nunca é igual. */
+function Drift({ c, locked }) {
+  return (
+    <g>
+      <ellipse className="v-ripple" cx="32" cy="54" rx="26" ry="4" fill="none" stroke="#5EC8FF" strokeWidth="1" opacity=".5" />
+      <g className="v-body v-bob">
+        <path d="M6 44 Q6 34 16 33 L50 31 Q60 31 60 40 Q60 49 50 49 L16 51 Q6 52 6 44 Z" fill={c} stroke="#2B1D10" strokeWidth="1.4" />
+        <ellipse cx="54" cy="40" rx="5" ry="7.5" fill="#B8925F" stroke="#2B1D10" strokeWidth="1.2" />
+        <path d="M54 35 a4 5 0 1 0 0.1 0 M54 38 a1.6 2.2 0 1 0 0.1 0" stroke="#6E4F2E" strokeWidth=".9" fill="none" />
+        <path d="M14 38 q8 -3 16 -1 M18 46 q10 2 20 -1" stroke="#6E4F2E" strokeWidth="1.1" fill="none" />
+        <path d="M8 40 Q14 30 26 33 Q34 29 42 33 L40 37 Q30 34 22 37 Q14 37 9 44 Z" fill="#3E7A3A" />
+        {!locked && <>
+          {/* arquivo .env pregado, com valores trocando */}
+          <g transform="rotate(-8 28 20)">
+            <rect x="18" y="8" width="20" height="24" rx="2" fill="#F2EEDF" stroke="#2B1D10" strokeWidth="1.2" />
+            <path d="M33 8 l5 5 h-5 Z" fill="#CFC8B0" />
+            <text x="21" y="17" fontSize="5" fontFamily="monospace" fontWeight="700" fill="#2B1D10">.env</text>
+            <path className="v-drift-a" d="M21 22 h13" stroke="#E0533D" strokeWidth="2" strokeLinecap="round" />
+            <path className="v-drift-b" d="M21 27 h9" stroke="#3E7A3A" strokeWidth="2" strokeLinecap="round" />
+            <circle cx="28" cy="9" r="1.4" fill="#5B6270" />
+          </g>
+          {/* olhos no tronco */}
+          <ellipse cx="44" cy="41" rx="2.6" ry="2.2" fill="#FFE9B0" /><circle cx="44.6" cy="41.4" r="1.1" fill="#2B1D10" />
+          <path d="M40 37.5 l6 1.5" stroke="#2B1D10" strokeWidth="1.6" strokeLinecap="round" />
+        </>}
+      </g>
+    </g>
+  );
+}
+
+/**
+ * The Merge Conflict — hidra do pântano; cada cabeça é uma unidade (main, roxa · feature, laranja). O pescoço sai da
+ * água e o corpo traz os marcadores de conflito (<<<<<<< / ======= / >>>>>>>).
+ */
+function Hydra({ c, locked, side }) {
+  const flip = side === 'feature' ? -1 : 1;
+  const mark = side === 'feature' ? '>>>>>>>' : '<<<<<<<';
+  return (
+    <g>
+      <ellipse className="v-ripple" cx="32" cy="57" rx="24" ry="3.6" fill="none" stroke="#5EC8FF" strokeWidth="1" opacity=".45" />
+      <g className="v-body" transform={flip < 0 ? 'translate(64 0) scale(-1 1)' : undefined}>
+        {/* pescoço em S saindo da água */}
+        <path d="M18 58 C14 46 30 42 26 30 C23 22 28 14 38 13 L44 20 C36 21 34 26 36 32 C40 44 26 48 30 58 Z" fill={c} stroke="#120B1E" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M22 54 c3 -2 6 -2 8 0 M24 46 c3 -2 6 -1 7 1 M28 37 c2 -2 5 -2 7 0" stroke="#120B1E" strokeWidth="1" fill="none" opacity=".45" />
+        {/* cabeça com focinho e chifres */}
+        <path d="M34 8 C42 5 52 8 58 14 C61 17 59 21 55 21 L44 22 C38 23 33 19 32 14 C31 11 32 9 34 8 Z" fill={c} stroke="#120B1E" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M37 9 L33 1 L41 7 M44 7 L44 0 L48 7" fill={c} stroke="#120B1E" strokeWidth="1.3" strokeLinejoin="round" />
+        <path d="M44 19.5 l2 3 l2 -3 l2 3 l2 -3" fill="#F2EEDF" />
+        {!locked && <>
+          <path className="v-glow" d="M41 12 L47 13.5 L41 15 Z" fill="#FFD24A" />
+          <path d="M39 10.5 L48 12" stroke="#120B1E" strokeWidth="1.8" strokeLinecap="round" />
+          <circle cx="56" cy="16" r="1" fill="#120B1E" />
+        </>}
+      </g>
+      {!locked && <text x={side === 'feature' ? 6 : 26} y="50" fontSize="5.5" fontFamily="monospace" fontWeight="700" fill="#F2EEDF" opacity=".75">{mark}</text>}
+      {!locked && <text x={side === 'feature' ? 8 : 26} y="43" fontSize="5.5" fontFamily="monospace" fontWeight="700" fill="#F2EEDF" opacity=".45">=======</text>}
+    </g>
+  );
+}
+const HydraMain = (p) => <Hydra {...p} side="main" />;
+const HydraFeature = (p) => <Hydra {...p} side="feature" />;
+
+const VILLAINS = { leaky: Leaky, flicker: Flicker, swarm: Swarm, forky: Forky, zero: Zero, bug: Bug, typo: Typo, dep: Dep, monolith: Monolith,
+  flaky: Flaky, race: Race, drift: Drift, 'hydra-main': HydraMain, 'hydra-feature': HydraFeature };
 
 /** Sprite de um vilão. state: active | blocked | defeated · locked = silhueta (nunca visto). */
 export function VillainSprite({ id, color, state = 'active', size = 56, locked = false, className = '' }) {

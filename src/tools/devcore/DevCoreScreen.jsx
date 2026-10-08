@@ -170,7 +170,7 @@ export function DevCoreScreen({ toast, request }) {
       else if (e.type === 'ability') out.push({ at: t, type: 'ability', pet: e.pet, text: (s.pets.find((p) => p.owned && p.ability.id === e.id) || { ability: {} }).ability.name });
     }
     for (const e of log || []) {
-      if (e.type === 'mapOpen') toast('Mapa liberado', `${e.name}: batalhas, eventos e Patches na aba Mapa`);
+      if (e.type === 'mapOpen') toast(e.from ? 'Nova área' : 'Mapa liberado', e.from ? `${e.name}: novos inimigos, novos perigos — e um novo chefe no fim` : `${e.name}: batalhas, eventos e Patches na aba Mapa`);
       if (e.type === 'battle' && e.cleared) setAfterBattle((q) => [...q, ['Área concluída', 'O Legacy Monolith caiu!']]); // só depois da arena
       if (e.type !== 'quest') continue;
       const item = e.item && (s.inventory.find((k) => k.id === e.item) || {}).name;

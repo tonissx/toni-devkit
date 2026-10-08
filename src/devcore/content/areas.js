@@ -1,11 +1,12 @@
 'use strict';
 /**
- * Áreas do mapa (tema: pipeline de deploy). MVP: só Localhost. Ver docs/devcore-mapa-singularity.md.
+ * Áreas do mapa (tema: pipeline de deploy): Floresta Localhost → Pântano Staging. Ver docs/devcore-mapa-singularity.md.
+ * next: a área que abre ao vencer o chefe (o jogador atravessa quando quiser; os Patches da run seguem valendo).
  *
  * Mapa: `lanes` trilhas × `columns` colunas + o chefe; gerado pela semente da run ao abrir a área.
  * costs: custo-base (Compute) de cada coluna — FIXO (não acompanha a produção: é o que cria a escolha entre investir
  *   em produção ou avançar). Cada tipo de ponto multiplica o custo da coluna (NODE_TYPES.costMult).
- * scale: atributos dos inimigos × (1 + linear × coluna + quad × coluna²); elites: vida e ataque × eliteMult;
+ * scale: atributos dos inimigos × base × (1 + linear × coluna + quad × coluna²); elites: vida e ataque × eliteMult;
  *   o chefe usa a escala da última coluna.
  * groups: grupos de inimigos por tipo de ponto (sorteados com a semente).
  */
@@ -38,6 +39,23 @@ const AREAS = [
       boss: [['legacy-monolith']],
     },
     boss: 'legacy-monolith',
+    next: 'staging',
+  },
+  {
+    id: 'staging', name: 'Pântano Staging', arena: 'staging', unlock: { area: 'localhost' },
+    description: 'Quase produção: um brejo turvo onde nada se comporta igual duas vezes. Os fogos-fátuos do CI piscam entre as árvores.',
+    lanes: 3, columns: 9,
+    fixed: { 0: ['battle', 'battle', 'battle'], 4: ['shop', 'event', 'rest'], 8: ['rest', 'rest', 'rest'] },
+    shortcutChance: 0.5,
+    crossChance: 0.45,
+    costs: [1.5e11, 3e11, 6e11, 1.2e12, 2.4e12, 4.5e12, 8e12, 1.3e13, 2e13, 3e13],
+    scale: { base: 1.2, linear: 0.25, quad: 0.06, eliteMult: 1.2 },  // pets já no teto de nível: a dificuldade vem dos traços e do chefe
+    groups: {
+      battle: [['flaky-test', 'flaky-test'], ['race-condition', 'race-condition'], ['config-drift', 'race-condition'], ['flaky-test', 'config-drift'], ['flaky-test', 'race-condition', 'bug'], ['config-drift', 'typo', 'typo']],
+      elite: [['flaky-test', 'flaky-test', 'race-condition'], ['config-drift', 'config-drift'], ['forky', 'race-condition'], ['zero', 'flaky-test']],
+      boss: [['conflict-main', 'conflict-feature']],
+    },
+    boss: 'conflict-main',
   },
 ];
 

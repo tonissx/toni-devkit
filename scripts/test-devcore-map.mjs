@@ -429,3 +429,82 @@ test('vida: saves sem vida guardada começam cheios', () => {
   assert.equal(battle.petHp(s, 'byte', T0), 1);
   assert.equal(battle.petDown(s, 'byte', T0), false);
 });
+
+/* ─────────────── Área 2 — Pântano Staging ─────────────── */
+/** Luta no Pântano (várias sementes) → todos os eventos do log. */
+const swampLogs = (s, squad, enemies, seeds = 30, col = 3, kind = 'battle') => {
+  const out = [];
+  for (let seed = 1; seed <= seeds; seed++) out.push(...battle.resolve(battle.setupBattle(s, squad, enemies, col, 'staging', CONTENT, kind), seed).log);
+  return out;
+};
+
+test('pântano: traços novos agem sem o counter e somem com o pet certo (Lint, Memo, Git)', () => {
+  const s = make({ pets: { byte: 12, armo: 12, query: 12, lint: 12, memo: 12, git: 12 } });
+  const base = squadOf(['armo', 'byte', 'query']);
+  // Instável: falhas e golpes em dobro; o Lint estabiliza.
+  const flaky = swampLogs(s, base, ['flaky-test', 'flaky-test']);
+  assert.ok(flaky.some((e) => e.k === 'miss' && e.f === 'flaky'));
+  assert.ok(flaky.some((e) => e.k === 'atk' && e.f === 'flaky'));
+  assert.ok(!swampLogs(s, squadOf(['armo', 'byte', 'lint']), ['flaky-test', 'flaky-test']).some((e) => e.f === 'flaky'));
+  // Corrida: age duas vezes às vezes; o Memo trava.
+  assert.ok(swampLogs(s, base, ['race-condition', 'race-condition']).some((e) => e.k === 'race'));
+  assert.ok(!swampLogs(s, squadOf(['armo', 'byte', 'memo']), ['race-condition', 'race-condition']).some((e) => e.k === 'race'));
+  // Deriva: o ataque muda a cada rodada dentro da faixa; o Git fixa.
+  const drift = swampLogs(s, base, ['config-drift']).filter((e) => e.k === 'drift');
+  assert.ok(drift.length > 0);
+  const D = CONTENT.TRAITS.drift;
+  assert.ok(drift.every((e) => e.v >= D.min * 100 - 1 && e.v <= D.max * 100 + 1));
+  assert.ok(new Set(drift.map((e) => e.v)).size > 3);
+  assert.ok(!swampLogs(s, squadOf(['armo', 'byte', 'git']), ['config-drift']).some((e) => e.k === 'drift'));
+});
+
+test('pântano: Merge — a cabeça caída volta (uma vez) se a outra seguir de pé', () => {
+  const s = make({ pets: { byte: 12, armo: 12, relay: 12, query: 12 } });
+  const sq = squadOf(['query', 'byte', 'relay'], { slots: { vanguard: 'query', center: 'byte', rear: 'relay' } });
+  let revives = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    const r = battle.resolve(battle.setupBattle(s, sq, ['conflict-main', 'conflict-feature'], 8, 'staging', CONTENT, 'boss'), seed);
+    const back = r.log.filter((e) => e.k === 'revive' && e.f === 'merge');
+    revives += back.length;
+    for (const uid of ['e0', 'e1']) assert.ok(back.filter((e) => e.t === uid).length <= 1, 'cada cabeça volta no máximo uma vez');
+    for (const e of back) near(e.v, Math.round(r.units.find((u) => u.uid === e.t).maxHp * CONTENT.TRAITS.merge.value), 1);
+  }
+  assert.ok(revives > 0);
+  // Sozinha (sem a outra cabeça), não volta.
+  const solo = battle.resolve(battle.setupBattle(s, sq, ['conflict-main'], 0, 'staging', CONTENT, 'boss'), 1);
+  assert.ok(!solo.log.some((e) => e.k === 'revive'));
+});
+
+test('pântano: vencer o Legacy Monolith libera a travessia; o Pântano começa do zero e os Patches seguem', () => {
+  const s = make({ pets: { byte: 10, noxi: 10, query: 10 }, patches: ['mentoring'] });
+  assert.equal(run(s, { type: 'mapAdvance' }).error, 'Vença o chefe da área antes de seguir');
+  assert.equal(snapshot(s, T0).map.next.id, 'staging');
+  const m = s.run.map;
+  m.at = '8-1'; m.visited = ['8-1'];
+  m.nodes.boss.group = ['typo'];
+  let r = run(s, { type: 'mapFight', node: 'boss', squad: squadOf(['byte', 'noxi', 'query']) });
+  r = run(r.state, { type: 'mapAdvance' });
+  assert.equal(r.error, undefined);
+  const st = r.state.run.map;
+  assert.equal(st.area, 'staging');
+  assert.equal(st.at, null);
+  assert.equal(st.cleared, false);
+  assert.ok(r.state.run.patches.includes('mentoring'));
+  assert.ok(r.log.some((e) => e.type === 'mapOpen' && e.area === 'staging' && e.from === 'localhost'));
+  const v = snapshot(r.state, T0).map;
+  assert.equal(v.area.name, 'Pântano Staging');
+  assert.equal(v.next, null);
+  assert.equal(v.nodes.find((n) => n.type === 'boss').enemies.length, 2);
+  // Staging ainda não tem próxima área: atravessar de novo é recusado mesmo depois do chefe.
+  r.state.run.map.cleared = true;
+  assert.equal(run(r.state, { type: 'mapAdvance' }).error, 'A próxima área ainda não existe');
+});
+
+test('ritmo: o robô vence as duas áreas — o Pântano leva alguns dias depois da Floresta', () => {
+  const { simulate, PROFILES } = require('../src/devcore/sim.js');
+  const m = simulate({ ...PROFILES.casual, days: 12 });
+  const day = (t) => (t - Date.UTC(2026, 0, 5, 9)) / 86400e3;
+  assert.ok(m.map.areas.localhost != null && m.map.areas.staging != null, 'as duas áreas concluídas');
+  const gap = day(m.map.areas.staging) - day(m.map.areas.localhost);
+  assert.ok(gap >= 3 && gap <= 9, `Pântano em ${gap.toFixed(1)} dias depois da Floresta`);
+});

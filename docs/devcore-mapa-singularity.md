@@ -242,7 +242,7 @@ custar tempo de recuperação além da entrada.
 | Área | Ambientação (proposta) |
 |---|---|
 | Floresta Localhost | Clareira à noite: árvores de circuito, pinheiros de fibra óptica, chão de musgo e vaga-lumes de LED |
-| Staging | Esteiras de pipeline com luzes de CI piscando |
+| Pântano Staging (feito) | Brejo à noite: água turva, névoa baixa, mangues com raízes de cabo, ciprestes com barba-de-velho, passarelas de madeira e fogos-fátuos do CI (verde ✓ / vermelho ✗) |
 | Production | Datacenter: racks, cabos e alarmes |
 
 ### 6.1 Música e efeitos sonoros (decidido, a implementar)
@@ -270,11 +270,37 @@ Tema de pipeline de deploy. Vencer o chefe abre a próxima área.
 | Área | Abre | Chefe | Novos inimigos (proposta) |
 |---|---|---|---|
 | 1. Floresta Localhost | Tier 2 | **Legacy Monolith** | Bug, Typo, Dependência quebrada |
-| 2. Staging | Chefe da Área 1 | **The Merge Conflict** | Flaky Test, Race Condition, Config Drift |
+| 2. Pântano Staging (feito) | Chefe da Área 1 | **The Merge Conflict** | Flaky Test, Race Condition, Config Drift |
 | 3. Production | Chefe da Área 2 | **Production Outage** | Memory Leak gigante, DDoS, Cold Start |
 
 Chefes têm fases (proposta): por exemplo, o Legacy Monolith ganha defesa a cada rodada até ser "refatorado" (dano
 acumulado), e a habilidade certa no momento certo faz diferença.
+
+### 7.1 Pântano Staging (Área 2, feito)
+
+Staging é "quase produção": parece firme, mas é turvo e nada se comporta igual duas vezes. Floresta (dev local) →
+Pântano (testes, instável) → Production (o topo).
+
+- **Transição:** o topo do mapa da Floresta, atrás do Legacy Monolith, já mostra o começo do Pântano — água turva,
+  névoa, juncos, uma lanterna de CI vermelha, uma placa "STAGING" e, no fundo da névoa, o vulto escuro da hidra com os
+  olhos acesos. Vencer o chefe mostra "Atravessar para o Pântano Staging"; o jogador atravessa quando quiser e os
+  Patches da run seguem valendo.
+- **Inimigos e traços** (cada um com um counter de pet):
+
+| Inimigo | Traço | Efeito | Counter |
+|---|---|---|---|
+| Flaky Test (fogo-fátuo ✓/✗) | Instável | 30% dos golpes falham, 30% acertam em dobro | Lint |
+| Race Condition (libélulas gêmeas) | Corrida | 35% de chance de agir duas vezes seguidas | Memo |
+| Config Drift (tronco com `.env`) | Deriva | O ataque muda a cada rodada (70–150%) | Git |
+
+- **Chefe — The Merge Conflict:** hidra de duas cabeças, `main` (roxa) e `feature` (laranja), cada uma uma unidade.
+  Traço **Merge**: se uma cabeça cair e a outra seguir de pé, ela volta 2 rodadas depois com 35% da vida — uma vez por
+  cabeça. Sem counter: pede um esquadrão que aguente uma luta longa (tanque na frente, suporte curando atrás) e derrube
+  as duas cabeças perto uma da outra.
+- **Escala:** os pets já estão perto do nível máximo quando chegam ao Pântano, então a dificuldade vem dos traços e do
+  chefe (`scale.base` 1,2), não de números muito maiores.
+- **Música:** mi frígio, lenta e arrastada, cravo abafado e bateria em meio-tempo. No chefe, **duas melodias ao mesmo
+  tempo**, uma esbarrando meio tom na outra — um merge conflict musical.
 
 **Áreas extras** (Cloud, Edge, …) abrem depois de algumas Singularities e dão o conteúdo longo.
 
@@ -286,7 +312,7 @@ acumulado), e a habilidade certa no momento certo faz diferença.
 |---|---|
 | Mapa abre (Tier 2) | ~2 h |
 | Área 1 vencida | ~3 dias |
-| Área 2 vencida | ~7 dias |
+| Área 2 vencida | ~7 dias (simulador: ~9 dias no casual, ~8 no dedicado — ~6 dias depois da Área 1) |
 | Área 3 vencida → Singularity | ~12 dias (1–2 semanas) |
 
 - Isso dá **~3–4 pontos por dia**, convivendo com a parte idle em vez de substituí-la.
@@ -368,6 +394,7 @@ A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa d
 | 2026-10-06 | **Esquadrão de 3** por enquanto |
 | 2026-10-06 | **Vida persiste entre batalhas**, recuperação de 25%/h (também offline), fora de combate até 25%, cura completa no descanso e consumível **Health Check** fabricável |
 | 2026-10-07 | Área 1 vira a **Floresta Localhost** (floresta tecnológica) no mapa e na arena, com elementos 3D também entre as trilhas |
+| 2026-10-08 | Área 2 vira o **Pântano Staging**: traços Instável, Corrida e Deriva (counters Lint, Memo, Git); chefe **The Merge Conflict** (duas cabeças com Merge); o topo da Floresta mostra o começo do Pântano; travessia manual depois do chefe |
 | 2026-10-07 | Montagem do esquadrão em **slots de arrastar e soltar** (Vanguarda, Centro, Retaguarda), com bônus por slot e extra para o papel certo; a ordem dos slots define quem apanha |
 | 2026-10-06 | Apresentação (a implementar): **música e efeitos sonoros** nas batalhas (inspiração em *Castlevania SOTN* e *Vampire Survivors*); **popup de item ganho/comprado** com ícone, nome e descrição; na aba Mapa a **cena de farm some** e o mapa ganha espaço; mapa em **perspectiva 3D** estilo *Inscryption*, com elementos 3D da área; **caminhos pontilhados e curvos** |
 

@@ -291,7 +291,7 @@ function act(s, action, now, c, log) {
       }
       return null;
     }
-    case 'mapSquad': case 'mapMove': case 'mapFight': case 'mapChoose': case 'mapBuy':
+    case 'mapSquad': case 'mapMove': case 'mapFight': case 'mapChoose': case 'mapBuy': case 'mapAdvance':
       return mapAct(s, action, now, c, log);
     case 'seen':
       s.discoveries.unseen = [];

@@ -87,7 +87,7 @@ function petStats(s, petId, c = CONTENT) {
 }
 
 /** Escala dos inimigos numa coluna: 1 + linear × coluna + quadrática × coluna² (a defesa cresce pela metade). */
-const scaleAt = (area, col) => 1 + area.scale.linear * col + area.scale.quad * col * col;
+const scaleAt = (area, col) => (area.scale.base || 1) * (1 + area.scale.linear * col + area.scale.quad * col * col);
 
 /** Atributos de um inimigo numa coluna da área (elite: vida e ataque × eliteMult). */
 function enemyStats(enemyId, col, area, c = CONTENT, kind = 'battle') {
@@ -122,7 +122,7 @@ function setupBattle(s, squad, enemyIds, col, areaId, c = CONTENT, kind = 'battl
   });
   const enemies = enemyIds.map((id, i) => {
     const st = enemyStats(id, col, area, c, kind);
-    return { uid: 'e' + i, side: 'enemy', id, name: c.enemy[id].name, traits: c.enemy[id].traits, boss: !!c.enemy[id].boss, hp: st.hp, maxHp: st.hp, atk: st.atk, def: st.def, baseDef: st.def, spd: st.spd };
+    return { uid: 'e' + i, side: 'enemy', id, name: c.enemy[id].name, traits: c.enemy[id].traits, boss: !!c.enemy[id].boss, hp: st.hp, maxHp: st.hp, atk: st.atk, baseAtk: st.atk, def: st.def, baseDef: st.def, spd: st.spd };
   });
   return {
     pets, enemies, items: [...(squad.items || [])],
@@ -145,7 +145,7 @@ function resolve(setup, seed, c = CONTENT) {
   const B = c.BATTLE;
   const rand = rng(seed >>> 0);
   const pets = setup.pets.map((u) => ({ ...u, energy: 0, alive: true, abilityUsed: false, drain: 0, burst: 1, attacked: false }));
-  const enemies = setup.enemies.map((u) => ({ ...u, energy: 0, alive: true, mark: 0, child: false }));
+  const enemies = setup.enemies.map((u) => ({ ...u, baseAtk: u.baseAtk || u.atk, energy: 0, alive: true, mark: 0, child: false, mergeAt: 0 }));
   const units = [...pets, ...enemies];
   const log = [];
   const squad = { shield: null, buffs: [], hasteUntil: 0, decoy: 0 };
@@ -211,6 +211,7 @@ function resolve(setup, seed, c = CONTENT) {
     if (t.hp <= 0) {
       t.alive = false; t.hp = 0;
       log.push({ r, k: 'down', t: t.uid });
+      if (has('merge', t) && !t.merged && enemies.some((x) => x !== t && x.alive && x.traits.includes('merge'))) { t.merged = true; t.mergeAt = r + c.TRAITS.merge.rounds; }
       if (has('split', t) && !t.child) {
         for (let i = 0; i < 2; i++) {
           const hp = Math.max(1, Math.round(t.maxHp * c.TRAITS.split.value));
@@ -222,24 +223,36 @@ function resolve(setup, seed, c = CONTENT) {
     }
   }
 
-  function enemyAct(e) {
+  function enemyAct(e, again = false) {
     const targets = alivePets();
     if (!targets.length) return;
     const t = [...targets].sort((a, b) => a.rank - b.rank)[0]; // o slot mais à frente que estiver de pé
     if (squad.decoy > 0) { squad.decoy -= 1; log.push({ r, k: 'decoy', a: e.uid, t: t.uid }); return; }
+    // Instável (Flaky Test): o golpe pode falhar ou sair em dobro.
+    let flaky = 1;
+    if (has('flaky', e)) {
+      const roll = rand();
+      if (roll < c.TRAITS.flaky.value) { log.push({ r, k: 'miss', a: e.uid, t: t.uid, f: 'flaky' }); return; }
+      if (roll < c.TRAITS.flaky.value * 2) flaky = 2;
+    }
     const crit = rand() < B.critChance;
     const def = has('pierce', e) ? 0 : t.def;
     const swarm = e.traits.includes('swarm') && countered('swarm', setup.counters, c) ? c.TRAITS.swarm.value : 1;
     const shield = squad.shield && squad.shield.until >= r ? 1 - squad.shield.value : 1;
-    const dmg = Math.max(1, Math.round(e.atk * swarm * 100 / (100 + def) * shield * (crit ? B.critMult : 1)));
+    const dmg = Math.max(1, Math.round(e.atk * swarm * flaky * 100 / (100 + def) * shield * (crit ? B.critMult : 1)));
     t.hp -= dmg;
-    log.push({ r, k: 'atk', a: e.uid, t: t.uid, v: dmg, c: crit || undefined });
+    log.push({ r, k: 'atk', a: e.uid, t: t.uid, v: dmg, c: crit || undefined, f: flaky > 1 ? 'flaky' : undefined });
     if (t.hp <= 0) {
       t.hp = 0; t.alive = false;
       log.push({ r, k: 'down', t: t.uid });
       if (items.has('rollback')) { useItem('rollback'); t.alive = true; t.hp = Math.round(t.maxHp * c.BATTLE_ITEMS.rollback.value); log.push({ r, k: 'revive', t: t.uid, v: t.hp }); }
     }
     checkAllyLow();
+    // Corrida (Race Condition): às vezes age de novo na mesma hora.
+    if (!again && e.alive && has('race', e) && rand() < c.TRAITS.race.value && aliveEnemies().length && alivePets().length) {
+      log.push({ r, k: 'race', a: e.uid });
+      enemyAct(e, true);
+    }
   }
 
   let win = false;
@@ -261,6 +274,21 @@ function resolve(setup, seed, c = CONTENT) {
       }
     }
     for (const e of aliveEnemies()) if (has('fortify', e)) { e.def = e.baseDef * (1 + c.TRAITS.fortify.value * r); log.push({ r, k: 'fortify', t: e.uid, v: Math.round(e.def) }); }
+    // Deriva (Config Drift): o ataque muda a cada rodada.
+    for (const e of aliveEnemies()) if (has('drift', e)) {
+      const D = c.TRAITS.drift;
+      const f = D.min + rand() * (D.max - D.min);
+      e.atk = e.baseAtk * f;
+      log.push({ r, k: 'drift', t: e.uid, v: Math.round(f * 100) });
+    }
+    // Merge: a cabeça caída volta se a outra ainda estiver de pé.
+    for (const e of enemies) if (!e.alive && e.mergeAt && e.mergeAt <= r) {
+      e.mergeAt = 0;
+      if (enemies.some((x) => x !== e && x.alive && x.traits.includes('merge'))) {
+        e.alive = true; e.hp = Math.round(e.maxHp * c.TRAITS.merge.value); e.energy = 0;
+        log.push({ r, k: 'revive', t: e.uid, v: e.hp, f: 'merge' });
+      }
+    }
     if (!aliveEnemies().length) { win = true; break; }
 
     // Ações por energia.

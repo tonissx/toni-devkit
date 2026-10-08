@@ -31,6 +31,19 @@ const ENEMIES = [
   { id: 'legacy-monolith', name: 'Legacy Monolith', sprite: 'monolith', color: '#6A6E66', hp: 280, atk: 10, def: 8, spd: 6, traits: ['fortify'], boss: true,
     lines: ['eu funciono desde 2009', 'não mexa no que funciona', 'refatorar? nunca.'],
     timeout: 'Faltando um commit para derrubá-lo, o Legacy Monolith foi declarado "crítico para o negócio" pela diretoria. O refactor foi congelado até o próximo trimestre, o time voltou para o backlog e o monólito segue de pé — mais rachado, mais teimoso e esperando a próxima tentativa.' },
+  // Área 2 — Pântano Staging
+  { id: 'flaky-test', name: 'Flaky Test', sprite: 'flaky', color: '#5EE7A0', hp: 70, atk: 12, def: 5, spd: 12, traits: ['flaky'],
+    lines: ['passou na minha máquina', 'retry 3/3...', 'verde. vermelho. verde.'] },
+  { id: 'race-condition', name: 'Race Condition', sprite: 'race', color: '#5EC8FF', hp: 55, atk: 10, def: 4, spd: 15, traits: ['race'],
+    lines: ['eu primeiro!', 'não, EU primeiro!', 'deadlock?'] },
+  { id: 'config-drift', name: 'Config Drift', sprite: 'drift', color: '#9C7A4E', hp: 130, atk: 10, def: 12, spd: 6, traits: ['drift'],
+    lines: ['quem mudou o .env?', 'em staging era diferente', 'funcionava ontem'] },
+  // Chefe da Área 2: uma hidra de duas cabeças (duas unidades com o traço Merge)
+  { id: 'conflict-main', name: 'Merge Conflict · main', sprite: 'hydra-main', color: '#8E6BFF', hp: 230, atk: 11, def: 8, spd: 8, traits: ['merge'], boss: true,
+    lines: ['<<<<<<< HEAD', 'a main é minha', 'ninguém faz push aqui'],
+    timeout: 'As duas cabeças do Merge Conflict passaram a noite discutindo qual versão manter. Ao amanhecer, alguém resolveu com "aceitar as duas" — e agora o pântano tem um bug novo para cada linha duplicada.' },
+  { id: 'conflict-feature', name: 'Merge Conflict · feature', sprite: 'hydra-feature', color: '#FF8A3D', hp: 200, atk: 13, def: 6, spd: 10, traits: ['merge'], boss: true,
+    lines: ['>>>>>>> feature', 'rebase? nunca', 'minha branch, minhas regras'] },
 ];
 
 module.exports = { ENEMIES };

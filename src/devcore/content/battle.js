@@ -94,6 +94,11 @@ const TRAITS = {
   split: { name: 'Divisão', text: 'Ao cair, vira dois com 40% da vida', value: 0.4, counter: { anyOf: ['relay'] }, counterText: 'Relay no esquadrão impede a divisão' },
   fortify: { name: 'Fortificação', text: '+6% de defesa a cada rodada', value: 0.06, counter: null, counterText: 'Sem counter: vença rápido (habilidades no início)' },
   pierce: { name: 'Perfuração', text: 'Ignora a defesa', counter: { anyOf: ['armo'] }, counterText: 'Armo no esquadrão devolve a defesa' },
+  // Área 2 — Pântano Staging
+  flaky: { name: 'Instável', text: 'Cada golpe tem 30% de chance de falhar e 30% de acertar em dobro', value: 0.3, counter: { anyOf: ['lint'] }, counterText: 'Lint no esquadrão estabiliza os golpes' },
+  race: { name: 'Corrida', text: '35% de chance de agir duas vezes seguidas', value: 0.35, counter: { anyOf: ['memo'] }, counterText: 'Memo no esquadrão trava a corrida' },
+  drift: { name: 'Deriva', text: 'O ataque muda a cada rodada (de 70% a 150%)', min: 0.7, max: 1.5, counter: { anyOf: ['git'] }, counterText: 'Git no esquadrão fixa a configuração' },
+  merge: { name: 'Merge', text: 'Se uma cabeça cair e a outra seguir de pé, ela volta 2 rodadas depois com 35% da vida (uma vez por cabeça)', value: 0.35, rounds: 2, counter: null, counterText: 'Sem counter: derrube as duas cabeças perto uma da outra' },
 };
 
 /** Desculpas de "lore" para o tempo esgotado em batalhas comuns (escolhida pela batalha; ver enemies.js `timeout`). */

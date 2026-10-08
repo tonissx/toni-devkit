@@ -84,7 +84,7 @@ function noise(t, dur, { gain = 0.15, hp = 1200, out = master } = {}) {
 
 /* ─────────────── instrumentos ─────────────── */
 const organ = (t, m, d, out) => { tone(t, m, d, { type: 'sine', gain: 0.07, attack: 0.03, out }); tone(t, m + 12, d, { type: 'sine', gain: 0.035, attack: 0.03, out }); tone(t, m + 19, d, { type: 'sine', gain: 0.018, attack: 0.03, out }); };
-const harpsichord = (t, m, d, out) => tone(t, m, d, { type: 'square', gain: 0.045, decay: 0.22, filter: 3200, out });
+const harpsichord = (t, m, d, out, filter = 3200) => tone(t, m, d, { type: 'square', gain: 0.045, decay: 0.22, filter, out });
 const strings = (t, m, d, out) => { tone(t, m, d, { type: 'sawtooth', gain: 0.03, attack: 0.18, filter: 1500, detune: -6, out }); tone(t, m, d, { type: 'sawtooth', gain: 0.03, attack: 0.18, filter: 1500, detune: 6, out }); };
 const bass = (t, m, d, out) => tone(t, m, d, { type: 'triangle', gain: 0.16, decay: d * 0.9, out });
 /* bateria: bumbo com peso (pancada + estalo), caixa com corpo, chimbal, prato e tons */
@@ -110,8 +110,15 @@ const DRUMS = {
     fill: { 12: 52, 13: 50, 14: 47, 15: 43 } },
   boss: { kick: [0, 1, 3, 6, 8, 9, 11, 14], snare: [4, 12], ghost: [2, 7, 10, 15], hats: 1, openHat: [6, 14], crashEvery: 1,
     fill: { 8: 55, 9: 55, 10: 52, 11: 52, 12: 48, 13: 48, 14: 43, 15: 43 } },
+  // Pântano: meio-tempo arrastado (caixa no 3), bumbo pesado e chimbal só nas semínimas; virada grave no fim.
+  staging: { kick: [0, 7, 10], snare: [8], ghost: [14], hats: 4, openHat: [12], crashEvery: 4,
+    fill: { 12: 47, 13: 45, 14: 43, 15: 40 } },
+  'staging-boss': { kick: [0, 2, 3, 6, 8, 10, 11, 14], snare: [4, 12], ghost: [7, 15], hats: 2, openHat: [6, 14], crashEvery: 1,
+    fill: { 8: 52, 10: 50, 11: 50, 12: 47, 13: 47, 14: 43, 15: 40 } },
 };
 const lead = (t, m, d, out) => { tone(t, m, d, { type: 'square', gain: 0.05, attack: 0.01, filter: 2600, out }); tone(t, m, d, { type: 'triangle', gain: 0.05, attack: 0.01, out }); };
+/** Segunda voz (o "outro lado" do merge conflict): serra filtrada, levemente desafinada. */
+const lead2 = (t, m, d, out) => { tone(t, m, d, { type: 'sawtooth', gain: 0.024, attack: 0.02, filter: 1800, detune: 14, out }); tone(t, m, d, { type: 'sine', gain: 0.02, attack: 0.02, out }); };
 
 /* ─────────────── temas (originais) ───────────────
  * chords: tríade por compasso (MIDI) · melody: 16 passos por compasso (semicolcheias; null = pausa) */
@@ -126,6 +133,36 @@ const THEMES = {
       [75, null, null, 74, 75, null, 79, null, 78, null, 75, null, 74, null, null, null],
       [77, null, 76, 77, 74, null, null, null, 80, null, 81, null, 77, null, 74, null],
       [73, null, null, 76, 73, null, 69, null, 70, null, 73, null, 76, 75, 73, null],
+    ],
+  },
+  // Pântano Staging: lento e arrastado — mi frígio (o fá natural por cima do mi), cravo abafado como se estivesse
+  // debaixo d'água, melodia esparsa e grave; a bateria arrasta em meio-tempo.
+  staging: {
+    bpm: 112, pulse: true, chromatic: true, arpFilter: 1300,
+    chords: [[52, 55, 59], [53, 57, 60], [52, 55, 59], [50, 53, 57]],
+    melody: [
+      [71, null, null, 72, 71, null, null, null, 67, null, 68, null, 67, null, null, null],
+      [69, null, null, null, 72, null, 71, null, 69, null, null, 65, 64, null, null, null],
+      [71, null, 72, null, 74, null, null, 75, 74, null, 72, null, 71, null, null, null],
+      [69, null, 68, null, 65, null, null, null, 64, null, 65, null, 62, null, null, null],
+    ],
+  },
+  // Chefe do Pântano (The Merge Conflict): duas melodias ao mesmo tempo, uma contra a outra — a segunda voz (counter)
+  // insiste meio tom acima ou abaixo da principal, como dois branches que não se entendem.
+  'staging-boss': {
+    bpm: 150, pulse: true, chromatic: true, timpani: true, arpFilter: 2000,
+    chords: [[52, 55, 59], [53, 56, 60], [48, 51, 55], [47, 51, 54]],
+    melody: [
+      [76, null, 77, null, 76, null, 71, null, 72, null, 71, null, 76, null, null, null],
+      [77, null, 80, null, 77, null, 76, null, 72, null, 71, null, 68, null, null, null],
+      [79, null, 78, null, 75, null, 72, null, 75, null, 78, null, 79, null, null, null],
+      [78, 77, 75, null, 74, null, 71, null, 70, null, 71, null, 66, null, 64, null],
+    ],
+    counter: [
+      [null, null, 76, null, 77, null, 72, null, null, 71, 72, null, 77, null, 76, null],
+      [76, null, 79, null, 78, null, 77, null, 71, null, 72, null, 67, null, 68, null],
+      [null, 79, null, 77, 76, null, 71, null, 74, null, 79, null, 78, null, 80, null],
+      [79, null, 76, null, 75, null, 72, null, 71, null, 70, null, 67, null, 63, null],
     ],
   },
   // Chefe: ainda mais rápido, bumbo dobrado, tímpanos e trítono (sol sustenido) no clímax.
@@ -171,7 +208,7 @@ export function startMusic(theme) {
       // Cravo: arpejo da tríade em semicolcheias; nos temas tensos, a vizinha cromática (meio tom acima) no fim de cada meio compasso.
       const arp = [0, 1, 2, 1, 0, 2, 1, 2];
       const tone8 = chord[arp[s % 8]] + 24;
-      harpsichord(next, T.chromatic && s % 8 === 7 ? chord[2] + 25 : tone8, step * 0.9, out);
+      harpsichord(next, T.chromatic && s % 8 === 7 ? chord[2] + 25 : tone8, step * 0.9, out, T.arpFilter || 3200);
       // Baixo: pulsando em colcheias (tenso) ou em semínimas.
       if (T.pulse ? s % 2 === 0 : s % 4 === 0) bass(next, chord[0] - 12 + (T.pulse && s % 8 === 6 ? 1 : 0), T.pulse ? step * 1.6 : step * 3.5, out);
       // Bateria: no último compasso do loop entra a virada de tons no lugar do groove.
@@ -190,6 +227,12 @@ export function startMusic(theme) {
         let len = 1;
         while (s + len < 16 && T.melody[bar][s + len] == null && len < 4) len++;
         lead(next, note, step * len * 0.95, out);
+      }
+      const other = T.counter && T.counter[bar][s];
+      if (other != null) {
+        let len = 1;
+        while (s + len < 16 && T.counter[bar][s + len] == null && len < 4) len++;
+        lead2(next, other, step * len * 0.95, out);
       }
       n++;
       next += step;

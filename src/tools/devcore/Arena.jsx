@@ -3,6 +3,7 @@ import { PetSprite, auraOf } from './PetSprite.jsx';
 import { VillainSprite } from './VillainSprite.jsx';
 import { PartIcon } from './PartArt.jsx';
 import { ForestBackdrop } from './ForestArt.jsx';
+import { SwampBackdrop } from './SwampArt.jsx';
 import { startMusic, stopMusic, sfx } from './audio.js';
 
 const { Modal, Button, Icon, ProgressBar } = DS;
@@ -85,7 +86,8 @@ function BattleSummary({ battle, snap, itemName }) {
 /** Efeito sonoro de um evento do log. */
 function sound(e) {
   if (e.k === 'atk') return e.a && e.a[0] === 'e' ? 'enemyHit' : e.c ? 'crit' : 'hit';
-  return { miss: 'miss', heal: 'heal', revive: 'heal', ab: 'ability', item: 'item', down: 'down', decoy: 'miss', split: 'down' }[e.k] || null;
+  if (e.k === 'revive' && e.f === 'merge') return 'ability';
+  return { miss: 'miss', heal: 'heal', revive: 'heal', ab: 'ability', item: 'item', down: 'down', decoy: 'miss', split: 'down', race: 'miss' }[e.k] || null;
 }
 
 /** Botão de som (liga/desliga) — o estado fica nas preferências do DevCore. */
@@ -99,13 +101,15 @@ export function SoundToggle({ sound: on, onSound }) {
 
 /** Texto curto de um evento do log (balão sobre a unidade). */
 function bubble(e, abilityName, itemName) {
-  if (e.k === 'atk') return (e.c ? 'crítico! ' : '') + '−' + e.v;
-  if (e.k === 'miss') return 'errou!';
+  if (e.k === 'atk') return (e.c ? 'crítico! ' : '') + (e.f === 'flaky' ? 'em dobro! ' : '') + '−' + e.v;
+  if (e.k === 'miss') return e.f === 'flaky' ? 'falhou!' : 'errou!';
+  if (e.k === 'race') return 'de novo!';
+  if (e.k === 'drift') return 'ataque ' + e.v + '%';
   if (e.k === 'heal') return '+' + e.v;
   if (e.k === 'ab') return abilityName(e.v) + '!';
   if (e.k === 'item') return itemName(e.v) + '!';
   if (e.k === 'decoy') return 'clone!';
-  if (e.k === 'revive') return 'rollback!';
+  if (e.k === 'revive') return e.f === 'merge' ? 'merge!' : 'rollback!';
   if (e.k === 'split') return 'dividiu!';
   if (e.k === 'fortify') return 'fortificou';
   return '';
@@ -123,15 +127,22 @@ function FeedLine({ e, unit, abilityName, itemName, age }) {
   let body = null;
   if (e.k === 'atk') {
     icon = e.a === 'item' ? 'bug-off' : e.c ? 'zap' : 'sword';
-    body = <><N uid={e.a} /> {e.a === 'item' ? 'atingiu' : 'atacou'} <N uid={e.t} />{e.c && <em className="is-crit"> crítico</em>} <span className="is-dmg">−{e.v}</span></>;
-  } else if (e.k === 'miss') { icon = 'wind'; body = <><N uid={e.t} /> esquivou do ataque de <N uid={e.a} /></>; }
+    body = <><N uid={e.a} /> {e.a === 'item' ? 'atingiu' : 'atacou'} <N uid={e.t} />{e.c && <em className="is-crit"> crítico</em>}{e.f === 'flaky' && <em className="is-crit"> em dobro</em>} <span className="is-dmg">−{e.v}</span></>;
+  } else if (e.k === 'miss') {
+    icon = 'wind';
+    body = e.f === 'flaky' ? <><N uid={e.a} /> falhou o golpe em <N uid={e.t} /> (instável)</> : <><N uid={e.t} /> esquivou do ataque de <N uid={e.a} /></>;
+  } else if (e.k === 'race') { icon = 'fast-forward'; body = <><N uid={e.a} /> agiu de novo (corrida)</>; }
+  else if (e.k === 'drift') { icon = 'shuffle'; body = <><N uid={e.t} /> derivou: ataque em <span className={e.v > 100 ? 'is-dmg' : 'is-heal'}>{e.v}%</span></>; }
   else if (e.k === 'heal') {
     icon = 'heart-plus';
     body = e.a && e.a !== e.t && unit(e.a) ? <><N uid={e.a} /> curou <N uid={e.t} /> <span className="is-heal">+{e.v}</span></> : <><N uid={e.t} /> recuperou <span className="is-heal">+{e.v}</span></>;
   } else if (e.k === 'ab') { icon = 'sparkles'; body = <><N uid={e.a} /> ativou <em className="is-ability">{abilityName(e.v)}</em></>; }
   else if (e.k === 'item') { icon = 'package-open'; body = <>Consumível usado: <em className="is-itemname">{itemName(e.v)}</em></>; }
   else if (e.k === 'down') { icon = 'skull'; body = <><N uid={e.t} /> caiu</>; }
-  else if (e.k === 'revive') { icon = 'rotate-ccw'; body = <>Rollback: <N uid={e.t} /> voltou com <span className="is-heal">{e.v}</span> de vida</>; }
+  else if (e.k === 'revive') {
+    icon = e.f === 'merge' ? 'git-merge' : 'rotate-ccw';
+    body = e.f === 'merge' ? <><N uid={e.t} /> fez merge e voltou com <span className="is-dmg">{e.v}</span> de vida</> : <>Rollback: <N uid={e.t} /> voltou com <span className="is-heal">{e.v}</span> de vida</>;
+  }
   else if (e.k === 'split') { icon = 'copy'; body = <><N uid={e.a} /> se dividiu: <N uid={e.t} /> apareceu</>; }
   else if (e.k === 'fortify') { icon = 'shield'; body = <><N uid={e.t} /> se fortificou (defesa {e.v})</>; }
   else if (e.k === 'decoy') { icon = 'ghost'; body = <><N uid={e.a} /> acertou um clone em vez de <N uid={e.t} /></>; }
@@ -170,7 +181,8 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   const log = battle.log;
   const done = i >= log.length;
   // Música: tema da área (ou do chefe) enquanto a luta passa; fanfarra de vitória/derrota no fim.
-  React.useEffect(() => { startMusic(battle.kind === 'boss' ? 'boss' : area.id); return () => stopMusic(); }, []);
+  // Chefe: tema próprio da área (o da Floresta se chama só 'boss').
+  React.useEffect(() => { startMusic(battle.kind === 'boss' ? (area.id === 'localhost' ? 'boss' : area.id + '-boss') : area.id); return () => stopMusic(); }, []);
   React.useEffect(() => {
     if (done) { stopMusic(); sfx(battle.win ? 'victory' : 'defeat'); return; }
     if (i > 0) { const s = sound(log[i - 1]); if (s) sfx(s); }
@@ -179,7 +191,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     if (done) return undefined;
     // Habilidades ficam mais tempo na tela (faixa com o nome + efeito); quedas e fortificação passam rápido.
     const k = log[i] && log[i].k;
-    const t = setTimeout(() => setI((x) => x + 1), k === 'ab' ? STEP_MS * 2.2 : k === 'fortify' || k === 'down' ? STEP_MS / 2 : STEP_MS);
+    const t = setTimeout(() => setI((x) => x + 1), k === 'ab' ? STEP_MS * 2.2 : k === 'fortify' || k === 'down' || k === 'drift' || k === 'race' ? STEP_MS / 2 : STEP_MS);
     return () => clearTimeout(t);
   }, [i, done]);
 
@@ -235,7 +247,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     const acting = cur && cur.a === u.uid;
     const hit = cur && cur.t === u.uid && (cur.k === 'atk' || cur.k === 'miss');
     // O balão vai em quem recebe (dano, cura, revive, fortificação, clone novo) ou, senão, em quem age.
-    const popAt = cur && (['atk', 'miss', 'heal', 'revive', 'fortify', 'split'].includes(cur.k) ? cur.t : cur.a);
+    const popAt = cur && (['atk', 'miss', 'heal', 'revive', 'fortify', 'split', 'drift'].includes(cur.k) ? cur.t : cur.a);
     const say = popAt === u.uid ? bubble(cur, abilityName, itemName) : '';
     return (
       <div className={'dc-arena__unit is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (acting ? ' is-acting' : '') + (hit ? ' is-hit' : '') + (u.front ? ' is-front' : '') + (u.boss ? ' is-boss' : '')
@@ -269,6 +281,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
       </>}>
       <div className={'dc-arena dc-arena--' + area.arena + (burstHit ? ' is-shake' : '') + (done ? ' is-done' : '')} aria-label={'Arena ' + area.name}>
         {area.arena === 'localhost' && <ForestBackdrop />}
+        {area.arena === 'staging' && <SwampBackdrop />}
         <BattleFeed log={log} upto={done ? log.length : i + 1} unit={(uid) => battle.units.find((u) => u.uid === uid)} abilityName={abilityName} itemName={itemName} />
         <div className={'dc-arena__side is-pets' + (on.shield ? ' is-shielded' : '') + (on.buff ? ' is-buffed' : '') + (on.haste ? ' is-hasted' : '')}>
           {on.shield && <span className="dc-fx-shield" aria-hidden="true" />}
