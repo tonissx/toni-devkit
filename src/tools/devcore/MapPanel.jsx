@@ -81,20 +81,28 @@ const BOARD_H = 400;    // altura de referência para decorações antigas (não
 
 /**
  * A próxima área espiando atrás do chefe: uma cortina de névoa sombria, em pé, logo atrás do chefe (no 3D, tudo o que
- * fica atrás dela some) e, saindo da névoa, só a silhueta escura do próximo chefe com os olhos brilhando.
+ * fica atrás dela some). A silhueta do próximo chefe fica no horizonte (ver TeaseBeast).
  */
 function BoardTease({ map, w, line }) {
   return (
     <>
       <div className={'dc-board__tease is-' + map.next.arena} style={{ height: line + 60 }} aria-hidden="true" />
       <span className="dc-prop is-upright is-anchored dc-tease__fog" style={{ left: w / 2, top: line, width: w + 80, zIndex: Math.round(line) }} aria-hidden="true" />
-      <span className="dc-prop is-upright is-anchored dc-tease__beast" style={{ left: w / 2 + 150, top: line + 8, zIndex: Math.round(line + 8) }} aria-hidden="true">
-        <VillainSprite id="hydra-main" color="#07060B" size={190} />
-      </span>
-      <span className="dc-prop is-upright is-anchored dc-tease__beast" style={{ left: w / 2 + 215, top: line + 4, zIndex: Math.round(line + 4) }} aria-hidden="true">
-        <VillainSprite id="hydra-feature" color="#07060B" size={165} />
-      </span>
     </>
+  );
+}
+
+/**
+ * Silhueta do próximo chefe no horizonte: centralizada, no limite do fundo do tabuleiro, saindo da névoa. Fica fora da
+ * mesa 3D (senão a cortina de névoa a esconderia). As duas cabeças lado a lado, voltadas para fora, mexendo só um pouco.
+ */
+function TeaseBeast({ next, edge, cx }) {
+  if (next.arena !== 'staging') return null;
+  return (
+    <div className="dc-tease__horizon" style={{ top: edge + 30, left: cx }} aria-hidden="true" title={'Algo espreita além do chefe: ' + next.name}>
+      <span className="dc-tease__head is-left"><VillainSprite id="hydra-feature" color="#07060B" size={128} /></span>
+      <span className="dc-tease__head is-right"><VillainSprite id="hydra-main" color="#07060B" size={136} /></span>
+    </div>
   );
 }
 
@@ -197,6 +205,9 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
   const boxRef = React.useRef(null);
   const [w, setW] = React.useState(900);
   const [lift, setLift] = React.useState(0); // vazio que a inclinação deixa no topo (o tabuleiro sobe essa medida)
+  const [edge, setEdge] = React.useState(0); // topo visível da mesa inclinada, no contêiner (o horizonte do tabuleiro)
+  const [cx, setCx] = React.useState(0);     // centro da mesa, no contêiner
+  const HEADROOM = map.next ? 110 : 0;       // com a próxima área espiando: espaço acima da borda para a silhueta
   React.useLayoutEffect(() => {
     if (!ref.current) return undefined;
     setW(ref.current.offsetWidth);
@@ -208,8 +219,13 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
     if (!ref.current || !boxRef.current) return;
     // Distância do topo do contêiner até o topo visível da mesa inclinada (não muda quando o contêiner sobe).
     const gap = Math.max(0, Math.round(ref.current.getBoundingClientRect().top - boxRef.current.getBoundingClientRect().top) - 8);
-    if (Math.abs(gap - lift) > 2) setLift(gap);
-  }, [w]);
+    const want = Math.max(0, gap - HEADROOM);
+    if (Math.abs(want - lift) > 2) setLift(want);
+    if (Math.abs(gap + 8 - edge) > 2) setEdge(gap + 8);
+    const t = ref.current.getBoundingClientRect();
+    const mid = Math.round(t.left + t.width / 2 - boxRef.current.getBoundingClientRect().left);
+    if (Math.abs(mid - cx) > 2) setCx(mid);
+  }, [w, HEADROOM]);
   const H = boardH(map);
   // Onde a próxima área começa (topo do tabuleiro, atrás do chefe): abaixo desta linha é a área atual.
   const teaseLine = map.next ? padTop(map) - 20 : 0;
@@ -271,6 +287,7 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
   }, [layoutKey]);
   return (
     <div ref={boxRef} className="dc-board" role="group" aria-label={'Mapa ' + map.area.name} style={{ marginTop: -lift }}>
+      {map.next && edge > 0 && <TeaseBeast next={map.next} edge={edge} cx={cx} />}
       <div ref={ref} className={'dc-board__table dc-board--' + map.area.arena} style={{ height: H }}>
         <div className="dc-board__mat" />
         {map.next && <BoardTease map={map} w={w} line={teaseLine} />}

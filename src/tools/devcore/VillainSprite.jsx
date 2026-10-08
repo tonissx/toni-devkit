@@ -336,7 +336,7 @@ function Hydra({ c, locked, side }) {
   return (
     <g>
       <ellipse className="v-ripple" cx="32" cy="57" rx="24" ry="3.6" fill="none" stroke="#5EC8FF" strokeWidth="1" opacity=".45" />
-      <g className="v-body" transform={flip < 0 ? 'translate(64 0) scale(-1 1)' : undefined}>
+      <g transform={flip < 0 ? 'translate(64 0) scale(-1 1)' : undefined}><g className="v-body">
         {/* pescoço em S saindo da água */}
         <path d="M18 58 C14 46 30 42 26 30 C23 22 28 14 38 13 L44 20 C36 21 34 26 36 32 C40 44 26 48 30 58 Z" fill={c} stroke="#120B1E" strokeWidth="1.5" strokeLinejoin="round" />
         <path d="M22 54 c3 -2 6 -2 8 0 M24 46 c3 -2 6 -1 7 1 M28 37 c2 -2 5 -2 7 0" stroke="#120B1E" strokeWidth="1" fill="none" opacity=".45" />
@@ -349,7 +349,7 @@ function Hydra({ c, locked, side }) {
           <path d="M39 10.5 L48 12" stroke="#120B1E" strokeWidth="1.8" strokeLinecap="round" />
           <circle cx="56" cy="16" r="1" fill="#120B1E" />
         </>}
-      </g>
+      </g></g>
       {!locked && <text x={side === 'feature' ? 6 : 26} y="50" fontSize="5.5" fontFamily="monospace" fontWeight="700" fill="#F2EEDF" opacity=".75">{mark}</text>}
       {!locked && <text x={side === 'feature' ? 8 : 26} y="43" fontSize="5.5" fontFamily="monospace" fontWeight="700" fill="#F2EEDF" opacity=".45">=======</text>}
     </g>

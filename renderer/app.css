@@ -804,13 +804,21 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   animation: dc-fog-drift 12s ease-in-out infinite;
 }
 @keyframes dc-fog-drift { 50% { background-position: 24px 0, -20px 0, 0 0; } }
-.dc-tease__beast { filter: none !important; -webkit-mask-image: linear-gradient(to top, transparent 0, #000 38%); mask-image: linear-gradient(to top, transparent 0, #000 38%); }
-.dc-tease__beast svg { display: block; overflow: visible; }
-.dc-tease__beast text, .dc-tease__beast path[fill="#F2EEDF"], .dc-tease__beast .v-ripple, .dc-tease__beast circle[fill="#120B1E"] { display: none; }
-.dc-tease__beast [stroke="#120B1E"] { stroke: #000; }
-.dc-tease__beast .v-glow { fill: #FFD24A; animation: dc-eye-glow 3.5s ease-in-out infinite; filter: drop-shadow(0 0 3px #FFB02E) drop-shadow(0 0 7px rgba(255, 176, 46, .7)); }
+/* Silhueta no horizonte: duas cabeças lado a lado (pescoços juntos no centro, cabeças para fora), balançando de leve */
+.dc-tease__horizon { position: absolute; z-index: 4; display: flex; align-items: flex-end; pointer-events: none; transform: translate(-50%, -100%);
+  -webkit-mask-image: linear-gradient(to top, transparent 0, #000 42%); mask-image: linear-gradient(to top, transparent 0, #000 42%); }
+.dc-tease__head { display: block; transform-origin: 50% 100%; }
+.dc-tease__head.is-left { margin-right: -40px; animation: dc-head-sway 5.5s ease-in-out infinite; }
+.dc-tease__head.is-right { animation: dc-head-sway 6.5s ease-in-out infinite reverse; animation-delay: -1.7s; }
+@keyframes dc-head-sway { 0%, 100% { transform: rotate(-1.6deg) translateY(0); } 50% { transform: rotate(1.6deg) translateY(-2px); } }
+.dc-tease__head svg { display: block; overflow: visible; }
+.dc-tease__head .v-body { animation: none !important; } /* sem o "ameaçar" do sprite: só o balanço lento */
+.dc-tease__head text, .dc-tease__head path[fill="#F2EEDF"], .dc-tease__head .v-ripple, .dc-tease__head circle[fill="#120B1E"], .dc-tease__head ellipse[fill="#000"] { display: none; }
+.dc-tease__head [stroke="#120B1E"] { stroke: #000; }
+.dc-tease__head .v-glow { fill: #FFD24A; animation: dc-eye-glow 3.5s ease-in-out infinite; filter: drop-shadow(0 0 3px #FFB02E) drop-shadow(0 0 7px rgba(255, 176, 46, .7)); }
+.dc-tease__head.is-right .v-glow { animation-delay: -1.2s; }
 @keyframes dc-eye-glow { 0%, 100% { opacity: 1; } 46% { opacity: 1; } 50% { opacity: .15; } 54% { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .dc-tease__fog, .dc-tease__beast .v-glow { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .dc-tease__fog, .dc-tease__head, .dc-tease__head .v-glow { animation: none; } }
 /* Fogos-fátuos do CI: luzes que flutuam e alternam verde (✓) / vermelho (✗) */
 .dc-wisps { position: absolute; inset: 0 0 auto 0; height: 100%; pointer-events: none; z-index: 3; }
 .dc-wisps i { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #9CFFCB; box-shadow: 0 0 10px 3px rgba(94, 231, 160, .55); animation: dc-wisp 6s ease-in-out infinite; }
