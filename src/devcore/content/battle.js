@@ -98,6 +98,11 @@ const TRAITS = {
   flaky: { name: 'Instável', text: 'Cada golpe tem 30% de chance de falhar e 30% de acertar em dobro', value: 0.3, counter: { anyOf: ['lint'] }, counterText: 'Lint no esquadrão estabiliza os golpes' },
   race: { name: 'Corrida', text: '35% de chance de agir duas vezes seguidas', value: 0.35, counter: { anyOf: ['memo'] }, counterText: 'Memo no esquadrão trava a corrida' },
   drift: { name: 'Deriva', text: 'O ataque muda a cada rodada (de 70% a 150%)', min: 0.7, max: 1.5, counter: { anyOf: ['git'] }, counterText: 'Git no esquadrão fixa a configuração' },
+  // Área 3 — Pico Production
+  coldstart: { name: 'Partida a frio', text: 'Lento nas 3 primeiras rodadas; depois aquece: +60% de ataque', rounds: 3, slow: 0.5, value: 0.6, counter: { anyOf: ['relay'] }, counterText: 'Relay no esquadrão pré-aquece (sem o bônus)' },
+  flood: { name: 'Inundação', text: 'A cada 3 rodadas chama mais um igual com 40% da vida (até 6 inimigos)', every: 3, value: 0.4, max: 6, counter: { anyOf: ['lint'] }, counterText: 'Lint no esquadrão faz o rate limiting' },
+  grow: { name: 'Vazamento', text: 'Cresce 12% em ataque e vida a cada rodada', value: 0.12, counter: { anyOf: ['query'] }, counterText: 'Query no esquadrão libera a memória' },
+  blackout: { name: 'Apagão', text: 'A cada 5 rodadas um raio: o esquadrão perde a vez e leva 8% da vida', every: 5, value: 0.08, counter: null, counterText: 'Sem counter: leve vida sobrando e cura (suporte, Rollback)' },
   merge: { name: 'Merge', text: 'Se uma cabeça cair e a outra seguir de pé, ela volta 2 rodadas depois com 35% da vida (uma vez por cabeça)', value: 0.35, rounds: 2, counter: null, counterText: 'Sem counter: derrube as duas cabeças perto uma da outra' },
 };
 

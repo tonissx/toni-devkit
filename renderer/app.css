@@ -662,6 +662,9 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .villain-svg .v-drift-a { animation: v-drift 1.3s steps(1) infinite; }
 .villain-svg .v-drift-b { animation: v-drift 1.3s steps(1) infinite reverse; }
 @keyframes v-drift { 0%, 49% { transform: scaleX(1); } 50%, 100% { transform: scaleX(.45); } }
+/* Pico: barra "carregando" do Cold Start */
+.villain-svg .v-load { transform-origin: left center; animation: v-load 3s ease-in-out infinite; }
+@keyframes v-load { 0% { transform: scaleX(.05); } 80%, 100% { transform: scaleX(1); } }
 @keyframes v-buzz { to { transform: translate(2px, -2px) rotate(8deg); } }
 @keyframes v-argue { to { transform: rotate(10deg); } }
 @keyframes v-hover { 50% { transform: translateY(-4px); } }
@@ -772,6 +775,42 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 }
 .dc-board--localhost { background: repeating-linear-gradient(92deg, #3B2A1D 0 14px, #43301F 14px 30px, #38281B 30px 41px); } /* mesa de madeira */
 .dc-board__mat { position: absolute; inset: 22px 26px; pointer-events: none; border-radius: 12px; background: radial-gradient(ellipse at 50% 40%, #222A37, #161B24 75%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05); }
+/* Pico Production: mesa de pedra fria; chão de neve e rocha, com gelo azulado e a luz pálida da tempestade */
+.dc-board--production { background: repeating-linear-gradient(92deg, #3A3F48 0 14px, #424852 14px 30px, #363B44 30px 41px); }
+.dc-board--production .dc-board__mat {
+  background:
+    radial-gradient(ellipse 22% 14% at 26% 30%, rgba(255, 255, 255, .10), transparent),
+    radial-gradient(ellipse 26% 14% at 72% 64%, rgba(190, 230, 250, .10), transparent),
+    radial-gradient(ellipse 34% 22% at 50% 45%, #5A6878, transparent 70%),
+    radial-gradient(ellipse 55% 50% at 50% 55%, rgba(220, 235, 255, .10), transparent 70%),
+    radial-gradient(ellipse at 50% 50%, #4B5768, #2C3442 70%, #161B24);
+  box-shadow: inset 0 0 90px rgba(0, 0, 0, .75), inset 0 0 0 1px rgba(200, 225, 245, .1);
+}
+.dc-board--production .dc-trail { stroke: rgba(235, 242, 250, .7); } /* trilha na neve */
+/* Neve caindo (tabuleiro e arena) */
+.dc-snow { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 3; }
+.dc-snow i { position: absolute; top: -8px; width: var(--sz, 3px); height: var(--sz, 3px); border-radius: 50%; background: #F4FAFF; opacity: .8; animation: dc-snowfall 8s linear infinite; }
+@keyframes dc-snowfall { to { transform: translate(-30px, 900px); } }
+/* Arena do Pico: plataforma de pedra no cume, cordilheira e tempestade, relâmpagos ao longe */
+.dc-arena--production { background: linear-gradient(to top, #39414E 0, #4A5363 38px, transparent 38px), radial-gradient(ellipse at 50% 0%, #2E3850, #0C111C 72%); }
+.dc-peak__range { position: absolute; left: 0; right: 0; bottom: 36px; width: 100%; height: 120px; }
+.dc-arena__lightning { position: absolute; inset: 0; background: radial-gradient(ellipse at 62% 10%, rgba(220, 230, 255, .55), transparent 55%); opacity: 0; animation: dc-lightning 7s linear infinite; }
+@keyframes dc-lightning { 0%, 86%, 92%, 100% { opacity: 0; } 87%, 89% { opacity: 1; } 88% { opacity: .2; } }
+/* Transição para o Pico (topo do Pântano): névoa de tempestade azul-acinzentada */
+.dc-tease__fog.is-production {
+  background:
+    radial-gradient(ellipse 40% 26% at 35% 84%, rgba(160, 175, 200, .16), transparent 70%),
+    radial-gradient(ellipse 36% 22% at 70% 86%, rgba(160, 175, 200, .12), transparent 70%),
+    linear-gradient(to top, rgba(14, 18, 26, 0) 0, rgba(14, 18, 26, .78) 14%, rgba(9, 12, 18, .96) 34%, #06080C 60%);
+}
+.dc-tease__horizon.is-production { align-items: flex-end; -webkit-mask-image: linear-gradient(to top, transparent 0, #000 30%); mask-image: linear-gradient(to top, transparent 0, #000 30%); }
+.dc-tease__range { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); }
+.dc-tease__head.is-titan { position: relative; animation: dc-head-sway 7s ease-in-out infinite; }
+.dc-tease__head.is-titan .v-glow:not([d^="M22"]) { display: none; } /* no escuro: só os olhos */
+.dc-tease__head.is-titan path[d^="M5 44"], .dc-tease__head.is-titan circle { display: none; }
+.dc-tease__head.is-titan path[stroke="#9AA3B2"] { stroke: #05070B; }
+.dc-tease__flash { position: absolute; left: -200px; right: -200px; top: -60px; bottom: 0; background: radial-gradient(ellipse at 50% 20%, rgba(210, 225, 255, .5), transparent 60%); opacity: 0; animation: dc-lightning 9s linear infinite; animation-delay: -3s; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .dc-snow i, .dc-arena__lightning, .dc-tease__flash, .dc-tease__head.is-titan { animation: none; } .dc-snow { display: none; } }
 /* Pântano Staging: mesa de madeira escura e úmida; chão de brejo — lama, água turva e manchas de lodo */
 .dc-board--staging { background: repeating-linear-gradient(92deg, #2B2219 0 14px, #31271C 14px 30px, #282017 30px 41px); }
 .dc-board--staging .dc-board__mat {
@@ -1189,6 +1228,9 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   background: radial-gradient(circle, #FFF3B0 0 12%, #FFB347 30%, rgba(255, 107, 53, .5) 50%, transparent 70%); animation: dc-fx-burst .45s ease-out both; }
 @keyframes dc-fx-burst { from { opacity: 1; transform: translate(-50%, -50%) scale(.2); } to { opacity: 0; transform: translate(-50%, -50%) scale(1.5); } }
 .dc-arena.is-shake { animation: dc-fx-shake .35s; }
+.dc-fx-blackout { position: absolute; inset: 0; z-index: 4; pointer-events: none; background: radial-gradient(ellipse at 60% 0%, rgba(235, 240, 255, .95), rgba(160, 180, 230, .35) 45%, rgba(0, 0, 0, .5)); animation: dc-fx-blackout .9s ease-out forwards; }
+@keyframes dc-fx-blackout { 0% { opacity: 0; } 8% { opacity: 1; } 20% { opacity: .15; } 30% { opacity: .9; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .dc-fx-blackout { animation: none; opacity: .3; } }
 @keyframes dc-fx-shake { 20% { transform: translate(-4px, 2px); } 40% { transform: translate(4px, -2px); } 60% { transform: translate(-3px, 1px); } 80% { transform: translate(2px, -1px); } }
 /* Index: mira sobre o inimigo marcado */
 .dc-fx-reticle { position: absolute; left: 50%; top: 28px; width: 62px; height: 62px; transform: translate(-50%, -50%); pointer-events: none; z-index: 2;

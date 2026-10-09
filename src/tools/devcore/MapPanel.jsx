@@ -74,7 +74,8 @@ const ROW_H = 82;       // distância entre colunas do mapa (que viram linhas, d
 const LANE_W = 150;     // distância entre trilhas (lado a lado, centralizadas)
 const PAD_TOP = 70;
 const PAD_BOTTOM = 110; // espaço do esquadrão antes da primeira linha
-const PAD_TEASE = 270;  // com uma próxima área: faixa extra no topo, atrás do chefe, onde ela começa a aparecer
+const PAD_TEASE = 270;
+const ZONE = { localhost: 'forest', staging: 'swamp', production: 'peak' }; // zona da mata de cada área  // com uma próxima área: faixa extra no topo, atrás do chefe, onde ela começa a aparecer
 const padTop = (map) => (map.next ? PAD_TEASE : PAD_TOP);
 const boardH = (map) => padTop(map) + (map.area.columns + 1) * ROW_H + PAD_BOTTOM;
 const BOARD_H = 400;    // altura de referência para decorações antigas (não usada no tabuleiro vertical)
@@ -87,7 +88,7 @@ function BoardTease({ map, w, line }) {
   return (
     <>
       <div className={'dc-board__tease is-' + map.next.arena} style={{ height: line + 60 }} aria-hidden="true" />
-      <span className="dc-prop is-upright is-anchored dc-tease__fog" style={{ left: w / 2, top: line, width: w + 80, zIndex: Math.round(line) }} aria-hidden="true" />
+      <span className={'dc-prop is-upright is-anchored dc-tease__fog is-' + map.next.arena} style={{ left: w / 2, top: line, width: w + 80, zIndex: Math.round(line) }} aria-hidden="true" />
     </>
   );
 }
@@ -97,6 +98,19 @@ function BoardTease({ map, w, line }) {
  * mesa 3D (senão a cortina de névoa a esconderia). As duas cabeças lado a lado, voltadas para fora, mexendo só um pouco.
  */
 function TeaseBeast({ next, edge, cx }) {
+  // Pico: a cordilheira no escuro e o titã da tempestade — só os olhos; um raio de vez em quando revela tudo.
+  if (next.arena === 'production') {
+    return (
+      <div className="dc-tease__horizon is-production" style={{ top: edge + 30, left: cx }} aria-hidden="true" title={'Algo espreita além do chefe: ' + next.name}>
+        <svg className="dc-tease__range" viewBox="0 0 520 150" width="520" height="150">
+          <path d="M0 150 L0 104 L60 70 L100 92 L170 34 L220 76 L260 14 L300 70 L350 40 L410 88 L460 60 L520 96 L520 150 Z" fill="#05070B" />
+          <path d="M170 34 L184 50 L174 52 L160 44 Z M260 14 L276 32 L264 34 L250 24 Z M350 40 L362 54 L350 54 Z" fill="#8A9AAE" opacity=".5" className="dc-tease__snowcap" />
+        </svg>
+        <span className="dc-tease__head is-titan"><VillainSprite id="titan" color="#07080D" size={150} /></span>
+        <i className="dc-tease__flash" />
+      </div>
+    );
+  }
   if (next.arena !== 'staging') return null;
   return (
     <div className="dc-tease__horizon" style={{ top: edge + 30, left: cx }} aria-hidden="true" title={'Algo espreita além do chefe: ' + next.name}>
@@ -110,6 +124,7 @@ function TeaseBeast({ next, edge, cx }) {
 function AreaProps({ arena, w, h, spots, tease = 0 }) {
   if (arena === 'localhost') return <ForestProps w={w} h={h} spots={spots} />;
   if (arena === 'staging') return <ForestProps w={w} h={h} spots={spots} fireflies={false} wisps="all" />;
+  if (arena === 'production') return <ForestProps w={w} h={h} spots={spots} fireflies={false} snow />;
   return null;
 }
 
@@ -279,8 +294,9 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
         const e = Math.hypot((px - w / 2) / (w / 2), (py - H / 2) / (H / 2));
         if (((h >>> 12) % 100) / 100 < Math.min(0.55, Math.max(0, (e - 0.7) * 0.8))) continue;
         // Zona: o Pântano inteiro; na Floresta, a faixa do topo vai virando pântano (transição suave).
-        const swampOdds = map.area.arena === 'staging' ? 1 : map.next ? Math.min(1, Math.max(0, (teaseLine - py) / 110 + 0.5)) : 0;
-        const zone = ((h >>> 9) % 100) / 100 < swampOdds ? 'swamp' : 'forest';
+        // Zona de cada lugar: a da área; no topo, a da próxima área vai aparecendo (transição suave).
+        const nextOdds = map.next ? Math.min(1, Math.max(0, (teaseLine - py) / 110 + 0.5)) : 0;
+        const zone = ((h >>> 9) % 100) / 100 < nextOdds ? ZONE[map.next.arena] : ZONE[map.area.arena];
         if (zone === 'swamp' && ((h >>> 14) % 100) < 30) continue; // pântano: mais água aberta, menos mato
         out.push({ id, x: px, y: py, h, zone });
       }
@@ -640,7 +656,8 @@ export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio
         <div className={'dc-mapbox is-cleared' + (map.next ? ' is-' + map.next.arena : '')}>
           <Icon name="crown" size={16} />
           <span><b>{map.area.name} concluída!</b> {map.boss.name} caiu.{' '}
-            {map.next ? <>Além dele começa o <b>{map.next.name}</b>. {map.next.description} Os Patches da run seguem com você.</> : 'A próxima área chega em breve.'}</span>
+            {map.next ? <>Além dele começa o <b>{map.next.name}</b>. {map.next.description} Os Patches da run seguem com você.</>
+              : map.area.id === 'production' ? 'Você venceu o pipeline inteiro — da floresta ao topo. A Singularity chega em breve.' : 'A próxima área chega em breve.'}</span>
           {map.next && <Button variant="primary" icon="footprints" onClick={() => act({ type: 'mapAdvance' })}>Atravessar para {map.next.name}</Button>}
         </div>
       )}

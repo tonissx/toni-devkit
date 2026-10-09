@@ -493,11 +493,64 @@ test('pântano: vencer o Legacy Monolith libera a travessia; o Pântano começa 
   assert.ok(r.log.some((e) => e.type === 'mapOpen' && e.area === 'staging' && e.from === 'localhost'));
   const v = snapshot(r.state, T0).map;
   assert.equal(v.area.name, 'Pântano Staging');
-  assert.equal(v.next, null);
+  assert.equal(v.next.id, 'production');
   assert.equal(v.nodes.find((n) => n.type === 'boss').enemies.length, 2);
-  // Staging ainda não tem próxima área: atravessar de novo é recusado mesmo depois do chefe.
+  // Pântano → Pico; o Pico é a última área (por enquanto): atravessar de lá é recusado mesmo depois do chefe.
+  r.state.run.map.cleared = true;
+  r = run(r.state, { type: 'mapAdvance' });
+  assert.equal(r.state.run.map.area, 'production');
+  assert.equal(snapshot(r.state, T0).map.next, null);
   r.state.run.map.cleared = true;
   assert.equal(run(r.state, { type: 'mapAdvance' }).error, 'A próxima área ainda não existe');
+});
+
+/* ─────────────── Área 3 — Pico Production ─────────────── */
+const peakLogs = (s, squad, enemies, seeds = 20, col = 3, kind = 'battle') => {
+  const out = [];
+  for (let seed = 1; seed <= seeds; seed++) out.push(battle.resolve(battle.setupBattle(s, squad, enemies, col, 'production', CONTENT, kind), seed));
+  return out;
+};
+
+test('pico: traços novos agem sem o counter e somem com o pet certo (Relay, Lint, Query)', () => {
+  const s = make({ pets: { byte: 12, armo: 12, git: 12, relay: 12, lint: 12, query: 12 } });
+  const base = squadOf(['armo', 'byte', 'git']);
+  // Partida a frio: lento nas primeiras rodadas e aquece depois; o Relay pré-aquece (sem o bônus).
+  const cold = peakLogs(s, base, ['cold-start', 'cold-start'], 5, 8, 'elite').flatMap((r) => r.log);
+  assert.ok(cold.some((e) => e.k === 'warm' && e.r === CONTENT.TRAITS.coldstart.rounds + 1));
+  assert.ok(!peakLogs(s, squadOf(['armo', 'byte', 'relay']), ['cold-start', 'cold-start'], 5, 8, 'elite').some((r) => r.log.some((e) => e.k === 'warm')));
+  // Inundação: chama mais corvos (até o limite); o Lint faz o rate limiting.
+  const flood = peakLogs(s, squadOf(['armo', 'git', 'query']), ['ddos', 'ddos'], 10, 6);
+  assert.ok(flood.some((r) => r.log.some((e) => e.k === 'split' && e.f === 'flood')));
+  for (const r of flood) assert.ok(r.units.filter((u) => u.side === 'enemy').length <= CONTENT.TRAITS.flood.max);
+  assert.ok(!peakLogs(s, squadOf(['armo', 'git', 'lint']), ['ddos', 'ddos'], 10, 6).some((r) => r.log.some((e) => e.f === 'flood')));
+  // Vazamento: cresce a cada rodada; o Query libera a memória.
+  const grow = peakLogs(s, squadOf(['armo', 'byte', 'git']), ['leak-giant'], 3).flatMap((r) => r.log).filter((e) => e.k === 'grow');
+  assert.ok(grow.length > 0 && grow.every((e) => e.v > 0));
+  assert.ok(!peakLogs(s, squadOf(['query', 'byte', 'git']), ['leak-giant'], 3).some((r) => r.log.some((e) => e.k === 'grow')));
+});
+
+test('pico: Apagão — a cada N rodadas o esquadrão leva dano e perde a vez', () => {
+  const s = make({ pets: { byte: 12, armo: 12, relay: 12 } });
+  const sq = squadOf(['armo', 'byte', 'relay'], { slots: { vanguard: 'armo', center: 'byte', rear: 'relay' } });
+  const B = CONTENT.TRAITS.blackout;
+  const r = battle.resolve(battle.setupBattle(s, sq, ['production-outage'], 8, 'production', CONTENT, 'boss'), 3);
+  const outs = r.log.filter((e) => e.k === 'blackout');
+  assert.ok(outs.length > 0 && outs.every((e) => e.r % B.every === 0));
+  for (const o of outs) {
+    // nenhum pet age (ataca ou cura por conta própria) na rodada do apagão; todos levam o raio
+    assert.ok(!r.log.some((e) => e.r === o.r && ['p0', 'p1', 'p2'].includes(e.a) && (e.k === 'atk' || e.k === 'heal')));
+    assert.equal(r.log.filter((e) => e.r === o.r && e.a === 'storm').length, r.units.filter((u) => u.side === 'pet').length);
+  }
+});
+
+test('ritmo: o robô vence as três áreas — o jogo completo leva ~2 semanas no uso casual', () => {
+  const { simulate, PROFILES } = require('../src/devcore/sim.js');
+  const m = simulate({ ...PROFILES.casual, days: 17 });
+  const day = (t) => (t - Date.UTC(2026, 0, 5, 9)) / 86400e3;
+  for (const id of ['localhost', 'staging', 'production']) assert.ok(m.map.areas[id] != null, 'área concluída: ' + id);
+  const total = day(m.map.areas.production);
+  assert.ok(total >= 9 && total <= 17, `Pico concluído no dia ${total.toFixed(1)}`);
+  assert.ok(day(m.map.areas.production) - day(m.map.areas.staging) >= 2, 'o Pico não acaba numa tarde');
 });
 
 test('ritmo: o robô vence as duas áreas — o Pântano leva alguns dias depois da Floresta', () => {

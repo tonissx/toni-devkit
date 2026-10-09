@@ -145,7 +145,7 @@ function resolve(setup, seed, c = CONTENT) {
   const B = c.BATTLE;
   const rand = rng(seed >>> 0);
   const pets = setup.pets.map((u) => ({ ...u, energy: 0, alive: true, abilityUsed: false, drain: 0, burst: 1, attacked: false }));
-  const enemies = setup.enemies.map((u) => ({ ...u, baseAtk: u.baseAtk || u.atk, energy: 0, alive: true, mark: 0, child: false, mergeAt: 0 }));
+  const enemies = setup.enemies.map((u) => ({ ...u, baseAtk: u.baseAtk || u.atk, baseSpd: u.spd, energy: 0, alive: true, mark: 0, child: false, mergeAt: 0 }));
   const units = [...pets, ...enemies];
   const log = [];
   const squad = { shield: null, buffs: [], hasteUntil: 0, decoy: 0 };
@@ -281,6 +281,43 @@ function resolve(setup, seed, c = CONTENT) {
       e.atk = e.baseAtk * f;
       log.push({ r, k: 'drift', t: e.uid, v: Math.round(f * 100) });
     }
+    // Partida a frio (Cold Start): lento no começo, depois aquece.
+    for (const e of aliveEnemies()) if (e.traits.includes('coldstart')) {
+      const C = c.TRAITS.coldstart;
+      if (r <= C.rounds) e.spd = Math.max(1, Math.round(e.baseSpd * C.slow));
+      else if (r === C.rounds + 1) {
+        e.spd = e.baseSpd;
+        if (has('coldstart', e)) { e.baseAtk *= 1 + C.value; e.atk = e.baseAtk; log.push({ r, k: 'warm', t: e.uid }); }
+      }
+    }
+    // Vazamento (Memory Leak gigante): cresce a cada rodada.
+    for (const e of aliveEnemies()) if (has('grow', e) && r > 1) {
+      const g = c.TRAITS.grow.value;
+      const add = Math.round(e.maxHp * g);
+      e.maxHp += add; e.hp += add; e.baseAtk *= 1 + g; e.atk = e.baseAtk;
+      log.push({ r, k: 'grow', t: e.uid, v: add });
+    }
+    // Inundação (DDoS): a cada N rodadas, cada um de pé chama mais um (até o limite).
+    if (r > 1 && (r - 1) % c.TRAITS.flood.every === 0) {
+      for (const e of aliveEnemies().filter((x) => has('flood', x))) {
+        if (aliveEnemies().length >= c.TRAITS.flood.max) break;
+        const hp = Math.max(1, Math.round(e.maxHp * c.TRAITS.flood.value));
+        const kid = { ...e, uid: 'e' + nextEnemy++, hp, maxHp: hp, alive: true, energy: 0, mark: 0, child: true };
+        enemies.push(kid); units.push(kid);
+        log.push({ r, k: 'split', a: e.uid, t: kid.uid, v: hp, f: 'flood' });
+      }
+    }
+    // Apagão (Production Outage): um raio a cada N rodadas — o esquadrão perde a vez e leva dano.
+    let blackout = false;
+    if (aliveEnemies().some((e) => e.traits.includes('blackout')) && r % c.TRAITS.blackout.every === 0) {
+      blackout = true;
+      log.push({ r, k: 'blackout' });
+      for (const p of alivePets()) {
+        const dmg = Math.max(1, Math.round(p.maxHp * c.TRAITS.blackout.value));
+        p.hp = Math.max(1, p.hp - dmg);
+        log.push({ r, k: 'atk', a: 'storm', t: p.uid, v: dmg });
+      }
+    }
     // Merge: a cabeça caída volta se a outra ainda estiver de pé.
     for (const e of enemies) if (!e.alive && e.mergeAt && e.mergeAt <= r) {
       e.mergeAt = 0;
@@ -293,6 +330,7 @@ function resolve(setup, seed, c = CONTENT) {
 
     // Ações por energia.
     for (const u of units) if (u.alive) u.energy += u.spd + (u.side === 'pet' && squad.hasteUntil >= r ? B.energyPerAction : 0);
+    if (blackout) for (const p of pets) p.energy = Math.min(p.energy, 0); // apagão: ninguém do esquadrão age nesta rodada
     for (let guard = 0; guard < 200; guard++) {
       const next = units.filter((u) => u.alive && u.energy >= B.energyPerAction)
         .sort((a, b) => b.energy - a.energy || (a.side === 'pet' ? -1 : 1) - (b.side === 'pet' ? -1 : 1))[0];

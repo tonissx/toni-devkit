@@ -113,6 +113,11 @@ const DRUMS = {
   // Pântano: meio-tempo arrastado (caixa no 3), bumbo pesado e chimbal só nas semínimas; virada grave no fim.
   staging: { kick: [0, 7, 10], snare: [8], ghost: [14], hats: 4, openHat: [12], crashEvery: 4,
     fill: { 12: 47, 13: 45, 14: 43, 15: 40 } },
+  // Pico: galope épico; chefe do Pico: bumbo duplo contínuo e prato em todo compasso.
+  production: { kick: [0, 3, 6, 8, 11, 14], snare: [4, 12], ghost: [10], hats: 2, openHat: [14], crashEvery: 2,
+    fill: { 12: 55, 13: 52, 14: 48, 15: 43 } },
+  'production-boss': { kick: [0, 1, 2, 3, 6, 7, 8, 9, 10, 11, 14, 15], snare: [4, 12], ghost: [5, 13], hats: 1, openHat: [7, 15], crashEvery: 1,
+    fill: { 8: 57, 9: 55, 10: 52, 11: 50, 12: 48, 13: 45, 14: 43, 15: 40 } },
   'staging-boss': { kick: [0, 2, 3, 6, 8, 10, 11, 14], snare: [4, 12], ghost: [7, 15], hats: 2, openHat: [6, 14], crashEvery: 1,
     fill: { 8: 52, 10: 50, 11: 50, 12: 47, 13: 47, 14: 43, 15: 40 } },
 };
@@ -163,6 +168,35 @@ const THEMES = {
       [76, null, 79, null, 78, null, 77, null, 71, null, 72, null, 67, null, 68, null],
       [null, 79, null, 77, 76, null, 71, null, 74, null, 79, null, 78, null, 80, null],
       [79, null, 76, null, 75, null, 72, null, 71, null, 70, null, 67, null, 63, null],
+    ],
+  },
+  // Pico Production: épico e rápido — dó menor, com o sexto grau abaixado (lá bemol) dando peso; cravo brilhante e
+  // melodia larga, subindo até o topo; tímpanos marcando como trovões.
+  production: {
+    bpm: 150, pulse: true, chromatic: false, timpani: true, arpFilter: 3600,
+    chords: [[48, 51, 55], [44, 48, 51], [46, 50, 53], [43, 47, 50]],
+    melody: [
+      [72, null, null, 75, 79, null, 77, null, 75, null, 74, null, 75, null, null, null],
+      [80, null, null, 79, 77, null, 75, null, 72, null, 75, null, 80, null, null, null],
+      [77, null, 79, null, 82, null, 80, null, 79, null, 77, null, 74, null, null, null],
+      [79, null, 77, null, 75, null, 74, null, 71, null, 74, null, 67, null, 71, null],
+    ],
+  },
+  // Chefe do Pico (Production Outage): o mais rápido de todos, cromático, com a segunda voz em oitavas como um alarme.
+  'production-boss': {
+    bpm: 168, pulse: true, chromatic: true, timpani: true, arpFilter: 3000,
+    chords: [[48, 51, 55], [49, 52, 56], [44, 48, 51], [43, 47, 50]],
+    melody: [
+      [84, null, 83, null, 84, null, 79, null, 80, null, 79, null, 75, null, 72, null],
+      [85, null, 84, null, 80, null, 77, null, 76, null, 77, null, 80, null, null, null],
+      [80, null, 82, null, 84, null, 87, null, 86, null, 84, null, 80, null, 79, null],
+      [79, 80, 79, null, 77, null, 74, null, 71, null, 74, null, 79, null, 83, null],
+    ],
+    counter: [
+      [72, null, null, null, 72, null, null, null, 72, null, null, null, 72, null, null, null],
+      [73, null, null, null, 73, null, null, null, 73, null, null, null, 73, null, null, null],
+      [68, null, null, null, 68, null, null, null, 68, null, null, null, 68, null, null, null],
+      [67, null, null, null, 67, null, null, null, 71, null, null, null, 71, null, null, null],
     ],
   },
   // Chefe: ainda mais rápido, bumbo dobrado, tímpanos e trítono (sol sustenido) no clímax.

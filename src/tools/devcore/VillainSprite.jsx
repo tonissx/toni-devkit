@@ -358,8 +358,111 @@ function Hydra({ c, locked, side }) {
 const HydraMain = (p) => <Hydra {...p} side="main" />;
 const HydraFeature = (p) => <Hydra {...p} side="feature" />;
 
+/* ─────────────── Área 3 — Pico Production ─────────────── */
+
+/** Cold Start — golem de gelo ainda "carregando": cristais, olhos azuis e uma barra de progresso no peito. */
+function ColdStart({ c, locked }) {
+  return (
+    <g>
+      <g className="v-body">
+        {/* pernas e braços de gelo */}
+        <path d="M21 46 L20 58 L28 58 L28 46 Z M36 46 L36 58 L44 58 L43 46 Z" fill="#7FB8D8" stroke="#1E3A52" strokeWidth="1.3" />
+        <path d="M14 26 L6 40 L12 44 L19 32 Z M50 26 L58 40 L52 44 L45 32 Z" fill="#9FD8F5" stroke="#1E3A52" strokeWidth="1.3" strokeLinejoin="round" />
+        {/* corpo facetado */}
+        <path d="M18 18 L32 10 L46 18 L48 40 L38 48 L26 48 L16 40 Z" fill={c} stroke="#1E3A52" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M32 10 L46 18 L48 40 L38 48 L32 30 Z" fill="#1E3A52" opacity=".18" />
+        <path d="M18 18 L32 10 L32 30 Z" fill="#fff" opacity=".35" />
+        {/* cristais no topo */}
+        <path d="M24 15 L22 4 L28 12 Z M33 11 L34 1 L38 12 Z M41 15 L46 6 L45 17 Z" fill="#DDF3FF" stroke="#1E3A52" strokeWidth="1" strokeLinejoin="round" />
+        {!locked && <>
+          <path d="M23 25 h7 M34 25 h7" stroke="#1E3A52" strokeWidth="2.6" strokeLinecap="round" />
+          <circle className="v-glow" cx="26.5" cy="27" r="1.6" fill="#5EC8FF" /><circle className="v-glow" cx="37.5" cy="27" r="1.6" fill="#5EC8FF" />
+          {/* "carregando..." */}
+          <rect x="22" y="35" width="20" height="5" rx="2" fill="#1E3A52" />
+          <rect className="v-load" x="23" y="36" width="18" height="3" rx="1.5" fill="#7CF5B0" />
+        </>}
+      </g>
+      {!locked && <path d="M8 14 l2 2 M10 14 l-2 2 M54 10 l2 2 M56 10 l-2 2 M58 30 l2 2 M60 30 l-2 2" stroke="#DDF3FF" strokeWidth="1.1" strokeLinecap="round" opacity=".8" />}
+    </g>
+  );
+}
+
+/** DDoS — bando de corvos da tempestade, cada um com o olho vermelho, uma ponta de raio no meio do bando. */
+function Ddos({ c, locked }) {
+  const crow = (x, y, s, i) => (
+    <g key={i} className={'v-bot v-bot--' + (i % 3)} transform={`translate(${x} ${y}) scale(${s})`}>
+      <path d="M-12 -2 Q-6 -10 0 -3 Q6 -10 12 -2 Q6 -4 3 2 L0 4 L-3 2 Q-6 -4 -12 -2 Z" fill={c} stroke="#0B0D16" strokeWidth=".8" strokeLinejoin="round" />
+      <path d="M0 4 L-1.5 8 L1.5 8 Z" fill="#0B0D16" />
+      {!locked && <circle cx="1.5" cy="-0.5" r="1" fill="#FF4A3D" />}
+    </g>
+  );
+  return (
+    <g>
+      {[[32, 22, 1.5], [14, 32, 1.1], [50, 34, 1.15], [24, 46, 0.95], [44, 50, 0.9], [36, 8, 0.8]].map(([x, y, s], i) => crow(x, y, s, i))}
+      {!locked && <path className="v-glow" d="M30 30 L26 38 L31 38 L28 46 L36 35 L31 35 L34 30 Z" fill="#FFE27A" opacity=".85" />}
+    </g>
+  );
+}
+
+/** Memory Leak gigante — a gosma do Leaky, adulta: transbordando, com objetos presos dentro e a poça crescendo. */
+function LeakGiant({ c, eye, locked }) {
+  return (
+    <g>
+      <ellipse className="v-puddle" cx="32" cy="57" rx="28" ry="4" fill={c} opacity=".5" />
+      <g className="v-body">
+        <path d="M5 56 Q2 34 14 22 Q22 6 34 8 Q48 8 54 22 Q63 34 59 56 Z" fill={c} />
+        <path d="M14 22 Q22 6 34 8 Q30 12 26 24 Q18 22 14 22 Z" fill="#fff" opacity=".18" />
+        {/* objetos que nunca foram liberados */}
+        <rect x="14" y="40" width="7" height="7" rx="1" fill="#000" opacity=".25" transform="rotate(-12 17 43)" />
+        <text x="40" y="49" fontSize="6" fontFamily="monospace" fontWeight="700" fill="#000" opacity=".3">{'{…}'}</text>
+        <circle cx="47" cy="38" r="3" fill="#000" opacity=".22" />
+        {!locked && <>
+          <ellipse cx="24" cy="28" rx="5.4" ry="4.6" fill={eye} /><ellipse cx="40" cy="28" rx="5.4" ry="4.6" fill={eye} />
+          <circle cx="25" cy="29" r="2.2" fill={VOID} /><circle cx="39" cy="29" r="2.2" fill={VOID} />
+          <path d="M17 20 L29 24 M47 20 L35 24" stroke={VOID} strokeWidth="2.4" strokeLinecap="round" />
+          <path d="M20 39 q12 9 24 0" stroke={VOID} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+          <path d="M25 41 l2 3 l2 -2.6 M33 42 l2 2.8 l2 -3" fill={EYE} />
+        </>}
+      </g>
+      <path className="v-drip" d="M12 54 q3 5 0 8 q-3 -3 0 -8 z" fill={c} />
+      <path className="v-drip v-drip--b" d="M52 54 q3 5 0 8 q-3 -3 0 -8 z" fill={c} />
+    </g>
+  );
+}
+
+/**
+ * Production Outage — titã de tempestade: corpo de nuvem carregada, coroa de pára-raios, olhos de relâmpago e um
+ * status vermelho no peito. Raios saem das mãos.
+ */
+function Titan({ c, locked }) {
+  return (
+    <g>
+      <g className="v-body">
+        {/* braços de nuvem com raios */}
+        <path d="M14 30 Q4 32 3 42 Q6 46 10 44 Q12 36 18 36 Z M50 30 Q60 32 61 42 Q58 46 54 44 Q52 36 46 36 Z" fill={c} stroke="#121726" strokeWidth="1.3" />
+        {!locked && <path className="v-glow" d="M5 44 L2 52 L6 51 L3 60 M59 44 L62 52 L58 51 L61 60" stroke="#FFE27A" strokeWidth="1.6" fill="none" strokeLinejoin="round" />}
+        {/* corpo de nuvem */}
+        <path d="M16 54 Q8 52 10 44 Q6 36 14 32 Q12 20 24 18 Q28 10 36 12 Q46 12 48 22 Q58 24 54 34 Q60 42 52 48 Q52 56 44 56 Z" fill={c} stroke="#121726" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M24 18 Q28 10 36 12 Q34 16 30 20 Q26 18 24 18 Z M14 32 Q12 24 18 22 Q18 28 20 32 Z" fill="#fff" opacity=".12" />
+        {/* coroa de pára-raios */}
+        <path d="M22 18 L20 6 L24 14 M32 12 L32 0 L34 12 M42 16 L46 5 L44 17" stroke="#9AA3B2" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        <circle cx="20" cy="6" r="1.4" fill="#FFE27A" /><circle cx="32" cy="0.5" r="1.4" fill="#FFE27A" /><circle cx="46" cy="5" r="1.4" fill="#FFE27A" />
+        {!locked && <>
+          {/* olhos de relâmpago e testa franzida */}
+          <path d="M20 27 L30 30 M44 27 L34 30" stroke="#121726" strokeWidth="2.6" strokeLinecap="round" />
+          <path className="v-glow" d="M22 31 L29 32.5 L23 34.5 Z M42 31 L35 32.5 L41 34.5 Z" fill="#FFE27A" />
+          <path d="M25 41 L28 39 L31 42 L34 39 L37 42 L40 39" stroke="#121726" strokeWidth="1.8" fill="none" strokeLinejoin="round" />
+          {/* status no peito */}
+          <circle className="v-glow" cx="32" cy="49" r="3" fill="#FF4A3D" />
+        </>}
+      </g>
+    </g>
+  );
+}
+
 const VILLAINS = { leaky: Leaky, flicker: Flicker, swarm: Swarm, forky: Forky, zero: Zero, bug: Bug, typo: Typo, dep: Dep, monolith: Monolith,
-  flaky: Flaky, race: Race, drift: Drift, 'hydra-main': HydraMain, 'hydra-feature': HydraFeature };
+  flaky: Flaky, race: Race, drift: Drift, 'hydra-main': HydraMain, 'hydra-feature': HydraFeature,
+  coldstart: ColdStart, ddos: Ddos, leakgiant: LeakGiant, titan: Titan };
 
 /** Sprite de um vilão. state: active | blocked | defeated · locked = silhueta (nunca visto). */
 export function VillainSprite({ id, color, state = 'active', size = 56, locked = false, className = '' }) {

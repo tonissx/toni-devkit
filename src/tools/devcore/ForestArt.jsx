@@ -5,6 +5,7 @@
  */
 
 import { swampPiece, Wisps } from './SwampArt.jsx';
+import { peakPiece, Snowfall } from './PeakArt.jsx';
 
 const LED = '#7CF5B0';
 const CYAN = '#5EE7FF';
@@ -188,8 +189,9 @@ function pieceFor(h) {
  * de LED (floresta) e/ou fogos-fátuos do CI (pântano; wisps: altura da faixa ou 'all').
  * Memorizada: só redesenha quando o traçado ou a largura mudam.
  */
-export const ForestProps = React.memo(function ForestProps({ spots, w, h, fireflies = true, wisps = null }) {
-  const pieces = spots.map((sp) => ({ sp, P: sp.zone === 'swamp' ? swampPiece(sp.h) : pieceFor(sp.h) }));
+const PIECE = { swamp: swampPiece, peak: peakPiece };
+export const ForestProps = React.memo(function ForestProps({ spots, w, h, fireflies = true, wisps = null, snow = false }) {
+  const pieces = spots.map((sp) => ({ sp, P: (PIECE[sp.zone] || pieceFor)(sp.h) }));
   return (
     <>
       {/* Sombras no chão (uma camada só, barata): elipse suave projetada para o lado de cada peça em pé, mais o contato com o chão. */}
@@ -220,9 +222,10 @@ export const ForestProps = React.memo(function ForestProps({ spots, w, h, firefl
       </div>}
       {wisps === 'all' && <Wisps n={18} seed="board" />}
       {typeof wisps === 'number' && <Wisps n={6} seed="tease" band={wisps} />}
+      {snow && <Snowfall n={40} seed="board" />}
     </>
   );
-}, (a, b) => a.spots === b.spots && a.w === b.w && a.h === b.h && a.wisps === b.wisps);
+}, (a, b) => a.spots === b.spots && a.w === b.w && a.h === b.h && a.wisps === b.wisps && a.snow === b.snow);
 
 /** Fundo da arena: clareira na Floresta Localhost à noite (árvores de circuito, vaga-lumes). */
 export function ForestBackdrop() {

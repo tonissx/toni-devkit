@@ -55,10 +55,10 @@ function generate(area, seed, c = CONTENT) {
       else if (r < area.crossChance) nodes[nodeId(col, lane + 1)].next.push(nodeId(col + 1, lane));
     }
   }
-  // Elite é escolha de risco, não pedágio: todo ponto tem ao menos uma saída que não é elite.
+  // Elite e deploy expresso são escolhas (risco ou atalho pago), não pedágio: todo ponto tem ao menos uma saída comum.
   for (const n of Object.values(nodes)) {
     const outs = n.next.map((id) => nodes[id]);
-    if (outs.length && outs.every((x) => x.type === 'elite')) {
+    if (outs.length && outs.every((x) => x.type === 'elite' || x.type === 'express')) {
       const x = outs[Math.floor(rand() * outs.length)];
       x.type = 'battle';
       x.group = pick(area.groups.battle, rand);

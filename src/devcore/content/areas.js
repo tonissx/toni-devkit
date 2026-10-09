@@ -1,6 +1,7 @@
 'use strict';
 /**
- * Áreas do mapa (tema: pipeline de deploy): Floresta Localhost → Pântano Staging. Ver docs/devcore-mapa-singularity.md.
+ * Áreas do mapa (tema: pipeline de deploy): Floresta Localhost → Pântano Staging → Pico Production.
+ * Ver docs/devcore-mapa-singularity.md.
  * next: a área que abre ao vencer o chefe (o jogador atravessa quando quiser; os Patches da run seguem valendo).
  *
  * Mapa: `lanes` trilhas × `columns` colunas + o chefe; gerado pela semente da run ao abrir a área.
@@ -56,6 +57,23 @@ const AREAS = [
       boss: [['conflict-main', 'conflict-feature']],
     },
     boss: 'conflict-main',
+    next: 'production',
+  },
+  {
+    id: 'production', name: 'Pico Production', arena: 'production', unlock: { area: 'staging' },
+    description: 'O topo do pipeline: um cume nevado com o datacenter cravado na rocha. Aqui tudo é real, exposto — e nada pode cair.',
+    lanes: 3, columns: 9,
+    fixed: { 0: ['battle', 'battle', 'battle'], 4: ['shop', 'event', 'rest'], 8: ['rest', 'rest', 'rest'] },
+    shortcutChance: 0.5,
+    crossChance: 0.4,
+    costs: [1.2e13, 1.8e13, 2.7e13, 3.6e13, 4.5e13, 5.4e13, 6.6e13, 7.8e13, 9e13, 1.2e14],  // a produção já estabiliza aqui: custos mais planos
+    scale: { base: 1.3, linear: 0.25, quad: 0.06, eliteMult: 1.2 },
+    groups: {
+      battle: [['cold-start', 'typo'], ['ddos', 'ddos'], ['leak-giant'], ['cold-start', 'ddos'], ['flaky-test', 'ddos'], ['leak-giant', 'race-condition']],
+      elite: [['cold-start', 'cold-start'], ['leak-giant', 'ddos'], ['zero', 'cold-start'], ['config-drift', 'leak-giant']],
+      boss: [['production-outage', 'ddos']],
+    },
+    boss: 'production-outage',
   },
 ];
 

@@ -118,7 +118,7 @@ function botSquad(s, enemies, kind, c, now = null) {
 }
 
 /** Próximo passo do robô no mapa: { action, cost } ou null. Guarda Compute para lutas que valem a pena. */
-function botMapChoice(s, now, c) {
+function botMapChoice(s, now, c, budget = Infinity) {
   const m = s.run.map;
   if (!m || m.cleared) return null;
   if (m.pending && m.pending.kind !== 'shop') {
@@ -140,10 +140,12 @@ function botMapChoice(s, now, c) {
     const min = n.type === 'elite' ? 0.8 : 0.5;
     return { n, cost, chance: p, squad, score: p >= min ? p + (n.type === 'elite' ? 0.2 : 0) : -1 };
   }).filter((o) => o.score >= 0).sort((a, b) => b.score - a.score || a.cost - b.cost);
-  const best = options[0];
+  // Prefere o que cabe no orçamento (o que tem + o que vai guardar): não fica parado esperando um elite caro.
+  const fits = options.filter((o) => o.cost <= budget);
+  const best = (fits.length ? fits : options)[0];
   if (!best) return null;
   const action = best.squad ? { type: 'mapFight', node: best.n.id, squad: best.squad } : { type: 'mapMove', node: best.n.id };
-  return { action, cost: best.cost };
+  return { action, cost: best.cost, boss: best.n.type === 'boss' };
 }
 
 /**
@@ -159,10 +161,12 @@ function playMap(s, now, c, step, marks, reserveHours) {
       const o = node.offers.find((x) => !x.bought && x.kind === 'patch' && x.price <= s.run.resources.compute.amount * 0.5);
       if (o) { s = step({ type: 'mapBuy', offer: o.index }).state; continue; }
     }
-    const pick = botMapChoice(s, now, c);
-    if (!pick) return 0;
     const rate = production(s, now, c).rate;
-    if (pick.cost > s.run.resources.compute.amount) return pick.cost <= rate * reserveHours * 3600 ? pick.cost : 0;
+    const pick = botMapChoice(s, now, c, s.run.resources.compute.amount + rate * reserveHours * 3600);
+    if (!pick) return 0;
+    // Guarda para o próximo ponto se ele couber em ~reserveHours de produção; o chefe vale até um dia de espera.
+    const hours = pick.boss ? Math.max(reserveHours, 12) : reserveHours;
+    if (pick.cost > s.run.resources.compute.amount) return pick.cost <= rate * hours * 3600 ? pick.cost : 0;
     const before = m.lastBattle ? m.lastBattle.id : 0;
     s = step(pick.action).state;
     const lb = s.run.map.lastBattle;

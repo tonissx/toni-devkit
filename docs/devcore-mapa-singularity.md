@@ -243,7 +243,7 @@ custar tempo de recuperação além da entrada.
 |---|---|
 | Floresta Localhost | Clareira à noite: árvores de circuito, pinheiros de fibra óptica, chão de musgo e vaga-lumes de LED |
 | Pântano Staging (feito) | Brejo à noite: água turva, névoa baixa, mangues com raízes de cabo, ciprestes com barba-de-velho, passarelas de madeira e fogos-fátuos do CI (verde ✓ / vermelho ✗) |
-| Production | Datacenter: racks, cabos e alarmes |
+| Pico Production (feito) | Cume nevado à noite, tempestade permanente: pinheiros nevados, rochas, cristais de gelo, torres de resfriamento e de energia, blocos do datacenter cravados na rocha, neve caindo e relâmpagos |
 
 ### 6.1 Música e efeitos sonoros (decidido, a implementar)
 
@@ -271,7 +271,7 @@ Tema de pipeline de deploy. Vencer o chefe abre a próxima área.
 |---|---|---|---|
 | 1. Floresta Localhost | Tier 2 | **Legacy Monolith** | Bug, Typo, Dependência quebrada |
 | 2. Pântano Staging (feito) | Chefe da Área 1 | **The Merge Conflict** | Flaky Test, Race Condition, Config Drift |
-| 3. Production | Chefe da Área 2 | **Production Outage** | Memory Leak gigante, DDoS, Cold Start |
+| 3. Pico Production (feito) | Chefe da Área 2 | **Production Outage** | Memory Leak gigante, DDoS, Cold Start |
 
 Chefes têm fases (proposta): por exemplo, o Legacy Monolith ganha defesa a cada rodada até ser "refatorado" (dano
 acumulado), e a habilidade certa no momento certo faz diferença.
@@ -302,6 +302,30 @@ Pântano (testes, instável) → Production (o topo).
 - **Música:** mi frígio, lenta e arrastada, cravo abafado e bateria em meio-tempo. No chefe, **duas melodias ao mesmo
   tempo**, uma esbarrando meio tom na outra — um merge conflict musical.
 
+### 7.2 Pico Production (Área 3, feito)
+
+O topo do pipeline: um cume nevado com o datacenter cravado na rocha e uma tempestade permanente (a nuvem,
+literalmente). Aqui tudo é real e exposto — e nada pode cair.
+
+- **Transição:** o topo do mapa do Pântano, atrás do Merge Conflict, vira uma névoa de tempestade azul-acinzentada;
+  rochas, pinheiros nevados e cristais de gelo começam a aparecer no brejo. No horizonte, a cordilheira no escuro e o
+  vulto do titã — só os olhos de relâmpago; de vez em quando um raio ilumina tudo por um instante.
+- **Inimigos e traços:**
+
+| Inimigo | Traço | Efeito | Counter |
+|---|---|---|---|
+| Cold Start (golem de gelo "carregando") | Partida a frio | Lento nas 3 primeiras rodadas; depois aquece: +60% de ataque | Relay (pré-aquece) |
+| DDoS (bando de corvos da tempestade) | Inundação | A cada 3 rodadas cada um chama mais um com 40% da vida (até 6 inimigos) | Lint (rate limiting) |
+| Memory Leak gigante (o Leaky adulto) | Vazamento | Cresce 12% em ataque e vida a cada rodada | Query |
+
+- **Chefe — Production Outage:** titã de tempestade (corpo de nuvem carregada, coroa de pára-raios, status vermelho no
+  peito), acompanhado de um DDoS. Traço **Apagão**: a cada 5 rodadas um raio derruba tudo — o esquadrão leva 8% da vida
+  e perde a vez naquela rodada (a arena pisca e treme). Sem counter: pede vida sobrando, cura e dano constante.
+- **Custos mais planos:** a produção já estabiliza nesta fase (~5–7 B/s), então os pontos custam algumas horas dela.
+- **Música:** épica e rápida (dó menor, tímpanos como trovões); no chefe, o tema mais rápido de todos com uma segunda
+  voz martelando como um alarme.
+- **Concluir o Pico** fecha o pipeline: "A Singularity chega em breve".
+
 **Áreas extras** (Cloud, Edge, …) abrem depois de algumas Singularities e dão o conteúdo longo.
 
 ## 8. Ritmo e custos
@@ -312,8 +336,8 @@ Pântano (testes, instável) → Production (o topo).
 |---|---|
 | Mapa abre (Tier 2) | ~2 h |
 | Área 1 vencida | ~3 dias |
-| Área 2 vencida | ~7 dias (simulador: ~9 dias no casual, ~8 no dedicado — ~6 dias depois da Área 1) |
-| Área 3 vencida → Singularity | ~12 dias (1–2 semanas) |
+| Área 2 vencida | ~7 dias (simulador: ~10 dias no casual — ~7 dias depois da Área 1) |
+| Área 3 vencida → Singularity | ~12 dias (1–2 semanas) (simulador: ~14 dias no casual — ~4 dias depois da Área 2) |
 
 - Isso dá **~3–4 pontos por dia**, convivendo com a parte idle em vez de substituí-la.
 - **Custo fixo por área (decidido).** A unidade de custo `U` de cada área é calibrada no simulador para que um ponto
@@ -394,6 +418,7 @@ A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa d
 | 2026-10-06 | **Esquadrão de 3** por enquanto |
 | 2026-10-06 | **Vida persiste entre batalhas**, recuperação de 25%/h (também offline), fora de combate até 25%, cura completa no descanso e consumível **Health Check** fabricável |
 | 2026-10-07 | Área 1 vira a **Floresta Localhost** (floresta tecnológica) no mapa e na arena, com elementos 3D também entre as trilhas |
+| 2026-10-08 | Área 3 vira o **Pico Production**: traços Partida a frio, Inundação e Vazamento (counters Relay, Lint, Query); chefe **Production Outage** com Apagão; o topo do Pântano mostra a tempestade e o titã; deploy expresso, como o elite, nunca é a única saída de um ponto |
 | 2026-10-08 | Área 2 vira o **Pântano Staging**: traços Instável, Corrida e Deriva (counters Lint, Memo, Git); chefe **The Merge Conflict** (duas cabeças com Merge); o topo da Floresta mostra o começo do Pântano; travessia manual depois do chefe |
 | 2026-10-07 | Montagem do esquadrão em **slots de arrastar e soltar** (Vanguarda, Centro, Retaguarda), com bônus por slot e extra para o papel certo; a ordem dos slots define quem apanha |
 | 2026-10-06 | Apresentação (a implementar): **música e efeitos sonoros** nas batalhas (inspiração em *Castlevania SOTN* e *Vampire Survivors*); **popup de item ganho/comprado** com ícone, nome e descrição; na aba Mapa a **cena de farm some** e o mapa ganha espaço; mapa em **perspectiva 3D** estilo *Inscryption*, com elementos 3D da área; **caminhos pontilhados e curvos** |

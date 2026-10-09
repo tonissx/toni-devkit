@@ -4,6 +4,7 @@ import { VillainSprite } from './VillainSprite.jsx';
 import { PartIcon } from './PartArt.jsx';
 import { ForestBackdrop } from './ForestArt.jsx';
 import { SwampBackdrop } from './SwampArt.jsx';
+import { PeakBackdrop } from './PeakArt.jsx';
 import { startMusic, stopMusic, sfx } from './audio.js';
 
 const { Modal, Button, Icon, ProgressBar } = DS;
@@ -87,7 +88,7 @@ function BattleSummary({ battle, snap, itemName }) {
 function sound(e) {
   if (e.k === 'atk') return e.a && e.a[0] === 'e' ? 'enemyHit' : e.c ? 'crit' : 'hit';
   if (e.k === 'revive' && e.f === 'merge') return 'ability';
-  return { miss: 'miss', heal: 'heal', revive: 'heal', ab: 'ability', item: 'item', down: 'down', decoy: 'miss', split: 'down', race: 'miss' }[e.k] || null;
+  return { miss: 'miss', heal: 'heal', revive: 'heal', ab: 'ability', item: 'item', down: 'down', decoy: 'miss', split: 'down', race: 'miss', blackout: 'crit', warm: 'ability' }[e.k] || null;
 }
 
 /** Botão de som (liga/desliga) — o estado fica nas preferências do DevCore. */
@@ -104,13 +105,15 @@ function bubble(e, abilityName, itemName) {
   if (e.k === 'atk') return (e.c ? 'crítico! ' : '') + (e.f === 'flaky' ? 'em dobro! ' : '') + '−' + e.v;
   if (e.k === 'miss') return e.f === 'flaky' ? 'falhou!' : 'errou!';
   if (e.k === 'race') return 'de novo!';
+  if (e.k === 'warm') return 'aqueceu!';
+  if (e.k === 'grow') return '+' + e.v + ' de vida';
   if (e.k === 'drift') return 'ataque ' + e.v + '%';
   if (e.k === 'heal') return '+' + e.v;
   if (e.k === 'ab') return abilityName(e.v) + '!';
   if (e.k === 'item') return itemName(e.v) + '!';
   if (e.k === 'decoy') return 'clone!';
   if (e.k === 'revive') return e.f === 'merge' ? 'merge!' : 'rollback!';
-  if (e.k === 'split') return 'dividiu!';
+  if (e.k === 'split') return e.f === 'flood' ? 'chamou reforço!' : 'dividiu!';
   if (e.k === 'fortify') return 'fortificou';
   return '';
 }
@@ -119,19 +122,23 @@ function bubble(e, abilityName, itemName) {
 function FeedLine({ e, unit, abilityName, itemName, age }) {
   const N = ({ uid }) => {
     if (uid === 'item') return <b className="is-item">Hotfix</b>;
+    if (uid === 'storm') return <b className="is-enemy">O raio</b>;
     const u = unit(uid);
     return u ? <b className={'is-' + u.side}>{u.name}</b> : <b>?</b>;
   };
-  const side = e.a && e.a !== 'item' && unit(e.a) ? unit(e.a).side : 'neutral';
+  const side = e.a === 'storm' || e.k === 'blackout' ? 'enemy' : e.a && e.a !== 'item' && unit(e.a) ? unit(e.a).side : 'neutral';
   let icon = 'dot';
   let body = null;
   if (e.k === 'atk') {
-    icon = e.a === 'item' ? 'bug-off' : e.c ? 'zap' : 'sword';
+    icon = e.a === 'item' ? 'bug-off' : e.a === 'storm' ? 'cloud-lightning' : e.c ? 'zap' : 'sword';
     body = <><N uid={e.a} /> {e.a === 'item' ? 'atingiu' : 'atacou'} <N uid={e.t} />{e.c && <em className="is-crit"> crítico</em>}{e.f === 'flaky' && <em className="is-crit"> em dobro</em>} <span className="is-dmg">−{e.v}</span></>;
   } else if (e.k === 'miss') {
     icon = 'wind';
     body = e.f === 'flaky' ? <><N uid={e.a} /> falhou o golpe em <N uid={e.t} /> (instável)</> : <><N uid={e.t} /> esquivou do ataque de <N uid={e.a} /></>;
   } else if (e.k === 'race') { icon = 'fast-forward'; body = <><N uid={e.a} /> agiu de novo (corrida)</>; }
+  else if (e.k === 'blackout') { icon = 'zap-off'; body = <><b className="is-enemy">Apagão!</b> Um raio derrubou tudo: o esquadrão perde a vez</>; }
+  else if (e.k === 'warm') { icon = 'thermometer'; body = <><N uid={e.t} /> aqueceu: ataque bem mais forte</>; }
+  else if (e.k === 'grow') { icon = 'trending-up'; body = <><N uid={e.t} /> vazou mais memória: <span className="is-dmg">+{e.v}</span> de vida</>; }
   else if (e.k === 'drift') { icon = 'shuffle'; body = <><N uid={e.t} /> derivou: ataque em <span className={e.v > 100 ? 'is-dmg' : 'is-heal'}>{e.v}%</span></>; }
   else if (e.k === 'heal') {
     icon = 'heart-plus';
@@ -143,7 +150,7 @@ function FeedLine({ e, unit, abilityName, itemName, age }) {
     icon = e.f === 'merge' ? 'git-merge' : 'rotate-ccw';
     body = e.f === 'merge' ? <><N uid={e.t} /> fez merge e voltou com <span className="is-dmg">{e.v}</span> de vida</> : <>Rollback: <N uid={e.t} /> voltou com <span className="is-heal">{e.v}</span> de vida</>;
   }
-  else if (e.k === 'split') { icon = 'copy'; body = <><N uid={e.a} /> se dividiu: <N uid={e.t} /> apareceu</>; }
+  else if (e.k === 'split') { icon = e.f === 'flood' ? 'bird' : 'copy'; body = e.f === 'flood' ? <><N uid={e.a} /> chamou mais um corvo: <N uid={e.t} /> chegou</> : <><N uid={e.a} /> se dividiu: <N uid={e.t} /> apareceu</>; }
   else if (e.k === 'fortify') { icon = 'shield'; body = <><N uid={e.t} /> se fortificou (defesa {e.v})</>; }
   else if (e.k === 'decoy') { icon = 'ghost'; body = <><N uid={e.a} /> acertou um clone em vez de <N uid={e.t} /></>; }
   else return null;
@@ -191,7 +198,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     if (done) return undefined;
     // Habilidades ficam mais tempo na tela (faixa com o nome + efeito); quedas e fortificação passam rápido.
     const k = log[i] && log[i].k;
-    const t = setTimeout(() => setI((x) => x + 1), k === 'ab' ? STEP_MS * 2.2 : k === 'fortify' || k === 'down' || k === 'drift' || k === 'race' ? STEP_MS / 2 : STEP_MS);
+    const t = setTimeout(() => setI((x) => x + 1), k === 'ab' ? STEP_MS * 2.2 : k === 'blackout' ? STEP_MS * 1.6 : k === 'fortify' || k === 'down' || k === 'drift' || k === 'race' || k === 'grow' ? STEP_MS / 2 : STEP_MS);
     return () => clearTimeout(t);
   }, [i, done]);
 
@@ -224,6 +231,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     if (e.k === 'down') alive[e.t] = false;
     if (e.k === 'revive') { alive[e.t] = true; hp[e.t] = e.v; }
     if (e.k === 'split') visible[e.t] = true;
+    if (e.k === 'grow') hp[e.t] += e.v;
   }
   const cur = !done ? log[i] : null;
   const pet = (id) => snap.pets.find((p) => p.id === id);
@@ -247,7 +255,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     const acting = cur && cur.a === u.uid;
     const hit = cur && cur.t === u.uid && (cur.k === 'atk' || cur.k === 'miss');
     // O balão vai em quem recebe (dano, cura, revive, fortificação, clone novo) ou, senão, em quem age.
-    const popAt = cur && (['atk', 'miss', 'heal', 'revive', 'fortify', 'split', 'drift'].includes(cur.k) ? cur.t : cur.a);
+    const popAt = cur && (['atk', 'miss', 'heal', 'revive', 'fortify', 'split', 'drift', 'warm', 'grow'].includes(cur.k) ? cur.t : cur.a);
     const say = popAt === u.uid ? bubble(cur, abilityName, itemName) : '';
     return (
       <div className={'dc-arena__unit is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (acting ? ' is-acting' : '') + (hit ? ' is-hit' : '') + (u.front ? ' is-front' : '') + (u.boss ? ' is-boss' : '')
@@ -279,9 +287,11 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           ? <Button variant="primary" onClick={onClose}>Continuar</Button>
           : <Button variant="ghost" icon="fast-forward" onClick={() => setI(log.length)}>Pular</Button>}
       </>}>
-      <div className={'dc-arena dc-arena--' + area.arena + (burstHit ? ' is-shake' : '') + (done ? ' is-done' : '')} aria-label={'Arena ' + area.name}>
+      <div className={'dc-arena dc-arena--' + area.arena + (burstHit || (cur && cur.k === 'blackout') ? ' is-shake' : '') + (done ? ' is-done' : '')} aria-label={'Arena ' + area.name}>
+        {cur && cur.k === 'blackout' && <i key={'flash' + i} className="dc-fx-blackout" aria-hidden="true" />}
         {area.arena === 'localhost' && <ForestBackdrop />}
         {area.arena === 'staging' && <SwampBackdrop />}
+        {area.arena === 'production' && <PeakBackdrop />}
         <BattleFeed log={log} upto={done ? log.length : i + 1} unit={(uid) => battle.units.find((u) => u.uid === uid)} abilityName={abilityName} itemName={itemName} />
         <div className={'dc-arena__side is-pets' + (on.shield ? ' is-shielded' : '') + (on.buff ? ' is-buffed' : '') + (on.haste ? ' is-hasted' : '')}>
           {on.shield && <span className="dc-fx-shield" aria-hidden="true" />}

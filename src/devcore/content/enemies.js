@@ -44,6 +44,17 @@ const ENEMIES = [
     timeout: 'As duas cabeças do Merge Conflict passaram a noite discutindo qual versão manter. Ao amanhecer, alguém resolveu com "aceitar as duas" — e agora o pântano tem um bug novo para cada linha duplicada.' },
   { id: 'conflict-feature', name: 'Merge Conflict · feature', sprite: 'hydra-feature', color: '#FF8A3D', hp: 200, atk: 13, def: 6, spd: 10, traits: ['merge'], boss: true,
     lines: ['>>>>>>> feature', 'rebase? nunca', 'minha branch, minhas regras'] },
+  // Área 3 — Pico Production
+  { id: 'cold-start', name: 'Cold Start', sprite: 'coldstart', color: '#9FD8F5', hp: 150, atk: 11, def: 14, spd: 8, traits: ['coldstart'],
+    lines: ['carregando...', 'só um instante...', 'AGORA SIM'] },
+  { id: 'ddos', name: 'DDoS', sprite: 'ddos', color: '#3A3F55', hp: 45, atk: 8, def: 3, spd: 14, traits: ['flood'],
+    lines: ['req req req req', 'mais um!', '503'] },
+  { id: 'leak-giant', name: 'Memory Leak gigante', sprite: 'leakgiant', color: '#B03A8C', hp: 170, atk: 10, def: 8, spd: 6, traits: ['grow'],
+    lines: ['heap... cheio...', 'OOM em 3, 2...', 'só mais um objeto'] },
+  // Chefe da Área 3
+  { id: 'production-outage', name: 'Production Outage', sprite: 'titan', color: '#3D4A6B', hp: 300, atk: 13, def: 10, spd: 8, traits: ['blackout'], boss: true,
+    lines: ['status: 🔴', 'todos os serviços fora', 'o pager não para'],
+    timeout: 'O Production Outage durou a noite inteira. Quando o incidente finalmente fechou, o post-mortem tinha 40 páginas, o status page virou meme e a tempestade só passou — ela vai voltar no próximo deploy de sexta-feira.' },
 ];
 
 module.exports = { ENEMIES };
