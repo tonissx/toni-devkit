@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { BINDABLE_IDS, UI_BINDABLE_IDS, DEFAULT_BINDS, acceleratorFromEvent, acceleratorLabel, normalizeBinds } = require('../src/commands/binds.js');
+const { BINDABLE_IDS, UI_BINDABLE_IDS, SELECTION_BIND_IDS, DEFAULT_BINDS, acceleratorFromEvent, acceleratorLabel, normalizeBinds } = require('../src/commands/binds.js');
 const { COMMANDS, detectClipboardKind } = require('../src/commands/registry.js');
 
 const key = (code, mods = {}) => ({ code, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...mods });
@@ -102,4 +102,28 @@ test('clipboard:xml run headless formats the clipboard and reports a message', a
   assert.match(clip, /\n\s+<b>1<\/b>/);
   clip = '   ';
   await assert.rejects(() => cmd.run(ctx), /vazia/);
+});
+
+test('selection binds are bindable commands', () => {
+  for (const id of SELECTION_BIND_IDS) assert.ok(BINDABLE_IDS.includes(id), id);
+});
+
+test('copySelection returns the selected text, or restores the clipboard when nothing is selected', async () => {
+  const { createSelectionCopier } = require('../electron/selection.js');
+  const mk = (onCopy) => {
+    const c = { text: 'antes' };
+    const clipboard = { readText: () => c.text, writeText: (t) => { c.text = t; } };
+    return { c, copy: createSelectionCopier({ clipboard, win: { copy: async () => onCopy(c) }, sleep: async () => {} }) };
+  };
+  const ok = mk((c) => { c.text = 'select 1'; });
+  assert.equal(await ok.copy(), 'select 1');
+  assert.equal(ok.c.text, 'select 1');
+
+  const none = mk(() => {});
+  await assert.rejects(() => none.copy(), /Nenhum texto selecionado/);
+  assert.equal(none.c.text, 'antes');
+
+  const blocked = mk(() => { const e = new Error('x'); e.code = 'BLOCKED'; throw e; });
+  await assert.rejects(() => blocked.copy(), /bloqueou/);
+  assert.equal(blocked.c.text, 'antes');
 });

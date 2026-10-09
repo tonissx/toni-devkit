@@ -11,9 +11,9 @@
 
 /** Comandos que podem receber um atalho global (ids de src/commands/registry.js). */
 const BINDABLE = [
-  { id: 'clipboard:auto', name: 'Formatar clipboard (SQL ou XML)' },
-  { id: 'clipboard:sql', name: 'Formatar SQL do clipboard' },
-  { id: 'clipboard:xml', name: 'Formatar XML do clipboard' },
+  { id: 'clipboard:auto', name: 'Formatar seleção (SQL ou XML)' },
+  { id: 'clipboard:sql', name: 'Formatar SQL selecionado' },
+  { id: 'clipboard:xml', name: 'Formatar XML selecionado' },
   { id: 'theme:toggle', name: 'Alternar tema claro/escuro' },
   { id: 'snippets:paste', name: 'Colar snippet em qualquer programa' },
   { id: 'vault:lock', name: 'Bloquear o cofre (Vault)' },
@@ -22,6 +22,8 @@ const BINDABLE = [
 const BINDABLE_IDS = BINDABLE.map((b) => b.id);
 // Exceção à regra "sem UI": estes mostram a palette (lista de snippets) em vez de rodar com ela oculta.
 const UI_BINDABLE_IDS = ['snippets:paste'];
+// Pelo atalho global estes formatam o TEXTO SELECIONADO no programa em foco (Ctrl+C simulado antes de rodar).
+const SELECTION_BIND_IDS = ['clipboard:auto', 'clipboard:sql', 'clipboard:xml'];
 
 // Um atalho só (F de "Format") que detecta SQL/XML; os específicos ficam opcionais.
 // Shift junto evita colisão com AltGr (= Ctrl+Alt) no ABNT2 e com atalhos de IDE (Ctrl+Alt+S, Ctrl+Alt+L…).
@@ -91,4 +93,4 @@ function normalizeBinds(raw, ids = BINDABLE_IDS) {
   return out;
 }
 
-module.exports = { BINDABLE, BINDABLE_IDS, UI_BINDABLE_IDS, DEFAULT_BINDS, RESERVED, acceleratorFromEvent, acceleratorLabel, normalizeBinds };
+module.exports = { BINDABLE, BINDABLE_IDS, UI_BINDABLE_IDS, SELECTION_BIND_IDS, DEFAULT_BINDS, RESERVED, acceleratorFromEvent, acceleratorLabel, normalizeBinds };
