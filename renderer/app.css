@@ -218,6 +218,11 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .tk-scroll::-webkit-scrollbar-corner { background: transparent; }
 .nts__side { position: relative; transition: width .12s ease; }
 .nts__side.is-dragging { transition: none; user-select: none; }
+/* Recolhida: sobra só uma faixa com a seta para reabrir; o conteúdo some (sem espremer). */
+.nts__side.is-collapsed { padding: 0; gap: 0; align-items: stretch; }
+.nts__side.is-collapsed > *:not(.nts__grip):not(.nts__reopen) { display: none; }
+.nts__reopen { flex: 1; display: flex; align-items: flex-start; justify-content: center; padding-top: 10px; border: 0; background: none; color: var(--tk-text-3); cursor: pointer; border-radius: var(--tk-radius-md); }
+.nts__reopen:hover { color: var(--tk-text); background: var(--tk-surface-hover); }
 .nts__grip { position: absolute; top: 0; bottom: 0; right: -12px; width: 12px; z-index: 5; cursor: col-resize; touch-action: none; outline: 0; }
 .nts__grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 5px; width: 2px; background: transparent; transition: background .12s; }
 .nts__grip:hover::after, .nts__grip:focus-visible::after, .nts__side.is-dragging .nts__grip::after { background: var(--tk-accent); }
