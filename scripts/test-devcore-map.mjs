@@ -483,9 +483,11 @@ test('pântano: vencer o Legacy Monolith libera a travessia; o Pântano começa 
   m.at = '8-1'; m.visited = ['8-1'];
   m.nodes.boss.group = ['typo'];
   let r = run(s, { type: 'mapFight', node: 'boss', squad: squadOf(['byte', 'noxi', 'query']) });
+  const fought = r.state.run.map.battles;
   r = run(r.state, { type: 'mapAdvance' });
   assert.equal(r.error, undefined);
   const st = r.state.run.map;
+  assert.equal(st.battles, fought, 'a numeração das lutas segue depois da travessia (a arena precisa ver a luta nova)');
   assert.equal(st.area, 'staging');
   assert.equal(st.at, null);
   assert.equal(st.cleared, false);

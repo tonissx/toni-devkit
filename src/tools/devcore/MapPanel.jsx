@@ -608,8 +608,10 @@ export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio
   const live = snap.map;
   const [prep, setPrep] = React.useState(null);
   const [decision, setDecision] = React.useState(true); // modal da escolha pendente aberto (fechar no X só adia)
-  const [seen, setSeen] = React.useState(live.lastBattle ? live.lastBattle.id : 0);
-  const battle = live.lastBattle && live.lastBattle.id > seen ? live.lastBattle : null;
+  // Última luta já mostrada (área + número): a arena abre para qualquer luta nova, também depois de trocar de área.
+  const keyOf = (m) => (m.lastBattle ? m.area.id + ':' + m.lastBattle.id : null);
+  const [seen, setSeen] = React.useState(keyOf(live));
+  const battle = live.lastBattle && keyOf(live) !== seen ? live.lastBattle : null;
   // Sem spoiler: enquanto a arena mostra a luta, o painel fica como estava antes dela (placar, Patches, posição,
   // preparação). A luta já vem calculada do engine; o resultado só aparece depois de "Continuar".
   React.useEffect(() => { setDecision(true); }, [live.pending ? live.pending.node : null]);
@@ -619,7 +621,7 @@ export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio
   const prepNode = prep && map.nodes.find((n) => n.id === prep && n.status === 'reachable');
   React.useEffect(() => { onArena(!!battle); return () => onArena(false); }, [!!battle]);
   const setSound = (on) => setAudio((a) => ({ ...a, on }));
-  const closeArena = () => { if (battle.win) setPrep(null); setSeen(battle.id); };
+  const closeArena = () => { if (battle.win) setPrep(null); setSeen(keyOf(live)); };
 
   if (!map.unlocked) return <div className="dc-empty">O mapa de {map.area.name} abre com {map.requirement}.</div>;
 

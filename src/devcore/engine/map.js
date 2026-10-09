@@ -270,7 +270,9 @@ function mapAct(s, action, now, c, log) {
     if (!m.cleared) return 'Vença o chefe da área antes de seguir';
     if (!area.next || !c.area[area.next]) return 'A próxima área ainda não existe';
     const next = c.area[area.next];
+    const battles = m.battles;
     s.run.map = createMap(s, next, c);
+    s.run.map.battles = battles; // a numeração das lutas segue na run (a UI usa o número para saber que há luta nova)
     log.push({ type: 'mapOpen', area: next.id, name: next.name, from: area.id });
     return null;
   }
