@@ -116,7 +116,7 @@ const DRUMS = {
   // Pico: galope épico; chefe do Pico: bumbo duplo contínuo e prato em todo compasso.
   production: { kick: [0, 3, 8, 11], snare: [4, 12], ghost: [14], hats: 2, openHat: [14], crashEvery: 2, taiko: [0, 6, 8, 10, 14],
     fill: { 12: 55, 13: 52, 14: 48, 15: 43 } },
-  'production-boss': { kick: [0, 1, 2, 3, 6, 7, 8, 9, 10, 11, 14, 15], snare: [4, 12], ghost: [5, 13], hats: 1, openHat: [7, 15], crashEvery: 1, taiko: [0, 3, 8, 11],
+  'production-boss': { kick: [0, 2, 3, 6, 8, 10, 11, 14], snare: [4, 12], ghost: [15], hats: 2, openHat: [14], crashEvery: 1, taiko: [0, 8],
     fill: { 8: 57, 9: 55, 10: 52, 11: 50, 12: 48, 13: 45, 14: 43, 15: 40 } },
   'staging-boss': { kick: [0, 2, 3, 6, 8, 10, 11, 14], snare: [4, 12], ghost: [7, 15], hats: 2, openHat: [6, 14], crashEvery: 1,
     fill: { 8: 52, 10: 50, 11: 50, 12: 47, 13: 47, 14: 43, 15: 40 } },
@@ -172,6 +172,28 @@ const taiko = (t, out, accent = 1) => {
   tone(t, 33, 0.55, { type: 'sine', gain: 0.55 * accent, slideTo: 24, decay: 0.55, out });
   tone(t, 40, 0.3, { type: 'triangle', gain: 0.2 * accent, slideTo: 30, decay: 0.3, out });
   noise(t, 0.05, { gain: 0.1 * accent, hp: 600, out });
+};
+
+/** Saturação (guitarra): curva suave que "quebra" a serra num timbre de amplificador no talo. */
+function distCurve(amount = 40) {
+  const n = 1024;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; curve[i] = ((1 + amount) * x) / (1 + amount * Math.abs(x)); }
+  return curve;
+}
+/** Power chord (fundamental, quinta, oitava) — `mute`: abafado com a mão (curto e grave, o "chug"). */
+const guitar = (t, root, d, out, mute = false) => {
+  for (const [iv, det] of [[0, -7], [0, 7], [7, 0], [12, -4]]) {
+    if (mute && iv === 12) continue;
+    voice(t, root + iv, d, { gain: mute ? 0.05 : 0.045, attack: 0.004, release: mute ? 0.05 : 0.2, detune: det, filter: 'lowpass', freq: mute ? 900 : 2600, q: 0.8, out });
+  }
+};
+/** Coral cantando (mais forte que o pad): a melodia ou um canto curto em bloco. */
+const chant = (t, m, d, out, g = 1) => {
+  for (const det of [-8, 0, 8]) {
+    voice(t, m, d, { gain: 0.03 * g, attack: Math.min(0.12, d / 3), release: Math.min(0.3, d / 2), detune: det, freq: 760, q: 4, out });
+    voice(t, m, d, { gain: 0.018 * g, attack: Math.min(0.12, d / 3), release: Math.min(0.3, d / 2), detune: det, freq: 1150, q: 5, out });
+  }
 };
 
 /** Segunda voz (o "outro lado" do merge conflict): serra filtrada, levemente desafinada. */
@@ -234,21 +256,18 @@ const THEMES = {
       [79, null, null, null, 74, null, null, 71, 67, null, null, null, 71, null, 74, null],
     ],
   },
-  // Chefe do Pico (Production Outage): o mais rápido de todos, cromático, com a segunda voz em oitavas como um alarme.
+  // Chefe final (Production Outage): rock pesado com coral épico — guitarras distorcidas em "chug" com acentos em
+  // power chord, bateria com bumbo duplo, órgão e cordas segurando o acorde, e o coral cantando a melodia em notas
+  // longas (dobrado pelos metais). Dó menor, i–VI–VII–V. riff: x = chug abafado · X = acorde aberto · - = pausa.
   'production-boss': {
-    bpm: 160, pulse: true, chromatic: true, timpani: true, arpFilter: 3000, epic: true,
-    chords: [[48, 51, 55], [49, 52, 56], [44, 48, 51], [43, 47, 50]],
+    bpm: 150, pulse: false, chromatic: false, timpani: true, epic: true, rock: true,
+    chords: [[48, 51, 55], [44, 48, 51], [46, 50, 53], [43, 47, 50]],
+    riff: ['X-xxx-xxX-xxx-xx', 'X-xxx-xxX-xxX-X-', 'X-xxx-xxX-xxx-xx', 'X-xxX-xxX-X-XXXX'],
     melody: [
-      [84, null, 83, null, 84, null, 79, null, 80, null, 79, null, 75, null, 72, null],
-      [85, null, 84, null, 80, null, 77, null, 76, null, 77, null, 80, null, null, null],
-      [80, null, 82, null, 84, null, 87, null, 86, null, 84, null, 80, null, 79, null],
-      [79, 80, 79, null, 77, null, 74, null, 71, null, 74, null, 79, null, 83, null],
-    ],
-    counter: [
-      [72, null, null, null, 72, null, null, null, 72, null, null, null, 72, null, null, null],
-      [73, null, null, null, 73, null, null, null, 73, null, null, null, 73, null, null, null],
-      [68, null, null, null, 68, null, null, null, 68, null, null, null, 68, null, null, null],
-      [67, null, null, null, 67, null, null, null, 71, null, null, null, 71, null, null, null],
+      [79, null, null, null, null, null, 77, null, 75, null, null, null, 74, null, 75, null],
+      [77, null, null, null, null, null, 75, null, 72, null, null, null, null, null, null, null],
+      [74, null, null, null, 77, null, null, null, 82, null, null, null, 80, null, 79, null],
+      [79, null, null, null, null, null, null, null, 74, null, null, null, 71, null, null, null],
     ],
   },
   // Chefe: ainda mais rápido, bumbo dobrado, tímpanos e trítono (sol sustenido) no clímax.
@@ -282,6 +301,16 @@ export function startMusic(theme) {
   drums.gain.value = 0.9;
   drums.connect(comp); comp.connect(out);
   const D = DRUMS[theme] || DRUMS.localhost;
+  // Rock: as guitarras passam por uma saturação e um corte de agudos antes de entrar na mixagem.
+  let amp = null;
+  if (T.rock) {
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = distCurve(55); shaper.oversample = '4x';
+    const cab = ctx.createBiquadFilter(); cab.type = 'lowpass'; cab.frequency.value = 3800;
+    amp = ctx.createGain(); amp.gain.value = 0.9;
+    const post = ctx.createGain(); post.gain.value = 0.22; // a saturação devolve o sinal quase no talo: volta ao nível da mixagem
+    amp.connect(shaper); shaper.connect(cab); cab.connect(post); post.connect(out);
+  }
   // Temas épicos: um envio para o reverb de catedral (dá tamanho a tudo — coral, metais e tambores).
   if (T.epic) {
     const send = ctx.createGain();
@@ -301,14 +330,21 @@ export function startMusic(theme) {
         // Coral sustentando o acorde (aberto: fundamental, quinta e terça em cima).
         if (s === 0) for (const m of [chord[0] + 12, chord[2] + 12, chord[1] + 24]) choir(next, m, step * 16, out);
         // Metais: acordes em ataque no 1 e no "e" do 2 (síncope heroica), e uma chamada no fim do compasso.
-        if (s === 0 || s === 6) for (const m of [chord[0], chord[2], chord[0] + 12]) brass(next, m, step * (s === 0 ? 5 : 2), out, s === 0 ? 1 : 0.75);
-        if (s === 14) brass(next, chord[2] + 12, step * 2, out, 0.6);
+        if (!T.rock && (s === 0 || s === 6)) for (const m of [chord[0], chord[2], chord[0] + 12]) brass(next, m, step * (s === 0 ? 5 : 2), out, s === 0 ? 1 : 0.75);
+        if (!T.rock && s === 14) brass(next, chord[2] + 12, step * 2, out, 0.6);
         if (D.taiko && D.taiko.includes(s)) taiko(next, drums, s === 0 ? 1 : 0.75);
       }
       // Cravo: arpejo da tríade em semicolcheias; nos temas tensos, a vizinha cromática (meio tom acima) no fim de cada meio compasso.
       const arp = [0, 1, 2, 1, 0, 2, 1, 2];
       const tone8 = chord[arp[s % 8]] + 24;
-      harpsichord(next, T.chromatic && s % 8 === 7 ? chord[2] + 25 : tone8, step * 0.9, out, T.arpFilter || 3200);
+      if (!T.rock) harpsichord(next, T.chromatic && s % 8 === 7 ? chord[2] + 25 : tone8, step * 0.9, out, T.arpFilter || 3200);
+      // Rock: o riff das guitarras (chug abafado ou power chord aberto) e o coral em canto curto nos tempos fortes.
+      if (T.rock) {
+        const hit = T.riff[bar][s];
+        if (hit === 'x') guitar(next, chord[0] - 12, step * 0.85, amp, true);
+        if (hit === 'X') guitar(next, chord[0] - 12, step * 1.7, amp, false);
+        if (s === 0 || s === 8) for (const m of [chord[0] + 12, chord[2] + 12, chord[1] + 24]) chant(next, m, step * 1.2, out, 0.6);
+      }
       // Baixo: pulsando em colcheias (tenso) ou em semínimas.
       if (T.pulse ? s % 2 === 0 : s % 4 === 0) bass(next, chord[0] - 12 + (T.pulse && s % 8 === 6 ? 1 : 0), T.pulse ? step * 1.6 : step * 3.5, out);
       // Bateria: no último compasso do loop entra a virada de tons no lugar do groove.
@@ -326,8 +362,16 @@ export function startMusic(theme) {
       if (note != null) {
         let len = 1;
         while (s + len < 16 && T.melody[bar][s + len] == null && len < 4) len++;
-        lead(next, note, step * len * 0.95, out);
-        if (T.epic) brass(next, note - 12, step * len * 0.95, out, 0.55); // melodia dobrada pelos metais, uma oitava abaixo
+        if (T.rock) {
+          // O coral canta a melodia (notas longas) com os metais por baixo.
+          let hold = len;
+          while (s + hold < 16 && T.melody[bar][s + hold] == null) hold++;
+          chant(next, note, step * hold * 0.98, out, 0.9);
+          brass(next, note - 12, step * hold * 0.95, out, 0.5);
+        } else {
+          lead(next, note, step * len * 0.95, out);
+          if (T.epic) brass(next, note - 12, step * len * 0.95, out, 0.55); // melodia dobrada pelos metais, uma oitava abaixo
+        }
       }
       const other = T.counter && T.counter[bar][s];
       if (other != null) {
@@ -341,7 +385,7 @@ export function startMusic(theme) {
   };
   schedule();
   const timer = setInterval(schedule, 25);
-  music = { timer, out, drums };
+  music = { timer, out, drums, amp };
 }
 
 /** Para a música (com um fade curto). */
