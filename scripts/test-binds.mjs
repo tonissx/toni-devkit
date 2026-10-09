@@ -126,4 +126,10 @@ test('copySelection returns the selected text, or restores the clipboard when no
   const blocked = mk(() => { const e = new Error('x'); e.code = 'BLOCKED'; throw e; });
   await assert.rejects(() => blocked.copy(), /bloqueou/);
   assert.equal(blocked.c.text, 'antes');
+
+  // Electron recente: readText() devolve Promise.
+  const c = { text: 'antes' };
+  const asyncClip = { readText: async () => c.text, writeText: (t) => { c.text = t; } };
+  const viaPromise = createSelectionCopier({ clipboard: asyncClip, win: { copy: async () => { c.text = '"SELECT 1"'; } }, sleep: async () => {} });
+  assert.equal(await viaPromise(), '"SELECT 1"');
 });
