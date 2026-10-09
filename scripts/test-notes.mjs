@@ -1231,3 +1231,16 @@ test('isMarkdownFile: extensão e tamanho', () => {
   assert.ok(!isMarkdownFile({ name: 'a.png', size: 10 }));
   assert.ok(!isMarkdownFile({ name: 'a.md', size: 3 * 1024 * 1024 }));
 });
+
+test('sideWidth (bandeja lateral): respeita mínimo, máximo e o espaço disponível', () => {
+  const { sideWidth, SIDE_COLLAPSED, SIDE_SNAP, SIDE_MIN, SIDE_MAX, SIDE_DEFAULT } = require('../src/notes/panel.js');
+  assert.equal(sideWidth(100), SIDE_COLLAPSED);
+  assert.equal(sideWidth(0), SIDE_COLLAPSED);
+  assert.equal(sideWidth(SIDE_SNAP - 1), SIDE_COLLAPSED);
+  assert.equal(sideWidth(SIDE_SNAP), SIDE_MIN);
+  assert.equal(sideWidth(5000), SIDE_MAX);
+  assert.equal(sideWidth(400.4), 400);
+  assert.equal(sideWidth(600, 500), 500);
+  assert.equal(sideWidth(600, 100), SIDE_MIN);
+  assert.equal(sideWidth(undefined), SIDE_DEFAULT);
+});
