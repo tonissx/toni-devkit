@@ -92,7 +92,7 @@ function BindsCard({ onChange }) {
   return (
     <Card padding={24}>
       <div className="tk-card__title">Smart Binds</div>
-      <Row label="Como usar" hint="Copie o texto, aperte o atalho e cole — o Devkit formata o clipboard sem abrir janela, com as opções salvas em cada ferramenta">
+      <Row label="Como usar" hint="Selecione o texto (SQL ou XML) em qualquer programa e aperte o atalho — o Devkit formata a seleção e copia o resultado, sem abrir janela, com as opções salvas em cada ferramenta">
         <Button variant="ghost" size="sm" onClick={() => save(state.defaults)}>Restaurar padrão</Button>
       </Row>
       {state.bindable.map(({ id, name }) => {

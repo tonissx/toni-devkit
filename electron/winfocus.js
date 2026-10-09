@@ -63,6 +63,14 @@ const SCRIPT = [
   '    }',
   '    return sent;',
   '  }',
+  '  [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vk);',
+  // Ctrl+C num SendInput só. Devolve quantos eventos o Windows aceitou (4 = ok; 0 = bloqueado).
+  '  public static int CopySel() {',
+  '    INPUT[] all = new INPUT[4];',
+  '    all[0] = Key(0x11, false, false); all[1] = Key(0x43, false, false);', // Ctrl↓ C↓
+  '    all[2] = Key(0x43, true, false);  all[3] = Key(0x11, true, false);',  // C↑ Ctrl↑
+  '    return (int)SendInput(4, all, Marshal.SizeOf(typeof(INPUT)));',
+  '  }',
   '  [DllImport("user32.dll", EntryPoint="SystemParametersInfo")] public static extern bool SpiGet(uint a, uint p, ref uint v, uint f);',
   '  [DllImport("user32.dll", EntryPoint="SystemParametersInfo")] public static extern bool SpiSet(uint a, uint p, IntPtr v, uint f);',
   '}',
@@ -103,6 +111,18 @@ const SCRIPT = [
   '    switch ($parts[0]) {',
   '      "fg" { $r = "ok " + (Fg) }',
   '      "focus" { $r = Focus ([int64]$arg) }',
+  // Copiar a seleção: o atalho global ainda pode estar pressionado — sem esperar soltar, o Ctrl+C viraria Ctrl+Alt+Shift+C.
+  '      "copy" {',
+  '        $t0 = Get-Date',
+  '        while (((Get-Date) - $t0).TotalMilliseconds -lt 1200) {',
+  '          $down = $false',
+  '          foreach ($vk in 0x10, 0x11, 0x12, 0x5B, 0x5C) { if (([DkWin]::GetAsyncKeyState($vk) -band 0x8000) -ne 0) { $down = $true } }',
+  '          if (-not $down) { break }',
+  '          Start-Sleep -Milliseconds 15',
+  '        }',
+  '        if ([DkWin]::CopySel() -ne 4) { throw "BLOQUEADO: o Windows recusou as teclas (janela de administrador?)" }',
+  '        $r = "ok"',
+  '      }',
   '      "keys" { [System.Windows.Forms.SendKeys]::SendWait($arg); $r = "ok" }',
   '      "paste" {',
   '        $b = [int]$arg',
@@ -217,6 +237,13 @@ function createWinHelper({ spawn = nodeSpawn, platform = process.platform, timeo
       const n = Number(back);
       if (!Number.isInteger(n) || n < 0 || n > MAX_BACK) throw new Error('Posição do cursor inválida');
       try { await send('paste ' + n, { wait: 8000 }); } catch (e) {
+        if (/BLOQUEADO/.test(String((e && e.message) || e))) e.code = 'BLOCKED';
+        throw e;
+      }
+    },
+    /** Ctrl+C na janela em foco (espera os modificadores do atalho global serem soltos). `code === 'BLOCKED'` se o Windows recusar. */
+    async copy() {
+      try { await send('copy', { wait: 4000 }); } catch (e) {
         if (/BLOQUEADO/.test(String((e && e.message) || e))) e.code = 'BLOCKED';
         throw e;
       }
