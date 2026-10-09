@@ -12,9 +12,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 function createSelectionCopier({ clipboard, win, sleep = wait }) {
   return async function copySelection() {
     if (!win || typeof win.copy !== 'function') throw new Error('Copiar a seleção só funciona no Windows');
-    const prevText = clipboard.readText();
-    const prevImage = !prevText && clipboard.availableFormats && clipboard.availableFormats().some((f) => f.startsWith('image/'))
-      ? clipboard.readImage() : null;
+    // `await` em toda leitura: conforme a versão do Electron o clipboard devolve valor direto ou Promise.
+    const readText = async () => String((await clipboard.readText()) ?? '');
+    const prevText = await readText();
+    const prevImage = !prevText && clipboard.availableFormats && (await clipboard.availableFormats()).some((f) => f.startsWith('image/'))
+      ? await clipboard.readImage() : null;
     const restore = () => {
       if (prevImage && clipboard.write) clipboard.write({ image: prevImage });
       else clipboard.writeText(prevText);
@@ -27,7 +29,7 @@ function createSelectionCopier({ clipboard, win, sleep = wait }) {
       throw new Error('Não consegui copiar a seleção: ' + String((e && e.message) || e));
     }
     for (let i = 0; i < POLL_TRIES; i++) {
-      const now = clipboard.readText();
+      const now = await readText();
       if (now !== sentinel) {
         if (!now.trim()) break;
         return now;
