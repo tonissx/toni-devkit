@@ -214,6 +214,11 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0;
   background: var(--tk-bg); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); padding: 10px;
 }
+.nts__side { position: relative; transition: width .12s ease; }
+.nts__side.is-dragging { transition: none; user-select: none; }
+.nts__grip { position: absolute; top: 0; bottom: 0; right: -12px; width: 12px; z-index: 5; cursor: col-resize; touch-action: none; outline: 0; }
+.nts__grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 5px; width: 2px; background: transparent; transition: background .12s; }
+.nts__grip:hover::after, .nts__grip:focus-visible::after, .nts__side.is-dragging .nts__grip::after { background: var(--tk-accent); }
 .nts__main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 /* Abas de visão (Nota | Tarefas | Grafo): trocam a área principal — diferente dos filtros da lateral. */
 .nts-views { display: flex; align-items: flex-end; gap: 2px; margin-bottom: 8px; border-bottom: 1px solid var(--tk-border); }
@@ -350,7 +355,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .md-preview .md-pri.is-p2 { color: var(--tk-amber); background: color-mix(in srgb, var(--tk-amber) 12%, transparent); }
 .md-preview .md-pri.is-p3 { color: var(--tk-blue); background: color-mix(in srgb, var(--tk-blue) 12%, transparent); }
 .md-preview .md-pri { font-family: var(--tk-font-sans); }
-.nts-row__tasks { margin-left: 6px; color: var(--tk-accent-text); font: 400 10.5px var(--tk-font-mono); }
+.nts-row__tasks { display: inline-flex; align-items: center; gap: 3px; vertical-align: -1px; margin-left: 6px; color: var(--tk-accent-text); font: 400 10.5px var(--tk-font-mono); }
 .nts-error { display: block; margin-bottom: 6px; font: 400 12px var(--tk-font-mono); }
 
 .nts-editor__body { flex: 1; min-height: 0; display: grid; }
