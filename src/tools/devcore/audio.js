@@ -108,7 +108,7 @@ const tom = (t, m, out) => tone(t, m, 0.26, { type: 'sine', gain: 0.3, slideTo: 
 const DRUMS = {
   localhost: { kick: [0, 3, 8, 10, 11], snare: [4, 12], ghost: [7, 15], hats: 2, openHat: [14], crashEvery: 2,
     fill: { 12: 52, 13: 50, 14: 47, 15: 43 } },
-  boss: { kick: [0, 1, 3, 6, 8, 9, 11, 14], snare: [4, 12], ghost: [2, 7, 10, 15], hats: 2, openHat: [6, 14], crashEvery: 1, taiko: [0, 8],
+  boss: { kick: [0, 3, 6, 8, 10, 11, 14], snare: [4, 12], ghost: [7, 15], hats: 2, openHat: [14], crashEvery: 2,
     fill: { 8: 55, 9: 55, 10: 52, 11: 52, 12: 48, 13: 48, 14: 43, 15: 43 } },
   // Pântano: meio-tempo arrastado (caixa no 3), bumbo pesado e chimbal só nas semínimas; virada grave no fim.
   staging: { kick: [0, 7, 10], snare: [8], ghost: [14], hats: 4, openHat: [12], crashEvery: 4,
@@ -196,6 +196,29 @@ const chant = (t, m, d, out, g = 1) => {
   }
 };
 
+/** Lead "8-bit" brilhante com vibrato que entra depois do ataque (o canto dos temas de Castlevania). */
+function leadVib(t, m, d, out) {
+  for (const [type, g, det] of [['square', 0.045, 0], ['square', 0.02, 9], ['triangle', 0.04, 0]]) {
+    const o = ctx.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(hz(m), t);
+    o.detune.value = det;
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 5.8;
+    const depth = ctx.createGain();
+    depth.gain.setValueAtTime(0, t);
+    depth.gain.linearRampToValueAtTime(hz(m) * 0.012, t + Math.min(0.25, d * 0.6)); // vibrato atrasado
+    lfo.connect(depth); depth.connect(o.frequency);
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 3400;
+    const gn = ctx.createGain();
+    gn.gain.setValueAtTime(0.0001, t);
+    gn.gain.linearRampToValueAtTime(g, t + 0.008);
+    gn.gain.setValueAtTime(g * 0.85, t + Math.max(0.01, d * 0.7));
+    gn.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(f); f.connect(gn); gn.connect(out);
+    o.start(t); lfo.start(t); o.stop(t + d + 0.05); lfo.stop(t + d + 0.05);
+  }
+}
 /** Sinos antigos: parciais inarmônicos decaindo devagar (a ponte do Legacy Monolith). */
 const bells = (t, m, d, out) => {
   for (const [ratio, g] of [[1, 0.09], [2.76, 0.04], [5.4, 0.022], [8.93, 0.01]]) {
@@ -391,59 +414,71 @@ const THEMES = {
       },
     },
   },
-  // Chefe 1 (Legacy Monolith): gótico, no espírito da trilha da Floresta — um riff galopante de órgão de igreja
-  // martelando ré menor (i–VI–iv–V), coral por baixo, cravo e metais. A → A' (melodia uma oitava acima) → B (ponte:
-  // desacelera, sinos antigos tocando a melodia, coral aberto) → C (galope com tímpanos e rufo) → A.
-  // riff (órgão): X = acorde sustentado · x = ataque curto · - = pausa.
+  // Chefe 1 (Legacy Monolith): no estilo dos temas de Castlevania (composição original) — uma introdução sombria de
+  // órgão (só na primeira vez) e então o motor: baixo em oitavas pulsando em colcheias, andamento rápido, ré menor
+  // harmônico, lead brilhante com vibrato em frases de pergunta e resposta e arpejos de cravo. A → A' (uma oitava
+  // acima, com uma segunda voz em terças) → B (ponte: acordes maiores, a melodia respira) → C (corridas em semicolcheias,
+  // rufo) → A.
   boss: {
-    bpm: 144, pulse: true, chromatic: true, timpani: true, epic: true, riffInst: 'organ',
+    bpm: 160, pulse: true, chromatic: false, timpani: true, reverb: true, octaveBass: true, vibLead: true,
+    intro: 'I',
     form: ['A', 'A2', 'B', 'C'],
     sections: {
+      I: {
+        chords: [[50, 53, 57], [49, 52, 57]],
+        melody: [
+          [74, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+          [73, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+        ],
+        lead: 'organ', noArp: true, noBass: true,
+        drums: { kick: [], snare: [], ghost: [], hats: 16, openHat: [], crashEvery: 99, fill: { 8: 50, 10: 47, 12: 45, 13: 45, 14: 43, 15: 43 } },
+      },
       A: {
         chords: [[50, 53, 57], [46, 50, 53], [43, 46, 50], [45, 49, 52]],
-        riff: ['X--x--x-X--x-x--', 'X--x--x-X--x-x--', 'X--x--x-X--x-x--', 'X--x--x-X-x-XxXx'],
         melody: [
-          [74, null, null, 73, 74, null, 77, null, 76, null, 74, null, 73, null, null, null],
-          [74, null, null, null, 70, null, null, null, 72, null, 74, null, 77, null, null, null],
-          [79, null, null, null, 77, null, 74, null, 70, null, 74, null, 79, null, 77, null],
-          [76, null, null, null, 73, null, null, null, 69, null, null, null, null, null, null, null],
+          [74, null, 76, 77, 76, null, 74, null, 73, null, 74, null, 77, null, null, null],
+          [70, null, 72, 74, 72, null, 70, null, 69, null, 70, null, 74, null, null, null],
+          [79, null, 77, 76, 77, null, 79, null, 82, null, 81, null, 79, null, 77, null],
+          [76, null, 77, 76, 73, null, 76, null, 81, null, null, null, 80, null, 81, null],
         ],
       },
       A2: {
         chords: [[50, 53, 57], [46, 50, 53], [43, 46, 50], [45, 49, 52]],
-        riff: ['X-xX-xX-X-xX-xX-', 'X-xX-xX-X-xX-xX-', 'X-xX-xX-X-xX-xX-', 'X-X-X-X-XxXxXxXx'],
         melody: [
-          [86, null, null, 85, 86, null, 89, null, 88, null, 86, null, 85, null, null, null],
-          [86, null, null, null, 82, null, null, null, 84, null, 86, null, 89, null, null, null],
-          [91, null, 89, null, 86, null, 82, null, 86, null, 89, null, 91, null, 89, null],
-          [88, null, null, null, 85, null, null, null, 81, null, 85, null, 88, null, null, null],
+          [86, null, 88, 89, 88, null, 86, null, 85, null, 86, null, 89, null, 88, 86],
+          [82, null, 84, 86, 84, null, 82, null, 81, null, 82, null, 86, null, 84, 82],
+          [91, null, 89, 88, 89, null, 91, null, 94, null, 93, null, 91, null, 89, null],
+          [88, 89, 88, 86, 85, null, 88, null, 93, null, null, null, 92, null, 93, null],
+        ],
+        counter: [
+          [82, null, 85, 86, 85, null, 82, null, 81, null, 82, null, 86, null, 85, 82],
+          [79, null, 81, 82, 81, null, 79, null, 77, null, 79, null, 82, null, 81, 79],
+          [88, null, 86, 85, 86, null, 88, null, 91, null, 89, null, 88, null, 86, null],
+          [85, 86, 85, 82, 81, null, 85, null, 89, null, null, null, 88, null, 89, null],
         ],
       },
-      // Ponte: o monólito "respira" — acordes de Fá, Dó, Ré menor e Lá, sinos antigos e o coral; bateria em meio-tempo.
+      // Ponte: o céu abre um instante — Si bemol, Dó, Fá e Lá; a melodia em notas longas, a bateria em meio-tempo.
       B: {
-        chords: [[53, 57, 60], [48, 52, 55], [50, 53, 57], [45, 49, 52]],
-        riff: ['X---------------', 'X---------------', 'X---------------', 'X-------X---X-X-'],
+        chords: [[46, 50, 53], [48, 52, 55], [53, 57, 60], [45, 49, 52]],
         melody: [
-          [77, null, null, null, null, null, null, null, 76, null, null, null, 74, null, null, null],
-          [72, null, null, null, null, null, null, null, 76, null, null, null, null, null, null, null],
-          [77, null, null, null, null, null, null, null, 81, null, null, null, 79, null, null, null],
-          [76, null, null, null, null, null, null, null, 73, null, null, null, null, null, null, null],
+          [77, null, null, null, null, null, 79, null, 81, null, null, null, 79, null, null, null],
+          [79, null, null, null, null, null, 77, null, 76, null, null, null, 72, null, null, null],
+          [77, null, null, null, null, null, 81, null, 84, null, null, null, 81, null, null, null],
+          [81, null, null, null, 80, null, null, null, 76, null, null, null, 73, null, null, null],
         ],
-        lead: 'bells', noArp: true, bassEvery: 8,
-        drums: { kick: [0, 10], snare: [8], ghost: [], hats: 4, openHat: [], crashEvery: 4, taiko: [0, 8], fill: { 12: 47, 13: 45, 14: 43, 15: 40 } },
+        drums: { kick: [0, 10], snare: [8], ghost: [], hats: 4, openHat: [], crashEvery: 4, fill: { 12: 47, 13: 45, 14: 43, 15: 40 } },
       },
-      // Subida: galope do órgão, a melodia subindo, tímpanos e o rufo de volta ao tema.
+      // Subida: corridas em semicolcheias que sobem, a resposta caindo, e o rufo de volta ao tema.
       C: {
         chords: [[46, 50, 53], [48, 52, 55], [50, 53, 57], [45, 49, 52]],
-        riff: ['X-xX-xX-xX-xX-xx', 'X-xX-xX-xX-xX-xx', 'X-xX-xX-xX-xX-xx', 'X-X-X-X-XxXxXxXx'],
         melody: [
-          [74, null, null, null, 77, null, null, null, 81, null, null, null, 82, null, null, null],
-          [79, null, null, null, 81, null, null, null, 84, null, null, null, 86, null, null, null],
-          [86, null, null, null, null, null, null, null, 89, null, null, null, null, null, null, null],
-          [88, null, null, null, null, null, null, null, 85, null, null, null, null, null, null, null],
+          [70, 72, 74, 72, 70, 72, 74, 77, 74, 76, 77, 76, 74, 76, 77, 81],
+          [72, 74, 76, 74, 72, 74, 76, 79, 76, 77, 79, 77, 76, 77, 79, 84],
+          [74, null, 77, null, 81, null, 86, null, 84, null, 81, null, 77, null, 74, null],
+          [81, null, null, null, 80, null, null, null, 77, null, 76, null, 73, null, 69, null],
         ],
         roll: true,
-        drums: { kick: [0, 2, 4, 6, 8, 10, 12, 14], snare: [4, 12], ghost: [], hats: 2, openHat: [], crashEvery: 2, taiko: [0, 4, 8, 12], fill: {} },
+        drums: { kick: [0, 2, 4, 6, 8, 10, 12, 14], snare: [4, 12], ghost: [], hats: 2, openHat: [], crashEvery: 2, fill: {} },
       },
     },
   },
@@ -478,7 +513,7 @@ export function startMusic(theme) {
     amp.connect(shaper); shaper.connect(cab); cab.connect(post); post.connect(out);
   }
   // Temas épicos: um envio para o reverb de catedral (dá tamanho a tudo — coral, metais e tambores).
-  if (T.epic) {
+  if (T.epic || T.reverb) {
     const send = ctx.createGain();
     send.gain.value = 0.42;
     out.connect(send); send.connect(cathedral()); cathedral().connect(musicBus);
@@ -488,11 +523,14 @@ export function startMusic(theme) {
   // Forma da música: lista de compassos { seção, compasso na seção }. Temas sem seções são uma seção só.
   const sections = T.sections || { main: { chords: T.chords, melody: T.melody, counter: T.counter, riff: T.riff } };
   const form = T.form || ['main'];
-  const bars = form.flatMap((name) => sections[name].chords.map((_, b) => ({ sec: sections[name], b, last: b === sections[name].chords.length - 1 })));
-  const total = bars.length * 16;
+  const barsOf = (name) => sections[name].chords.map((_, b) => ({ sec: sections[name], b, last: b === sections[name].chords.length - 1 }));
+  const intro = T.intro ? barsOf(T.intro) : []; // introdução: toca uma vez, o loop não volta a ela
+  const loop = form.flatMap(barsOf);
+  const total = loop.length * 16;
+  const barAt = (k) => (k < intro.length * 16 ? intro[Math.floor(k / 16)] : loop[Math.floor(((k - intro.length * 16) % total) / 16)]);
   const schedule = () => {
     while (next < ctx.currentTime + 0.15) {
-      const at = bars[Math.floor((n % total) / 16)];
+      const at = barAt(n);
       const sec = at.sec;
       const bar = at.b;
       const s = n % 16;
@@ -524,7 +562,9 @@ export function startMusic(theme) {
       }
       if (T.rock && (s === 0 || s === 8)) for (const m of [chord[0] + 12, chord[2] + 12, chord[1] + 24]) chant(next, m, step * 1.2, out, 0.6);
       // Baixo: pulsando em colcheias (tenso) ou em semínimas.
-      if (sec.bassEvery ? s % sec.bassEvery === 0 : T.pulse ? s % 2 === 0 : s % 4 === 0) bass(next, chord[0] - 12 + (T.pulse && s % 8 === 6 ? 1 : 0), T.pulse ? step * 1.6 : step * 3.5, out);
+      if (sec.noBass) { /* introdução: só o órgão */ }
+      else if (T.octaveBass && !sec.bassEvery) { if (s % 2 === 0) bass(next, chord[0] - 12 + (s % 4 === 2 ? 12 : 0), step * 1.7, out); } // baixo em oitavas, o motor
+      else if (sec.bassEvery ? s % sec.bassEvery === 0 : T.pulse ? s % 2 === 0 : s % 4 === 0) bass(next, chord[0] - 12 + (T.pulse && s % 8 === 6 ? 1 : 0), T.pulse ? step * 1.6 : step * 3.5, out);
       // Bateria: no último compasso de cada seção entra a virada de tons no lugar do groove (ou o rufo da subida).
       const fill = at.last && D.fill[s] != null;
       if (sec.roll && at.last && s >= 8) snare(next, drums, 0.35 + (s - 8) * 0.09);
@@ -543,12 +583,15 @@ export function startMusic(theme) {
         while (s + len < 16 && sec.melody[bar][s + len] == null && len < 4) len++;
         const voiceOf = sec.lead || (T.rock ? 'choir' : 'lead');
         if (voiceOf === 'bells') bells(next, note, step * 8, out);
+        else if (voiceOf === 'organ') { organ(next, note - 12, step * 16, out); organ(next, note - 5, step * 16, out); }
         else if (voiceOf === 'choir') {
           // O coral canta a melodia (notas longas) com os metais por baixo.
           let hold = len;
           while (s + hold < 16 && sec.melody[bar][s + hold] == null) hold++;
           chant(next, note, step * hold * 0.98, out, 0.9);
           if (T.epic || T.rock) brass(next, note - 12, step * hold * 0.95, out, 0.5);
+        } else if (T.vibLead) {
+          leadVib(next, note, step * len * 0.95, out);
         } else {
           lead(next, note, step * len * 0.95, out);
           if (T.epic) brass(next, note - 12, step * len * 0.95, out, 0.55); // melodia dobrada pelos metais, uma oitava abaixo
