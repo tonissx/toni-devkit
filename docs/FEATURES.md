@@ -131,7 +131,8 @@ operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nad
   1ª linha, `Ctrl+Enter` e **corrigir o último commit** (amend)
 - **Histórico**: **grafo** dos commits com raias nas cores do tema, branches e tags, filtros por mensagem e autor; o
   commit escolhido mostra mensagem, arquivos e diff, e permite **criar uma branch ali** ou **voltar a branch para lá**
-  (mantendo as mudanças no stage, nos arquivos, ou jogando fora)
+  (mantendo as mudanças no stage, nos arquivos, ou jogando fora). A bandeja de detalhes é **expansível**: arraste a borda
+  esquerda (ou use ← / →) para dar mais espaço ao diff; duplo clique alterna entre a largura padrão e a ampla
 - **Branches**: à frente/atrás da base (main), **mesclada**, upstream; criar, **trocar** (com mudanças pendentes pergunta:
   guardar num stash ou levar junto), renomear, excluir e **comparar duas branches** (o que cada uma tem, o ancestral comum,
   os arquivos e o diff)

@@ -259,7 +259,12 @@
 /* histórico */
 .gt-history { display: flex; min-height: 0; }
 .gt-history__main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
-.gt-history__side { width: 380px; flex-shrink: 0; border-left: 1px solid var(--tk-border); overflow: auto; }
+.gt-history__side { position: relative; width: 380px; flex-shrink: 0; border-left: 1px solid var(--tk-border); display: flex; flex-direction: column; transition: width .12s ease; }
+.gt-history__side.is-dragging { transition: none; user-select: none; }
+.gt-history__scroll { flex: 1; min-height: 0; overflow: auto; }
+.gt-history__grip { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; z-index: 5; cursor: col-resize; touch-action: none; outline: 0; }
+.gt-history__grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: transparent; transition: background .12s; }
+.gt-history__grip:hover::after, .gt-history__grip:focus-visible::after, .gt-history__side.is-dragging .gt-history__grip::after { background: var(--tk-accent); }
 .gt-log { flex: 1; min-height: 0; overflow: auto; }
 .gt-log__inner { position: relative; }
 .gt-graph { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 1; }
