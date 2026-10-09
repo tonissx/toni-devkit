@@ -114,14 +114,66 @@ const DRUMS = {
   staging: { kick: [0, 7, 10], snare: [8], ghost: [14], hats: 4, openHat: [12], crashEvery: 4,
     fill: { 12: 47, 13: 45, 14: 43, 15: 40 } },
   // Pico: galope épico; chefe do Pico: bumbo duplo contínuo e prato em todo compasso.
-  production: { kick: [0, 3, 6, 8, 11, 14], snare: [4, 12], ghost: [10], hats: 2, openHat: [14], crashEvery: 2,
+  production: { kick: [0, 3, 8, 11], snare: [4, 12], ghost: [14], hats: 2, openHat: [14], crashEvery: 2, taiko: [0, 6, 8, 10, 14],
     fill: { 12: 55, 13: 52, 14: 48, 15: 43 } },
-  'production-boss': { kick: [0, 1, 2, 3, 6, 7, 8, 9, 10, 11, 14, 15], snare: [4, 12], ghost: [5, 13], hats: 1, openHat: [7, 15], crashEvery: 1,
+  'production-boss': { kick: [0, 1, 2, 3, 6, 7, 8, 9, 10, 11, 14, 15], snare: [4, 12], ghost: [5, 13], hats: 1, openHat: [7, 15], crashEvery: 1, taiko: [0, 3, 8, 11],
     fill: { 8: 57, 9: 55, 10: 52, 11: 50, 12: 48, 13: 45, 14: 43, 15: 40 } },
   'staging-boss': { kick: [0, 2, 3, 6, 8, 10, 11, 14], snare: [4, 12], ghost: [7, 15], hats: 2, openHat: [6, 14], crashEvery: 1,
     fill: { 8: 52, 10: 50, 11: 50, 12: 47, 13: 47, 14: 43, 15: 40 } },
 };
 const lead = (t, m, d, out) => { tone(t, m, d, { type: 'square', gain: 0.05, attack: 0.01, filter: 2600, out }); tone(t, m, d, { type: 'triangle', gain: 0.05, attack: 0.01, out }); };
+/* ─────────────── camada épica (Pico): coral, metais, taikos e um reverb de catedral ─────────────── */
+let hall = null;
+/** Reverb de catedral: resposta ao impulso sintetizada (ruído estéreo decaindo em ~3 s). */
+function cathedral() {
+  if (hall) return hall;
+  const len = Math.floor(ctx.sampleRate * 3.2);
+  const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+  }
+  hall = ctx.createConvolver();
+  hall.buffer = ir;
+  return hall;
+}
+/** Uma voz de envelope lento passando por um filtro (passa-banda: vogal do coral; passa-baixa: metal). */
+function voice(t, midi, dur, { type = 'sawtooth', gain = 0.03, attack = 0.3, release = 0.5, detune = 0, filter = 'bandpass', freq = 900, q = 3, sweepTo = null, out }) {
+  const o = ctx.createOscillator();
+  o.type = type;
+  o.frequency.setValueAtTime(hz(midi), t);
+  o.detune.value = detune;
+  const f = ctx.createBiquadFilter();
+  f.type = filter; f.Q.value = q;
+  f.frequency.setValueAtTime(freq, t);
+  if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, t + Math.min(0.12, dur / 2));
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.linearRampToValueAtTime(gain, t + attack);
+  g.gain.setValueAtTime(gain, t + Math.max(attack, dur - release));
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(f); f.connect(g); g.connect(out);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+/** Coral "aah": três vozes desafinadas e dois formantes de vogal, entrada lenta. */
+const choir = (t, m, d, out) => {
+  for (const det of [-9, 0, 9]) {
+    voice(t, m, d, { gain: 0.016, attack: 0.45, release: 0.6, detune: det, freq: 730, q: 4, out });
+    voice(t, m, d, { gain: 0.01, attack: 0.45, release: 0.6, detune: det, freq: 1090, q: 5, out });
+  }
+};
+/** Metal (trompa/trombone): serra + quadrada com o filtro abrindo no ataque. */
+const brass = (t, m, d, out, g = 1) => {
+  voice(t, m, d, { gain: 0.05 * g, attack: 0.03, release: 0.15, filter: 'lowpass', freq: 380, sweepTo: 2600, q: 1.2, out });
+  voice(t, m, d, { type: 'square', gain: 0.022 * g, attack: 0.03, release: 0.15, detune: 6, filter: 'lowpass', freq: 380, sweepTo: 1800, q: 1, out });
+};
+/** Taiko: tambor grave com corpo e a pele estalando. */
+const taiko = (t, out, accent = 1) => {
+  tone(t, 33, 0.55, { type: 'sine', gain: 0.55 * accent, slideTo: 24, decay: 0.55, out });
+  tone(t, 40, 0.3, { type: 'triangle', gain: 0.2 * accent, slideTo: 30, decay: 0.3, out });
+  noise(t, 0.05, { gain: 0.1 * accent, hp: 600, out });
+};
+
 /** Segunda voz (o "outro lado" do merge conflict): serra filtrada, levemente desafinada. */
 const lead2 = (t, m, d, out) => { tone(t, m, d, { type: 'sawtooth', gain: 0.024, attack: 0.02, filter: 1800, detune: 14, out }); tone(t, m, d, { type: 'sine', gain: 0.02, attack: 0.02, out }); };
 
@@ -170,21 +222,21 @@ const THEMES = {
       [79, null, 76, null, 75, null, 72, null, 71, null, 70, null, 67, null, 63, null],
     ],
   },
-  // Pico Production: épico e rápido — dó menor, com o sexto grau abaixado (lá bemol) dando peso; cravo brilhante e
-  // melodia larga, subindo até o topo; tímpanos marcando como trovões.
+  // Pico Production: épico e grandioso — dó menor com o lá bemol dando peso; coral sustentando os acordes, metais
+  // dobrando uma melodia larga e heroica (notas longas, saltos de quinta e oitava), taikos e reverb de catedral.
   production: {
-    bpm: 150, pulse: true, chromatic: false, timpani: true, arpFilter: 3600,
+    bpm: 132, pulse: true, chromatic: false, timpani: true, arpFilter: 3600, epic: true,
     chords: [[48, 51, 55], [44, 48, 51], [46, 50, 53], [43, 47, 50]],
     melody: [
-      [72, null, null, 75, 79, null, 77, null, 75, null, 74, null, 75, null, null, null],
-      [80, null, null, 79, 77, null, 75, null, 72, null, 75, null, 80, null, null, null],
-      [77, null, 79, null, 82, null, 80, null, 79, null, 77, null, 74, null, null, null],
-      [79, null, 77, null, 75, null, 74, null, 71, null, 74, null, 67, null, 71, null],
+      [72, null, null, null, 79, null, null, null, 77, null, 75, null, 74, null, 75, null],
+      [77, null, null, null, 75, null, null, 72, 80, null, null, null, null, null, null, null],
+      [77, null, null, null, 82, null, null, null, 80, null, 79, null, 77, null, 74, null],
+      [79, null, null, null, 74, null, null, 71, 67, null, null, null, 71, null, 74, null],
     ],
   },
   // Chefe do Pico (Production Outage): o mais rápido de todos, cromático, com a segunda voz em oitavas como um alarme.
   'production-boss': {
-    bpm: 168, pulse: true, chromatic: true, timpani: true, arpFilter: 3000,
+    bpm: 160, pulse: true, chromatic: true, timpani: true, arpFilter: 3000, epic: true,
     chords: [[48, 51, 55], [49, 52, 56], [44, 48, 51], [43, 47, 50]],
     melody: [
       [84, null, 83, null, 84, null, 79, null, 80, null, 79, null, 75, null, 72, null],
@@ -230,6 +282,12 @@ export function startMusic(theme) {
   drums.gain.value = 0.9;
   drums.connect(comp); comp.connect(out);
   const D = DRUMS[theme] || DRUMS.localhost;
+  // Temas épicos: um envio para o reverb de catedral (dá tamanho a tudo — coral, metais e tambores).
+  if (T.epic) {
+    const send = ctx.createGain();
+    send.gain.value = 0.42;
+    out.connect(send); send.connect(cathedral()); cathedral().connect(musicBus);
+  }
   let n = 0;
   let next = ctx.currentTime + 0.08;
   const total = T.chords.length * 16;
@@ -239,6 +297,14 @@ export function startMusic(theme) {
       const s = n % 16;
       const chord = T.chords[bar];
       if (s === 0) { strings(next, chord[0] + 12, step * 16, out); strings(next, chord[2] + 12, step * 16, out); organ(next, chord[1] + 12, step * 16, out); }
+      if (T.epic) {
+        // Coral sustentando o acorde (aberto: fundamental, quinta e terça em cima).
+        if (s === 0) for (const m of [chord[0] + 12, chord[2] + 12, chord[1] + 24]) choir(next, m, step * 16, out);
+        // Metais: acordes em ataque no 1 e no "e" do 2 (síncope heroica), e uma chamada no fim do compasso.
+        if (s === 0 || s === 6) for (const m of [chord[0], chord[2], chord[0] + 12]) brass(next, m, step * (s === 0 ? 5 : 2), out, s === 0 ? 1 : 0.75);
+        if (s === 14) brass(next, chord[2] + 12, step * 2, out, 0.6);
+        if (D.taiko && D.taiko.includes(s)) taiko(next, drums, s === 0 ? 1 : 0.75);
+      }
       // Cravo: arpejo da tríade em semicolcheias; nos temas tensos, a vizinha cromática (meio tom acima) no fim de cada meio compasso.
       const arp = [0, 1, 2, 1, 0, 2, 1, 2];
       const tone8 = chord[arp[s % 8]] + 24;
@@ -261,6 +327,7 @@ export function startMusic(theme) {
         let len = 1;
         while (s + len < 16 && T.melody[bar][s + len] == null && len < 4) len++;
         lead(next, note, step * len * 0.95, out);
+        if (T.epic) brass(next, note - 12, step * len * 0.95, out, 0.55); // melodia dobrada pelos metais, uma oitava abaixo
       }
       const other = T.counter && T.counter[bar][s];
       if (other != null) {
