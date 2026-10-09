@@ -1,8 +1,9 @@
 // Git — Histórico: grafo de commits (raias coloridas pela paleta do tema), filtros por texto e autor, e o painel do
 // commit escolhido (mensagem, arquivos, diff) com ações: criar branch aqui e voltar a branch para este ponto.
 import { DS } from '../../lib/ds.js';
-import { load } from '../../lib/store.js';
+import { load, usePersisted } from '../../lib/store.js';
 import { layoutGraph } from '../../git/graph.js';
+import { sideWidth, SIDE_MIN, SIDE_MAX, SIDE_DEFAULT, SIDE_WIDE } from '../../git/panel.js';
 import { validBranchName } from '../../git/ops.js';
 import { gitApi, useRepoData, ago, fullDate, short, RefBadges, FilePath, laneColor, OpButton } from './shared.jsx';
 import { GitDiff } from './GitDiff.jsx';
@@ -197,6 +198,26 @@ export function History({ repo, status, run, focus }) {
   React.useEffect(() => { if (focus && focus.hash) setSel(focus.hash); }, [focus && focus.nonce]);
   React.useEffect(() => { if (!sel && commits && commits[0]) setSel(commits[0].hash); }, [commits]);
   const lanesW = graphWidth(layout);
+  // Bandeja de detalhes: arrastar a borda esquerda define a largura (só grava ao soltar); duplo clique alterna padrão/expandida.
+  const [prefs, setPrefs] = usePersisted('git.historySide', { w: SIDE_DEFAULT });
+  const rootRef = React.useRef(null);
+  const [live, setLive] = React.useState(null);
+  const maxW = () => (rootRef.current ? rootRef.current.getBoundingClientRect().width * 0.7 : SIDE_MAX);
+  const width = sideWidth(prefs.w, maxW());
+  const w = live ?? width;
+  const setW = (v) => setPrefs((p) => ({ ...p, w: sideWidth(v, maxW()) }));
+  const drag = {
+    onPointerDown: (e) => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); setLive(width); },
+    onPointerMove: (e) => { if (live != null && rootRef.current) setLive(sideWidth(rootRef.current.getBoundingClientRect().right - e.clientX, maxW())); },
+    onPointerUp: () => { if (live != null) { setW(live); setLive(null); } },
+    onLostPointerCapture: () => setLive(null),
+    onDoubleClick: () => setW(width >= SIDE_WIDE - 8 ? SIDE_DEFAULT : SIDE_WIDE),
+    onKeyDown: (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      setW(width + (e.key === 'ArrowLeft' ? 16 : -16)); // a borda está à esquerda: ← alarga, → estreita
+    },
+  };
   const listRef = React.useRef(null);
   React.useEffect(() => {
     // Commit escolhido de fora (pai, Visão geral): rola até ele.
@@ -209,7 +230,7 @@ export function History({ repo, status, run, focus }) {
   const selected = commits && commits.find((c) => c.hash.startsWith(sel || '-'));
 
   return (
-    <div className="gt-history">
+    <div className="gt-history" ref={rootRef}>
       <div className="gt-history__main">
         <form className="gt-toolbar" onSubmit={(e) => { e.preventDefault(); setPages(1); setQuery({ grep: q.trim(), author: author.trim() }); }}>
           <label className="gt-search"><Icon name="search" size={13} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar na mensagem" /></label>
@@ -244,8 +265,12 @@ export function History({ repo, status, run, focus }) {
           {commits && !commits.length && <div className="gt-msg">Nenhum commit encontrado com esse filtro.</div>}
         </div>
       </div>
-      <aside className="gt-history__side tk-scroll">
-        {selected ? <CommitDetail repo={repo} hash={selected.hash} run={run} onPick={setSel} /> : <div className="gt-msg">Escolha um commit.</div>}
+      <aside className={'gt-history__side' + (live != null ? ' is-dragging' : '')} style={{ width: w }}>
+        <div className="gt-history__grip" role="separator" aria-orientation="vertical" aria-label="Largura dos detalhes do commit"
+          aria-valuemin={SIDE_MIN} aria-valuemax={SIDE_MAX} aria-valuenow={w} tabIndex={0} {...drag} />
+        <div className="gt-history__scroll tk-scroll">
+          {selected ? <CommitDetail repo={repo} hash={selected.hash} run={run} onPick={setSel} /> : <div className="gt-msg">Escolha um commit.</div>}
+        </div>
       </aside>
     </div>
   );
