@@ -258,17 +258,60 @@ const THEMES = {
   },
   // Chefe final (Production Outage): rock pesado com coral épico — guitarras distorcidas em "chug" com acentos em
   // power chord, bateria com bumbo duplo, órgão e cordas segurando o acorde, e o coral cantando a melodia em notas
-  // longas (dobrado pelos metais). Dó menor, i–VI–VII–V. riff: x = chug abafado · X = acorde aberto · - = pausa.
+  // longas (dobrado pelos metais). Dó menor. Não é um loop só: A (tema) → A' (variação, mais alto) → B (ponte: outros
+  // acordes, meio-tempo, só o coral e acordes longos) → C (subida: chugs contínuos, melodia subindo, rufo na caixa) → A.
+  // riff: x = chug abafado · X = acorde aberto · - = pausa.
   'production-boss': {
     bpm: 150, pulse: false, chromatic: false, timpani: true, epic: true, rock: true,
-    chords: [[48, 51, 55], [44, 48, 51], [46, 50, 53], [43, 47, 50]],
-    riff: ['X-xxx-xxX-xxx-xx', 'X-xxx-xxX-xxX-X-', 'X-xxx-xxX-xxx-xx', 'X-xxX-xxX-X-XXXX'],
-    melody: [
-      [79, null, null, null, null, null, 77, null, 75, null, null, null, 74, null, 75, null],
-      [77, null, null, null, null, null, 75, null, 72, null, null, null, null, null, null, null],
-      [74, null, null, null, 77, null, null, null, 82, null, null, null, 80, null, 79, null],
-      [79, null, null, null, null, null, null, null, 74, null, null, null, 71, null, null, null],
-    ],
+    form: ['A', 'A2', 'B', 'C'],
+    sections: {
+      A: {
+        chords: [[48, 51, 55], [44, 48, 51], [46, 50, 53], [43, 47, 50]],
+        riff: ['X-xxx-xxX-xxx-xx', 'X-xxx-xxX-xxX-X-', 'X-xxx-xxX-xxx-xx', 'X-xxX-xxX-X-XXXX'],
+        melody: [
+          [79, null, null, null, null, null, 77, null, 75, null, null, null, 74, null, 75, null],
+          [77, null, null, null, null, null, 75, null, 72, null, null, null, null, null, null, null],
+          [74, null, null, null, 77, null, null, null, 82, null, null, null, 80, null, 79, null],
+          [79, null, null, null, null, null, null, null, 74, null, null, null, 71, null, null, null],
+        ],
+      },
+      A2: {
+        chords: [[48, 51, 55], [44, 48, 51], [46, 50, 53], [43, 47, 50]],
+        riff: ['X-xxX-xxX-xxX-xx', 'X-xxX-xxX-xxX-X-', 'X-xxX-xxX-xxX-xx', 'X-X-X-X-XXXXXXXX'],
+        melody: [
+          [84, null, null, null, null, null, 82, null, 80, null, null, null, 79, null, 80, null],
+          [80, null, null, null, 79, null, 77, null, 75, null, null, null, 72, null, null, null],
+          [77, null, null, null, 82, null, null, null, 86, null, null, null, 84, null, 82, null],
+          [83, null, null, null, null, null, null, null, 79, null, 77, null, 74, null, 71, null],
+        ],
+      },
+      // Ponte: o chão some — acordes novos (iv–VI–III–V), bateria em meio-tempo, guitarras só no primeiro tempo.
+      B: {
+        chords: [[53, 56, 60], [44, 48, 51], [51, 55, 58], [43, 47, 50]],
+        riff: ['X---------------', 'X---------------', 'X---------------', 'X-------X---X-X-'],
+        melody: [
+          [72, null, null, null, null, null, null, null, 75, null, null, null, null, null, null, null],
+          [75, null, null, null, null, null, null, null, 72, null, null, null, 70, null, null, null],
+          [70, null, null, null, null, null, null, null, 74, null, null, null, null, null, null, null],
+          [74, null, null, null, null, null, null, null, 71, null, null, null, null, null, null, null],
+        ],
+        drums: { kick: [0, 10], snare: [8], ghost: [], hats: 4, openHat: [], crashEvery: 4, taiko: [0, 8], fill: { 12: 47, 13: 45, 14: 43, 15: 40 } },
+        bassEvery: 8,
+      },
+      // Subida: chugs contínuos, a melodia sobe por graus, e a caixa vira um rufo crescente no último compasso.
+      C: {
+        chords: [[44, 48, 51], [46, 50, 53], [48, 51, 55], [43, 47, 50]],
+        riff: ['xxxxxxxxxxxxxxxx', 'xxxxxxxxxxxxxxxx', 'X-xxX-xxX-xxX-xx', 'X-X-X-X-X-X-X-X-'],
+        melody: [
+          [72, null, null, null, 75, null, null, null, 77, null, null, null, 79, null, null, null],
+          [77, null, null, null, 79, null, null, null, 82, null, null, null, 84, null, null, null],
+          [84, null, null, null, null, null, null, null, 87, null, null, null, null, null, null, null],
+          [86, null, null, null, null, null, null, null, 83, null, null, null, null, null, null, null],
+        ],
+        drums: { kick: [0, 2, 4, 6, 8, 10, 12, 14], snare: [4, 12], ghost: [], hats: 2, openHat: [], crashEvery: 2, taiko: [0, 4, 8, 12], fill: {} },
+        roll: true,
+      },
+    },
   },
   // Chefe: ainda mais rápido, bumbo dobrado, tímpanos e trítono (sol sustenido) no clímax.
   boss: {
@@ -300,7 +343,7 @@ export function startMusic(theme) {
   const drums = ctx.createGain();
   drums.gain.value = 0.9;
   drums.connect(comp); comp.connect(out);
-  const D = DRUMS[theme] || DRUMS.localhost;
+  const D0 = DRUMS[theme] || DRUMS.localhost;
   // Rock: as guitarras passam por uma saturação e um corte de agudos antes de entrar na mixagem.
   let amp = null;
   if (T.rock) {
@@ -319,12 +362,19 @@ export function startMusic(theme) {
   }
   let n = 0;
   let next = ctx.currentTime + 0.08;
-  const total = T.chords.length * 16;
+  // Forma da música: lista de compassos { seção, compasso na seção }. Temas sem seções são uma seção só.
+  const sections = T.sections || { main: { chords: T.chords, melody: T.melody, counter: T.counter, riff: T.riff } };
+  const form = T.form || ['main'];
+  const bars = form.flatMap((name) => sections[name].chords.map((_, b) => ({ sec: sections[name], b, last: b === sections[name].chords.length - 1 })));
+  const total = bars.length * 16;
   const schedule = () => {
     while (next < ctx.currentTime + 0.15) {
-      const bar = Math.floor((n % total) / 16);
+      const at = bars[Math.floor((n % total) / 16)];
+      const sec = at.sec;
+      const bar = at.b;
       const s = n % 16;
-      const chord = T.chords[bar];
+      const chord = sec.chords[bar];
+      const D = sec.drums ? { ...D0, ...sec.drums } : D0;
       if (s === 0) { strings(next, chord[0] + 12, step * 16, out); strings(next, chord[2] + 12, step * 16, out); organ(next, chord[1] + 12, step * 16, out); }
       if (T.epic) {
         // Coral sustentando o acorde (aberto: fundamental, quinta e terça em cima).
@@ -340,15 +390,16 @@ export function startMusic(theme) {
       if (!T.rock) harpsichord(next, T.chromatic && s % 8 === 7 ? chord[2] + 25 : tone8, step * 0.9, out, T.arpFilter || 3200);
       // Rock: o riff das guitarras (chug abafado ou power chord aberto) e o coral em canto curto nos tempos fortes.
       if (T.rock) {
-        const hit = T.riff[bar][s];
+        const hit = sec.riff[bar][s];
         if (hit === 'x') guitar(next, chord[0] - 12, step * 0.85, amp, true);
         if (hit === 'X') guitar(next, chord[0] - 12, step * 1.7, amp, false);
         if (s === 0 || s === 8) for (const m of [chord[0] + 12, chord[2] + 12, chord[1] + 24]) chant(next, m, step * 1.2, out, 0.6);
       }
       // Baixo: pulsando em colcheias (tenso) ou em semínimas.
-      if (T.pulse ? s % 2 === 0 : s % 4 === 0) bass(next, chord[0] - 12 + (T.pulse && s % 8 === 6 ? 1 : 0), T.pulse ? step * 1.6 : step * 3.5, out);
-      // Bateria: no último compasso do loop entra a virada de tons no lugar do groove.
-      const fill = bar === T.chords.length - 1 && D.fill[s] != null;
+      if (sec.bassEvery ? s % sec.bassEvery === 0 : T.pulse ? s % 2 === 0 : s % 4 === 0) bass(next, chord[0] - 12 + (T.pulse && s % 8 === 6 ? 1 : 0), T.pulse ? step * 1.6 : step * 3.5, out);
+      // Bateria: no último compasso de cada seção entra a virada de tons no lugar do groove (ou o rufo da subida).
+      const fill = at.last && D.fill[s] != null;
+      if (sec.roll && at.last && s >= 8) snare(next, drums, 0.35 + (s - 8) * 0.09);
       if (fill) tom(next, D.fill[s], drums);
       else {
         if (D.kick.includes(s)) kick(next, drums, s % 4 === 0 ? 1 : 0.8);
@@ -358,14 +409,14 @@ export function startMusic(theme) {
       if (s % D.hats === 0 && !fill) hat(next, drums, s % 4 === 0 ? 1.4 : s % 2 === 0 ? 1 : 0.6, D.openHat.includes(s));
       if (s === 0 && bar % D.crashEvery === 0) { crash(next, drums); kick(next, drums); }
       if (T.timpani && s === 12) tone(next, 38, step * 3, { type: 'sine', gain: 0.2, decay: step * 3, out });
-      const note = T.melody[bar][s];
+      const note = sec.melody[bar][s];
       if (note != null) {
         let len = 1;
-        while (s + len < 16 && T.melody[bar][s + len] == null && len < 4) len++;
+        while (s + len < 16 && sec.melody[bar][s + len] == null && len < 4) len++;
         if (T.rock) {
           // O coral canta a melodia (notas longas) com os metais por baixo.
           let hold = len;
-          while (s + hold < 16 && T.melody[bar][s + hold] == null) hold++;
+          while (s + hold < 16 && sec.melody[bar][s + hold] == null) hold++;
           chant(next, note, step * hold * 0.98, out, 0.9);
           brass(next, note - 12, step * hold * 0.95, out, 0.5);
         } else {
@@ -373,10 +424,10 @@ export function startMusic(theme) {
           if (T.epic) brass(next, note - 12, step * len * 0.95, out, 0.55); // melodia dobrada pelos metais, uma oitava abaixo
         }
       }
-      const other = T.counter && T.counter[bar][s];
+      const other = sec.counter && sec.counter[bar][s];
       if (other != null) {
         let len = 1;
-        while (s + len < 16 && T.counter[bar][s + len] == null && len < 4) len++;
+        while (s + len < 16 && sec.counter[bar][s + len] == null && len < 4) len++;
         lead2(next, other, step * len * 0.95, out);
       }
       n++;
