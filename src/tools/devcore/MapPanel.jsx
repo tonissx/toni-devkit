@@ -135,6 +135,7 @@ function Party({ map, party, hold, place, geom }) {
     if (hold) return undefined;
     if (shown === map.at) { setPos(place(map.at)); return undefined; }
     const k = geom(shown, map.at);
+    if (!k) { setShown(map.at); setPos(place(map.at)); return undefined; }
     const t0 = performance.now();
     let raf = 0;
     setWalking(true);
@@ -241,6 +242,7 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
   const geom = (from, to) => {
     const a = nodeAt(from);
     const b = nodeAt(to);
+    if (!b) return null; // destino vazio (ex.: área nova, ainda no início): nada a percorrer
     const p0 = a ? { x: x(a), y: y(a) + 30 } : start;
     const k = trailCurve(p0.x, p0.y, x(b), y(b) + 30, (a ? a.id : 'start') + '>' + b.id, a && a.shortcut === b.id);
     return k;
@@ -644,7 +646,7 @@ export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio
       )}
       <div className={'dc-stage' + (prepNode ? ' is-prep' : '')}>
         <div className="dc-stage__map">
-          <MapGrid map={map} onNode={onNode} hold={!!battle} selected={prepNode ? prepNode.id : null}
+          <MapGrid key={map.area.id} map={map} onNode={onNode} hold={!!battle} selected={prepNode ? prepNode.id : null}
             party={(map.squad.pets.length ? map.squad.pets : [...map.roster].sort((a, b) => b.level - a.level).slice(0, 3).map((p) => p.id))
               .map((id) => snap.pets.find((p) => p.id === id && p.owned)).filter(Boolean)} />
         </div>
