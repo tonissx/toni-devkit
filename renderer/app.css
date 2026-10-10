@@ -1180,32 +1180,38 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @keyframes dc-roll { 0%, 100% { transform: rotate(0); } 45% { transform: rotate(540deg); } }
 .dc-arena__unit.is-hit.is-hit-late { animation-delay: .24s; }
 .dc-arena__unit.is-hit.is-hit-ranged { animation-delay: .3s; }
-.dc-hit { position: absolute; z-index: 4; width: 64px; height: 64px; pointer-events: none; opacity: 0; transform: translate(-50%, -50%); animation: dc-hit .5s ease-out .22s forwards; }
-.dc-hit.is-ranged { animation-delay: .3s; }
-.dc-hit svg { display: block; overflow: visible; filter: drop-shadow(0 0 4px rgba(255, 255, 255, .8)) drop-shadow(0 0 10px var(--hit-glow, rgba(255, 120, 90, .7))); }
-.dc-hit [pathLength] { stroke-dasharray: 100; stroke-dashoffset: 100; animation: dc-draw .16s ease-out .22s forwards; }
-.dc-hit.is-ranged [pathLength] { animation-delay: .3s; }
-.dc-hit.is-whip, .dc-hit.is-wind { --hit-glow: rgba(185, 140, 255, .7); }
-.dc-hit.is-zap, .dc-hit.is-throw, .dc-hit.is-bash { --hit-glow: rgba(255, 210, 80, .8); }
-.dc-hit.is-pierce { --hit-glow: rgba(120, 220, 255, .8); }
-.dc-hit.is-bite { --hit-glow: rgba(255, 70, 70, .8); }
-.dc-hit.is-miss { filter: grayscale(1) opacity(.55); }
-.dc-hit__ring { transform-origin: 30px 30px; animation: dc-ring .45s ease-out .22s both; }
-@keyframes dc-hit { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.45); } 22% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.25); } }
-@keyframes dc-draw { to { stroke-dashoffset: 0; } }
-@keyframes dc-ring { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
-.dc-proj { position: absolute; z-index: 4; pointer-events: none; transform: translate(-50%, -50%); animation: dc-proj .32s ease-in forwards; }
-.dc-proj.is-wind svg { animation: dc-spin .32s linear infinite; }
-.dc-proj.is-throw svg { animation: dc-spin .2s linear infinite; }
-@keyframes dc-proj { 0% { opacity: 1; transform: translate(-50%, -50%); } 92% { opacity: 1; transform: translate(calc(-50% + var(--px)), calc(-50% + var(--py))); } 100% { opacity: 0; transform: translate(calc(-50% + var(--px)), calc(-50% + var(--py))); } }
-@keyframes dc-spin { to { transform: rotate(360deg); } }
-.dc-beam { position: absolute; z-index: 4; height: 22px; margin-top: -11px; transform-origin: 0 50%; pointer-events: none; filter: drop-shadow(0 0 4px #FFE27A) drop-shadow(0 0 10px rgba(255, 226, 122, .7)); animation: dc-beam .42s ease-out forwards; }
+.dc-hit { --at: .22s; position: absolute; z-index: 4; width: 0; height: 0; pointer-events: none; }
+.dc-hit.is-ranged { --at: .3s; }
+.dc-hit > svg { position: absolute; left: -38px; top: -38px; overflow: visible; opacity: 0; transform: scale(1.35); animation: dc-hit-in .55s ease-out var(--at) forwards; }
+.dc-hit__blur { filter: blur(3px); opacity: .7; }
+.dc-hit__arc { opacity: 0; animation: dc-arc .62s ease-out var(--at) forwards; transform-origin: 30px 30px; }
+@keyframes dc-hit-in { 0% { opacity: 0; } 15% { opacity: 1; } 100% { opacity: 1; } }
+@keyframes dc-arc { 0% { opacity: 0; transform: scale(.82); } 25% { opacity: 1; } 100% { opacity: 0; transform: scale(1.08); } }
+/* clarão: luz radial suave no ponto do golpe */
+.dc-hit__flash { position: absolute; left: -36px; top: -36px; width: 72px; height: 72px; border-radius: 50%; opacity: 0; mix-blend-mode: screen;
+  background: radial-gradient(circle, color-mix(in srgb, var(--c) 55%, transparent) 0, color-mix(in srgb, var(--c) 28%, transparent) 35%, transparent 68%);
+  animation: dc-flash .5s ease-out var(--at) forwards; }
+.dc-hit.is-bash .dc-hit__flash, .dc-hit.is-throw .dc-hit__flash { width: 96px; height: 96px; left: -48px; top: -48px; }
+@keyframes dc-flash { 0% { opacity: 0; transform: scale(.4); } 18% { opacity: .85; } 100% { opacity: 0; transform: scale(1.35); } }
+/* partículas: faíscas (pontos de luz), poeira (nuvenzinhas) e penas (leves, sobem) */
+.dc-hit__p { position: absolute; left: -2px; top: -2px; width: 4px; height: 4px; border-radius: 50%; opacity: 0; background: #fff; box-shadow: 0 0 6px 2px var(--c); animation: dc-part .55s ease-out var(--at) forwards; }
+.dc-hit__p.is-dust { width: 10px; height: 10px; left: -5px; top: -5px; background: color-mix(in srgb, var(--c) 45%, #fff); box-shadow: none; filter: blur(2.5px); animation-duration: .7s; }
+.dc-hit__p.is-feather { width: 7px; height: 3px; border-radius: 3px; animation-duration: .8s; }
+@keyframes dc-part { 0% { opacity: 0; transform: translate(0, 0) scale(.6); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(1); } }
+.dc-hit.is-miss { filter: grayscale(1) opacity(.5); }
+/* projéteis de longe: uma bolinha de luz com rastro */
+.dc-proj { position: absolute; z-index: 4; pointer-events: none; animation: dc-proj .32s ease-in forwards; }
+.dc-trail-orb { display: block; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; }
+.dc-trail-orb.is-wind { background: radial-gradient(circle, #fff, rgba(205, 239, 255, .6) 45%, transparent 70%); box-shadow: -10px 0 14px 2px rgba(159, 216, 255, .5), -22px 0 18px rgba(159, 216, 255, .25); }
+.dc-trail-orb.is-throw { background: radial-gradient(circle, #FFE8C2, #C8873A 55%, transparent 72%); box-shadow: -8px 0 10px rgba(232, 166, 90, .45); }
+@keyframes dc-proj { 0% { opacity: 0; transform: translate(0, 0) scale(.6); } 15% { opacity: 1; } 90% { opacity: 1; transform: translate(var(--px), var(--py)) scale(1); } 100% { opacity: 0; transform: translate(var(--px), var(--py)) scale(1.3); } }
+.dc-beam { position: absolute; z-index: 4; height: 22px; margin-top: -11px; transform-origin: 0 50%; pointer-events: none; filter: drop-shadow(0 0 3px #FFE27A) drop-shadow(0 0 9px rgba(255, 226, 122, .8)); animation: dc-beam .42s ease-out forwards; }
 .dc-beam svg { display: block; }
 @keyframes dc-beam { 0% { clip-path: inset(0 100% 0 0); opacity: 1; } 55% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .dc-arena__unit.is-lunge, .dc-arena__unit.is-lunge svg, .dc-proj, .dc-beam { animation: none !important; }
   .dc-proj, .dc-beam { display: none; }
-  .dc-hit { animation: none; opacity: 1; } .dc-hit [pathLength] { animation: none; stroke-dashoffset: 0; }
+  .dc-hit > svg, .dc-hit__arc, .dc-hit__flash { animation: none; opacity: .9; } .dc-hit__p { display: none; }
 }
 .dc-arena__unit.is-down { opacity: .25; filter: grayscale(1); }
 .dc-arena__pop { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); white-space: nowrap; font: 700 12px var(--tk-font-mono); color: #FF8A8A; animation: dc-arena-pop .42s ease-out; text-shadow: 0 1px 2px #000; }

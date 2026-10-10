@@ -125,20 +125,82 @@ function bubble(e, abilityName, itemName) {
  */
 const ATTACK = { byte: 'slash', git: 'claw', armo: 'bash', query: 'whip', memo: 'pierce', relay: 'wind', noxi: 'zap', lint: 'throw' };
 const RANGED = new Set(['wind', 'zap', 'throw']);
-const HIT_ART = {
-  slash: <path pathLength="100" d="M12 50 Q30 34 50 10" stroke="#fff" strokeWidth="5" strokeLinecap="round" fill="none" />,
-  claw: <g stroke="#fff" strokeWidth="3.6" strokeLinecap="round" fill="none"><path pathLength="100" d="M14 44 L38 10" /><path pathLength="100" d="M22 50 L46 16" /><path pathLength="100" d="M30 56 L54 22" /></g>,
-  bash: <g><path d="M30 6 L35 22 L52 18 L40 30 L54 42 L36 40 L30 56 L24 40 L6 42 L20 30 L8 18 L25 22 Z" fill="#FFE27A" /><circle className="dc-hit__ring" cx="30" cy="30" r="20" fill="none" stroke="#fff" strokeWidth="2.5" /></g>,
-  whip: <path pathLength="100" d="M6 44 Q20 4 34 26 T56 18" stroke="#B98CFF" strokeWidth="4" strokeLinecap="round" fill="none" />,
-  pierce: <g><path pathLength="100" d="M2 40 L52 22" stroke="#fff" strokeWidth="3" strokeLinecap="round" /><path d="M52 22 L44 20 M52 22 L46 28" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" /><circle cx="52" cy="22" r="5" fill="#9FE6FF" opacity=".7" /></g>,
-  wind: <g stroke="#CDEFFF" strokeWidth="3" strokeLinecap="round" fill="none"><path pathLength="100" d="M8 22 Q30 8 42 22 Q50 32 38 36 Q30 38 32 30" /><path pathLength="100" d="M6 40 Q26 32 46 42" /></g>,
-  zap: <g><path d="M34 4 L20 30 L32 30 L24 56 L44 24 L32 24 L40 4 Z" fill="#FFE27A" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" /><path d="M10 20 l6 4 M50 40 l-6 -3 M14 46 l6 -3" stroke="#FFE27A" strokeWidth="2" strokeLinecap="round" /></g>,
-  throw: <g><circle cx="30" cy="30" r="12" fill="#C8873A" opacity=".85" /><path d="M30 10 v8 M30 42 v8 M10 30 h8 M42 30 h8 M16 16 l6 6 M38 38 l6 6 M44 16 l-6 6 M16 44 l6 -6" stroke="#FFE27A" strokeWidth="2.6" strokeLinecap="round" /></g>,
-  bite: <g fill="#fff"><path d="M8 18 Q30 2 52 18 L46 22 L42 16 L38 22 L34 16 L30 22 L26 16 L22 22 L18 16 L14 22 Z" /><path d="M8 42 Q30 58 52 42 L46 38 L42 44 L38 38 L34 44 L30 38 L26 44 L22 38 L18 44 L14 38 Z" /></g>,
+/**
+ * Efeitos de impacto suaves: luz em vez de forma — arcos afilados (finos nas pontas) com degradê e brilho desfocado,
+ * um clarão radial no ponto do golpe e partículas que se espalham e somem. Cor e partículas por tipo de ataque.
+ */
+const HIT_STYLE = {
+  slash: { color: '#FFFFFF', glow: '#9FD8FF', parts: 'spark', arcs: [['M6 52 Q22 22 56 6', 7]] },
+  claw: { color: '#FFF2F2', glow: '#FF8A8A', parts: 'spark', arcs: [['M10 46 Q24 26 40 6', 4.5], ['M18 52 Q32 32 48 12', 5], ['M26 58 Q40 38 56 18', 4.5]] },
+  bash: { color: '#FFF4D6', glow: '#FFC861', parts: 'dust', arcs: [] },
+  whip: { color: '#F2E8FF', glow: '#B98CFF', parts: 'spark', arcs: [['M4 46 Q14 6 30 24 Q42 38 58 14', 5.5]] },
+  pierce: { color: '#FFFFFF', glow: '#8FE3FF', parts: 'spark', arcs: [['M0 42 Q30 30 60 20', 3.4]] },
+  wind: { color: '#E8F7FF', glow: '#9FD8FF', parts: 'feather', arcs: [['M6 26 Q26 6 44 20 Q52 30 40 34', 4], ['M4 44 Q28 32 54 42', 3.4]] },
+  zap: { color: '#FFFBE0', glow: '#FFE27A', parts: 'spark', arcs: [] },
+  throw: { color: '#FFF0D6', glow: '#E8A65A', parts: 'dust', arcs: [] },
+  bite: { color: '#FFFFFF', glow: '#FF6B6B', parts: 'spark', arcs: [['M8 22 Q30 4 52 22', 5], ['M8 38 Q30 56 52 38', 5]] },
 };
+
+/** Faixa afilada ao longo de uma curva (quadráticas encadeadas): grossa no meio, fina nas pontas. */
+function taper(d, w) {
+  // Amostra a curva (M x y Q cx cy x y [Q ...]) e monta um contorno de largura variável.
+  const nums = d.match(/-?\d+(\.\d+)?/g).map(Number);
+  const pts = [];
+  let [x0, y0] = nums;
+  for (let k = 2; k + 3 < nums.length + 1; k += 4) {
+    const [cx, cy, x1, y1] = nums.slice(k, k + 4);
+    if (x1 == null) break;
+    for (let s = 0; s <= 12; s++) {
+      const t = s / 12;
+      pts.push([(1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t * t * x1, (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cy + t * t * y1]);
+    }
+    x0 = x1; y0 = y1;
+  }
+  const L = []; const R = [];
+  pts.forEach(([x, y], i) => {
+    const [px, py] = pts[Math.max(0, i - 1)]; const [nx, ny] = pts[Math.min(pts.length - 1, i + 1)];
+    const dx = nx - px; const dy = ny - py; const len = Math.hypot(dx, dy) || 1;
+    const half = (w / 2) * Math.sin((Math.PI * i) / (pts.length - 1)); // 0 nas pontas, w no meio
+    L.push([x - (dy / len) * half, y + (dx / len) * half]); R.push([x + (dy / len) * half, y - (dx / len) * half]);
+  });
+  return 'M' + [...L, ...R.reverse()].map(([x, y]) => x.toFixed(1) + ' ' + y.toFixed(1)).join(' L') + ' Z';
+}
+
+/** Impacto: clarão suave, os arcos de luz (brilho + núcleo) e as partículas. */
+function HitFx({ type, id }) {
+  const S = HIT_STYLE[type] || HIT_STYLE.slash;
+  const g = 'hg' + id;
+  const parts = Array.from({ length: S.parts === 'dust' ? 9 : 8 }, (_, k) => {
+    const ang = (k / 8) * Math.PI * 2 + (id % 5) * 0.4;
+    const dist = 18 + ((id * 7 + k * 13) % 14);
+    return { x: Math.cos(ang) * dist, y: Math.sin(ang) * dist - (S.parts === 'feather' ? 6 : 0), d: (k % 3) * 0.03 };
+  });
+  return (
+    <>
+      <i className="dc-hit__flash" style={{ '--c': S.glow }} />
+      <svg width="76" height="76" viewBox="-8 -8 76 76">
+        <defs>
+          <linearGradient id={g} x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stopColor={S.glow} stopOpacity="0" />
+            <stop offset=".5" stopColor={S.color} stopOpacity="1" />
+            <stop offset="1" stopColor={S.glow} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {S.arcs.map(([d, w], k) => (
+          <g key={k} className="dc-hit__arc" style={{ animationDelay: k * 0.04 + 's' }}>
+            <path d={taper(d, w * 2.6)} fill={S.glow} opacity=".45" className="dc-hit__blur" />
+            <path d={taper(d, w)} fill={`url(#${g})`} />
+          </g>
+        ))}
+        {type === 'zap' && <path className="dc-hit__arc" d="M34 0 Q26 16 34 24 Q22 34 30 60" stroke={S.color} strokeWidth="2.2" fill="none" strokeLinecap="round" />}
+      </svg>
+      {parts.map((pt, k) => <i key={k} className={'dc-hit__p is-' + S.parts} style={{ '--x': pt.x + 'px', '--y': pt.y + 'px', '--c': S.glow, animationDelay: `calc(var(--at) + ${pt.d}s)` }} />)}
+    </>
+  );
+}
 const PROJ_ART = {
-  wind: <svg width="30" height="30" viewBox="0 0 30 30"><path d="M4 12 Q15 2 24 10 Q28 16 20 18 Q14 19 16 14 M3 22 Q14 17 26 23" stroke="#CDEFFF" strokeWidth="2.6" strokeLinecap="round" fill="none" /></svg>,
-  throw: <svg width="20" height="22" viewBox="0 0 20 22"><path d="M3 8 Q10 2 17 8 Z" fill="#6B4630" /><path d="M4 8 Q10 22 16 8 Z" fill="#C8873A" /><path d="M10 2 v-2" stroke="#6B4630" strokeWidth="1.6" /></svg>,
+  wind: <i className="dc-trail-orb is-wind" />,
+  throw: <i className="dc-trail-orb is-throw" />,
 };
 
 /** Uma linha da fila de eventos: ícone, lado (cor) e o texto com os nomes destacados. */
@@ -342,11 +404,11 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
       <div ref={arenaRef} className={'dc-arena dc-arena--' + area.arena + (burstHit || (cur && cur.k === 'blackout') ? ' is-shake' : '') + (done ? ' is-done' : '')} aria-label={'Arena ' + area.name}>
         {/* golpe: projétil/raio (de longe) e o efeito no alvo, no tipo de ataque de quem bate */}
         {sk && sk.type === 'zap' && <span key={'beam' + i} className="dc-beam" aria-hidden="true" style={{ left: sk.ax, top: sk.ay, width: sk.len, transform: `rotate(${sk.ang}rad)` }}>
-          <svg width="100%" height="22" viewBox="0 0 100 22" preserveAspectRatio="none"><path d="M0 11 L12 3 L22 17 L34 5 L46 18 L58 4 L70 16 L82 6 L100 11" stroke="#FFE27A" strokeWidth="2.6" fill="none" strokeLinejoin="round" /></svg>
+          <svg width="100%" height="22" viewBox="0 0 100 22" preserveAspectRatio="none"><path d="M0 11 Q8 5 16 12 T32 10 T48 13 T64 9 T80 12 T100 11" stroke="#FFF6C8" strokeWidth="1.6" fill="none" strokeLinecap="round" /></svg>
         </span>}
         {sk && PROJ_ART[sk.type] && <span key={'proj' + i} className={'dc-proj is-' + sk.type} aria-hidden="true" style={{ left: sk.ax, top: sk.ay, '--px': sk.tx - sk.ax + 'px', '--py': sk.ty - sk.ay + 'px' }}>{PROJ_ART[sk.type]}</span>}
         {sk && <span key={'hit' + i} className={'dc-hit is-' + sk.type + (sk.miss ? ' is-miss' : '') + (sk.ranged ? ' is-ranged' : '')} aria-hidden="true" style={{ left: sk.tx, top: sk.ty }}>
-          <svg width="64" height="64" viewBox="0 0 60 60">{HIT_ART[sk.type]}</svg>
+          <HitFx type={sk.type} id={i} />
         </span>}
         {cur && cur.k === 'blackout' && <i key={'flash' + i} className="dc-fx-blackout" aria-hidden="true" />}
         {area.arena === 'localhost' && <ForestBackdrop />}
