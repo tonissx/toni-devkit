@@ -627,37 +627,125 @@ export function stopMusic() {
 }
 
 /* ─────────────── efeitos ─────────────── */
+/* ─────────────── golpes com impacto: barramento saturado + camadas de pancada, lâmina e tiro ─────────────── */
+let punch = null;
+/** Barramento dos golpes: saturação (corpo e agressividade) + compressor (soco "na cara" sem estourar). */
+function punchBus() {
+  if (punch) return punch;
+  const drive = ctx.createWaveShaper();
+  const n = 1024; const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; curve[i] = Math.tanh(x * 2.6); }
+  drive.curve = curve; drive.oversample = '2x';
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -20; comp.knee.value = 4; comp.ratio.value = 6; comp.attack.value = 0.001; comp.release.value = 0.12;
+  punch = ctx.createGain(); punch.gain.value = 0.9;
+  punch.connect(drive); drive.connect(comp); comp.connect(master);
+  return punch;
+}
+/** Ruído filtrado com varredura (lâmina cortando o ar, estouro, crepitação). type: bandpass | lowpass | highpass. */
+function swish(t, dur, { gain = 0.2, type = 'bandpass', from = 800, to = 5000, q = 1.4, attack = 0.004, out } = {}) {
+  if (!noiseBuf) noise(t, 0.001, { gain: 0 });
+  const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  const f = ctx.createBiquadFilter(); f.type = type; f.Q.value = q;
+  f.frequency.setValueAtTime(from, t); f.frequency.exponentialRampToValueAtTime(to, t + dur);
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(gain, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(f); f.connect(g); g.connect(out || punchBus());
+  src.start(t); src.stop(t + dur + 0.02);
+}
+/** Pancada: "tum" grave despencando + estalo seco no ataque + corpo médio. power 0–1.5. */
+function thump(t, power = 1, out) {
+  const o = out || punchBus();
+  tone(t, 45, 0.28, { type: 'sine', gain: 0.55 * power, slideTo: 22, decay: 0.28, out: o });
+  tone(t, 57, 0.08, { type: 'triangle', gain: 0.25 * power, slideTo: 40, decay: 0.08, out: o });
+  swish(t, 0.018, { gain: 0.5 * power, type: 'highpass', from: 2500, to: 2500, q: 0.7, attack: 0.001, out: o });
+  swish(t, 0.12, { gain: 0.3 * power, type: 'lowpass', from: 1800, to: 300, q: 0.8, attack: 0.002, out: o });
+}
+/** Aço: parciais inarmônicos agudos decaindo rápido (o "shing" de uma lâmina). */
+function steel(t, midi = 98, dur = 0.35, gain = 0.09, out) {
+  for (const [r, g] of [[1, 1], [2.76, 0.6], [5.4, 0.35], [8.93, 0.18]]) {
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(hz(midi) * r, t);
+    const gn = ctx.createGain(); gn.gain.setValueAtTime(0.0001, t); gn.gain.linearRampToValueAtTime(gain * g, t + 0.003);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t + dur / Math.sqrt(r));
+    o.connect(gn); gn.connect(out || punchBus()); o.start(t); o.stop(t + dur + 0.05);
+  }
+}
+/** Tiro/estouro: ruído largo com o brilho caindo + boom grave + crepitação. */
+function blast(t, power = 1) {
+  swish(t, 0.16, { gain: 0.6 * power, type: 'lowpass', from: 9000, to: 400, q: 0.6, attack: 0.001 });
+  tone(t, 40, 0.35, { type: 'sine', gain: 0.5 * power, slideTo: 20, decay: 0.35, out: punchBus() });
+  for (let k = 1; k < 5; k++) swish(t + 0.03 + k * 0.022, 0.025, { gain: 0.18 * power, type: 'highpass', from: 4500, to: 4500, attack: 0.001 });
+}
+
 const SFX = {
   hit: (t) => { tone(t, 64, 0.09, { type: 'square', gain: 0.1, slideTo: 52, decay: 0.09 }); noise(t, 0.05, { gain: 0.05, hp: 2500 }); },
-  crit: (t) => { tone(t, 76, 0.12, { type: 'square', gain: 0.11, slideTo: 64, decay: 0.12 }); tone(t + 0.05, 88, 0.12, { type: 'square', gain: 0.07, decay: 0.12 }); noise(t, 0.08, { gain: 0.08, hp: 1800 }); },
-  enemyHit: (t) => { tone(t, 52, 0.12, { type: 'sawtooth', gain: 0.09, slideTo: 40, decay: 0.12, filter: 1400 }); },
+  crit: (t) => { thump(t, 1.1); steel(t, 96, 0.4, 0.09); swish(t, 0.05, { gain: 0.6, type: 'highpass', from: 3000, to: 3000, attack: 0.001 }); tone(t + 0.04, 88, 0.12, { type: 'square', gain: 0.07, decay: 0.12, out: punchBus() }); },
+  enemyHit: (t) => { thump(t, 0.7); swish(t, 0.07, { gain: 0.35, from: 1800, to: 600, q: 1.5, attack: 0.002 }); tone(t, 52, 0.12, { type: 'sawtooth', gain: 0.08, slideTo: 38, decay: 0.12, filter: 1400, out: punchBus() }); },
   miss: (t) => { noise(t, 0.14, { gain: 0.05, hp: 4000 }); tone(t, 79, 0.1, { type: 'triangle', gain: 0.04, slideTo: 74, decay: 0.1 }); },
   heal: (t) => { [72, 76, 79, 84].forEach((m, i) => tone(t + i * 0.05, m, 0.18, { type: 'sine', gain: 0.07, decay: 0.18 })); },
   ability: (t) => { [67, 71, 74, 79, 83].forEach((m, i) => tone(t + i * 0.035, m, 0.12, { type: 'square', gain: 0.06, decay: 0.12, filter: 3500 })); },
   item: (t) => { tone(t, 79, 0.08, { type: 'square', gain: 0.06, decay: 0.08 }); tone(t + 0.07, 86, 0.14, { type: 'square', gain: 0.06, decay: 0.14 }); },
   down: (t) => { tone(t, 60, 0.35, { type: 'sawtooth', gain: 0.08, slideTo: 36, filter: 1200 }); },
   // Efeito visual de ataque: o som de cada pet (tocado no início do golpe; o impacto cai em ~0,22 s, ou ~0,3 s de longe).
-  // Byte: investida (whoosh) e o "shing" metálico do corte.
-  'atk-slash': (t) => { noise(t, 0.16, { gain: 0.05, hp: 2500 }); tone(t + 0.21, 96, 0.22, { type: 'triangle', gain: 0.07, slideTo: 91, decay: 0.22 }); tone(t + 0.21, 103, 0.16, { type: 'sine', gain: 0.04, decay: 0.16 }); noise(t + 0.21, 0.05, { gain: 0.06, hp: 5000 }); },
-  // Git: o salto e três arranhões rápidos.
-  'atk-claw': (t) => { tone(t, 55, 0.14, { type: 'sine', gain: 0.08, slideTo: 67, decay: 0.14 }); [0.21, 0.25, 0.29].forEach((d) => noise(t + d, 0.035, { gain: 0.08, hp: 3800 })); },
-  // Query: "splorch" molhado e o estalo do chicote.
-  'atk-whip': (t) => { tone(t, 48, 0.12, { type: 'sine', gain: 0.1, slideTo: 62, decay: 0.12 }); tone(t + 0.06, 58, 0.1, { type: 'sine', gain: 0.06, slideTo: 50, decay: 0.1 }); noise(t + 0.21, 0.04, { gain: 0.12, hp: 3000 }); tone(t + 0.21, 84, 0.05, { type: 'square', gain: 0.04, decay: 0.05 }); },
-  // Memo: duas batidas de asa e a bicada seca.
-  'atk-pierce': (t) => { noise(t, 0.07, { gain: 0.06, hp: 500 }); noise(t + 0.09, 0.07, { gain: 0.06, hp: 500 }); tone(t + 0.22, 91, 0.04, { type: 'square', gain: 0.07, decay: 0.04 }); noise(t + 0.22, 0.03, { gain: 0.07, hp: 4500 }); },
-  // Relay: bater de asas e a rajada de vento.
-  'atk-wind': (t) => { noise(t, 0.08, { gain: 0.06, hp: 500 }); noise(t + 0.06, 0.4, { gain: 0.05, hp: 1200 }); tone(t + 0.06, 76, 0.3, { type: 'sine', gain: 0.02, slideTo: 84, decay: 0.3 }); },
-  // Noxi: zumbido de carga subindo e o estalo elétrico.
-  'atk-zap': (t) => { tone(t, 60, 0.26, { type: 'sawtooth', gain: 0.035, slideTo: 86, filter: 2200 }); for (let k = 0; k < 5; k++) noise(t + 0.28 + k * 0.025, 0.02, { gain: 0.08, hp: 5000 }); tone(t + 0.28, 90, 0.08, { type: 'square', gain: 0.04, slideTo: 72, decay: 0.08 }); },
-  // Lint: o "boing" do lançamento e o estalo da noz no alvo.
-  'atk-throw': (t) => { tone(t, 67, 0.16, { type: 'sine', gain: 0.07, slideTo: 81, decay: 0.16 }); noise(t + 0.31, 0.05, { gain: 0.1, hp: 1800 }); tone(t + 0.31, 74, 0.06, { type: 'triangle', gain: 0.06, decay: 0.06 }); },
-  // Armo rolando: ronco grave subindo com a velocidade (rodinhas de cascalho) e a pancada no impacto.
+  // Tudo passa pelo barramento de impacto (saturação + compressor).
+  // Byte: a lâmina cortando o ar e o golpe — "fssh" + "SHING" de aço + pancada.
+  'atk-slash': (t) => {
+    swish(t + 0.05, 0.17, { gain: 0.32, from: 500, to: 6500, q: 1.6, attack: 0.12 });
+    swish(t + 0.21, 0.05, { gain: 0.55, type: 'highpass', from: 3500, to: 3500, attack: 0.001 });
+    steel(t + 0.21, 100, 0.45, 0.1);
+    thump(t + 0.21, 0.7);
+  },
+  // Git: o bote no ar e três garradas rasgando (cada uma um corte curto e agudo).
+  'atk-claw': (t) => {
+    swish(t, 0.2, { gain: 0.22, from: 300, to: 1600, q: 1, attack: 0.08 });
+    [0.21, 0.255, 0.3].forEach((d, k) => {
+      swish(t + d, 0.06, { gain: 0.5, from: 2200, to: 8000, q: 2, attack: 0.002 });
+      steel(t + d, 103 - k * 3, 0.16, 0.05);
+    });
+    thump(t + 0.21, 0.55);
+  },
+  // Query: o tentáculo zunindo e o estalo seco do chicote, com pancada.
+  'atk-whip': (t) => {
+    swish(t + 0.03, 0.18, { gain: 0.26, from: 400, to: 3500, q: 1.2, attack: 0.15 });
+    swish(t + 0.21, 0.025, { gain: 0.8, type: 'highpass', from: 2800, to: 2800, attack: 0.0008 });
+    tone(t + 0.21, 96, 0.05, { type: 'square', gain: 0.12, slideTo: 72, decay: 0.05, out: punchBus() });
+    thump(t + 0.21, 0.65);
+  },
+  // Memo: o mergulho rasgando o ar e a estocada que perfura — impacto curto, agudo e pesado.
+  'atk-pierce': (t) => {
+    swish(t, 0.08, { gain: 0.25, type: 'lowpass', from: 900, to: 400, attack: 0.01 });
+    swish(t + 0.06, 0.16, { gain: 0.32, from: 700, to: 7000, q: 1.8, attack: 0.13 });
+    swish(t + 0.22, 0.04, { gain: 0.6, from: 6000, to: 1500, q: 2.5, attack: 0.001 });
+    steel(t + 0.22, 108, 0.2, 0.08);
+    thump(t + 0.22, 0.8);
+  },
+  // Relay: a rajada sai como um disparo de ar e acerta com estrondo.
+  'atk-wind': (t) => {
+    swish(t, 0.06, { gain: 0.3, type: 'lowpass', from: 700, to: 200, attack: 0.002 });
+    swish(t + 0.04, 0.3, { gain: 0.38, from: 300, to: 3200, q: 0.9, attack: 0.03 });
+    swish(t + 0.3, 0.2, { gain: 0.45, type: 'lowpass', from: 4000, to: 300, q: 0.7, attack: 0.002 });
+    thump(t + 0.3, 0.85);
+  },
+  // Noxi: carga subindo e o DISPARO — estouro elétrico com boom e crepitação.
+  'atk-zap': (t) => {
+    tone(t, 55, 0.27, { type: 'sawtooth', gain: 0.06, slideTo: 91, filter: 3000, out: punchBus() });
+    tone(t, 67, 0.27, { type: 'square', gain: 0.025, slideTo: 103, filter: 2500, out: punchBus() });
+    blast(t + 0.28, 1);
+    tone(t + 0.28, 98, 0.12, { type: 'sawtooth', gain: 0.08, slideTo: 60, decay: 0.12, out: punchBus() });
+  },
+  // Lint: o arremesso zunindo e a noz batendo como uma pedrada (estalo de madeira + pancada).
+  'atk-throw': (t) => {
+    swish(t, 0.12, { gain: 0.3, from: 600, to: 2600, q: 1.3, attack: 0.04 });
+    swish(t + 0.31, 0.03, { gain: 0.7, from: 1600, to: 1200, q: 3, attack: 0.001 });
+    tone(t + 0.31, 79, 0.05, { type: 'triangle', gain: 0.2, slideTo: 70, decay: 0.05, out: punchBus() });
+    thump(t + 0.31, 0.9);
+  },
+  // Armo: a bola rolando (ronco e cascalho) e o choque pesado no impacto.
   roll: (t) => {
-    tone(t, 33, 0.24, { type: 'sawtooth', gain: 0.07, slideTo: 45, filter: 420 });
-    for (let k = 0; k < 6; k++) noise(t + k * 0.035, 0.03, { gain: 0.035, hp: 900 });
-    tone(t + 0.23, 40, 0.3, { type: 'sine', gain: 0.26, slideTo: 24, decay: 0.3 });
-    noise(t + 0.23, 0.09, { gain: 0.1, hp: 500 });
-    tone(t + 0.23, 64, 0.08, { type: 'square', gain: 0.05, slideTo: 50, decay: 0.08, filter: 1600 });
+    tone(t, 33, 0.24, { type: 'sawtooth', gain: 0.1, slideTo: 45, filter: 420, out: punchBus() });
+    for (let k = 0; k < 6; k++) swish(t + k * 0.035, 0.03, { gain: 0.16, type: 'highpass', from: 900, to: 900, attack: 0.002 });
+    thump(t + 0.23, 1.3);
+    swish(t + 0.23, 0.25, { gain: 0.35, type: 'lowpass', from: 1200, to: 150, attack: 0.002 });
   },
   victory: (t) => {
     [62, 66, 69, 74].forEach((m, i) => lead(t + i * 0.11, m, 0.14, master));
