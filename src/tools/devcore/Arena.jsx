@@ -410,7 +410,9 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   // Efeito visual de ataque: cada pet tem o seu som, tocado quando o golpe começa (o Armo rolando é o 'roll').
   React.useEffect(() => { if (sk && ATTACK_SET.has(sk.type)) sfx(sk.type === 'bash' ? 'roll' : 'atk-' + sk.type); }, [sk && sk.i]);
 
-  const Unit = ({ u }) => {
+  // Funções de render (não componentes): um componente declarado aqui dentro seria um tipo novo a cada render — o React
+  // remontaria as unidades e reiniciaria as animações no meio do golpe (o relógio da tela re-renderiza a cada 500 ms).
+  const unitView = (u) => {
     if (!visible[u.uid]) return null;
     const p = u.side === 'pet' ? pet(u.id) : null;
     const acting = cur && cur.a === u.uid;
@@ -451,7 +453,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   const pets = battle.units.filter((u) => u.side === 'pet');
   const enemies = battle.units.filter((u) => u.side === 'enemy');
   /** Painel do topo: retrato, nome e vida de cada um (pets à esquerda, inimigos à direita). */
-  const Card = ({ u }) => {
+  const cardView = (u) => {
     if (!visible[u.uid]) return null;
     const p = u.side === 'pet' ? pet(u.id) : null;
     const life = hp[u.uid] / u.maxHp;
@@ -497,8 +499,8 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
         </span>}
         {cur && cur.k === 'blackout' && <i key={'flash' + i} className="dc-fx-blackout" aria-hidden="true" />}
         <div className="dc-hud" aria-label="Vida das unidades">
-          <div className="dc-hud__side is-pets">{[...pets].sort((a, b) => (b.rank != null ? b.rank : 0) - (a.rank != null ? a.rank : 0)).map((u) => <Card key={u.uid} u={u} />)}</div>
-          <div className="dc-hud__side is-enemies">{enemies.map((u) => <Card key={u.uid} u={u} />)}</div>
+          <div className="dc-hud__side is-pets">{[...pets].sort((a, b) => (b.rank != null ? b.rank : 0) - (a.rank != null ? a.rank : 0)).map((u) => <React.Fragment key={u.uid}>{cardView(u)}</React.Fragment>)}</div>
+          <div className="dc-hud__side is-enemies">{enemies.map((u) => <React.Fragment key={u.uid}>{cardView(u)}</React.Fragment>)}</div>
         </div>
         {area.arena === 'localhost' && <ForestBackdrop />}
         {area.arena === 'staging' && <SwampBackdrop />}
@@ -510,7 +512,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           {Array.from({ length: st.decoys }, (_, k) => (
             <span key={'decoy' + k} className="dc-fx-decoy" aria-hidden="true"><PetSprite id="git" color={(pet('git') || {}).color || '#F05133'} eye={(pet('git') || {}).eye} size={48} className="is-static" /></span>
           ))}
-          {[...pets].sort((a, b) => (b.rank != null ? b.rank : -b.front) - (a.rank != null ? a.rank : -a.front)).map((u) => <Unit key={u.uid} u={u} />)}
+          {[...pets].sort((a, b) => (b.rank != null ? b.rank : -b.front) - (a.rank != null ? a.rank : -a.front)).map((u) => <React.Fragment key={u.uid}>{unitView(u)}</React.Fragment>)}
         </div>
         {curFx && caster && (
           <div key={'banner' + i} className={'dc-fx-banner is-' + curFx.type} style={{ '--pet': casterPet ? casterPet.color : '#fff' }} aria-live="polite">
@@ -518,7 +520,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           </div>
         )}
         <div className="dc-arena__vs">VS</div>
-        <div className="dc-arena__side is-enemies">{enemies.map((u) => <Unit key={u.uid} u={u} />)}</div>
+        <div className="dc-arena__side is-enemies">{enemies.map((u) => <React.Fragment key={u.uid}>{unitView(u)}</React.Fragment>)}</div>
         {done && (
           <div className={'dc-arena__result' + (battle.win ? ' is-win' : ' is-loss')}>
             <b>{battle.win ? 'Vitória' : timeout ? 'Tempo esgotado' : 'Derrota'}</b>
