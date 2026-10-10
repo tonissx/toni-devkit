@@ -398,6 +398,8 @@ function mapView(s, now, c) {
         name: o.kind === 'item' ? c.consumable[o.id].name : o.kind === 'part' ? 'Peça de Blueprint' : 'Patch ' + c.RARITIES[o.rarity].name.toLowerCase(),
         icon: o.kind === 'item' ? c.consumable[o.id].icon : o.kind === 'part' ? 'package' : 'sparkles',
         full: o.kind === 'item' && (s.run.inventory[o.id] || 0) >= c.consumable[o.id].cap,
+        desc: o.kind === 'item' ? c.consumable[o.id].description : o.kind === 'part' ? 'Uma peça para montar o Blueprint de um gerador.' : 'Um Patch aleatório desta raridade, ativo até o fim da run.',
+        owned: o.kind === 'item' ? (s.run.inventory[o.id] || 0) : null, cap: o.kind === 'item' ? c.consumable[o.id].cap : null,
       })) };
     }
   }

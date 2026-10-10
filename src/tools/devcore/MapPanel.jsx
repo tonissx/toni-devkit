@@ -217,7 +217,7 @@ function Landmark({ n, x, y }) {
 }
 
 function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
-  const waiting = !!(map.pending && map.pending.kind !== 'shop'); // escolha pendente no ponto atual
+  const waiting = !!map.pending; // escolha pendente (ou loja aberta) no ponto atual: clicar nele reabre o modal
   const ref = React.useRef(null);
   const boxRef = React.useRef(null);
   const [w, setW] = React.useState(900);
@@ -336,24 +336,40 @@ function MapGrid({ map, onNode, party = [], hold = false, selected = null }) {
 /** Evento, descanso ou loja em que o jogador está. */
 function PendingPanel({ map, snap, act, open = true, setOpen = () => {} }) {
   const p = map.pending;
-  if (p.kind === 'shop') {
-    return (
-      <section className="dc-mapbox">
-        <div className="dc-mapbox__head"><Icon name="store" size={14} /> <b>Loja</b><span>Compre o que quiser e siga pelo mapa quando terminar.</span></div>
+  if (p.kind === 'shop') return <ShopModal p={p} snap={snap} act={act} open={open} setOpen={setOpen} />;
+  return <DecisionModal p={p} snap={snap} act={act} open={open} setOpen={setOpen} />;
+}
+
+/** Loja: modal com a barraca e um card por oferta. Fechar não encerra a loja — clicar no ponto dela reabre. */
+function ShopModal({ p, snap, act, open, setOpen }) {
+  if (!open) return null;
+  const compute = typeof snap.amount === 'number' ? snap.amount : null;
+  return (
+    <Modal open title="LOJA" icon="store" onClose={() => setOpen(false)} width={680}>
+      <div className="dc-decision">
+        <div className="dc-decision__story">
+          <span className="dc-shop__stall" aria-hidden="true"><ShopStall s={0.62} /></span>
+          <p>Uma barraca no meio da trilha. Compre o que quiser e siga pelo mapa quando terminar — dá para voltar aqui clicando no ponto da loja.
+            {compute != null && <><br /><b className="dc-shop__wallet"><Icon name="cpu" size={12} /> {formatNum(compute)} Compute</b></>}</p>
+        </div>
         <div className="dc-shop">
           {p.offers.map((o) => (
             <div key={o.index} className={'dc-shop__item' + (o.bought ? ' is-bought' : '')}>
-              <Icon name={o.icon} size={16} />
-              <span>{o.name}</span>
+              <span className="dc-shop__icon"><Icon name={o.icon} size={22} /></span>
+              <span className="dc-shop__body">
+                <b>{o.name}</b>
+                <span>{o.desc}</span>
+                {o.owned != null && <small>Você tem {o.owned}/{o.cap}</small>}
+              </span>
               {o.bought ? <span className="dc-chip is-ok"><Icon name="check" size={11} />comprado</span>
                 : <Button size="sm" variant={o.affordable && !o.full ? 'primary' : 'secondary'} disabled={!o.affordable || o.full} onClick={() => act({ type: 'mapBuy', offer: o.index })}>{o.full ? 'Estoque cheio' : formatNum(o.price)}</Button>}
             </div>
           ))}
         </div>
-      </section>
-    );
-  }
-  return <DecisionModal p={p} snap={snap} act={act} open={open} setOpen={setOpen} />;
+        <div className="dc-shop__foot"><Button variant="secondary" onClick={() => setOpen(false)}>Voltar ao mapa</Button></div>
+      </div>
+    </Modal>
+  );
 }
 
 /** Ilustração de cada tipo de recompensa (cena em gradiente com um ícone grande). */

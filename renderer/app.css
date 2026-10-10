@@ -983,10 +983,17 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-mapbox__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dc-mapbox__head > span { font-size: 11.5px; color: var(--tk-text-3); }
 .dc-mapbox__text { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--tk-text-2); }
-.dc-shop { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
-.dc-shop__item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); font-size: 12.5px; }
-.dc-shop__item > span:not(.dc-chip) { flex: 1; }
+.dc-shop { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dc-shop__item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-lg); background: var(--tk-surface-2); font-size: 12.5px; }
+.dc-shop__icon { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: var(--tk-radius-md);
+  color: #FFD27A; background: radial-gradient(circle at 50% 35%, color-mix(in srgb, #FFD27A 28%, transparent), color-mix(in srgb, #FFD27A 6%, transparent)); }
+.dc-shop__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dc-shop__body > span { color: var(--tk-text-2); font-size: 12px; line-height: 1.4; }
+.dc-shop__body > small { color: var(--tk-text-3); font-size: 11px; }
 .dc-shop__item.is-bought { opacity: .6; }
+.dc-shop__stall { flex: none; width: 64px; height: 64px; display: grid; place-items: end center; overflow: visible; }
+.dc-shop__wallet { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; color: var(--tk-text); }
+.dc-shop__foot { display: flex; justify-content: flex-end; }
 /* Mapa e preparação na mesma célula: o mapa mantém a largura toda e os painéis flutuam sobre as bordas da floresta
    (decoração), grudados no topo enquanto o mapa rola. */
 /* Ponto de decisão: modal com cards ilustrados */
