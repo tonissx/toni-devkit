@@ -639,7 +639,8 @@ function punchBus() {
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -20; comp.knee.value = 4; comp.ratio.value = 6; comp.attack.value = 0.001; comp.release.value = 0.12;
   punch = ctx.createGain(); punch.gain.value = 0.9;
-  punch.connect(drive); drive.connect(comp); comp.connect(master);
+  const level = ctx.createGain(); level.gain.value = 0.6; // volume final dos golpes (~-4,5 dB): abaixo dos picos da música
+  punch.connect(drive); drive.connect(comp); comp.connect(level); level.connect(master);
   return punch;
 }
 /** Ruído filtrado com varredura (lâmina cortando o ar, estouro, crepitação). type: bandpass | lowpass | highpass. */
@@ -661,13 +662,23 @@ function thump(t, power = 1, out) {
   swish(t, 0.018, { gain: 0.5 * power, type: 'highpass', from: 2500, to: 2500, q: 0.7, attack: 0.001, out: o });
   swish(t, 0.12, { gain: 0.3 * power, type: 'lowpass', from: 1800, to: 300, q: 0.8, attack: 0.002, out: o });
 }
-/** Aço: parciais inarmônicos agudos decaindo rápido (o "shing" de uma lâmina). */
-function steel(t, midi = 98, dur = 0.35, gain = 0.09, out) {
-  for (const [r, g] of [[1, 1], [2.76, 0.6], [5.4, 0.35], [8.93, 0.18]]) {
-    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(hz(midi) * r, t);
-    const gn = ctx.createGain(); gn.gain.setValueAtTime(0.0001, t); gn.gain.linearRampToValueAtTime(gain * g, t + 0.003);
-    gn.gain.exponentialRampToValueAtTime(0.0001, t + dur / Math.sqrt(r));
-    o.connect(gn); gn.connect(out || punchBus()); o.start(t); o.stop(t + dur + 0.05);
+/**
+ * Aço (espada): ruído passando por filtros ressonantes estreitos e agudos — o raspar de metal em metal, deslizando
+ * para baixo e sumindo rápido. Nada de senos puros (que soam como sino). midi só desloca o "brilho" da lâmina.
+ */
+function steel(t, midi = 98, dur = 0.14, gain = 0.09, out) {
+  if (!noiseBuf) noise(t, 0.001, { gain: 0 });
+  const o = out || punchBus();
+  const lift = Math.pow(2, (midi - 98) / 24); // um pouco mais agudo para notas mais altas
+  for (const [freq, q, g] of [[2900, 14, 1], [4400, 18, 0.8], [6800, 22, 0.55], [9200, 10, 0.3]]) {
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q;
+    f.frequency.setValueAtTime(freq * lift * 1.12, t); f.frequency.exponentialRampToValueAtTime(freq * lift * 0.9, t + dur);
+    const gn = ctx.createGain();
+    gn.gain.setValueAtTime(0.0001, t); gn.gain.linearRampToValueAtTime(gain * g * 9, t + 0.002);
+    gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(gn); gn.connect(o);
+    src.start(t); src.stop(t + dur + 0.02);
   }
 }
 /** Tiro/estouro: ruído largo com o brilho caindo + boom grave + crepitação. */
@@ -679,7 +690,7 @@ function blast(t, power = 1) {
 
 const SFX = {
   hit: (t) => { tone(t, 64, 0.09, { type: 'square', gain: 0.1, slideTo: 52, decay: 0.09 }); noise(t, 0.05, { gain: 0.05, hp: 2500 }); },
-  crit: (t) => { thump(t, 1.1); steel(t, 96, 0.4, 0.09); swish(t, 0.05, { gain: 0.6, type: 'highpass', from: 3000, to: 3000, attack: 0.001 }); tone(t + 0.04, 88, 0.12, { type: 'square', gain: 0.07, decay: 0.12, out: punchBus() }); },
+  crit: (t) => { thump(t, 1.1); steel(t, 96, 0.14, 0.09); swish(t, 0.05, { gain: 0.6, type: 'highpass', from: 3000, to: 3000, attack: 0.001 }); tone(t + 0.04, 88, 0.12, { type: 'square', gain: 0.07, decay: 0.12, out: punchBus() }); },
   enemyHit: (t) => { thump(t, 0.7); swish(t, 0.07, { gain: 0.35, from: 1800, to: 600, q: 1.5, attack: 0.002 }); tone(t, 52, 0.12, { type: 'sawtooth', gain: 0.08, slideTo: 38, decay: 0.12, filter: 1400, out: punchBus() }); },
   miss: (t) => { noise(t, 0.14, { gain: 0.05, hp: 4000 }); tone(t, 79, 0.1, { type: 'triangle', gain: 0.04, slideTo: 74, decay: 0.1 }); },
   heal: (t) => { [72, 76, 79, 84].forEach((m, i) => tone(t + i * 0.05, m, 0.18, { type: 'sine', gain: 0.07, decay: 0.18 })); },
@@ -692,7 +703,7 @@ const SFX = {
   'atk-slash': (t) => {
     swish(t + 0.05, 0.17, { gain: 0.32, from: 500, to: 6500, q: 1.6, attack: 0.12 });
     swish(t + 0.21, 0.05, { gain: 0.55, type: 'highpass', from: 3500, to: 3500, attack: 0.001 });
-    steel(t + 0.21, 100, 0.45, 0.1);
+    steel(t + 0.21, 100, 0.16, 0.1);
     thump(t + 0.21, 0.7);
   },
   // Git: o bote no ar e três garradas rasgando (cada uma um corte curto e agudo).
@@ -700,7 +711,7 @@ const SFX = {
     swish(t, 0.2, { gain: 0.22, from: 300, to: 1600, q: 1, attack: 0.08 });
     [0.21, 0.255, 0.3].forEach((d, k) => {
       swish(t + d, 0.06, { gain: 0.5, from: 2200, to: 8000, q: 2, attack: 0.002 });
-      steel(t + d, 103 - k * 3, 0.16, 0.05);
+      steel(t + d, 103 - k * 3, 0.07, 0.06);
     });
     thump(t + 0.21, 0.55);
   },
@@ -716,7 +727,7 @@ const SFX = {
     swish(t, 0.08, { gain: 0.25, type: 'lowpass', from: 900, to: 400, attack: 0.01 });
     swish(t + 0.06, 0.16, { gain: 0.32, from: 700, to: 7000, q: 1.8, attack: 0.13 });
     swish(t + 0.22, 0.04, { gain: 0.6, from: 6000, to: 1500, q: 2.5, attack: 0.001 });
-    steel(t + 0.22, 108, 0.2, 0.08);
+    steel(t + 0.22, 108, 0.08, 0.08);
     thump(t + 0.22, 0.8);
   },
   // Relay: a rajada sai como um disparo de ar e acerta com estrondo.
