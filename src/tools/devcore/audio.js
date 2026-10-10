@@ -636,6 +636,21 @@ const SFX = {
   ability: (t) => { [67, 71, 74, 79, 83].forEach((m, i) => tone(t + i * 0.035, m, 0.12, { type: 'square', gain: 0.06, decay: 0.12, filter: 3500 })); },
   item: (t) => { tone(t, 79, 0.08, { type: 'square', gain: 0.06, decay: 0.08 }); tone(t + 0.07, 86, 0.14, { type: 'square', gain: 0.06, decay: 0.14 }); },
   down: (t) => { tone(t, 60, 0.35, { type: 'sawtooth', gain: 0.08, slideTo: 36, filter: 1200 }); },
+  // Efeito visual de ataque: o som de cada pet (tocado no início do golpe; o impacto cai em ~0,22 s, ou ~0,3 s de longe).
+  // Byte: investida (whoosh) e o "shing" metálico do corte.
+  'atk-slash': (t) => { noise(t, 0.16, { gain: 0.05, hp: 2500 }); tone(t + 0.21, 96, 0.22, { type: 'triangle', gain: 0.07, slideTo: 91, decay: 0.22 }); tone(t + 0.21, 103, 0.16, { type: 'sine', gain: 0.04, decay: 0.16 }); noise(t + 0.21, 0.05, { gain: 0.06, hp: 5000 }); },
+  // Git: o salto e três arranhões rápidos.
+  'atk-claw': (t) => { tone(t, 55, 0.14, { type: 'sine', gain: 0.08, slideTo: 67, decay: 0.14 }); [0.21, 0.25, 0.29].forEach((d) => noise(t + d, 0.035, { gain: 0.08, hp: 3800 })); },
+  // Query: "splorch" molhado e o estalo do chicote.
+  'atk-whip': (t) => { tone(t, 48, 0.12, { type: 'sine', gain: 0.1, slideTo: 62, decay: 0.12 }); tone(t + 0.06, 58, 0.1, { type: 'sine', gain: 0.06, slideTo: 50, decay: 0.1 }); noise(t + 0.21, 0.04, { gain: 0.12, hp: 3000 }); tone(t + 0.21, 84, 0.05, { type: 'square', gain: 0.04, decay: 0.05 }); },
+  // Memo: duas batidas de asa e a bicada seca.
+  'atk-pierce': (t) => { noise(t, 0.07, { gain: 0.06, hp: 500 }); noise(t + 0.09, 0.07, { gain: 0.06, hp: 500 }); tone(t + 0.22, 91, 0.04, { type: 'square', gain: 0.07, decay: 0.04 }); noise(t + 0.22, 0.03, { gain: 0.07, hp: 4500 }); },
+  // Relay: bater de asas e a rajada de vento.
+  'atk-wind': (t) => { noise(t, 0.08, { gain: 0.06, hp: 500 }); noise(t + 0.06, 0.4, { gain: 0.05, hp: 1200 }); tone(t + 0.06, 76, 0.3, { type: 'sine', gain: 0.02, slideTo: 84, decay: 0.3 }); },
+  // Noxi: zumbido de carga subindo e o estalo elétrico.
+  'atk-zap': (t) => { tone(t, 60, 0.26, { type: 'sawtooth', gain: 0.035, slideTo: 86, filter: 2200 }); for (let k = 0; k < 5; k++) noise(t + 0.28 + k * 0.025, 0.02, { gain: 0.08, hp: 5000 }); tone(t + 0.28, 90, 0.08, { type: 'square', gain: 0.04, slideTo: 72, decay: 0.08 }); },
+  // Lint: o "boing" do lançamento e o estalo da noz no alvo.
+  'atk-throw': (t) => { tone(t, 67, 0.16, { type: 'sine', gain: 0.07, slideTo: 81, decay: 0.16 }); noise(t + 0.31, 0.05, { gain: 0.1, hp: 1800 }); tone(t + 0.31, 74, 0.06, { type: 'triangle', gain: 0.06, decay: 0.06 }); },
   // Armo rolando: ronco grave subindo com a velocidade (rodinhas de cascalho) e a pancada no impacto.
   roll: (t) => {
     tone(t, 33, 0.24, { type: 'sawtooth', gain: 0.07, slideTo: 45, filter: 420 });

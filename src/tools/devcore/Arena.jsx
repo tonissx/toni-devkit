@@ -87,7 +87,7 @@ function BattleSummary({ battle, snap, itemName }) {
 
 /** Efeito sonoro de um evento do log. */
 function sound(e) {
-  if (e.k === 'atk') return e.a && e.a[0] === 'e' ? 'enemyHit' : e.c ? 'crit' : 'hit';
+  if (e.k === 'atk') return e.a && e.a[0] === 'e' ? 'enemyHit' : e.c ? 'crit' : e.a === 'item' ? 'hit' : null; // pets: som do próprio ataque (no início do golpe)
   if (e.k === 'revive' && e.f === 'merge') return 'ability';
   return { miss: 'miss', heal: 'heal', revive: 'heal', ab: 'ability', item: 'item', down: 'down', decoy: 'miss', split: 'down', race: 'miss', blackout: 'crit', warm: 'ability' }[e.k] || null;
 }
@@ -126,6 +126,7 @@ function bubble(e, abilityName, itemName) {
  */
 const ATTACK = { byte: 'slash', git: 'claw', armo: 'bash', query: 'whip', memo: 'pierce', relay: 'wind', noxi: 'zap', lint: 'throw' };
 const RANGED = new Set(['wind', 'zap', 'throw']);
+const ATTACK_SET = new Set(Object.values(ATTACK));
 /** Onde fica o rosto em cada sprite (viewBox 64): o retrato do painel faz um close ali. Padrão: (32, 30). */
 const FACE = {
   'hydra-main': [13, 15], 'hydra-feature': [51, 15], titan: [32, 31], ddos: [32, 22], race: [40, 24], monolith: [32, 20],
@@ -213,8 +214,26 @@ function HitFx({ type, id }) {
 }
 const PROJ_ART = {
   wind: <i className="dc-trail-orb is-wind" />,
-  throw: <i className="dc-trail-orb is-throw" />,
+  throw: <span className="dc-proj__arc"><i className="dc-trail-orb is-throw" /></span>,
 };
+
+/**
+ * Efeito visual de ataque (animação + rastro + som) de cada pet — o rastro fica dentro da unidade, atrás do pet:
+ * Byte: caracteres de terminal · Git: nós de commit · Query: gotas de tinta · Memo: páginas · Relay: ondas de vento e
+ * penas · Noxi: faíscas de carga. (Lint arremessa a noz em arco; o Armo vira bola — ArmoBall.)
+ */
+const TRAIL = {
+  slash: (k) => <i key={k} className="dc-atk-p is-glyph" style={{ animationDelay: 0.03 + k * 0.04 + 's', bottom: 8 + (k % 3) * 12 + 'px' }}>{['>', '_', '1', '0', '$', '>'][k]}</i>,
+  claw: (k) => <i key={k} className="dc-atk-p is-commit" style={{ animationDelay: 0.04 + k * 0.05 + 's', bottom: 14 + (k % 2) * 10 + 'px' }} />,
+  whip: (k) => <i key={k} className="dc-atk-p is-ink" style={{ animationDelay: 0.03 + k * 0.045 + 's', bottom: 10 + (k % 3) * 9 + 'px' }} />,
+  pierce: (k) => <i key={k} className="dc-atk-p is-page" style={{ animationDelay: k * 0.05 + 's', bottom: 22 + (k % 3) * 10 + 'px', '--r': (k % 2 ? 1 : -1) * (120 + k * 40) + 'deg' }} />,
+  wind: (k) => k < 3 ? <i key={k} className="dc-atk-p is-gust" style={{ animationDelay: k * 0.08 + 's' }} /> : <i key={k} className="dc-atk-p is-feather" style={{ animationDelay: 0.05 + (k - 3) * 0.07 + 's', bottom: 30 + (k % 2) * 8 + 'px' }} />,
+  zap: (k) => <i key={k} className="dc-atk-p is-spark" style={{ animationDelay: (k % 3) * 0.07 + 's', bottom: 8 + ((k * 13) % 40) + 'px', left: ((k * 17) % 44) - 22 + 'px', '--r': k * 47 + 'deg' }} />,
+};
+function AtkTrail({ type }) {
+  const make = TRAIL[type];
+  return make ? <span className={'dc-atk-trail is-' + type} aria-hidden="true">{Array.from({ length: 6 }, (_, k) => make(k))}</span> : null;
+}
 
 /** O Armo enrolado em bola (o ataque de contusão): carapaça em faixas, placas e as luzes de servidor. */
 function ArmoBall({ c, eye }) {
@@ -388,7 +407,8 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
       len: Math.hypot(tx - ax, ty - ay), ang: Math.atan2(ty - ay, tx - ax) });
   }, [i, done]);
   const sk = strike && strike.i === i ? strike : null;
-  React.useEffect(() => { if (sk && sk.type === 'bash') sfx('roll'); }, [sk && sk.i]);
+  // Efeito visual de ataque: cada pet tem o seu som, tocado quando o golpe começa (o Armo rolando é o 'roll').
+  React.useEffect(() => { if (sk && ATTACK_SET.has(sk.type)) sfx(sk.type === 'bash' ? 'roll' : 'atk-' + sk.type); }, [sk && sk.i]);
 
   const Unit = ({ u }) => {
     if (!visible[u.uid]) return null;
@@ -410,6 +430,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
         {burstHit && cur.t === u.uid && <span className="dc-fx-burst" aria-hidden="true" />}
         {say && <span className={'dc-arena__pop' + (cur.k === 'heal' || cur.k === 'revive' ? ' is-heal' : '') + (cur.c ? ' is-crit' : '')}>{say}</span>}
         <i className="dc-arena__shadow" aria-hidden="true" />
+        {lunge && u.side === 'pet' && sk.type !== 'bash' && <AtkTrail type={sk.type} />}
         {lunge && sk.type === 'bash' && u.side === 'pet' && <>
           {/* rastro: poeira saindo do chão e riscos de vento atrás da bola (na ida e na volta) */}
           <span className="dc-armo-trail" aria-hidden="true">
