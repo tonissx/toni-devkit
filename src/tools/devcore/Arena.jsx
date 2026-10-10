@@ -219,7 +219,7 @@ const PROJ_ART = {
 /** O Armo enrolado em bola (o ataque de contusão): carapaça em faixas, placas e as luzes de servidor. */
 function ArmoBall({ c, eye }) {
   return (
-    <svg className="dc-armo-ball" width="46" height="46" viewBox="0 0 46 46" aria-hidden="true">
+    <svg className="dc-armo-ball" width="36" height="36" viewBox="0 0 46 46" aria-hidden="true">
       <g className="dc-armo-ball__spin">
         <circle cx="23" cy="23" r="21" fill={c} stroke="#1B2230" strokeWidth="1.6" />
         <path d="M23 2 A21 21 0 0 1 23 44 A13 21 0 0 0 23 2 Z" fill="#000" opacity=".22" />
@@ -410,7 +410,16 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
         {burstHit && cur.t === u.uid && <span className="dc-fx-burst" aria-hidden="true" />}
         {say && <span className={'dc-arena__pop' + (cur.k === 'heal' || cur.k === 'revive' ? ' is-heal' : '') + (cur.c ? ' is-crit' : '')}>{say}</span>}
         <i className="dc-arena__shadow" aria-hidden="true" />
-        {lunge && sk.type === 'bash' && u.side === 'pet' && <ArmoBall c={p ? p.color : '#8C9BB0'} eye={p ? p.eye : undefined} />}
+        {lunge && sk.type === 'bash' && u.side === 'pet' && <>
+          {/* rastro: poeira saindo do chão e riscos de vento atrás da bola (na ida e na volta) */}
+          <span className="dc-armo-trail" aria-hidden="true">
+            {[0, 1, 2, 3, 4].map((k) => <i key={'g' + k} className="dc-dust is-go" style={{ animationDelay: 0.04 + k * 0.045 + 's', bottom: (k % 2) * 4 + 'px' }} />)}
+            {[0, 1, 2, 3].map((k) => <i key={'b' + k} className="dc-dust is-back" style={{ animationDelay: 0.36 + k * 0.05 + 's', bottom: (k % 2) * 4 + 'px' }} />)}
+            {[0, 1, 2].map((k) => <i key={'w' + k} className="dc-wind is-go" style={{ bottom: 10 + k * 8 + 'px', animationDelay: k * 0.03 + 's' }} />)}
+            {[0, 1, 2].map((k) => <i key={'v' + k} className="dc-wind is-back" style={{ bottom: 10 + k * 8 + 'px', animationDelay: k * 0.03 + 's' }} />)}
+          </span>
+          <ArmoBall c={p ? p.color : '#8C9BB0'} eye={p ? p.eye : undefined} />
+        </>}
         {u.side === 'pet'
           ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} stage={p ? p.stage.id : 0} aura={p ? auraOf(p) : undefined} size={56} className="is-static" />
           : <VillainSprite id={u.sprite} color={u.color} state={alive[u.uid] ? 'active' : 'defeated'} size={u.boss ? 92 : 56} />}

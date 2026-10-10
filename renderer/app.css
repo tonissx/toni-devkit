@@ -1230,9 +1230,23 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-arena__unit.is-lunge.is-ranged { animation: dc-hop .5s ease-out both; }
 .dc-arena__unit.is-lunge.is-bash > svg.pet-svg { animation: dc-curl .62s linear both; } /* o Armo some e vira bola */
 @keyframes dc-curl { 0% { opacity: 1; transform: scale(1); } 10% { opacity: 0; transform: scale(.7); } 88% { opacity: 0; transform: scale(.7); } 100% { opacity: 1; transform: scale(1); } }
-.dc-arena__unit > svg.dc-armo-ball { position: absolute; left: 50%; bottom: 2px; z-index: 2; margin-left: -23px; overflow: visible; animation: dc-ball .62s linear both; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .45)); }
+.dc-arena__unit > svg.dc-armo-ball { position: absolute; left: 50%; bottom: 2px; z-index: 2; margin-left: -18px; overflow: visible; animation: dc-ball .62s linear both; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .45)); }
 .dc-armo-ball__spin { transform-origin: 23px 23px; animation: dc-ball-spin .62s cubic-bezier(.3, .7, .4, 1) both; }
 @keyframes dc-ball { 0% { opacity: 0; transform: scale(.5); } 10% { opacity: 1; transform: scale(1); } 40% { transform: translateY(0) scale(1.06, .92); } 46% { transform: translateY(-10px) scale(1); } 54% { transform: translateY(0); } 88% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.6); } }
+/* rastro da bola: poeira que sai do chão e fica para trás, e riscos de vento */
+.dc-armo-trail { position: absolute; left: 50%; bottom: 0; width: 0; height: 0; z-index: 1; pointer-events: none; }
+.dc-dust { position: absolute; left: -13px; width: 26px; height: 17px; border-radius: 50%; opacity: 0; filter: blur(1.2px);
+  background: radial-gradient(closest-side, rgba(150, 128, 100, .95), rgba(110, 92, 70, .6) 60%, transparent); }
+.dc-dust.is-go { animation: dc-dust-go .42s ease-out both; }
+.dc-dust.is-back { animation: dc-dust-back .4s ease-out both; }
+@keyframes dc-dust-go { 0% { opacity: 0; transform: translate(-14px, 0) scale(.5); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(-62px, -16px) scale(2.2); } }
+@keyframes dc-dust-back { 0% { opacity: 0; transform: translate(14px, 0) scale(.5); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(62px, -16px) scale(2.2); } }
+.dc-wind { position: absolute; width: 26px; height: 2px; border-radius: 2px; opacity: 0; background: linear-gradient(90deg, transparent, rgba(230, 245, 255, .85)); }
+.dc-wind.is-go { left: -46px; animation: dc-wind-go .62s linear both; }
+.dc-wind.is-back { left: 20px; background: linear-gradient(270deg, transparent, rgba(230, 245, 255, .85)); animation: dc-wind-back .62s linear both; }
+@keyframes dc-wind-go { 0%, 4% { opacity: 0; transform: translateX(8px) scaleX(.4); } 14%, 30% { opacity: .85; transform: translateX(0) scaleX(1); } 38%, 100% { opacity: 0; transform: translateX(-10px) scaleX(.6); } }
+@keyframes dc-wind-back { 0%, 54% { opacity: 0; transform: translateX(-8px) scaleX(.4); } 64%, 84% { opacity: .85; transform: translateX(0) scaleX(1); } 94%, 100% { opacity: 0; transform: translateX(10px) scaleX(.6); } }
+@media (prefers-reduced-motion: reduce) { .dc-armo-trail { display: none; } }
 @keyframes dc-ball-spin { 0% { transform: rotate(0); } 36% { transform: rotate(900deg); } 52% { transform: rotate(960deg); } 100% { transform: rotate(360deg); } }
 @keyframes dc-lunge { 0% { transform: translate(0, 0); } 36%, 52% { transform: translate(var(--dx), var(--dy)); } 100% { transform: translate(0, 0); } }
 @keyframes dc-hop { 0%, 100% { transform: translate(0, 0); } 30% { transform: translate(var(--dx), var(--dy)) scale(1.06); } }
