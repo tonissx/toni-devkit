@@ -216,6 +216,22 @@ const PROJ_ART = {
   throw: <i className="dc-trail-orb is-throw" />,
 };
 
+/** O Armo enrolado em bola (o ataque de contusão): carapaça em faixas, placas e as luzes de servidor. */
+function ArmoBall({ c, eye }) {
+  return (
+    <svg className="dc-armo-ball" width="46" height="46" viewBox="0 0 46 46" aria-hidden="true">
+      <g className="dc-armo-ball__spin">
+        <circle cx="23" cy="23" r="21" fill={c} stroke="#1B2230" strokeWidth="1.6" />
+        <path d="M23 2 A21 21 0 0 1 23 44 A13 21 0 0 0 23 2 Z" fill="#000" opacity=".22" />
+        <path d="M23 2 Q11 23 23 44 M23 2 Q35 23 23 44 M6 12 Q23 20 40 12 M3 24 Q23 30 43 24 M6 35 Q23 40 40 35" stroke="#1B2230" strokeWidth="1.2" fill="none" opacity=".55" />
+        <circle cx="15" cy="16" r="1.6" fill={eye || '#7CF5B0'} />
+        <circle cx="30" cy="29" r="1.6" fill={eye || '#7CF5B0'} />
+        <path d="M14 8 Q20 5 26 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" opacity=".4" fill="none" />
+      </g>
+    </svg>
+  );
+}
+
 /** Uma linha da fila de eventos: ícone, lado (cor) e o texto com os nomes destacados. */
 function FeedLine({ e, unit, abilityName, itemName, age }) {
   const N = ({ uid }) => {
@@ -368,10 +384,11 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     const ranged = RANGED.has(type);
     const dir = tx > ax ? 1 : -1;
     setStrike({ i, a: e.a, t: e.t, type, ranged, miss: e.k === 'miss', ax, ay, tx, ty,
-      dx: ranged ? dir * 14 : tx - ax - dir * 50, dy: ranged ? -6 : (ty - ay) * 0.5,
+      dx: ranged ? dir * 14 : tx - ax - dir * 50, dy: ranged ? -6 : type === 'bash' ? 0 : (ty - ay) * 0.5, // a bola rola pelo chão
       len: Math.hypot(tx - ax, ty - ay), ang: Math.atan2(ty - ay, tx - ax) });
   }, [i, done]);
   const sk = strike && strike.i === i ? strike : null;
+  React.useEffect(() => { if (sk && sk.type === 'bash') sfx('roll'); }, [sk && sk.i]);
 
   const Unit = ({ u }) => {
     if (!visible[u.uid]) return null;
@@ -393,6 +410,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
         {burstHit && cur.t === u.uid && <span className="dc-fx-burst" aria-hidden="true" />}
         {say && <span className={'dc-arena__pop' + (cur.k === 'heal' || cur.k === 'revive' ? ' is-heal' : '') + (cur.c ? ' is-crit' : '')}>{say}</span>}
         <i className="dc-arena__shadow" aria-hidden="true" />
+        {lunge && sk.type === 'bash' && u.side === 'pet' && <ArmoBall c={p ? p.color : '#8C9BB0'} eye={p ? p.eye : undefined} />}
         {u.side === 'pet'
           ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} stage={p ? p.stage.id : 0} aura={p ? auraOf(p) : undefined} size={56} className="is-static" />
           : <VillainSprite id={u.sprite} color={u.color} state={alive[u.uid] ? 'active' : 'defeated'} size={u.boss ? 92 : 56} />}

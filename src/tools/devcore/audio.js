@@ -636,6 +636,14 @@ const SFX = {
   ability: (t) => { [67, 71, 74, 79, 83].forEach((m, i) => tone(t + i * 0.035, m, 0.12, { type: 'square', gain: 0.06, decay: 0.12, filter: 3500 })); },
   item: (t) => { tone(t, 79, 0.08, { type: 'square', gain: 0.06, decay: 0.08 }); tone(t + 0.07, 86, 0.14, { type: 'square', gain: 0.06, decay: 0.14 }); },
   down: (t) => { tone(t, 60, 0.35, { type: 'sawtooth', gain: 0.08, slideTo: 36, filter: 1200 }); },
+  // Armo rolando: ronco grave subindo com a velocidade (rodinhas de cascalho) e a pancada no impacto.
+  roll: (t) => {
+    tone(t, 33, 0.24, { type: 'sawtooth', gain: 0.07, slideTo: 45, filter: 420 });
+    for (let k = 0; k < 6; k++) noise(t + k * 0.035, 0.03, { gain: 0.035, hp: 900 });
+    tone(t + 0.23, 40, 0.3, { type: 'sine', gain: 0.26, slideTo: 24, decay: 0.3 });
+    noise(t + 0.23, 0.09, { gain: 0.1, hp: 500 });
+    tone(t + 0.23, 64, 0.08, { type: 'square', gain: 0.05, slideTo: 50, decay: 0.08, filter: 1600 });
+  },
   victory: (t) => {
     [62, 66, 69, 74].forEach((m, i) => lead(t + i * 0.11, m, 0.14, master));
     [62, 66, 69, 74].forEach((m) => organ(t + 0.46, m, 0.9, master));
