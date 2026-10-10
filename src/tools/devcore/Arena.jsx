@@ -9,6 +9,7 @@ import { startMusic, stopMusic, sfx } from './audio.js';
 
 const { Modal, Button, Icon, ProgressBar } = DS;
 const STEP_MS = 700; // ritmo da luta (era 420: 40% mais devagar, dá tempo de ler a fila de eventos)
+const STRIKE_MS = 900; // golpes (ataque ou erro): o tempo da corrida, do impacto e do arco de luz terminarem
 
 /**
  * Desempenho de cada pet na luta (do log): dano causado e recebido, cura, abates (último golpe), habilidades.
@@ -286,7 +287,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     if (done) return undefined;
     // Habilidades ficam mais tempo na tela (faixa com o nome + efeito); quedas e fortificação passam rápido.
     const k = log[i] && log[i].k;
-    const t = setTimeout(() => setI((x) => x + 1), k === 'ab' ? STEP_MS * 2.2 : k === 'blackout' ? STEP_MS * 1.6 : k === 'fortify' || k === 'down' || k === 'drift' || k === 'race' || k === 'grow' ? STEP_MS / 2 : STEP_MS);
+    const t = setTimeout(() => setI((x) => x + 1), k === 'atk' || k === 'miss' ? STRIKE_MS : k === 'ab' ? STEP_MS * 2.2 : k === 'blackout' ? STEP_MS * 1.6 : k === 'fortify' || k === 'down' || k === 'drift' || k === 'race' || k === 'grow' ? STEP_MS / 2 : STEP_MS);
     return () => clearTimeout(t);
   }, [i, done]);
 
