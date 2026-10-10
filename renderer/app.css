@@ -1171,6 +1171,42 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-arena__unit.is-pet.is-acting { transform: translateX(22px); }
 .dc-arena__unit.is-enemy.is-acting { transform: translateX(-14px); }
 .dc-arena__unit.is-hit { animation: dc-arena-hit .3s; }
+/* Golpes: o atacante corre até o alvo e volta (ou dá um pulo, se ataca de longe); o alvo treme quando o golpe chega */
+.dc-arena__unit.is-lunge { z-index: 3; animation: dc-lunge .62s cubic-bezier(.3, .7, .4, 1) both; }
+.dc-arena__unit.is-lunge.is-ranged { animation: dc-hop .5s ease-out both; }
+.dc-arena__unit.is-lunge.is-bash svg { animation: dc-roll .62s ease-in-out; } /* Armo vem rolando */
+@keyframes dc-lunge { 0% { transform: translate(0, 0); } 36%, 52% { transform: translate(var(--dx), var(--dy)); } 100% { transform: translate(0, 0); } }
+@keyframes dc-hop { 0%, 100% { transform: translate(0, 0); } 30% { transform: translate(var(--dx), var(--dy)) scale(1.06); } }
+@keyframes dc-roll { 0%, 100% { transform: rotate(0); } 45% { transform: rotate(540deg); } }
+.dc-arena__unit.is-hit.is-hit-late { animation-delay: .24s; }
+.dc-arena__unit.is-hit.is-hit-ranged { animation-delay: .3s; }
+.dc-hit { position: absolute; z-index: 4; width: 64px; height: 64px; pointer-events: none; opacity: 0; transform: translate(-50%, -50%); animation: dc-hit .5s ease-out .22s forwards; }
+.dc-hit.is-ranged { animation-delay: .3s; }
+.dc-hit svg { display: block; overflow: visible; filter: drop-shadow(0 0 4px rgba(255, 255, 255, .8)) drop-shadow(0 0 10px var(--hit-glow, rgba(255, 120, 90, .7))); }
+.dc-hit [pathLength] { stroke-dasharray: 100; stroke-dashoffset: 100; animation: dc-draw .16s ease-out .22s forwards; }
+.dc-hit.is-ranged [pathLength] { animation-delay: .3s; }
+.dc-hit.is-whip, .dc-hit.is-wind { --hit-glow: rgba(185, 140, 255, .7); }
+.dc-hit.is-zap, .dc-hit.is-throw, .dc-hit.is-bash { --hit-glow: rgba(255, 210, 80, .8); }
+.dc-hit.is-pierce { --hit-glow: rgba(120, 220, 255, .8); }
+.dc-hit.is-bite { --hit-glow: rgba(255, 70, 70, .8); }
+.dc-hit.is-miss { filter: grayscale(1) opacity(.55); }
+.dc-hit__ring { transform-origin: 30px 30px; animation: dc-ring .45s ease-out .22s both; }
+@keyframes dc-hit { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.45); } 22% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.25); } }
+@keyframes dc-draw { to { stroke-dashoffset: 0; } }
+@keyframes dc-ring { from { transform: scale(.4); opacity: 1; } to { transform: scale(1.5); opacity: 0; } }
+.dc-proj { position: absolute; z-index: 4; pointer-events: none; transform: translate(-50%, -50%); animation: dc-proj .32s ease-in forwards; }
+.dc-proj.is-wind svg { animation: dc-spin .32s linear infinite; }
+.dc-proj.is-throw svg { animation: dc-spin .2s linear infinite; }
+@keyframes dc-proj { 0% { opacity: 1; transform: translate(-50%, -50%); } 92% { opacity: 1; transform: translate(calc(-50% + var(--px)), calc(-50% + var(--py))); } 100% { opacity: 0; transform: translate(calc(-50% + var(--px)), calc(-50% + var(--py))); } }
+@keyframes dc-spin { to { transform: rotate(360deg); } }
+.dc-beam { position: absolute; z-index: 4; height: 22px; margin-top: -11px; transform-origin: 0 50%; pointer-events: none; filter: drop-shadow(0 0 4px #FFE27A) drop-shadow(0 0 10px rgba(255, 226, 122, .7)); animation: dc-beam .42s ease-out forwards; }
+.dc-beam svg { display: block; }
+@keyframes dc-beam { 0% { clip-path: inset(0 100% 0 0); opacity: 1; } 55% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .dc-arena__unit.is-lunge, .dc-arena__unit.is-lunge svg, .dc-proj, .dc-beam { animation: none !important; }
+  .dc-proj, .dc-beam { display: none; }
+  .dc-hit { animation: none; opacity: 1; } .dc-hit [pathLength] { animation: none; stroke-dashoffset: 0; }
+}
 .dc-arena__unit.is-down { opacity: .25; filter: grayscale(1); }
 .dc-arena__pop { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); white-space: nowrap; font: 700 12px var(--tk-font-mono); color: #FF8A8A; animation: dc-arena-pop .42s ease-out; text-shadow: 0 1px 2px #000; }
 .dc-arena__pop.is-heal { color: #7CF5B0; }

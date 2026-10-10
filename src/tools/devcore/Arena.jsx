@@ -118,6 +118,29 @@ function bubble(e, abilityName, itemName) {
   return '';
 }
 
+/**
+ * Tipo de ataque de cada pet (pela espécie) — o efeito no alvo muda: corte, garras, contusão, chicotada, perfuração,
+ * rajada de vento, choque e arremesso. Os de longe (vento, choque, arremesso) lançam um projétil; os outros correm até
+ * o alvo. Inimigos avançam e mordem/batem.
+ */
+const ATTACK = { byte: 'slash', git: 'claw', armo: 'bash', query: 'whip', memo: 'pierce', relay: 'wind', noxi: 'zap', lint: 'throw' };
+const RANGED = new Set(['wind', 'zap', 'throw']);
+const HIT_ART = {
+  slash: <path pathLength="100" d="M12 50 Q30 34 50 10" stroke="#fff" strokeWidth="5" strokeLinecap="round" fill="none" />,
+  claw: <g stroke="#fff" strokeWidth="3.6" strokeLinecap="round" fill="none"><path pathLength="100" d="M14 44 L38 10" /><path pathLength="100" d="M22 50 L46 16" /><path pathLength="100" d="M30 56 L54 22" /></g>,
+  bash: <g><path d="M30 6 L35 22 L52 18 L40 30 L54 42 L36 40 L30 56 L24 40 L6 42 L20 30 L8 18 L25 22 Z" fill="#FFE27A" /><circle className="dc-hit__ring" cx="30" cy="30" r="20" fill="none" stroke="#fff" strokeWidth="2.5" /></g>,
+  whip: <path pathLength="100" d="M6 44 Q20 4 34 26 T56 18" stroke="#B98CFF" strokeWidth="4" strokeLinecap="round" fill="none" />,
+  pierce: <g><path pathLength="100" d="M2 40 L52 22" stroke="#fff" strokeWidth="3" strokeLinecap="round" /><path d="M52 22 L44 20 M52 22 L46 28" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" /><circle cx="52" cy="22" r="5" fill="#9FE6FF" opacity=".7" /></g>,
+  wind: <g stroke="#CDEFFF" strokeWidth="3" strokeLinecap="round" fill="none"><path pathLength="100" d="M8 22 Q30 8 42 22 Q50 32 38 36 Q30 38 32 30" /><path pathLength="100" d="M6 40 Q26 32 46 42" /></g>,
+  zap: <g><path d="M34 4 L20 30 L32 30 L24 56 L44 24 L32 24 L40 4 Z" fill="#FFE27A" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" /><path d="M10 20 l6 4 M50 40 l-6 -3 M14 46 l6 -3" stroke="#FFE27A" strokeWidth="2" strokeLinecap="round" /></g>,
+  throw: <g><circle cx="30" cy="30" r="12" fill="#C8873A" opacity=".85" /><path d="M30 10 v8 M30 42 v8 M10 30 h8 M42 30 h8 M16 16 l6 6 M38 38 l6 6 M44 16 l-6 6 M16 44 l6 -6" stroke="#FFE27A" strokeWidth="2.6" strokeLinecap="round" /></g>,
+  bite: <g fill="#fff"><path d="M8 18 Q30 2 52 18 L46 22 L42 16 L38 22 L34 16 L30 22 L26 16 L22 22 L18 16 L14 22 Z" /><path d="M8 42 Q30 58 52 42 L46 38 L42 44 L38 38 L34 44 L30 38 L26 44 L22 38 L18 44 L14 38 Z" /></g>,
+};
+const PROJ_ART = {
+  wind: <svg width="30" height="30" viewBox="0 0 30 30"><path d="M4 12 Q15 2 24 10 Q28 16 20 18 Q14 19 16 14 M3 22 Q14 17 26 23" stroke="#CDEFFF" strokeWidth="2.6" strokeLinecap="round" fill="none" /></svg>,
+  throw: <svg width="20" height="22" viewBox="0 0 20 22"><path d="M3 8 Q10 2 17 8 Z" fill="#6B4630" /><path d="M4 8 Q10 22 16 8 Z" fill="#C8873A" /><path d="M10 2 v-2" stroke="#6B4630" strokeWidth="1.6" /></svg>,
+};
+
 /** Uma linha da fila de eventos: ícone, lado (cor) e o texto com os nomes destacados. */
 function FeedLine({ e, unit, abilityName, itemName, age }) {
   const N = ({ uid }) => {
@@ -185,6 +208,9 @@ function BattleFeed({ log, upto, unit, abilityName, itemName }) {
  */
 export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) {
   const [i, setI] = React.useState(0);
+  const arenaRef = React.useRef(null);
+  const unitRefs = React.useRef({});
+  const [strike, setStrike] = React.useState(null); // o golpe do passo atual: quem, em quem, tipo e as posições na arena
   const log = battle.log;
   const done = i >= log.length;
   // Música: tema da área (ou do chefe) enquanto a luta passa; fanfarra de vitória/derrota no fim.
@@ -249,18 +275,44 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   // Inimigos ainda de pé no fim (para explicar o tempo esgotado).
   const standing = battle.units.filter((u) => u.side === 'enemy' && u.end > 0);
 
+  // Golpe do passo atual (ataque ou golpe que errou): mede atacante e alvo na arena para o avanço, o projétil e o impacto.
+  React.useLayoutEffect(() => {
+    const e = !done ? log[i] : null;
+    if (!e || (e.k !== 'atk' && e.k !== 'miss') || !e.a || e.a === 'item' || e.a === 'storm') { setStrike(null); return; }
+    const a = unitRefs.current[e.a];
+    const t = unitRefs.current[e.t];
+    const box = arenaRef.current;
+    if (!a || !t || !box) { setStrike(null); return; }
+    const B = box.getBoundingClientRect();
+    const ra = a.getBoundingClientRect();
+    const rt = t.getBoundingClientRect();
+    const ax = ra.left + ra.width / 2 - B.left; const ay = ra.top + ra.height * 0.42 - B.top;
+    const tx = rt.left + rt.width / 2 - B.left; const ty = rt.top + rt.height * 0.42 - B.top;
+    const who = battle.units.find((x) => x.uid === e.a);
+    const type = who && who.side === 'pet' ? ATTACK[who.id] || 'slash' : 'bite';
+    const ranged = RANGED.has(type);
+    const dir = tx > ax ? 1 : -1;
+    setStrike({ i, a: e.a, t: e.t, type, ranged, miss: e.k === 'miss', ax, ay, tx, ty,
+      dx: ranged ? dir * 14 : tx - ax - dir * 50, dy: ranged ? -6 : (ty - ay) * 0.5,
+      len: Math.hypot(tx - ax, ty - ay), ang: Math.atan2(ty - ay, tx - ax) });
+  }, [i, done]);
+  const sk = strike && strike.i === i ? strike : null;
+
   const Unit = ({ u }) => {
     if (!visible[u.uid]) return null;
     const p = u.side === 'pet' ? pet(u.id) : null;
     const acting = cur && cur.a === u.uid;
     const hit = cur && cur.t === u.uid && (cur.k === 'atk' || cur.k === 'miss');
+    const lunge = sk && sk.a === u.uid; // corre até o alvo (ou dá um pulo, se ataca de longe)
     // O balão vai em quem recebe (dano, cura, revive, fortificação, clone novo) ou, senão, em quem age.
     const popAt = cur && (['atk', 'miss', 'heal', 'revive', 'fortify', 'split', 'drift', 'warm', 'grow'].includes(cur.k) ? cur.t : cur.a);
     const say = popAt === u.uid ? bubble(cur, abilityName, itemName) : '';
     return (
       <div className={'dc-arena__unit is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (acting ? ' is-acting' : '') + (hit ? ' is-hit' : '') + (u.front ? ' is-front' : '') + (u.boss ? ' is-boss' : '')
         + (st.charged.has(u.uid) ? ' is-charged' : '') + (st.marked.has(u.uid) && alive[u.uid] ? ' is-marked' : '') + (burstHit && cur.t === u.uid ? ' is-burst-hit' : '')
-        + (acting && curFx ? ' is-casting' : '')} style={p ? { '--pet': p.color } : undefined}>
+        + (acting && curFx ? ' is-casting' : '') + (lunge ? ' is-lunge is-' + sk.type + (sk.ranged ? ' is-ranged' : '') : '') + (hit && sk ? (sk.ranged ? ' is-hit-ranged' : ' is-hit-late') : '')}
+        ref={(el) => { if (el) unitRefs.current[u.uid] = el; }}
+        style={{ ...(p ? { '--pet': p.color } : null), ...(lunge ? { '--dx': sk.dx + 'px', '--dy': sk.dy + 'px' } : null) }}>
         {st.marked.has(u.uid) && alive[u.uid] && <span className="dc-fx-reticle" aria-hidden="true" />}
         {cur && cur.k === 'heal' && cur.t === u.uid && <span className="dc-fx-sparkles" aria-hidden="true"><i /><i /><i /><i /><i /></span>}
         {burstHit && cur.t === u.uid && <span className="dc-fx-burst" aria-hidden="true" />}
@@ -287,7 +339,15 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           ? <Button variant="primary" onClick={onClose}>Continuar</Button>
           : <Button variant="ghost" icon="fast-forward" onClick={() => setI(log.length)}>Pular</Button>}
       </>}>
-      <div className={'dc-arena dc-arena--' + area.arena + (burstHit || (cur && cur.k === 'blackout') ? ' is-shake' : '') + (done ? ' is-done' : '')} aria-label={'Arena ' + area.name}>
+      <div ref={arenaRef} className={'dc-arena dc-arena--' + area.arena + (burstHit || (cur && cur.k === 'blackout') ? ' is-shake' : '') + (done ? ' is-done' : '')} aria-label={'Arena ' + area.name}>
+        {/* golpe: projétil/raio (de longe) e o efeito no alvo, no tipo de ataque de quem bate */}
+        {sk && sk.type === 'zap' && <span key={'beam' + i} className="dc-beam" aria-hidden="true" style={{ left: sk.ax, top: sk.ay, width: sk.len, transform: `rotate(${sk.ang}rad)` }}>
+          <svg width="100%" height="22" viewBox="0 0 100 22" preserveAspectRatio="none"><path d="M0 11 L12 3 L22 17 L34 5 L46 18 L58 4 L70 16 L82 6 L100 11" stroke="#FFE27A" strokeWidth="2.6" fill="none" strokeLinejoin="round" /></svg>
+        </span>}
+        {sk && PROJ_ART[sk.type] && <span key={'proj' + i} className={'dc-proj is-' + sk.type} aria-hidden="true" style={{ left: sk.ax, top: sk.ay, '--px': sk.tx - sk.ax + 'px', '--py': sk.ty - sk.ay + 'px' }}>{PROJ_ART[sk.type]}</span>}
+        {sk && <span key={'hit' + i} className={'dc-hit is-' + sk.type + (sk.miss ? ' is-miss' : '') + (sk.ranged ? ' is-ranged' : '')} aria-hidden="true" style={{ left: sk.tx, top: sk.ty }}>
+          <svg width="64" height="64" viewBox="0 0 60 60">{HIT_ART[sk.type]}</svg>
+        </span>}
         {cur && cur.k === 'blackout' && <i key={'flash' + i} className="dc-fx-blackout" aria-hidden="true" />}
         {area.arena === 'localhost' && <ForestBackdrop />}
         {area.arena === 'staging' && <SwampBackdrop />}
