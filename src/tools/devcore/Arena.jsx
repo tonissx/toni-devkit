@@ -126,6 +126,8 @@ function bubble(e, abilityName, itemName) {
  */
 const ATTACK = { byte: 'slash', git: 'claw', armo: 'bash', query: 'whip', memo: 'pierce', relay: 'wind', noxi: 'zap', lint: 'throw' };
 const RANGED = new Set(['wind', 'zap', 'throw']);
+/** Inimigos que voam (pairam acima do chão, com a sombra embaixo); o resto pisa no chão. */
+const FLYING = new Set(['flaky', 'race', 'ddos', 'titan', 'flicker', 'swarm']);
 /**
  * Efeitos de impacto suaves: luz em vez de forma — arcos afilados (finos nas pontas) com degradê e brilho desfocado,
  * um clarão radial no ponto do golpe e partículas que se espalham e somem. Cor e partículas por tipo de ataque.
@@ -373,24 +375,45 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     return (
       <div className={'dc-arena__unit is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (acting ? ' is-acting' : '') + (hit ? ' is-hit' : '') + (u.front ? ' is-front' : '') + (u.boss ? ' is-boss' : '')
         + (st.charged.has(u.uid) ? ' is-charged' : '') + (st.marked.has(u.uid) && alive[u.uid] ? ' is-marked' : '') + (burstHit && cur.t === u.uid ? ' is-burst-hit' : '')
-        + (acting && curFx ? ' is-casting' : '') + (lunge ? ' is-lunge is-' + sk.type + (sk.ranged ? ' is-ranged' : '') : '') + (hit && sk ? (sk.ranged ? ' is-hit-ranged' : ' is-hit-late') : '')}
+        + (acting && curFx ? ' is-casting' : '') + (lunge ? ' is-lunge is-' + sk.type + (sk.ranged ? ' is-ranged' : '') : '') + (hit && sk ? (sk.ranged ? ' is-hit-ranged' : ' is-hit-late') : '') + (u.side === 'enemy' && FLYING.has(u.sprite) ? ' is-flying' : '')}
         ref={(el) => { if (el) unitRefs.current[u.uid] = el; }}
         style={{ ...(p ? { '--pet': p.color } : null), ...(lunge ? { '--dx': sk.dx + 'px', '--dy': sk.dy + 'px' } : null) }}>
         {st.marked.has(u.uid) && alive[u.uid] && <span className="dc-fx-reticle" aria-hidden="true" />}
         {cur && cur.k === 'heal' && cur.t === u.uid && <span className="dc-fx-sparkles" aria-hidden="true"><i /><i /><i /><i /><i /></span>}
         {burstHit && cur.t === u.uid && <span className="dc-fx-burst" aria-hidden="true" />}
         {say && <span className={'dc-arena__pop' + (cur.k === 'heal' || cur.k === 'revive' ? ' is-heal' : '') + (cur.c ? ' is-crit' : '')}>{say}</span>}
+        <i className="dc-arena__shadow" aria-hidden="true" />
         {u.side === 'pet'
           ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} stage={p ? p.stage.id : 0} aura={p ? auraOf(p) : undefined} size={56} className="is-static" />
           : <VillainSprite id={u.sprite} color={u.color} state={alive[u.uid] ? 'active' : 'defeated'} size={u.boss ? 92 : 56} />}
-        <span className="dc-arena__name">{u.name}</span>
-        <ProgressBar value={(hp[u.uid] / u.maxHp) * 100} size="sm" />
       </div>
     );
   };
 
   const pets = battle.units.filter((u) => u.side === 'pet');
   const enemies = battle.units.filter((u) => u.side === 'enemy');
+  /** Painel do topo: retrato, nome e vida de cada um (pets à esquerda, inimigos à direita). */
+  const Card = ({ u }) => {
+    if (!visible[u.uid]) return null;
+    const p = u.side === 'pet' ? pet(u.id) : null;
+    const life = hp[u.uid] / u.maxHp;
+    const on = cur && (cur.a === u.uid ? ' is-acting' : cur.t === u.uid && (cur.k === 'atk' || cur.k === 'miss') ? ' is-hit' : '');
+    return (
+      <div className={'dc-hud__card is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (on || '') + (life < 0.3 ? ' is-low' : '')}>
+        <span className="dc-hud__face">
+          {u.side === 'pet'
+            ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} stage={p ? p.stage.id : 0} size={26} className="is-static" />
+            : <VillainSprite id={u.sprite} color={u.color} state="active" size={26} />}
+          {!alive[u.uid] && <Icon name="skull" size={12} className="dc-hud__dead" />}
+        </span>
+        <span className="dc-hud__info">
+          <span className="dc-hud__name">{u.name}</span>
+          <span className="dc-hud__bar"><i style={{ width: Math.max(0, life * 100) + '%' }} /></span>
+          <span className="dc-hud__hp">{Math.max(0, Math.round(hp[u.uid]))}/{u.maxHp}</span>
+        </span>
+      </div>
+    );
+  };
   return (
     <Modal open title={'ARENA · ' + area.name.toUpperCase()} icon="swords" onClose={onClose} width={900}
       description={done
@@ -412,6 +435,10 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           <HitFx type={sk.type} id={i} />
         </span>}
         {cur && cur.k === 'blackout' && <i key={'flash' + i} className="dc-fx-blackout" aria-hidden="true" />}
+        <div className="dc-hud" aria-label="Vida das unidades">
+          <div className="dc-hud__side is-pets">{[...pets].sort((a, b) => (b.rank != null ? b.rank : 0) - (a.rank != null ? a.rank : 0)).map((u) => <Card key={u.uid} u={u} />)}</div>
+          <div className="dc-hud__side is-enemies">{enemies.map((u) => <Card key={u.uid} u={u} />)}</div>
+        </div>
         {area.arena === 'localhost' && <ForestBackdrop />}
         {area.arena === 'staging' && <SwampBackdrop />}
         {area.arena === 'production' && <PeakBackdrop />}

@@ -1166,6 +1166,41 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-arena__unit.is-boss { width: 100px; }
 .dc-arena__unit .tk-progress { width: 100%; }
 .dc-arena__name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 10.5px; color: rgba(255, 255, 255, .75); white-space: nowrap; }
+/* Personagens no chão: o pé encosta na faixa de chão; sombra embaixo; quem voa paira e balança */
+.dc-arena { padding-bottom: 30px !important; padding-top: 64px !important; }
+.dc-arena__unit { justify-content: flex-end; }
+.dc-arena__unit > svg { position: relative; z-index: 1; }
+.dc-arena__shadow { position: absolute; bottom: -4px; left: 50%; width: 46px; height: 10px; margin-left: -23px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, .55), transparent); pointer-events: none; }
+.dc-arena__unit.is-boss .dc-arena__shadow { width: 76px; margin-left: -38px; height: 14px; }
+.dc-arena__unit > svg.villain-svg > ellipse:first-child { display: none; } /* a sombra agora é a do chão */
+.dc-arena__unit.is-flying > svg { animation: dc-fly 2.4s ease-in-out infinite; }
+.dc-arena__unit.is-flying .dc-arena__shadow { width: 34px; margin-left: -17px; opacity: .6; animation: dc-fly-shadow 2.4s ease-in-out infinite; }
+@keyframes dc-fly { 0%, 100% { transform: translateY(-22px); } 50% { transform: translateY(-30px); } }
+@keyframes dc-fly-shadow { 0%, 100% { transform: scale(1); opacity: .6; } 50% { transform: scale(.8); opacity: .4; } }
+.dc-arena__unit.is-down .dc-arena__shadow { opacity: .25; }
+/* Painel do topo: retrato, nome e vida (pets à esquerda, inimigos à direita) */
+.dc-hud { position: absolute; z-index: 5; top: 10px; left: 264px; right: 14px; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; pointer-events: none; }
+.dc-hud__side { display: flex; align-items: flex-start; gap: 5px; flex-wrap: wrap; align-content: flex-start; }
+.dc-hud__side.is-pets { flex: none; flex-wrap: nowrap; }
+.dc-hud__side.is-enemies { flex: 1; justify-content: flex-end; }
+.dc-hud__card { display: flex; align-items: center; gap: 6px; width: 112px; padding: 4px 8px 4px 4px; border-radius: 8px; background: rgba(8, 12, 18, .62); border: 1px solid rgba(255, 255, 255, .08); backdrop-filter: blur(3px); transition: border-color .15s, box-shadow .15s, opacity .3s; }
+.dc-hud__card.is-acting { border-color: rgba(255, 226, 122, .7); box-shadow: 0 0 10px rgba(255, 226, 122, .35); }
+.dc-hud__card.is-hit { border-color: rgba(255, 107, 107, .8); animation: dc-hud-hit .35s; }
+@keyframes dc-hud-hit { 30% { transform: translateX(-3px); } 60% { transform: translateX(3px); } }
+.dc-hud__card.is-down { opacity: .45; filter: grayscale(.8); }
+.dc-hud__face { position: relative; flex: none; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; background: rgba(255, 255, 255, .06); }
+.dc-hud__face svg { display: block; }
+.dc-hud__face .villain-svg * { animation: none !important; }
+.dc-hud__dead { position: absolute; right: -3px; bottom: -3px; color: #FF8A8A; }
+.dc-hud__info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dc-hud__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 600; color: #E8E8F0; }
+.dc-hud__bar { position: relative; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.dc-hud__bar i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: linear-gradient(90deg, #3FCB7E, #7CF5B0); transition: width .3s ease; }
+.dc-hud__card.is-enemy .dc-hud__bar i { background: linear-gradient(90deg, #D9443A, #FF8A7A); }
+.dc-hud__card.is-low .dc-hud__bar i { background: linear-gradient(90deg, #E0A030, #FFD24A); }
+.dc-hud__hp { font: 500 9px var(--tk-font-mono); color: rgba(255, 255, 255, .5); }
+.dc-arena.is-done .dc-hud { display: none; }
+@media (prefers-reduced-motion: reduce) { .dc-arena__unit.is-flying > svg, .dc-arena__unit.is-flying .dc-arena__shadow, .dc-hud__card.is-hit { animation: none; } .dc-arena__unit.is-flying > svg { transform: translateY(-24px); } }
 .dc-arena__unit.is-enemy .tk-progress__fill { background: #FF6B6B; box-shadow: none; }
 .dc-arena__unit.is-pet.is-front { transform: translateX(10px); }
 .dc-arena__unit.is-pet.is-acting { transform: translateX(22px); }
