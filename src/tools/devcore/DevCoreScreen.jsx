@@ -140,8 +140,8 @@ export function DevCoreScreen({ toast, request }) {
   const arenaSeen = React.useRef(false);
   React.useEffect(() => {
     if (arenaOpen) { arenaSeen.current = true; return; }
-    if (arenaSeen.current && afterBattle.length) {
-      arenaSeen.current = false;
+    if (arenaSeen.current) {
+      arenaSeen.current = false; // fechou: a próxima luta espera abrir e fechar de novo (mesmo sem aviso na fila)
       for (const [title, text] of afterBattle) toast(title, text);
       setAfterBattle([]);
     }
@@ -171,7 +171,7 @@ export function DevCoreScreen({ toast, request }) {
     }
     for (const e of log || []) {
       if (e.type === 'mapOpen') toast(e.from ? 'Nova área' : 'Mapa liberado', e.from ? `${e.name}: novos inimigos, novos perigos — e um novo chefe no fim` : `${e.name}: batalhas, eventos e Patches na aba Mapa`);
-      if (e.type === 'battle' && e.cleared) setAfterBattle((q) => [...q, ['Área concluída', 'O Legacy Monolith caiu!']]); // só depois da arena
+      if (e.type === 'battle' && e.cleared) setAfterBattle((q) => [...q, [s.map.area.name + ' concluída', (s.map.boss ? s.map.boss.name : 'O chefe') + ' caiu!']]); // só depois da arena
       if (e.type !== 'quest') continue;
       const item = e.item && (s.inventory.find((k) => k.id === e.item) || {}).name;
       toast('Missão concluída', e.title + (item ? ' · +1 ' + item : ''));
