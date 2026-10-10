@@ -327,31 +327,42 @@ function Drift({ c, locked }) {
 }
 
 /**
- * The Merge Conflict — hidra do pântano; cada cabeça é uma unidade (main, roxa · feature, laranja). O pescoço sai da
- * água e o corpo traz os marcadores de conflito (<<<<<<< / ======= / >>>>>>>).
+ * The Merge Conflict — dragão de duas cabeças. Cada cabeça é uma unidade, e cada sprite é METADE do dragão (asa, perna,
+ * pescoço e cabeça), com o corpo encostando na borda: lado a lado, main (roxa, à esquerda) e feature (laranja, espelhada)
+ * formam um só dragão — duas cores, duas versões do mesmo código. Os marcadores de conflito ficam no peito.
  */
 function Hydra({ c, locked, side }) {
-  const flip = side === 'feature' ? -1 : 1;
-  const mark = side === 'feature' ? '>>>>>>>' : '<<<<<<<';
+  const flip = side === 'feature';
+  const S = '#120B1E';
   return (
     <g>
-      <ellipse className="v-ripple" cx="32" cy="57" rx="24" ry="3.6" fill="none" stroke="#5EC8FF" strokeWidth="1" opacity=".45" />
-      <g transform={flip < 0 ? 'translate(64 0) scale(-1 1)' : undefined}><g className="v-body">
-        {/* pescoço em S saindo da água */}
-        <path d="M18 58 C14 46 30 42 26 30 C23 22 28 14 38 13 L44 20 C36 21 34 26 36 32 C40 44 26 48 30 58 Z" fill={c} stroke="#120B1E" strokeWidth="1.5" strokeLinejoin="round" />
-        <path d="M22 54 c3 -2 6 -2 8 0 M24 46 c3 -2 6 -1 7 1 M28 37 c2 -2 5 -2 7 0" stroke="#120B1E" strokeWidth="1" fill="none" opacity=".45" />
-        {/* cabeça com focinho e chifres */}
-        <path d="M34 8 C42 5 52 8 58 14 C61 17 59 21 55 21 L44 22 C38 23 33 19 32 14 C31 11 32 9 34 8 Z" fill={c} stroke="#120B1E" strokeWidth="1.5" strokeLinejoin="round" />
-        <path d="M37 9 L33 1 L41 7 M44 7 L44 0 L48 7" fill={c} stroke="#120B1E" strokeWidth="1.3" strokeLinejoin="round" />
-        <path d="M44 19.5 l2 3 l2 -3 l2 3 l2 -3" fill="#F2EEDF" />
+      <g transform={flip ? 'translate(64 0) scale(-1 1)' : undefined}><g className="v-body">
+        {/* asa de morcego atrás do corpo */}
+        <path d="M58 30 L46 2 Q36 8 22 10 Q28 15 27 21 Q35 19 39 24 Q47 25 58 30 Z" fill={c} stroke={S} strokeWidth="1.3" strokeLinejoin="round" />
+        <path d="M58 30 L46 2 Q36 8 22 10 Q28 15 27 21 Q35 19 39 24 Q47 25 58 30 Z" fill="#000" opacity=".35" />
+        <path d="M46 2 L27 21 M46 2 L39 24 M46 2 L52 28" stroke={S} strokeWidth="1" opacity=".7" />
+        {/* perna dianteira com garras */}
+        <path d="M42 44 Q35 50 36 58 L45 58 Q45 52 50 48 Z" fill={c} stroke={S} strokeWidth="1.3" strokeLinejoin="round" />
+        <path d="M36 58 l-2 2 M39 58 l-1 2.4 M42 58 l0 2.4" stroke="#F2EEDF" strokeWidth="1.1" strokeLinecap="round" />
+        {/* corpo (encosta na borda direita: a outra metade continua dali) */}
+        <path d="M64 24 Q48 22 39 33 Q33 44 41 52 Q50 59 64 59 Z" fill={c} stroke={S} strokeWidth="1.4" strokeLinejoin="round" />
+        <path d="M64 42 Q52 42 46 49 Q53 56 64 56 Z" fill="#F2D9A8" opacity=".55" />
+        <path d="M50 46 Q56 45 64 46 M48 50 Q56 50 64 51" stroke={S} strokeWidth=".8" opacity=".5" fill="none" />
+        {/* pescoço longo e espinhos */}
+        <path d="M46 34 Q33 31 29 22 Q26 15 21 13 L17 19 Q22 21 24 27 Q28 38 41 41 Z" fill={c} stroke={S} strokeWidth="1.4" strokeLinejoin="round" />
+        <path d="M30 20 l2 -4 l1 4 M35 26 l3 -3 l0 4 M41 30 l3 -3 l0 4 M48 25 l2 -4 l1 4 M55 24 l2 -4 l1 4" fill={c} stroke={S} strokeWidth="1" strokeLinejoin="round" />
+        {/* cabeça de dragão olhando para fora */}
+        <path d="M23 11 Q15 8 7 12 L1 16 Q3 20 9 20 L15 23 Q23 22 24 16 Z" fill={c} stroke={S} strokeWidth="1.4" strokeLinejoin="round" />
+        <path d="M2 17 Q8 18 14 21" stroke={S} strokeWidth="1" fill="none" />
+        <path d="M20 10 L29 3 L24 12 M17 9 L21 1 L20 10" fill="#F2EEDF" stroke={S} strokeWidth="1" strokeLinejoin="round" />
+        <path d="M3 17 l1 2 l1 -2 l1 2 l1 -2 l1 2" stroke="#F2EEDF" strokeWidth=".9" fill="none" />
+        <circle cx="4" cy="14.5" r=".8" fill={S} />
         {!locked && <>
-          <path className="v-glow" d="M41 12 L47 13.5 L41 15 Z" fill="#FFD24A" />
-          <path d="M39 10.5 L48 12" stroke="#120B1E" strokeWidth="1.8" strokeLinecap="round" />
-          <circle cx="56" cy="16" r="1" fill="#120B1E" />
+          <path className="v-glow" d="M11 13 L17 14 L11 15.6 Z" fill="#FFD24A" />
+          <path d="M9 11.5 L18 12.6" stroke={S} strokeWidth="1.6" strokeLinecap="round" />
         </>}
       </g></g>
-      {!locked && <text x={side === 'feature' ? 6 : 26} y="50" fontSize="5.5" fontFamily="monospace" fontWeight="700" fill="#F2EEDF" opacity=".75">{mark}</text>}
-      {!locked && <text x={side === 'feature' ? 8 : 26} y="43" fontSize="5.5" fontFamily="monospace" fontWeight="700" fill="#F2EEDF" opacity=".45">=======</text>}
+      {!locked && <text x={flip ? 4 : 41} y="54" fontSize="5" fontFamily="monospace" fontWeight="700" fill={S} opacity=".55">{flip ? '>>>>>>>' : '<<<<<<<'}</text>}
     </g>
   );
 }

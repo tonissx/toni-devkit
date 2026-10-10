@@ -849,12 +849,12 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-tease__horizon { position: absolute; z-index: 4; display: flex; align-items: flex-end; pointer-events: none; transform: translate(-50%, -100%);
   -webkit-mask-image: linear-gradient(to top, transparent 0, #000 42%); mask-image: linear-gradient(to top, transparent 0, #000 42%); }
 .dc-tease__head { display: block; transform-origin: 50% 100%; }
-.dc-tease__head.is-left { margin-right: -40px; animation: dc-head-sway 5.5s ease-in-out infinite; }
-.dc-tease__head.is-right { animation: dc-head-sway 6.5s ease-in-out infinite reverse; animation-delay: -1.7s; }
+.dc-tease__head.is-left { transform-origin: 100% 100%; animation: dc-head-sway 5.5s ease-in-out infinite; } /* as metades do dragão giram a partir da junção */
+.dc-tease__head.is-right { transform-origin: 0 100%; animation: dc-head-sway 6.5s ease-in-out infinite reverse; animation-delay: -1.7s; }
 @keyframes dc-head-sway { 0%, 100% { transform: rotate(-1.6deg) translateY(0); } 50% { transform: rotate(1.6deg) translateY(-2px); } }
 .dc-tease__head svg { display: block; overflow: visible; }
 .dc-tease__head .v-body { animation: none !important; } /* sem o "ameaçar" do sprite: só o balanço lento */
-.dc-tease__head text, .dc-tease__head path[fill="#F2EEDF"], .dc-tease__head .v-ripple, .dc-tease__head circle[fill="#120B1E"], .dc-tease__head ellipse[fill="#000"] { display: none; }
+.dc-tease__head path[fill="#F2D9A8"], .dc-tease__head [stroke="#F2EEDF"], .dc-tease__head text, .dc-tease__head path[fill="#F2EEDF"], .dc-tease__head .v-ripple, .dc-tease__head circle[fill="#120B1E"], .dc-tease__head ellipse[fill="#000"] { display: none; }
 .dc-tease__head [stroke="#120B1E"] { stroke: #000; }
 .dc-tease__head .v-glow { fill: #FFD24A; animation: dc-eye-glow 3.5s ease-in-out infinite; filter: drop-shadow(0 0 3px #FFB02E) drop-shadow(0 0 7px rgba(255, 176, 46, .7)); }
 .dc-tease__head.is-right .v-glow { animation-delay: -1.2s; }
@@ -1171,6 +1171,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-arena__unit { justify-content: flex-end; }
 .dc-arena__unit > svg { position: relative; z-index: 1; }
 .dc-arena__shadow { position: absolute; bottom: -4px; left: 50%; width: 46px; height: 10px; margin-left: -23px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, .55), transparent); pointer-events: none; }
+.dc-arena__unit.is-hydra-left { margin-right: -20px; z-index: 2; } /* as metades do dragão se encostam */
 .dc-arena__unit.is-boss .dc-arena__shadow { width: 76px; margin-left: -38px; height: 14px; }
 .dc-arena__unit > svg.villain-svg > ellipse:first-child { display: none; } /* a sombra agora é a do chão */
 .dc-arena__unit.is-flying > svg { animation: dc-fly 2.4s ease-in-out infinite; }
@@ -1183,15 +1184,33 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-hud__side { display: flex; align-items: flex-start; gap: 5px; flex-wrap: wrap; align-content: flex-start; }
 .dc-hud__side.is-pets { flex: none; flex-wrap: nowrap; }
 .dc-hud__side.is-enemies { flex: 1; justify-content: flex-end; }
-.dc-hud__card { display: flex; align-items: center; gap: 6px; width: 112px; padding: 4px 8px 4px 4px; border-radius: 8px; background: rgba(8, 12, 18, .62); border: 1px solid rgba(255, 255, 255, .08); backdrop-filter: blur(3px); transition: border-color .15s, box-shadow .15s, opacity .3s; }
+.dc-hud__card { display: flex; align-items: center; gap: 7px; width: 124px; padding: 4px 8px 4px 4px; border-radius: 8px; background: rgba(8, 12, 18, .62); border: 1px solid rgba(255, 255, 255, .08); backdrop-filter: blur(3px); transition: border-color .15s, box-shadow .15s, opacity .3s; }
 .dc-hud__card.is-acting { border-color: rgba(255, 226, 122, .7); box-shadow: 0 0 10px rgba(255, 226, 122, .35); }
 .dc-hud__card.is-hit { border-color: rgba(255, 107, 107, .8); animation: dc-hud-hit .35s; }
 @keyframes dc-hud-hit { 30% { transform: translateX(-3px); } 60% { transform: translateX(3px); } }
 .dc-hud__card.is-down { opacity: .45; filter: grayscale(.8); }
-.dc-hud__face { position: relative; flex: none; display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 6px; background: rgba(255, 255, 255, .06); }
-.dc-hud__face svg { display: block; }
-.dc-hud__face .villain-svg * { animation: none !important; }
-.dc-hud__dead { position: absolute; right: -3px; bottom: -3px; color: #FF8A8A; }
+.dc-hud__face {
+  position: relative; flex: none; width: 42px; height: 42px; border-radius: 7px; overflow: hidden; isolation: isolate;
+  background: radial-gradient(circle at 55% 40%, color-mix(in srgb, var(--c) 75%, #fff 10%), color-mix(in srgb, var(--c) 35%, #05070B) 55%, #05070B 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14);
+}
+/* linhas de velocidade e vinheta por cima do fundo (atrás do rosto) */
+.dc-hud__face::before { content: ''; position: absolute; inset: -20%; z-index: 0; opacity: .45;
+  background: repeating-conic-gradient(from 0deg at 55% 40%, rgba(255, 255, 255, .5) 0 2deg, transparent 2deg 14deg);
+  -webkit-mask-image: radial-gradient(circle at 55% 40%, transparent 22%, #000 70%); mask-image: radial-gradient(circle at 55% 40%, transparent 22%, #000 70%); }
+.dc-hud__face::after { content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: radial-gradient(circle at 50% 45%, transparent 45%, rgba(0, 0, 0, .65) 100%), linear-gradient(160deg, rgba(255, 255, 255, .18), transparent 35%); }
+.dc-hud__zoom { position: absolute; z-index: 1; transform: rotate(-7deg); transform-origin: 21px 21px; }
+.dc-hud__zoom svg { display: block; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .5)); }
+.dc-hud__zoom .villain-svg *, .dc-hud__zoom .pet-svg * { animation: none !important; }
+.dc-hud__zoom svg > ellipse:first-child { display: none; }
+/* agindo: zoom de impacto · apanhando: clarão vermelho · caído: preto e branco */
+.dc-hud__card.is-acting .dc-hud__zoom { animation: dc-portrait-punch .45s ease-out; }
+@keyframes dc-portrait-punch { 0% { transform: rotate(-7deg) scale(1); } 35% { transform: rotate(-3deg) scale(1.18); } 100% { transform: rotate(-7deg) scale(1.06); } }
+.dc-hud__card.is-acting .dc-hud__face::before { opacity: .8; }
+.dc-hud__card.is-hit .dc-hud__face::after { background: radial-gradient(circle at 50% 45%, rgba(255, 60, 60, .35), rgba(120, 0, 0, .7) 100%); }
+.dc-hud__card.is-down .dc-hud__face { filter: grayscale(1) brightness(.6); }
+.dc-hud__dead { position: absolute; z-index: 3; right: 2px; bottom: 2px; color: #FF8A8A; filter: drop-shadow(0 0 2px #000); }
 .dc-hud__info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dc-hud__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 600; color: #E8E8F0; }
 .dc-hud__bar { position: relative; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; }
@@ -1200,7 +1219,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-hud__card.is-low .dc-hud__bar i { background: linear-gradient(90deg, #E0A030, #FFD24A); }
 .dc-hud__hp { font: 500 9px var(--tk-font-mono); color: rgba(255, 255, 255, .5); }
 .dc-arena.is-done .dc-hud { display: none; }
-@media (prefers-reduced-motion: reduce) { .dc-arena__unit.is-flying > svg, .dc-arena__unit.is-flying .dc-arena__shadow, .dc-hud__card.is-hit { animation: none; } .dc-arena__unit.is-flying > svg { transform: translateY(-24px); } }
+@media (prefers-reduced-motion: reduce) { .dc-arena__unit.is-flying > svg, .dc-arena__unit.is-flying .dc-arena__shadow, .dc-hud__card.is-hit, .dc-hud__card.is-acting .dc-hud__zoom { animation: none; } .dc-arena__unit.is-flying > svg { transform: translateY(-24px); } }
 .dc-arena__unit.is-enemy .tk-progress__fill { background: #FF6B6B; box-shadow: none; }
 .dc-arena__unit.is-pet.is-front { transform: translateX(10px); }
 .dc-arena__unit.is-pet.is-acting { transform: translateX(22px); }

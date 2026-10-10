@@ -114,8 +114,8 @@ function TeaseBeast({ next, edge, cx }) {
   if (next.arena !== 'staging') return null;
   return (
     <div className="dc-tease__horizon" style={{ top: edge + 30, left: cx }} aria-hidden="true" title={'Algo espreita além do chefe: ' + next.name}>
-      <span className="dc-tease__head is-left"><VillainSprite id="hydra-feature" color="#07060B" size={128} /></span>
-      <span className="dc-tease__head is-right"><VillainSprite id="hydra-main" color="#07060B" size={136} /></span>
+      <span className="dc-tease__head is-left"><VillainSprite id="hydra-main" color="#07060B" size={132} /></span>
+      <span className="dc-tease__head is-right"><VillainSprite id="hydra-feature" color="#07060B" size={132} /></span>
     </div>
   );
 }
@@ -186,7 +186,8 @@ function Party({ map, party, hold, place, geom }) {
 function Foes({ n, x, y, target = false }) {
   const boss = n.type === 'boss';
   const size = boss ? 106 : n.type === 'elite' ? 47 : 32; // elite 30% maior que antes (36)
-  const gap = boss ? 40 : n.type === 'elite' ? 31 : 24;
+  // O dragão de duas cabeças: as metades se encostam (uma do lado da outra, sem vão).
+  const gap = n.enemies.some((e) => e.sprite === 'hydra-main') ? size : boss ? 40 : n.type === 'elite' ? 31 : 24;
   return (
     <div className={'dc-foes' + (boss ? ' is-boss' : '') + (target ? ' is-target' : '')} style={{ left: x, top: y - (boss ? 34 : 24) }}>
       {n.enemies.map((e, i) => {

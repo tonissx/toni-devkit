@@ -126,6 +126,16 @@ function bubble(e, abilityName, itemName) {
  */
 const ATTACK = { byte: 'slash', git: 'claw', armo: 'bash', query: 'whip', memo: 'pierce', relay: 'wind', noxi: 'zap', lint: 'throw' };
 const RANGED = new Set(['wind', 'zap', 'throw']);
+/** Onde fica o rosto em cada sprite (viewBox 64): o retrato do painel faz um close ali. Padrão: (32, 30). */
+const FACE = {
+  'hydra-main': [13, 15], 'hydra-feature': [51, 15], titan: [32, 31], ddos: [32, 22], race: [40, 24], monolith: [32, 20],
+  'pet:byte': [32, 29], 'pet:noxi': [28, 27], 'pet:query': [33, 28], 'pet:memo': [32, 25], 'pet:relay': [22, 22], 'pet:armo': [52, 37], 'pet:git': [34, 27], 'pet:lint': [27, 23],
+  flaky: [31, 32], drift: [44, 40], coldstart: [32, 26], leakgiant: [32, 30], bug: [32, 28], typo: [32, 30], dep: [32, 30], forky: [32, 28], zero: [32, 26],
+};
+const PORTRAIT = 42;   // lado do retrato (px)
+const ZOOM = 120;      // tamanho do sprite dentro do retrato (o close)
+const PET_ZOOM = 96;   // pets: um pouco mais aberto (a cabeça inteira)
+
 /** Inimigos que voam (pairam acima do chão, com a sombra embaixo); o resto pisa no chão. */
 const FLYING = new Set(['flaky', 'race', 'ddos', 'titan', 'flicker', 'swarm']);
 /**
@@ -375,7 +385,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     return (
       <div className={'dc-arena__unit is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (acting ? ' is-acting' : '') + (hit ? ' is-hit' : '') + (u.front ? ' is-front' : '') + (u.boss ? ' is-boss' : '')
         + (st.charged.has(u.uid) ? ' is-charged' : '') + (st.marked.has(u.uid) && alive[u.uid] ? ' is-marked' : '') + (burstHit && cur.t === u.uid ? ' is-burst-hit' : '')
-        + (acting && curFx ? ' is-casting' : '') + (lunge ? ' is-lunge is-' + sk.type + (sk.ranged ? ' is-ranged' : '') : '') + (hit && sk ? (sk.ranged ? ' is-hit-ranged' : ' is-hit-late') : '') + (u.side === 'enemy' && FLYING.has(u.sprite) ? ' is-flying' : '')}
+        + (acting && curFx ? ' is-casting' : '') + (lunge ? ' is-lunge is-' + sk.type + (sk.ranged ? ' is-ranged' : '') : '') + (hit && sk ? (sk.ranged ? ' is-hit-ranged' : ' is-hit-late') : '') + (u.side === 'enemy' && FLYING.has(u.sprite) ? ' is-flying' : '') + (u.sprite === 'hydra-main' ? ' is-hydra-left' : '')}
         ref={(el) => { if (el) unitRefs.current[u.uid] = el; }}
         style={{ ...(p ? { '--pet': p.color } : null), ...(lunge ? { '--dx': sk.dx + 'px', '--dy': sk.dy + 'px' } : null) }}>
         {st.marked.has(u.uid) && alive[u.uid] && <span className="dc-fx-reticle" aria-hidden="true" />}
@@ -400,10 +410,13 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     const on = cur && (cur.a === u.uid ? ' is-acting' : cur.t === u.uid && (cur.k === 'atk' || cur.k === 'miss') ? ' is-hit' : '');
     return (
       <div className={'dc-hud__card is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (on || '') + (life < 0.3 ? ' is-low' : '')}>
-        <span className="dc-hud__face">
-          {u.side === 'pet'
-            ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} stage={p ? p.stage.id : 0} size={26} className="is-static" />
-            : <VillainSprite id={u.sprite} color={u.color} state="active" size={26} />}
+        {/* close dramático: o rosto ampliado, inclinado, sobre a luz da cor do personagem e linhas de velocidade */}
+        <span className="dc-hud__face" style={{ '--c': (p ? p.color : u.color) || '#888' }}>
+          <span className="dc-hud__zoom" style={(() => { const [fx, fy] = FACE[u.side === 'pet' ? 'pet:' + u.id : u.sprite] || [32, 30]; const k = (u.side === 'pet' ? PET_ZOOM : ZOOM) / 64; return { left: PORTRAIT / 2 - fx * k, top: PORTRAIT / 2 - fy * k }; })()}>
+            {u.side === 'pet'
+              ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} stage={p ? p.stage.id : 0} size={PET_ZOOM} className="is-static" />
+              : <VillainSprite id={u.sprite} color={u.color} state="active" size={ZOOM} />}
+          </span>
           {!alive[u.uid] && <Icon name="skull" size={12} className="dc-hud__dead" />}
         </span>
         <span className="dc-hud__info">
