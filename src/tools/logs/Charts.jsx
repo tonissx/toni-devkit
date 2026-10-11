@@ -3,7 +3,7 @@
 // SVG próprio: linhas de 2px, barras de no máximo 24px com ponta arredondada, grade fina e discreta, legenda sempre
 // que há mais de uma série, tooltip com o valor na frente. Tudo respeita o filtro atual.
 import { DS } from '../../lib/ds.js';
-import { logsApi, errText, LEVEL_META, levelColor, fmtNum, fmtCompact, fmtMs, fmtTick, fmtTime, fmtStep, sameDay } from './shared.jsx';
+import { logsApi, errText, LEVEL_META, levelColor, fmtNum, fmtCompact, fmtMs, fmtTick, fmtTime, fmtStep, sameDay, useDelayed } from './shared.jsx';
 
 const { Icon, Spinner } = DS;
 
@@ -210,21 +210,45 @@ const pct = (a, b) => (b ? `${((a / b) * 100).toFixed(a / b < 0.1 ? 1 : 0).repla
  * props: id, sum (consulta atual), onFilter(term), onLevels(levels)
  */
 export function Charts({ id, sum, onFilter, onLevels }) {
+  // data guarda a fotografia da consulta usada no cálculo (snap): histograma e totais sempre batem com os números.
   const [data, setData] = React.useState(null);
   const [error, setError] = React.useState(null);
-  const [busy, setBusy] = React.useState(false);
+  const [pending, setPending] = React.useState(false);
+  const busy = useDelayed(pending, 300); // esmaece só se o cálculo demorar
+  const lastAt = React.useRef(0);
+  const timer = React.useRef(null);
+  const latest = React.useRef(sum);
+  latest.current = sum;
+  const mounted = React.useRef(true);
+  React.useEffect(() => () => { mounted.current = false; clearTimeout(timer.current); }, []);
   React.useEffect(() => {
-    if (!sum) return undefined;
-    let alive = true;
-    setBusy(true);
-    logsApi().charts({ id, qid: sum.qid }).then((r) => { if (!alive || !r || r.stale) return; setData(r); setError(null); setBusy(false); }, (e) => { if (alive) { setError(errText(e)); setBusy(false); } });
-    return () => { alive = false; };
+    if (!sum) return;
+    // Cada resultado vale para a fotografia que o pediu, então é aplicado mesmo que já exista consulta mais nova
+    // (com o arquivo crescendo sem parar, descartar o anterior faria os gráficos nunca atualizarem).
+    const fetchNow = () => {
+      const snap = latest.current;
+      if (!snap) return;
+      lastAt.current = Date.now();
+      if (!snap.viaAppend) setPending(true);
+      logsApi().charts({ id, qid: snap.qid }).then((r) => {
+        if (!mounted.current) return;
+        setPending(false);
+        if (!r || r.stale) return;
+        setData((d) => (d && d.snap.qid > snap.qid ? d : { ...r, snap })); setError(null);
+      }, (e) => { if (mounted.current) { setError(errText(e)); setPending(false); } });
+    };
+    clearTimeout(timer.current);
+    // Ao vivo: no máximo um recálculo a cada 3 s (o arquivo crescendo não faz os gráficos piscarem nem gastar CPU à toa).
+    // Filtro novo: na hora.
+    const wait = sum.viaAppend ? 3000 - (Date.now() - lastAt.current) : 0;
+    if (wait > 0) timer.current = setTimeout(fetchNow, wait); else fetchNow();
   }, [sum && sum.qid]);
 
   if (error) return <div className="lg-err lg-pad">{error}</div>;
   if (!data) return <div className="lg-muted lg-pad"><Spinner size={12} /> Calculando…</div>;
-  const hist = sum.hist ? { start: sum.hist.start, step: sum.hist.step, buckets: sum.hist.buckets } : null;
-  const total = sum.total;
+  const snap = data.snap;
+  const hist = snap.hist ? { start: snap.hist.start, step: snap.hist.step, buckets: snap.hist.buckets } : null;
+  const total = snap.total;
 
   if (data.http && data.httpStats) {
     const h = data.httpStats;
@@ -270,7 +294,7 @@ export function Charts({ id, sum, onFilter, onLevels }) {
     );
   }
 
-  const lv = data.levels || sum.counts;
+  const lv = data.levels || snap.counts;
   const errors = lv[5] + lv[6];
   const rate = data.errorRate || [];
   const lg = data.loggers;
@@ -280,7 +304,7 @@ export function Charts({ id, sum, onFilter, onLevels }) {
         <Stat label="Entradas" value={fmtCompact(total)} />
         <Stat label="Erros" value={fmtCompact(errors)} note={pct(errors, total)} tone={errors ? 'error' : null} />
         <Stat label="Avisos" value={fmtCompact(lv[4])} note={pct(lv[4], total)} tone={lv[4] ? 'warn' : null} />
-        <Stat label="Problemas distintos" value={fmtNum(sum.groupsTotal)} />
+        <Stat label="Problemas distintos" value={fmtNum(snap.groupsTotal)} />
       </div>
       {hist && (
         <Card title="Erros por minuto" sub={`média em cada ${fmtStep(hist.step)} · ERROR + FATAL`}>

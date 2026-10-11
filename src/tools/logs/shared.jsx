@@ -151,6 +151,20 @@ export function Sparkline({ data, width = 96, height = 22, title }) {
   );
 }
 
+/**
+ * true só depois de `flag` ficar ligado por `ms` — para indicar "carregando" sem piscar quando a resposta é rápida
+ * (a maioria das consultas volta em dezenas de ms).
+ */
+export function useDelayed(flag, ms = 300) {
+  const [on, setOn] = React.useState(false);
+  React.useEffect(() => {
+    if (!flag) { setOn(false); return undefined; }
+    const t = setTimeout(() => setOn(true), ms);
+    return () => clearTimeout(t);
+  }, [flag, ms]);
+  return on;
+}
+
 /** Copia texto (com toast). */
 export async function copyText(text, toast, what = 'Copiado') {
   try { await window.devkit.clipboard.write(String(text)); toast && toast(what, '', 'ok'); } catch (e) { toast && toast('Não foi possível copiar', errText(e), 'error'); }

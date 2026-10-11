@@ -6,7 +6,7 @@
 import { DS } from '../../lib/ds.js';
 import { useAiMode, useAiTask, AiButton, AiPanel, aiOn } from '../../ai/ui.jsx';
 import { FORMATS, FORMAT_IDS } from '../../logs/parse.js';
-import { logsApi, errText, toRegexes, fmtNum, fmtBytes, fmtTime, LEVEL_BY_ID, copyText, sameDay } from './shared.jsx';
+import { logsApi, errText, toRegexes, fmtNum, fmtBytes, fmtTime, LEVEL_BY_ID, copyText, sameDay, useDelayed } from './shared.jsx';
 import { LevelChips, SearchBox, RangeChip, Presets } from './FilterBar.jsx';
 import { LogList } from './LogList.jsx';
 import { Timeline } from './Timeline.jsx';
@@ -57,6 +57,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
 
   const [sum, setSum] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
+  const dimmed = useDelayed(loading); // esmaece só se a consulta demorar (> 300 ms)
   const [sel, setSel] = React.useState(null);       // { pos | null, i }
   const [scrollTo, setScrollTo] = React.useState(null);
   const [atBottom, setAtBottom] = React.useState(true);
@@ -86,12 +87,13 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
     latest.current = qid;
     const wasAppend = appended.current;
     appended.current = false;
-    setLoading(true);
+    // Ao vivo não mostra "carregando": as linhas novas só aparecem (sem esmaecer a tela a cada gravação).
+    if (!wasAppend) setLoading(true);
     try {
       const r = await api.query({ id, qid, q, levels, from: range ? range.from : null, to: range ? range.to : null, buckets: 120 });
       if (latest.current !== qid) return;
       const prev = sumRef.current;
-      setSum(r);
+      setSum({ ...r, viaAppend: wasAppend });
       if (first.current) {
         first.current = false;
         if (src.live && r.total) goTo(r.total - 1, 'end'); // como o tail -f: começa no fim
@@ -276,7 +278,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
       </div>
 
       <Timeline hist={sum && sum.hist} range={range} onRange={(r) => set({ range: r })} onSeek={seek} spikes={tlMode === 'problems' || errorsTotal ? sum && sum.spikes : []}
-        mode={tlMode} onMode={(m) => set({ tlMode: m })} loading={loading} />
+        mode={tlMode} onMode={(m) => set({ tlMode: m })} loading={dimmed} />
 
       <div className="lg-tabs" role="tablist">
         {[
@@ -298,7 +300,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
       </div>
 
       <div className="lg-body">
-        <div className={'lg-main' + (loading && sum ? ' is-loading' : '')}>
+        <div className={'lg-main' + (dimmed && sum ? ' is-loading' : '')}>
           {!sum ? <div className="lg-muted lg-pad"><Spinner size={12} /> Filtrando…</div>
             : tab === 'lines' ? (
               <>
@@ -341,7 +343,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
 
       <footer className="lg-status">
         {sum ? <span>{fmtNum(sum.total)} de {fmtNum(sum.n)} entradas{sum.total !== sum.n ? ' (filtro)' : ''}</span> : <span>…</span>}
-        {loading && <Spinner size={11} />}
+        {dimmed && <Spinner size={11} />}
         {sum && sum.tsMin != null && <span className="lg-muted">{fmtTime(sum.tsMin, { date: true, millis: false })} → {fmtTime(sum.tsMax, { date: true, millis: false })}</span>}
         <span className="lg-grow" />
         <span className="lg-muted lg-keys">↑↓ navegar · n/N erro · w aviso · End fim · Ctrl+F buscar</span>
