@@ -115,6 +115,20 @@ test('repoStatusChip: conflito tem prioridade; limpo não mostra nada', () => {
   assert.equal(chip([]), null);
 });
 
+test('logsAttention: erros novos primeiro, com resumo legível', () => {
+  const rows = H.logsAttention([
+    { id: 'a', name: 'iis', errors: 0, warns: 0, newErrors: 0, live: false },
+    { id: 'b', name: 'app.log', errors: 12, warns: 1, newErrors: 0, live: true },
+    { id: 'c', name: 'server.log', errors: 1500, warns: 30, newErrors: 3, live: true },
+  ]);
+  assert.deepEqual(rows.map((r) => [r.id, r.level, r.note]), [
+    ['c', 'new', '3 erros novos · 30 avisos · ao vivo'],
+    ['b', 'errors', '12 erros · 1 aviso · ao vivo'],
+    ['a', 'ok', 'sem erros · parado'],
+  ]);
+  assert.deepEqual(H.logsAttention(null), []);
+});
+
 test('PANELS tem ids únicos', () => {
   const ids = H.PANELS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length);

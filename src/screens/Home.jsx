@@ -6,7 +6,7 @@ import { isoDate } from '../notes/edit.js';
 import { cleanError, shortTime } from '../notes/client.js';
 import { needsValue } from '../links/link.js';
 import { formatNum } from '../devcore/engine/format.js';
-import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, PANELS } from '../home/dashboard.js';
+import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, logsAttention, PANELS } from '../home/dashboard.js';
 
 const { PageHeader, ToolCard, Button, Card, Icon, Badge, Checkbox, EmptyState, Spinner } = DS;
 
@@ -269,6 +269,33 @@ function GitPanel({ repos, open }) {
   );
 }
 
+/* ─────────────── Logs ─────────────── */
+
+const LOG_ICON = { new: 'circle-x', errors: 'triangle-alert', ok: 'circle-check' };
+
+/** Logs abertos na ferramenta Logs (só aparece com algum aberto); clicar volta para a aba do log. */
+function LogsPanel({ logs, open }) {
+  if (!logs || !logs.length) return null;
+  const fresh = logs.filter((l) => l.level === 'new').length;
+  return (
+    <Card className="home-panel is-logs" padding={16} icon="scroll-text" title="Logs"
+      subtitle={fresh ? `${fresh} com erros novos` : `${logs.length} aberto${logs.length === 1 ? '' : 's'}`}
+      actions={<Button size="sm" variant="ghost" onClick={() => open('logs', {})}>Abrir Logs</Button>}>
+      <div className="home-list">
+        {logs.slice(0, 6).map((l) => (
+          <button type="button" key={l.id} className={'home-row home-log is-' + l.level} onClick={() => open('logs', { action: 'show', id: l.id })} title={l.name}>
+            <Icon name={LOG_ICON[l.level]} size={14} />
+            <span className="home-row__main">
+              <span className="home-row__title">{String(l.name).split(/[\\/]/).pop()}</span>
+              <span className="home-row__sub">{l.note}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 /* ─────────────── Links rápidos ─────────────── */
 
 function LinkRow({ link, toast }) {
@@ -381,6 +408,18 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
     const id = setInterval(loadRepos, 60e3);
     return () => { window.removeEventListener('focus', loadRepos); clearInterval(id); };
   }, []);
+  // Logs abertos: o tail avisa a cada gravação — recarrega no máximo a cada 1,5 s (throttle, não debounce: com o
+  // arquivo crescendo sem parar, um debounce nunca dispararia).
+  const [logs, setLogs] = React.useState(null);
+  useLive(() => window.devkit.logs.summaries().then((s) => setLogs(logsAttention(s)), () => setLogs([])), (cb) => {
+    let last = 0; let t = null;
+    const off = window.devkit.logs.onChanged((e) => {
+      if (!e || e.type === 'progress') return;
+      const wait = 1500 - (Date.now() - last);
+      if (wait <= 0) { last = Date.now(); cb(); } else if (!t) t = setTimeout(() => { t = null; last = Date.now(); cb(); }, wait);
+    });
+    return () => { off(); clearTimeout(t); };
+  }, 0);
   useLive(() => window.devkit.vault.status().then(setVault, () => {}), window.devkit.vault.onChanged, 0);
   React.useEffect(() => { window.devkit.palette.status().then(setPalette, () => {}); }, []);
 
@@ -427,6 +466,7 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
         {shows('tasks') && <TasksPanel tasks={tasks} today={today} open={open} toast={toast} />}
         {shows('notes') && <NotesPanel recent={recent} pinned={pinned} open={open} toast={toast} />}
         {shows('git') && <GitPanel repos={repos} open={open} />}
+        {shows('logs') && <LogsPanel logs={logs} open={open} />}
         {shows('links') && <LinksPanel links={links} go={go} toast={toast} />}
         {showDc && <DevCorePanel snap={dc} now={tick} go={go} />}
       </div>
