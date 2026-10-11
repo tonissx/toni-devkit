@@ -1,5 +1,5 @@
 'use strict';
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 /** API mínima e explícita exposta ao renderer (window.devkit). */
 contextBridge.exposeInMainWorld('devkit', {
@@ -298,6 +298,8 @@ contextBridge.exposeInMainWorld('devkit', {
    * Consultas recebem { id, qid, ... } — qid identifica a consulta da tela (respostas de consultas velhas: { stale }).
    */
   logs: {
+    /** Caminho de um arquivo/pasta arrastado para a janela. */
+    pathOf: (file) => { try { return webUtils.getPathForFile(file) || null; } catch { return null; } },
     pickFile: () => ipcRenderer.invoke('logs:pickFile'),
     pickFolder: () => ipcRenderer.invoke('logs:pickFolder'),
     /** spec: { kind: 'file'|'folder', path, family?, format?, encoding?, tail? } */

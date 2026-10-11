@@ -49,6 +49,15 @@ const TOOL_META = [
     keywords: ['git', 'commit', 'branch', 'stash', 'merge', 'rebase', 'reflog', 'historico', 'repositório', 'versionamento', 'desfazer', 'diff'],
   },
   {
+    id: 'logs',
+    name: 'Logs',
+    icon: 'scroll-text',
+    group: 'Texto & código',
+    desc: 'Erros e avisos de logs grandes em segundos: filtros, problemas agrupados, gráficos e acompanhamento ao vivo',
+    shortcutKey: '9',
+    keywords: ['log', 'logs', 'tail', 'server.log', 'fluig', 'jboss', 'wildfly', 'iis', 'nginx', 'apache', 'erro', 'exception', 'stack trace', 'ndjson', 'monitorar'],
+  },
+  {
     id: 'notes',
     name: 'Notes',
     icon: 'notebook-pen',

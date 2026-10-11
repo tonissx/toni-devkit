@@ -78,11 +78,12 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
    * → info do worker + { id, name, spec, families, family, live }
    */
   async function openSource(spec, reuseId) {
-    spec = { kind: spec.kind === 'folder' ? 'folder' : 'file', path: String(spec.path || ''), family: spec.family || null, format: spec.format, encoding: spec.encoding, tail: spec.tail !== false };
+    spec = { kind: spec.kind === 'folder' || spec.kind === 'file' ? spec.kind : 'auto', path: String(spec.path || ''), family: spec.family || null, format: spec.format, encoding: spec.encoding, tail: spec.tail !== false };
+    const r = await resolve(spec);
+    spec.kind = r.families ? 'folder' : 'file'; // 'auto' (arrastar e soltar): decide pelo que existe no disco
     const ov = state.overrides[keyOf(spec)] || {};
     const format = spec.format || ov.format || 'auto';
     const encoding = spec.encoding || ov.encoding || 'auto';
-    const r = await resolve(spec);
     if (spec.kind === 'folder' && !spec.family) spec.family = r.family;
     const id = reuseId || 'l' + (++seq);
     const last = r.files[r.files.length - 1];

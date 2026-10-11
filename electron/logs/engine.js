@@ -261,7 +261,20 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
     const r = L.sum.result;
     const out = [];
     const end = Math.min(r.length, from + count);
-    for (let k = Math.max(0, from); k < end; k++) out.push(s.index.row(r[k]));
+    const ix = s.index;
+    for (let k = Math.max(0, from); k < end; k++) {
+      const row = ix.row(r[k]);
+      // JSON por linha: a lista mostra "logger: mensagem" em vez do JSON cru (o detalhe mostra tudo).
+      if (s.format === 'ndjson' && row.text.charCodeAt(0) === 123) {
+        const p = ix.parse(r[k], 1);
+        if (p.json) row.display = (p.logger ? p.logger + ': ' : '') + (p.msg || '') + (p.stack ? '  ⏎ ' + p.stack.split('\n')[0] : '');
+      } else if (ix.http) {
+        // Acesso: data, status e tempo já estão nas colunas — fica a requisição e quem pediu.
+        const p = ix.parse(r[k], 1);
+        if (p.http) row.display = `${p.http.method} ${p.http.path}${p.http.query ? '?' + p.http.query : ''}  · ${p.http.ip}${p.http.user ? ' (' + p.http.user + ')' : ''}`;
+      }
+      out.push(row);
+    }
     return { from, rows: out, total: r.length };
   }
 
