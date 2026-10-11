@@ -11,14 +11,19 @@ const PAD = { l: 6, r: 6, t: 10, b: 16 };
 const ORDER_ALL = [6, 5, 4, 3, 2, 1, 0];
 const ORDER_PROBLEMS = [6, 5, 4];
 
+/** Largura do conteúdo (sem o padding do contêiner): é o espaço que o SVG tem de verdade. */
 function useWidth(ref) {
   const [w, setW] = React.useState(600);
   React.useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
-    const ro = new ResizeObserver(() => setW(el.clientWidth));
+    const measure = () => {
+      const cs = getComputedStyle(el);
+      setW(Math.max(10, Math.floor(el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight))));
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setW(el.clientWidth);
+    measure();
     return () => ro.disconnect();
   }, []);
   return w;
@@ -36,8 +41,9 @@ function topRounded(x, y, w, h, r) {
  */
 export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, loading, collapsed, onCollapse }) {
   const ref = React.useRef(null);
+  const svgRef = React.useRef(null);
   const width = useWidth(ref);
-  const [hover, setHover] = React.useState(null); // { b, x }
+  const [hover, setHover] = React.useState(null); // { b }
   const [drag, setDrag] = React.useState(null);   // { b0, b1, moved }
   const [kb, setKb] = React.useState(null);       // teclado: { b, anchor } (anchor = início de Shift+setas)
 
@@ -80,8 +86,11 @@ export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, l
   const yScale = (v) => (max ? (v / max) * plotH : 0);
   const xOf = (b) => PAD.l + b * bw + (bw - barW) / 2;
   const tOf = (b) => hist.start + b * hist.step;
+  // Coluna sob o ponteiro: mede a partir do próprio SVG (o contêiner tem padding e borda — medir por ele desloca a
+  // troca de coluna para antes do meio da barra). Cada coluna ocupa a faixa inteira [b·bw, (b+1)·bw): a barra fica
+  // no centro dela, então a troca acontece no vão entre duas barras.
   const bOf = (clientX) => {
-    const rect = ref.current.getBoundingClientRect();
+    const rect = svgRef.current.getBoundingClientRect();
     return Math.max(0, Math.min(B - 1, Math.floor((clientX - rect.left - PAD.l) / bw)));
   };
 
@@ -208,7 +217,7 @@ export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, l
           <button type="button" className={mode === 'problems' ? 'is-on' : ''} onClick={() => onMode('problems')} title="Só avisos e erros, com escala própria">Problemas</button>
         </div>
       </div>
-      <svg width={width} height={H} className="lg-timeline__svg" role="img" tabIndex={0} onKeyDown={onKey} onBlur={() => setKb(null)}
+      <svg ref={svgRef} width={width} height={H} className="lg-timeline__svg" role="img" tabIndex={0} onKeyDown={onKey} onBlur={() => setKb(null)}
         aria-label={`Linha do tempo: ${B} colunas de ${fmtStep(hist.step)}, de ${fmtTime(hist.start, { date: true, millis: false })}. Setas andam entre as colunas, Shift+setas seleciona um intervalo, Enter aplica.`}
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={() => { setHover(null); }}>
         <line x1={PAD.l} x2={PAD.l + plotW} y1={PAD.t + plotH + 0.5} y2={PAD.t + plotH + 0.5} className="lg-axis" />
