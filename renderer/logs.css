@@ -174,9 +174,21 @@
 .lg-tick { fill: var(--tk-text-3); font: 10.5px var(--tk-font-mono); font-variant-numeric: tabular-nums; }
 .lg-cross { stroke: var(--tk-text-3); stroke-width: 1; pointer-events: none; }
 .lg-dim { fill: var(--tk-surface-2); opacity: .7; pointer-events: none; }
-.lg-brush { fill: color-mix(in srgb, var(--tk-accent) 14%, transparent); stroke: var(--tk-accent); stroke-width: 1; pointer-events: none; }
+.lg-brush { fill: color-mix(in srgb, var(--tk-accent) 10%, transparent); stroke: var(--tk-accent); stroke-width: 1; pointer-events: none; }
 .lg-spike { fill: var(--lg-error); }
-.lg-timeline g.is-hover { filter: brightness(1.25); }
+.lg-timeline g.is-hover { filter: brightness(1.2); }
+.lg-timeline g.is-dim { opacity: .45; }
+.lg-timeline__svg:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; border-radius: 4px; }
+/* Leitura do que está sob o cursor/teclado: fixa no cabeçalho, uma linha, altura constante (nada pula). */
+.lg-timeline__readout { flex: 1; min-width: 0; height: 24px; display: flex; align-items: center; overflow: hidden; }
+.lg-readout { display: flex; align-items: center; gap: 12px; min-width: 0; white-space: nowrap; font-size: 11.5px; color: var(--tk-text-2); }
+.lg-readout b { color: var(--tk-text); font: 600 11.5px var(--tk-font-mono); font-variant-numeric: tabular-nums; }
+.lg-readout__when { font-weight: 500 !important; }
+.lg-readout__lv { display: inline-flex; align-items: center; gap: 5px; font: 500 10.5px var(--tk-font-mono); letter-spacing: .02em; color: var(--tk-text-2); }
+.lg-readout__lv i { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.lg-readout.is-sel { color: var(--tk-text); }
+.lg-readout.is-sel > svg { color: var(--tk-accent-text); flex-shrink: 0; }
+.lg-readout .lg-muted { font-size: 11px; }
 .lg-tip { position: absolute; top: 28px; z-index: 20; min-width: 170px; padding: 8px 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-4);
   box-shadow: 0 8px 24px rgba(0,0,0,.3); pointer-events: none; font-size: 12px; color: var(--tk-text-2); }
 .lg-tip__when { margin-bottom: 4px; font: 11px var(--tk-font-mono); color: var(--tk-text-3); }
