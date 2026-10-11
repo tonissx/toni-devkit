@@ -78,10 +78,13 @@
 .lg-preset__new input { flex: 1; min-width: 0; height: 26px; padding: 0 8px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm); background: var(--tk-surface-2); color: var(--tk-text); font: 12px var(--tk-font-sans); }
 
 /* abas dos logs abertos */
-.lg-srcs { display: flex; align-items: center; gap: 4px; padding: 8px 12px 0; border-bottom: 1px solid var(--tk-border); background: var(--tk-bg); overflow-x: auto; }
+/* Faixa das abas: rola na horizontal (muitos logs abertos) e nunca na vertical. A linha de baixo é uma sombra interna
+   — a aba ativa, com o fundo do conteúdo, passa por cima dela e "cola" no painel sem precisar vazar 1px para fora. */
+.lg-srcs { display: flex; align-items: flex-end; gap: 4px; padding: 8px 12px 0; background: var(--tk-bg); box-shadow: inset 0 -1px 0 var(--tk-border);
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; flex-shrink: 0; }
 .lg-src { display: inline-flex; align-items: center; gap: 2px; height: 30px; max-width: 260px; padding: 0 4px 0 0; border: 1px solid transparent; border-bottom: 0;
   border-radius: var(--tk-radius-md) var(--tk-radius-md) 0 0; color: var(--tk-text-3); font: 500 12px var(--tk-font-sans); flex-shrink: 0; }
-.lg-src.is-on { background: var(--tk-surface-1); border-color: var(--tk-border); color: var(--tk-text); margin-bottom: -1px; height: 31px; }
+.lg-src.is-on { background: var(--tk-surface-1); border-color: var(--tk-border); color: var(--tk-text); }
 .lg-src__main { display: inline-flex; align-items: center; gap: 6px; min-width: 0; height: 100%; padding: 0 6px 0 10px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 .lg-src__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lg-src__err { min-width: 16px; padding: 0 4px; border-radius: var(--tk-radius-pill); background: var(--tk-red-a12); color: var(--tk-text); font: 600 10px/16px var(--tk-font-mono); text-align: center; }
