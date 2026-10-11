@@ -352,6 +352,13 @@
 .lg-table tbody tr:hover td { background: var(--tk-surface-3); color: var(--tk-text); }
 .lg-table__ep { max-width: 0; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tk-text) !important; }
 
+/* texto igual ao selecionado (CSS Custom Highlight API: sem mexer no DOM — ver src/tools/logs/sameText.js) */
+::highlight(lg-same) { background-color: color-mix(in srgb, var(--tk-accent) 30%, transparent); color: var(--tk-text); }
+.lg-same { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.lg-same__swatch { width: 10px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--tk-accent) 30%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tk-accent) 60%, transparent); flex-shrink: 0; }
+.lg-same code { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px var(--tk-font-mono); color: var(--tk-text); }
+.lg-same .lg-btn { height: 20px; padding: 0 6px; font-size: 11px; }
+
 /* rodapé */
 .lg-status { display: flex; align-items: center; gap: 12px; height: 26px; padding: 0 16px; border-top: 1px solid var(--tk-border); font: 11.5px var(--tk-font-sans); color: var(--tk-text-2); }
 .lg-status .lg-muted { font-size: 11px; }

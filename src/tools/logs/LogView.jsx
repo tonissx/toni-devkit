@@ -13,6 +13,7 @@ import { Timeline } from './Timeline.jsx';
 import { Detail } from './Detail.jsx';
 import { Problems } from './Problems.jsx';
 import { Charts } from './Charts.jsx';
+import { useSameText, filterTermFor } from './sameText.js';
 
 const { Icon, Spinner } = DS;
 
@@ -74,6 +75,10 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   const atBottomRef = React.useRef(true);
   atBottomRef.current = atBottom;
   React.useEffect(() => setLive(src.live), [src.live]);
+
+  // Texto selecionado numa linha → mesmas ocorrências destacadas nas linhas visíveis (ver sameText.js).
+  const [same, setSame] = React.useState({ text: '', count: 0 });
+  useSameText(rootRef, setSame);
 
   const cfg = useAiMode();
   const aiErr = useAiTask('logError', cfg);
@@ -347,6 +352,16 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
         {dimmed && <Spinner size={11} />}
         {sum && sum.tsMin != null && <span className="lg-muted">{fmtTime(sum.tsMin, { date: true, millis: false })} → {fmtTime(sum.tsMax, { date: true, millis: false })}</span>}
         <span className="lg-grow" />
+        {same.text && (
+          <span className="lg-same" title="Ocorrências do texto selecionado nas linhas que estão na tela">
+            <span className="lg-same__swatch" />
+            <code>{same.text.length > 40 ? same.text.slice(0, 40) + '…' : same.text}</code>
+            <span className="lg-muted">{same.count} na tela</span>
+            <button type="button" className="lg-btn" onMouseDown={(e) => e.preventDefault()} onClick={() => { addFilter(filterTermFor(same.text)); set({ tab: 'lines' }); }} title="Filtrar o log inteiro por este texto">
+              <Icon name="filter" size={12} /><span>Filtrar</span>
+            </button>
+          </span>
+        )}
         <span className="lg-muted lg-keys">↑↓ navegar · n/N erro · w aviso · End fim · Ctrl+F buscar</span>
         <span className="lg-muted">{src.formatLabel} · {src.encoding}</span>
       </footer>
