@@ -17,6 +17,7 @@ const { createLinksService } = require('./links/service');
 const { createVaultService } = require('./vault/service');
 const { createStickiesService } = require('./stickies/service');
 const { createGitService } = require('./git/service');
+const { createLogsService } = require('./logs/service');
 const { createAiService } = require('./ai/service');
 const { primaryIndex } = require('../src/vault/entry.js');
 
@@ -615,6 +616,93 @@ ipcMain.handle('git:open-in', async (_e, repo, where) => {
   return shell.openPath(top);
 });
 
+/* ─────────────── Logs (worker thread com o índice; ver electron/logs) ─────────────── */
+// O worker sobe no primeiro uso. Ele guarda o texto dos logs abertos (≈ tamanho dos arquivos), então ganha um
+// limite de memória maior que o padrão.
+let logsWorker = null;
+let logsWorkerReady = null;
+let logsSeq = 0;
+const logsPending = new Map();
+let logsSvc = null;
+let logsReady = null;
+const broadcastLogs = (evt) => { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('logs:changed', evt); };
+
+function startLogsWorker() {
+  if (logsWorker) return logsWorkerReady;
+  const workerFile = path.join(__dirname, 'logs', 'worker.js').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+  logsWorker = new Worker(workerFile, { resourceLimits: { maxOldGenerationSizeMb: 6144 } });
+  logsWorkerReady = new Promise((resolve, reject) => {
+    logsWorker.on('message', (msg) => {
+      if (msg.type === 'ready') return resolve();
+      if (msg.type === 'event') return broadcastLogs(msg.evt);
+      const p = logsPending.get(msg.id);
+      if (!p) return;
+      logsPending.delete(msg.id);
+      msg.ok ? p.resolve(msg.data) : p.reject(new Error(msg.error));
+    });
+    logsWorker.on('error', reject);
+  });
+  logsWorker.on('exit', () => {
+    for (const p of logsPending.values()) p.reject(new Error('O leitor de logs foi encerrado (memória?) — abra o log de novo'));
+    logsPending.clear();
+    logsWorker = null;
+    logsWorkerReady = null;
+    if (logsSvc) { logsSvc.unwatch(); logsSvc._open.clear(); }
+    broadcastLogs({ type: 'crashed' });
+  });
+  logsWorkerReady.catch(() => {});
+  return logsWorkerReady;
+}
+
+function callLogs(op, args) {
+  return startLogsWorker().then(() => new Promise((resolve, reject) => {
+    const id = ++logsSeq;
+    logsPending.set(id, { resolve, reject });
+    logsWorker.postMessage({ id, op, args });
+  }));
+}
+
+function initLogs() {
+  logsSvc = createLogsService({ file: path.join(app.getPath('userData'), 'logs.json'), callWorker: callLogs, broadcast: broadcastLogs });
+  logsReady = logsSvc.init().catch((e) => { console.error('[logs]', e); });
+}
+
+// Serviço (abrir, ao vivo, recentes, filtros salvos).
+const LOGS_SVC_API = ['open', 'reformat', 'switchFamily', 'setLive', 'close', 'list', 'summaries', 'markSeen', 'recents', 'forgetRecent', 'presets', 'savePresets', 'scanFolder'];
+for (const fn of LOGS_SVC_API) {
+  ipcMain.handle('logs:' + fn, async (_e, ...args) => { await logsReady; return logsSvc[fn](...args); });
+}
+// Consultas: vão direto ao worker (args: { id, qid, ... }).
+const LOGS_WORKER_API = ['query', 'rows', 'entry', 'context', 'locate', 'seekTime', 'next', 'sparks', 'charts', 'textOf', 'info'];
+for (const op of LOGS_WORKER_API) {
+  ipcMain.handle('logs:' + op, (_e, args) => callLogs(op, args && typeof args === 'object' ? args : {}));
+}
+ipcMain.handle('logs:pickFile', async (e) => {
+  const r = await dialog.showOpenDialog(fromEvent(e), {
+    title: 'Abrir log', properties: ['openFile'],
+    filters: [{ name: 'Logs', extensions: ['log', 'txt', 'out', 'json', 'ndjson', 'jsonl', 'gz', '1', '2', '3'] }, { name: 'Todos os arquivos', extensions: ['*'] }],
+  });
+  return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
+});
+ipcMain.handle('logs:pickFolder', async (e) => {
+  const r = await dialog.showOpenDialog(fromEvent(e), { title: 'Pasta de logs (junta os arquivos rotacionados)', properties: ['openDirectory'] });
+  return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
+});
+// Exportar o resultado do filtro: escolhe o arquivo aqui, o worker grava em stream.
+ipcMain.handle('logs:export', async (e, args) => {
+  const a = args && typeof args === 'object' ? args : {};
+  const md = a.kind === 'md';
+  const r = await dialog.showSaveDialog(fromEvent(e), {
+    title: 'Exportar entradas filtradas',
+    defaultPath: (a.name || 'logs').replace(/[\\/:*?"<>|]+/g, '_') + (md ? '.md' : '.log'),
+    filters: md ? [{ name: 'Markdown', extensions: ['md'] }] : [{ name: 'Log', extensions: ['log', 'txt'] }],
+  });
+  if (r.canceled || !r.filePath) return null;
+  const res = await callLogs('exportTo', { id: a.id, qid: a.qid, kind: md ? 'md' : 'log', file: r.filePath });
+  return { ...res, path: r.filePath };
+});
+ipcMain.handle('logs:reveal', (_e, p) => { if (p) shell.showItemInFolder(String(p)); return true; });
+
 /* ─────────────── IA (opcional: Ollama local ou API do Claude) ─────────────── */
 // %APPDATA%/Toni Devkit/ai.json. A chave da API fica no Vault: o serviço a lê aqui, no processo principal, só na hora
 // de chamar a API — a tela nunca a recebe. Ver electron/ai/service.js.
@@ -705,6 +793,7 @@ if (!app.requestSingleInstanceLock()) {
     initStickies();
     initLinks();
     initGit();
+    initLogs();
     initAi();
     initVault();
     registerNotesProtocol();
@@ -740,6 +829,7 @@ if (!app.requestSingleInstanceLock()) {
       if (vault) await vault.flush().catch(() => {});
       if (stickies) await stickies.flush().catch(() => {});
       if (gitSvc) { gitSvc.unwatch(); await gitSvc.flush().catch(() => {}); }
+      if (logsSvc) { logsSvc.unwatch(); await logsSvc.flush().catch(() => {}); }
       notesFlushed = true;
       app.quit();
     }, 300);
@@ -749,5 +839,6 @@ if (!app.requestSingleInstanceLock()) {
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     if (sqlWorker) sqlWorker.terminate();
+    if (logsWorker) logsWorker.terminate();
   });
 }

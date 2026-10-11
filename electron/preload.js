@@ -294,6 +294,48 @@ contextBridge.exposeInMainWorld('devkit', {
     },
   },
   /**
+   * Logs (ver electron/logs): o texto fica no worker do processo principal; a tela pede só o que mostra.
+   * Consultas recebem { id, qid, ... } — qid identifica a consulta da tela (respostas de consultas velhas: { stale }).
+   */
+  logs: {
+    pickFile: () => ipcRenderer.invoke('logs:pickFile'),
+    pickFolder: () => ipcRenderer.invoke('logs:pickFolder'),
+    /** spec: { kind: 'file'|'folder', path, family?, format?, encoding?, tail? } */
+    open: (spec) => ipcRenderer.invoke('logs:open', spec),
+    reformat: (id, opts) => ipcRenderer.invoke('logs:reformat', id, opts),
+    switchFamily: (id, family) => ipcRenderer.invoke('logs:switchFamily', id, family),
+    setLive: (id, on) => ipcRenderer.invoke('logs:setLive', id, on),
+    close: (id) => ipcRenderer.invoke('logs:close', id),
+    list: () => ipcRenderer.invoke('logs:list'),
+    summaries: () => ipcRenderer.invoke('logs:summaries'),
+    markSeen: (id) => ipcRenderer.invoke('logs:markSeen', id),
+    recents: () => ipcRenderer.invoke('logs:recents'),
+    forgetRecent: (p) => ipcRenderer.invoke('logs:forgetRecent', p),
+    presets: () => ipcRenderer.invoke('logs:presets'),
+    savePresets: (list) => ipcRenderer.invoke('logs:savePresets', list),
+    scanFolder: (dir) => ipcRenderer.invoke('logs:scanFolder', dir),
+    info: (args) => ipcRenderer.invoke('logs:info', args),
+    query: (args) => ipcRenderer.invoke('logs:query', args),
+    rows: (args) => ipcRenderer.invoke('logs:rows', args),
+    entry: (args) => ipcRenderer.invoke('logs:entry', args),
+    context: (args) => ipcRenderer.invoke('logs:context', args),
+    locate: (args) => ipcRenderer.invoke('logs:locate', args),
+    seekTime: (args) => ipcRenderer.invoke('logs:seekTime', args),
+    next: (args) => ipcRenderer.invoke('logs:next', args),
+    sparks: (args) => ipcRenderer.invoke('logs:sparks', args),
+    charts: (args) => ipcRenderer.invoke('logs:charts', args),
+    textOf: (args) => ipcRenderer.invoke('logs:textOf', args),
+    /** Escolhe o arquivo e grava o resultado do filtro. args: { id, qid, kind: 'log'|'md', name } */
+    exportTo: (args) => ipcRenderer.invoke('logs:export', args),
+    reveal: (p) => ipcRenderer.invoke('logs:reveal', p),
+    /** { type: 'progress'|'appended'|'reset'|'opening'|'error'|'crashed', id, ... } */
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('logs:changed', h);
+      return () => ipcRenderer.removeListener('logs:changed', h);
+    },
+  },
+  /**
    * IA opcional (ver electron/ai/service.js): modo Local (Ollama) ou Nuvem (Claude, chave no Vault — nunca chega aqui).
    */
   ai: {
