@@ -16,6 +16,8 @@ test('todas as tarefas montam system + user em texto', () => {
     jsonError: { error: 'x', line: 1, col: 1, excerpt: '1 | {' }, diffSummary: { patch }, noteMeta: { content: 'texto' },
     noteSummary: { content: 'texto' }, noteChecklist: { text: 'fazer a e b' }, notesAsk: { question: 'q', notes: [{ title: 'N', excerpt: 'e' }] },
     paletteAsk: { question: 'q', commands: [{ id: 'go:git', name: 'Git' }] }, clipExplain: { text: 'select 1', kind: 'sql' },
+    logError: { text: 'ERROR x\n\tat a.B.c(B.java:1)', format: 'jboss' },
+    logIncident: { groups: [{ level: 'ERROR', count: 3, title: 'x', first: '10:00', last: '10:05' }], total: 10 },
   };
   for (const [id, t] of Object.entries(TASKS)) {
     assert.ok(inputs[id], 'falta entrada de teste para ' + id);
@@ -31,6 +33,19 @@ test('entradas vazias viram erro em português', () => {
   assert.throws(() => TASKS.branchName.build({ description: ' ' }), /Descreva/);
   assert.throws(() => TASKS.notesAsk.build({ question: 'q', notes: [] }), /Nenhuma nota/);
   assert.throws(() => TASKS.clipExplain.build({ text: '' }), /vazia/);
+  assert.throws(() => TASKS.logError.build({ text: ' ' }), /vazia/);
+  assert.throws(() => TASKS.logIncident.build({ groups: [] }), /Nenhum problema/);
+});
+
+test('logs: segredos saem antes do envio; contexto Fluig quando o log é do Fluig', () => {
+  const r = TASKS.logError.build({ text: 'ERROR [com.fluig.x] senha=abc123 token: zzz user ana@x.com\n\tat com.fluig.A.b(A.java:1)', format: 'jboss', before: 'Authorization: Bearer xyz' });
+  assert.doesNotMatch(r.user, /abc123|zzz|ana@x\.com|xyz/);
+  assert.match(r.user, /‹oculto›/);
+  assert.match(r.system, /Fluig/);
+  assert.doesNotMatch(TASKS.logError.build({ text: 'Error: boom\n    at f (app.js:1)', format: 'ndjson' }).system, /Fluig/);
+  const inc = TASKS.logIncident.build({ groups: [{ level: 'ERROR', count: 2, title: 'Falha para joao@x.com', exception: 'a.X', rootCause: 'b.Y', frame: 'c.D.e', first: '1', last: '2' }], total: 5, filter: 'password=1' });
+  assert.match(inc.user, /1\. \[ERROR\] 2× — Falha para ‹oculto› \(a\.X → causa b\.Y\) em c\.D\.e/);
+  assert.doesNotMatch(inc.user, /password=1/);
 });
 
 test('clip anota o corte', () => {
