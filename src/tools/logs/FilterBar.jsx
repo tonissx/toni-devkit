@@ -46,7 +46,7 @@ export function LevelChips({ counts, levels, onChange }) {
       {LEVEL_META.filter((l) => !counts || counts[l.id] > 0 || !on(l.id) || l.id === 5).map((l) => {
         const n = counts ? counts[l.id] : 0;
         return (
-          <button key={l.id} type="button" className={'lg-chip is-' + l.key + (on(l.id) ? ' is-on' : '')} aria-pressed={on(l.id)}
+          <button key={l.id} type="button" className={'lg-chip is-' + l.key + (on(l.id) ? ' is-on' : '')} aria-pressed={on(l.id)} aria-label={`${l.name}: ${n}`}
             title={`${l.name}: ${n} — clique liga/desliga, Ctrl+clique mostra só este`}
             onClick={(e) => toggle(l.id, e.ctrlKey || e.metaKey)}>
             <span className="lg-chip__dot" style={{ background: levelColor(l.id) }} />

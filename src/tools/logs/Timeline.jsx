@@ -6,8 +6,8 @@ import { LEVEL_BY_ID, levelColor, fmtTick, fmtStep, fmtTime, fmtNum, fmtCompact,
 
 const { Icon } = DS;
 
-const H = 92;
-const PAD = { l: 6, r: 6, t: 14, b: 18 };
+const H = 64;
+const PAD = { l: 6, r: 6, t: 10, b: 16 };
 const ORDER_ALL = [6, 5, 4, 3, 2, 1, 0];
 const ORDER_PROBLEMS = [6, 5, 4];
 
@@ -34,11 +34,25 @@ function topRounded(x, y, w, h, r) {
  * props: hist { start, step, buckets, data }, range { from, to } | null, onRange(range|null), onSeek(ms),
  * spikes [b], mode 'all'|'problems', onMode, loading
  */
-export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, loading }) {
+export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, loading, collapsed, onCollapse }) {
   const ref = React.useRef(null);
   const width = useWidth(ref);
   const [hover, setHover] = React.useState(null); // { b, x }
   const [drag, setDrag] = React.useState(null);   // { b0, b1, moved }
+
+  // Recolhida: uma faixa fina, que ainda avisa dos picos de erro (o espaço vai para as linhas).
+  if (collapsed) {
+    const n = hist && spikes ? spikes.filter((b) => b < hist.buckets).length : 0;
+    return (
+      <div className="lg-timeline is-folded" ref={ref}>
+        <button type="button" className="lg-timeline__fold" onClick={() => onCollapse(false)} title="Mostrar a linha do tempo" aria-expanded="false">
+          <Icon name="chevron-right" size={13} /><span className="lg-timeline__title">Linha do tempo</span>
+        </button>
+        {hist && <span className="lg-muted">{fmtTime(hist.start, { date: !sameDay(hist.start, hist.start + hist.buckets * hist.step), millis: false })} → {fmtTime(hist.start + hist.buckets * hist.step, { millis: false })}</span>}
+        {n > 0 && <span className="lg-timeline__spikes"><Icon name="triangle-alert" size={11} />{n} pico{n === 1 ? '' : 's'} de erro</span>}
+      </div>
+    );
+  }
 
   if (!hist || !hist.buckets) {
     return (
@@ -130,8 +144,10 @@ export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, l
   return (
     <div className={'lg-timeline' + (loading ? ' is-loading' : '')} ref={ref}>
       <div className="lg-timeline__head">
-        <span className="lg-timeline__title">Entradas por {fmtStep(hist.step)}</span>
-        <span className="lg-muted">máx. {fmtNum(max)} por coluna · arraste para escolher um intervalo, clique para ir até o momento</span>
+        <button type="button" className="lg-timeline__fold" onClick={() => onCollapse(true)} title="Recolher a linha do tempo (mais espaço para as linhas)" aria-expanded="true">
+          <Icon name="chevron-down" size={13} /><span className="lg-timeline__title">Entradas por {fmtStep(hist.step)}</span>
+        </button>
+        <span className="lg-muted lg-timeline__hint">máx. {fmtNum(max)} por coluna · arraste = intervalo · clique = ir até o momento</span>
         <span className="lg-grow" />
         <div className="lg-seg" role="group" aria-label="O que o gráfico mostra">
           <button type="button" className={mode !== 'problems' ? 'is-on' : ''} onClick={() => onMode('all')}>Tudo</button>
@@ -155,7 +171,7 @@ export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, l
         {sel && <rect x={xOf(sel[0]) - 1} y={PAD.t - 6} width={xOf(sel[1]) + barW - xOf(sel[0]) + 2} height={plotH + 6} className="lg-brush" />}
         {hover && <line x1={hover.x} x2={hover.x} y1={PAD.t - 4} y2={PAD.t + plotH} className="lg-cross" />}
         {ticks.map((b) => (
-          <text key={'t' + b} x={xOf(b) + barW / 2} y={H - 4} className="lg-tick" textAnchor={b === 0 ? 'start' : 'middle'}>{fmtTick(tOf(b), multiDay && hist.step < 3600e3 && b === 0 ? 3600e3 : hist.step)}</text>
+          <text key={'t' + b} x={xOf(b) + barW / 2} y={H - 3} className="lg-tick" textAnchor={b === 0 ? 'start' : 'middle'}>{fmtTick(tOf(b), multiDay && hist.step < 3600e3 && b === 0 ? 3600e3 : hist.step)}</text>
         ))}
       </svg>
       {tip && totals[hb] >= 0 && (

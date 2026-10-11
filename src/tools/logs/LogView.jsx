@@ -52,7 +52,7 @@ function Menu({ label, icon, items, title }) {
 export function LogView({ src, state, setState, presets, onPresets, onInfo, onClose, toast, openedAt }) {
   const api = logsApi();
   const id = src.id;
-  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all' } = state;
+  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false } = state;
   const set = (patch) => setState((s) => ({ ...s, ...patch }));
 
   const [sum, setSum] = React.useState(null);
@@ -255,7 +255,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
             {ENCODINGS.map(([v, l]) => <option key={v} value={v}>{v === 'auto' ? 'Auto' : l}</option>)}
             {!ENCODINGS.some(([v]) => v === src.encoding) && <option value={src.encoding}>{src.encoding}</option>}
           </select>
-          <span className="lg-muted">{fmtBytes(src.bytes)} · {fmtNum(sum ? sum.n : src.n)} entradas</span>
+          <span className="lg-muted lg-head__size">{fmtBytes(src.bytes)} · {fmtNum(sum ? sum.n : src.n)} entradas</span>
           <button type="button" className={'lg-live' + (live ? ' is-on' : '')} onClick={toggleLive} disabled={src.files[src.files.length - 1].gz}
             title={live ? 'Acompanhando o arquivo — clique para parar' : 'Clique para acompanhar o arquivo ao vivo'}>
             <span className="lg-live__dot" />{live ? 'Ao vivo' : 'Parado'}
@@ -278,7 +278,8 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
       </div>
 
       <Timeline hist={sum && sum.hist} range={range} onRange={(r) => set({ range: r })} onSeek={seek} spikes={tlMode === 'problems' || errorsTotal ? sum && sum.spikes : []}
-        mode={tlMode} onMode={(m) => set({ tlMode: m })} loading={dimmed} />
+        mode={tlMode} onMode={(m) => set({ tlMode: m })} loading={dimmed}
+        collapsed={tlFolded} onCollapse={(v) => set({ tlFolded: v })} />
 
       <div className="lg-tabs" role="tablist">
         {[
