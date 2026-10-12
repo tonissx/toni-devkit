@@ -20,6 +20,8 @@ const { createStickiesService } = require('./stickies/service');
 const { createGitService } = require('./git/service');
 const { createAvatarService } = require('./git/avatars');
 const { createLogsService } = require('./logs/service');
+const { createDbService } = require('./db/service');
+const { fromVaultFields } = require('../src/db/connstr.js');
 const { createAiService } = require('./ai/service');
 const { primaryIndex } = require('../src/vault/entry.js');
 
@@ -474,7 +476,11 @@ ipcMain.handle('app:login-item', (_e, enable) => {
 // %APPDATA%/Toni Devkit/vault.json, criptografado com a senha mestra (ver electron/vault/service.js).
 let vault = null;
 let vaultReady = null;
-const broadcastVault = (evt) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('vault:changed', evt); };
+const broadcastVault = (evt) => {
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send('vault:changed', evt);
+  // Monitor do Banco esperando a credencial: tenta de novo assim que o cofre abre.
+  if (evt && evt.unlocked && dbSvc) dbSvc.vaultUnlocked();
+};
 
 function initVault() {
   vault = createVaultService({
@@ -716,6 +722,47 @@ ipcMain.handle('logs:export', async (e, args) => {
 });
 ipcMain.handle('logs:reveal', (_e, p) => { if (p) shell.showItemInFolder(String(p)); return true; });
 
+/* ─────────────── Banco (monitor de SQL Server; ver electron/db) ─────────────── */
+// Servidores em %APPDATA%/Toni Devkit/db-servers.json (sem senha); histórico em db-monitor/<servidor>/AAAA-MM-DD.ndjson.
+// A senha vem do Vault, lida aqui no processo principal — a tela nunca a recebe.
+let dbSvc = null;
+let dbReady = null;
+const broadcastDb = (evt) => { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('db:changed', evt); };
+
+function initDb() {
+  dbSvc = createDbService({
+    file: path.join(app.getPath('userData'), 'db-servers.json'),
+    dir: path.join(app.getPath('userData'), 'db-monitor'),
+    broadcast: broadcastDb,
+    getCredential: async (entryId) => {
+      await vaultReady;
+      if (!vault || !vault.status().unlocked) throw new Error('O Vault está trancado');
+      const entry = (vault.list() || []).find((e) => e.id === entryId);
+      if (!entry) throw new Error('A credencial escolhida não existe mais no Vault');
+      const fields = entry.fields.map((f, i) => ({ name: f.name, value: f.secret ? vault.reveal(entryId, i) : f.value }));
+      const v = fromVaultFields(fields);
+      if (!v.user) throw new Error(`A entrada "${entry.name}" do Vault não tem usuário`);
+      return { user: v.user, password: v.password };
+    },
+  });
+  dbReady = dbSvc.init().catch((e) => { console.error('[db]', e); });
+}
+
+const DB_API = ['list', 'settings', 'setSettings', 'add', 'update', 'remove', 'test', 'watch', 'now', 'history', 'at', 'incident', 'deadlocks', 'topQueries', 'queryStoreDbs', 'queryStoreTop', 'health', 'plan', 'kill', 'summaries'];
+for (const fn of DB_API) {
+  ipcMain.handle('db:' + fn, async (_e, ...args) => { await dbReady; return dbSvc[fn](...args); });
+}
+// Plano de execução: salvar como .sqlplan (abre no SSMS).
+ipcMain.handle('db:savePlan', async (e, xml, name) => {
+  const r = await dialog.showSaveDialog(fromEvent(e), {
+    title: 'Salvar plano de execução', defaultPath: String(name || 'plano').replace(/[\\/:*?"<>|]+/g, '_') + '.sqlplan',
+    filters: [{ name: 'Plano do SQL Server', extensions: ['sqlplan'] }],
+  });
+  if (r.canceled || !r.filePath) return null;
+  await fs.writeFile(r.filePath, String(xml || ''), 'utf8');
+  return r.filePath;
+});
+
 /* ─────────────── IA (opcional: Ollama local ou API do Claude) ─────────────── */
 // %APPDATA%/Toni Devkit/ai.json. A chave da API fica no Vault: o serviço a lê aqui, no processo principal, só na hora
 // de chamar a API — a tela nunca a recebe. Ver electron/ai/service.js.
@@ -807,6 +854,7 @@ if (!app.requestSingleInstanceLock()) {
     initLinks();
     initGit();
     initLogs();
+    initDb();
     initAi();
     initVault();
     registerNotesProtocol();
@@ -843,6 +891,7 @@ if (!app.requestSingleInstanceLock()) {
       if (stickies) await stickies.flush().catch(() => {});
       if (gitSvc) { gitSvc.unwatch(); await gitSvc.flush().catch(() => {}); }
       if (logsSvc) { logsSvc.unwatch(); await logsSvc.flush().catch(() => {}); }
+      if (dbSvc) { dbSvc.stopAll(); await dbSvc.flush().catch(() => {}); }
       notesFlushed = true;
       app.quit();
     }, 300);

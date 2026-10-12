@@ -340,6 +340,42 @@ contextBridge.exposeInMainWorld('devkit', {
     },
   },
   /**
+   * Banco — monitor de SQL Server (ver electron/db/service.js). A senha fica no Vault e nunca chega aqui:
+   * os servidores guardam só o id da entrada.
+   */
+  db: {
+    list: () => ipcRenderer.invoke('db:list'),
+    settings: () => ipcRenderer.invoke('db:settings'),
+    setSettings: (patch) => ipcRenderer.invoke('db:setSettings', patch),
+    add: (server) => ipcRenderer.invoke('db:add', server),
+    update: (id, patch) => ipcRenderer.invoke('db:update', id, patch),
+    remove: (id) => ipcRenderer.invoke('db:remove', id),
+    /** Testa antes de salvar: { ok, ms, info: { product_version, edition, has_view_server_state, ... } } */
+    test: (draft) => ipcRenderer.invoke('db:test', draft),
+    /** A tela abriu (true) / fechou (false) o servidor: ao vivo no intervalo cheio. */
+    watch: (id, on) => ipcRenderer.invoke('db:watch', id, on),
+    now: (id) => ipcRenderer.invoke('db:now', id),
+    history: (id, range) => ipcRenderer.invoke('db:history', id, range),
+    at: (id, t) => ipcRenderer.invoke('db:at', id, t),
+    incident: (id, incidentId, t) => ipcRenderer.invoke('db:incident', id, incidentId, t),
+    deadlocks: (id, range) => ipcRenderer.invoke('db:deadlocks', id, range),
+    topQueries: (id, opts) => ipcRenderer.invoke('db:topQueries', id, opts),
+    queryStoreDbs: (id) => ipcRenderer.invoke('db:queryStoreDbs', id),
+    queryStoreTop: (id, database, opts) => ipcRenderer.invoke('db:queryStoreTop', id, database, opts),
+    health: (id) => ipcRenderer.invoke('db:health', id),
+    plan: (id, opts) => ipcRenderer.invoke('db:plan', id, opts),
+    savePlan: (xml, name) => ipcRenderer.invoke('db:savePlan', xml, name),
+    /** Encerra a sessão; expect = { login_name, program_name } do que a pessoa viu (recusa se a sessão mudou). */
+    kill: (id, sessionId, expect) => ipcRenderer.invoke('db:kill', id, sessionId, expect),
+    summaries: () => ipcRenderer.invoke('db:summaries'),
+    /** { type: 'status'|'sample', id, ... } */
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('db:changed', h);
+      return () => ipcRenderer.removeListener('db:changed', h);
+    },
+  },
+  /**
    * IA opcional (ver electron/ai/service.js): modo Local (Ollama) ou Nuvem (Claude, chave no Vault — nunca chega aqui).
    */
   ai: {
