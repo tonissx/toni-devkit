@@ -2,6 +2,7 @@
 // cada um: processos em cima, recursos embaixo; seta tracejada = espera o recurso, contínua = segura o recurso.
 // A vítima (o processo que o SQL Server derrubou) vem com ícone e rótulo, não só cor.
 import { DS } from '../../lib/ds.js';
+import { useAiMode, useAiTask, AiButton, AiPanel, aiOn } from '../../ai/ui.jsx';
 import { dbApi, errText, fmtTime, fmtDur, ago, copyText, oneLine } from './shared.jsx';
 
 const { Icon, Spinner } = DS;
@@ -107,6 +108,19 @@ export function Deadlocks({ server, toast }) {
   const [list, setList] = React.useState(null);
   const [sel, setSel] = React.useState(null);
   const [inc, setInc] = React.useState(null);
+  const cfg = useAiMode();
+  const ai = useAiTask('dbDeadlock', cfg);
+  React.useEffect(() => { ai.close(); }, [sel && sel.id]);
+  const procSql = (p) => (p.frames.find((f) => f.text) || {}).text || p.inputBuffer;
+  const explain = (g) => ai.start(() => ({
+    processes: g.processes.map((p) => ({ spid: p.spid, victim: p.victim, app: p.app, login: p.login, isolation: p.isolation, lockMode: p.lockMode, waitResource: p.waitResource, sql: procSql(p) })),
+    resources: g.resources.map((r) => ({ type: r.type, object: r.object, index: r.index, holders: r.holders.map((h) => String((g.processes.find((p) => p.id === h.process) || {}).spid || '?')), waiters: r.waiters.map((w) => String((g.processes.find((p) => p.id === w.process) || {}).spid || '?')) })),
+  }));
+  const toNotes = async (i, g) => {
+    const lines = [`**Deadlock** · ${fmtTime(i.t, { date: true })} · ${server.name || server.label}`, '', i.title.replace(/^Deadlock: /, ''), ''];
+    for (const p of g.processes) lines.push(`### Sessão ${p.spid}${p.victim ? ' (vítima)' : ''} — ${[p.app, p.login].filter(Boolean).join(' · ')}`, `Pedia ${p.lockMode} em \`${p.waitResource}\` · ${p.isolation}`, '```sql', procSql(p), '```', '');
+    try { await window.devkit.notes.create({ title: `Deadlock ${fmtTime(i.t, { date: true, millis: false })} — ${server.name || server.label}`.slice(0, 120), content: lines.join('\n'), tags: ['banco', 'deadlock'], type: 'note', source: 'db' }); toast('Enviado para Notes', 'Deadlock salvo como nota', 'ok'); } catch (e) { toast('Não foi possível criar a nota', errText(e), 'error'); }
+  };
   const load = React.useCallback(async () => {
     try { const l = await dbApi().deadlocks(server.id, { from: Date.now() - 7 * 86400e3 }); setList(l); if (l.length && !sel) setSel(l[0]); } catch (e) { setList([]); toast('Deadlocks', errText(e), 'error'); }
   }, [server.id]);
@@ -155,7 +169,10 @@ export function Deadlocks({ server, toast }) {
                   <span className="lg-grow" />
                   <button type="button" className="lg-btn" onClick={() => copyText(inc.data.xml, toast, 'XML copiado')}><Icon name="copy" size={13} /><span>Copiar XML</span></button>
                   <button type="button" className="lg-btn" onClick={async () => { const f = await dbApi().savePlan(inc.data.xml, `deadlock-${fmtTime(inc.t, { millis: false }).replace(/:/g, '')}`, 'xdl'); if (f) toast('Deadlock salvo', `${f} — abra no SSMS para ver o desenho dele`, 'ok'); }}><Icon name="download" size={13} /><span>Salvar .xdl</span></button>
+                  <button type="button" className="lg-btn" onClick={() => toNotes(inc, g)}><Icon name="notebook-pen" size={13} /><span>Notes</span></button>
+                  {aiOn(cfg) && <AiButton ai={ai} label="Explicar" title="Explicar o deadlock com IA (o SQL passa pelo filtro de segredos)" onClick={() => explain(g)} />}
                 </div>
+                {aiOn(cfg) && <AiPanel ai={ai} className="lg-ai" />}
                 <DeadlockGraph g={g} />
                 <div className="db-legend"><span><i className="is-line is-dash" />espera o recurso</span><span><i className="is-line" />segura o recurso</span><span><Icon name="skull" size={11} /> vítima</span></div>
                 <div className="db-dlcards">{g.processes.map((p) => <ProcessCard key={p.id} p={p} toast={toast} />)}</div>

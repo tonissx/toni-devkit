@@ -2,6 +2,7 @@
 // agrupadas por query_hash — a mesma query com parâmetros diferentes) ou Query Store de um banco (com período).
 // Só sob demanda: nada disso roda no ciclo do monitor.
 import { DS } from '../../lib/ds.js';
+import { useAiMode, useAiTask, AiButton, AiPanel, aiOn } from '../../ai/ui.jsx';
 import { dbApi, errText, fmtNum, fmtCompact, fmtTime, ago, copyText, oneLine, fmtUs } from './shared.jsx';
 
 const { Icon, Spinner } = DS;
@@ -25,6 +26,9 @@ export function Queries({ server, toast, onOpenSql }) {
   const [error, setError] = React.useState(null);
   const [sel, setSel] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
+  const cfg = useAiMode();
+  const ai = useAiTask('dbQuery', cfg);
+  React.useEffect(() => { ai.close(); }, [sel]);
   React.useEffect(() => { dbApi().queryStoreDbs(server.id).then(setDbs, () => setDbs([])); }, [server.id]);
   const m = METRICS.find((x) => x.id === metric) || METRICS[0];
   const load = async () => {
@@ -92,8 +96,19 @@ export function Queries({ server, toast, onOpenSql }) {
             <button type="button" className="lg-btn" onClick={() => copyText(cur.statement_text, toast, 'SQL copiado')}><Icon name="copy" size={13} /><span>Copiar</span></button>
             {onOpenSql && <button type="button" className="lg-btn" onClick={() => onOpenSql(cur.statement_text)}><Icon name="database" size={13} /><span>SQL Formatter</span></button>}
             {cur.plan_handle && <button type="button" className="lg-btn" onClick={async () => { try { const p = await dbApi().plan(server.id, { planHandle: cur.plan_handle }); const f = await dbApi().savePlan(p.xml, `query-${String(cur.query_hash || sel + 1)}`); if (f) toast('Plano salvo', f, 'ok'); } catch (e) { toast('Sem plano', errText(e), 'error'); } }}><Icon name="list-tree" size={13} /><span>Plano</span></button>}
+            {aiOn(cfg) && (
+              <AiButton ai={ai} label="Por que está lenta" title="Explicar com IA (o texto passa pelo filtro de segredos)" onClick={() => ai.start(() => ({
+                sql: cur.statement_text,
+                stats: {
+                  executions: Number(cur.executions), avgDuration: fmtUs(cur.executions ? cur.total_duration_us / cur.executions : null),
+                  avgCpu: fmtUs(cur.executions ? cur.total_cpu_us / cur.executions : null), avgReads: cur.executions ? Math.round(Number(cur.total_reads) / Number(cur.executions)) : null,
+                  plans: cur.plans, database: cur.database_name,
+                },
+              }))} />
+            )}
           </div>
           <div className="db-detail__body tk-scroll">
+            {aiOn(cfg) && <AiPanel ai={ai} className="lg-ai" />}
             <div className="db-facts">
               <span>Execuções</span><b>{fmtNum(Number(cur.executions))}{cur.plans > 1 ? ` · ${cur.plans} planos diferentes` : ''}</b>
               <span>CPU</span><b>{fmtUs(cur.total_cpu_us)} total · {fmtUs(cur.executions ? cur.total_cpu_us / cur.executions : null)} por execução</b>

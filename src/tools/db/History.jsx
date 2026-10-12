@@ -30,11 +30,20 @@ export function IncidentDetail({ serverId, incident, onClose, toast, onDeadlock 
     return () => { alive = false; };
   }, [incident.id]);
   const k = INCIDENT_KIND[incident.kind] || INCIDENT_KIND.long;
+  // Retrato do incidente como nota (para o relatório do ocorrido / o chamado).
+  const toNotes = async () => {
+    if (!full || full.error) return;
+    const lines = [`**${k.label}** · ${fmtTime(incident.t, { date: true })}${incident.durMs != null ? ` · durou ${fmtDur(incident.durMs)}` : ''}`, '', incident.title, ''];
+    const rows = full.data && full.data.tree ? full.data.tree.map((n) => ({ id: n.id, depth: n.depth, row: n.row })) : full.data && full.data.row ? [{ id: full.data.row.session_id, depth: 0, row: full.data.row }] : [];
+    for (const n of rows.slice(0, 12)) lines.push(`${'  '.repeat(n.depth)}- Sessão ${n.id} — ${whoOf(n.row)}${n.row && n.row.wait_type ? ` · ${n.row.wait_type}` : ''}`, '', '```sql', sqlOf(n.row) || '(sem texto)', '```', '');
+    try { await window.devkit.notes.create({ title: `${k.label} ${fmtTime(incident.t, { date: true, millis: false })}`.slice(0, 120), content: lines.join('\n'), tags: ['banco', incident.kind], type: 'note', source: 'db' }); toast('Enviado para Notes', incident.title.slice(0, 80), 'ok'); } catch (e) { toast('Não foi possível criar a nota', errText(e), 'error'); }
+  };
   return (
     <aside className="db-detail">
       <div className="db-detail__head">
         <Icon name={k.icon} size={15} style={{ color: k.color }} />
         <b>{k.label}</b>
+        {full && !full.error && ['blocking', 'long'].includes(incident.kind) && <button type="button" className="lg-btn" onClick={toNotes} title="Salvar o retrato como nota"><Icon name="notebook-pen" size={12} /><span>Notes</span></button>}
         <span className="lg-muted">{fmtTime(incident.t, { date: true, millis: false })}{incident.durMs != null ? ` · durou ${fmtDur(incident.durMs)}` : incident.open ? ' · ainda acontecendo' : ''}</span>
         {incident.open && <Tone tone="error">acontecendo</Tone>}
         <span className="lg-grow" />

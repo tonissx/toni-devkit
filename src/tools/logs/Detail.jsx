@@ -90,7 +90,10 @@ function Context({ id, i, res, onJump, http }) {
 /**
  * props: id, i (entrada), res, http, onClose, onAddFilter(term), onJump(i), toast, aiSlot(entry) (botão/painel da IA)
  */
-export function Detail({ id, i, res, http, onClose, onAddFilter, onJump, toast, aiSlot, ai }) {
+// Erro que fala de banco: vale perguntar ao Banco o que estava acontecendo naquela hora.
+const DB_HINT = /\b(sql|jdbc|timeout|deadlock|lock request|database|banco|connection|conex[aã]o|ORA-\d|SQLException|SQLTimeout|tedious|sqlserver|mssql)/i;
+
+export function Detail({ id, i, res, http, onClose, onAddFilter, onJump, toast, aiSlot, ai, dbServers }) {
   const [entry, setEntry] = React.useState(null);
   const [error, setError] = React.useState(null);
   const [tab, setTab] = React.useState('entry');
@@ -136,6 +139,12 @@ export function Detail({ id, i, res, http, onClose, onAddFilter, onJump, toast, 
         <button type="button" className="lg-btn" onClick={() => { const r = redact(entry.text); copyText(r.text, toast, r.count ? `Copiado sem ${r.count} segredo(s)` : 'Copiado (nada para esconder)'); }} title="Troca senhas, tokens, e-mails e CPFs por ‹oculto›"><Icon name="shield" size={13} /><span>Copiar sem segredos</span></button>
         <button type="button" className="lg-btn" onClick={toNotes}><Icon name="notebook-pen" size={13} /><span>Notes</span></button>
         {aiSlot && aiSlot(entry)}
+        {dbServers > 0 && Number.isFinite(entry.ts) && DB_HINT.test(entry.text.slice(0, 20000)) && (
+          <button type="button" className="lg-btn" title="Abre o histórico do Banco (monitor de SQL Server) neste horário"
+            onClick={() => window.devkit.app.command({ type: 'go', route: 'db', params: { at: entry.ts } })}>
+            <Icon name="database-zap" size={13} /><span>O que o banco fazia?</span>
+          </button>
+        )}
       </div>
       {g && (
         <div className="lg-group-card">

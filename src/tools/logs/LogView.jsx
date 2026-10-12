@@ -80,6 +80,10 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   const [same, setSame] = React.useState({ text: '', count: 0 });
   useSameText(rootRef, setSame);
 
+  // Servidores do Banco cadastrados (para "O que o banco fazia?" no detalhe de um erro de SQL).
+  const [dbServers, setDbServers] = React.useState(0);
+  React.useEffect(() => { if (window.devkit.db) window.devkit.db.list().then((l) => setDbServers(l.length), () => {}); }, []);
+
   const cfg = useAiMode();
   const aiErr = useAiTask('logError', cfg);
   const aiInc = useAiTask('logIncident', cfg);
@@ -343,7 +347,8 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
           <Detail id={id} i={sel.i} res={res} http={src.http} toast={toast} onClose={() => setSel(null)}
             onAddFilter={addFilter} onJump={jumpToEntry}
             ai={aiOn(cfg) ? aiErr : null}
-            aiSlot={aiOn(cfg) ? (entry) => <AiButton ai={aiErr} label="Explicar" onClick={() => explain(entry)} title="Explicar o erro com IA (o texto passa pelo filtro de segredos)" /> : null} />
+            aiSlot={aiOn(cfg) ? (entry) => <AiButton ai={aiErr} label="Explicar" onClick={() => explain(entry)} title="Explicar o erro com IA (o texto passa pelo filtro de segredos)" /> : null}
+            dbServers={dbServers} />
         )}
       </div>
 

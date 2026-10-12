@@ -47,9 +47,14 @@ const Opt = ({ label, children }) => (
   </div>
 );
 
-export function SqlFormatter({ toast }) {
+export function SqlFormatter({ toast, request }) {
   const [opts, setOpts] = usePersisted('sql.options', DEFAULT_SQL_OPTIONS);
   const [draft, setDraft] = usePersisted('sql.draft', { text: SAMPLE, file: null });
+  // Outra ferramenta mandou um SQL (ex.: Banco → "SQL Formatter"): vira a entrada.
+  React.useEffect(() => {
+    if (!request || typeof request.text !== 'string') return;
+    setDraft({ text: request.text, file: request.file || null });
+  }, [request && request.nonce]);
   const input = draft.text;
   const setInput = (text) => setDraft((d) => ({ ...d, text }));
 

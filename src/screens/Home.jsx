@@ -8,7 +8,7 @@ import { needsValue } from '../links/link.js';
 import { TaskText } from '../tools/notes/TaskText.jsx';
 import { PriorityTag } from '../tools/notes/PriorityTag.jsx';
 import { formatNum } from '../devcore/engine/format.js';
-import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, logsAttention, PANELS } from '../home/dashboard.js';
+import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, logsAttention, dbAttention, PANELS } from '../home/dashboard.js';
 
 const { PageHeader, ToolCard, Button, Card, Icon, Badge, Checkbox, EmptyState, Spinner } = DS;
 
@@ -298,6 +298,33 @@ function LogsPanel({ logs, open }) {
   );
 }
 
+/* ─────────────── Banco ─────────────── */
+
+const DB_ICON = { block: 'octagon-x', down: 'unplug', ok: 'activity', idle: 'circle-pause' };
+
+/** Servidores do Banco (só aparece com algum cadastrado); bloqueio primeiro; clicar abre o servidor. */
+function DbPanel({ servers, open }) {
+  if (!servers || !servers.length) return null;
+  const blocked = servers.filter((s) => s.level === 'block').length;
+  return (
+    <Card className="home-panel is-db" padding={16} icon="database-zap" title="Banco"
+      subtitle={blocked ? `${blocked} com bloqueio agora` : `${servers.length} servidor${servers.length === 1 ? '' : 'es'}`}
+      actions={<Button size="sm" variant="ghost" onClick={() => open('db', {})}>Abrir Banco</Button>}>
+      <div className="home-list">
+        {servers.slice(0, 6).map((s) => (
+          <button type="button" key={s.id} className={'home-row home-db is-' + s.level} onClick={() => open('db', { server: s.id, tab: 'now' })} title={s.label}>
+            <Icon name={DB_ICON[s.level]} size={14} />
+            <span className="home-row__main">
+              <span className="home-row__title">{s.name || s.label}</span>
+              <span className="home-row__sub">{s.note}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 /* ─────────────── Links rápidos ─────────────── */
 
 function LinkRow({ link, toast }) {
@@ -422,6 +449,16 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
     });
     return () => { off(); clearTimeout(t); };
   }, 0);
+  // Banco: cada coletor avisa a cada ciclo — recarrega no máximo a cada 3 s.
+  const [dbServers, setDbServers] = React.useState(null);
+  useLive(() => window.devkit.db.summaries().then((s) => setDbServers(dbAttention(s)), () => setDbServers([])), (cb) => {
+    let last = 0; let t = null;
+    const off = window.devkit.db.onChanged(() => {
+      const wait = 3000 - (Date.now() - last);
+      if (wait <= 0) { last = Date.now(); cb(); } else if (!t) t = setTimeout(() => { t = null; last = Date.now(); cb(); }, wait);
+    });
+    return () => { off(); clearTimeout(t); };
+  }, 0);
   useLive(() => window.devkit.vault.status().then(setVault, () => {}), window.devkit.vault.onChanged, 0);
   React.useEffect(() => { window.devkit.palette.status().then(setPalette, () => {}); }, []);
 
@@ -469,6 +506,7 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
         {shows('notes') && <NotesPanel recent={recent} pinned={pinned} open={open} toast={toast} />}
         {shows('git') && <GitPanel repos={repos} open={open} />}
         {shows('logs') && <LogsPanel logs={logs} open={open} />}
+        {shows('db') && <DbPanel servers={dbServers} open={open} />}
         {shows('links') && <LinksPanel links={links} go={go} toast={toast} />}
         {showDc && <DevCorePanel snap={dc} now={tick} go={go} />}
       </div>

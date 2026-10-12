@@ -2,6 +2,7 @@
 // momento e o detalhe de uma sessão (texto, plano, encerrar). Tudo vem do último ciclo do coletor (nada é consultado
 // a mais no servidor por estar com a tela aberta, além do plano sob demanda).
 import { DS } from '../../lib/ds.js';
+import { useAiMode, useAiTask, AiButton, AiPanel, aiOn } from '../../ai/ui.jsx';
 import { WAIT_HINT, CATEGORY_LABEL } from '../../db/waits.js';
 import { Stat } from '../../lib/charts.jsx';
 import { dbApi, errText, fmtNum, fmtCompact, fmtTime, Sparkline, copyText, fmtDur, whoOf, sqlOf, oneLine, Tone, WAIT_CAT, STATUS } from './shared.jsx';
@@ -200,6 +201,9 @@ export function SessionDetail({ serverId, sid, now, onClose, onKill, toast, onOp
   const r = (now.requests.find((x) => x.session_id === sid)) || (fromTree && fromTree.row);
   const [full, setFull] = React.useState(false);
   const [plan, setPlan] = React.useState(null);
+  const cfg = useAiMode();
+  const ai = useAiTask('dbQuery', cfg);
+  React.useEffect(() => { ai.close(); }, [sid]);
   if (!r) {
     return (
       <aside className="db-detail">
@@ -234,8 +238,15 @@ export function SessionDetail({ serverId, sid, now, onClose, onKill, toast, onOp
         {onOpenSql && <button type="button" className="lg-btn" onClick={() => onOpenSql(text)}><Icon name="database" size={13} /><span>SQL Formatter</span></button>}
         {(r.plan_handle || r.command) && <button type="button" className="lg-btn" onClick={getPlan} disabled={plan && plan.busy}>{plan && plan.busy ? <Spinner size={11} /> : <Icon name="list-tree" size={13} />}<span>Plano</span></button>}
         <button type="button" className="lg-btn db-danger" onClick={() => onKill(node)}><Icon name="power" size={13} /><span>Encerrar</span></button>
+        {aiOn(cfg) && text && (
+          <AiButton ai={ai} label="Por que está lenta" title="Explicar com IA (o texto passa pelo filtro de segredos)" onClick={() => ai.start(() => ({
+            sql: text,
+            stats: { elapsed: r.total_elapsed_time ? fmtDur(r.total_elapsed_time) : '', wait: r.wait_type ? `${r.wait_type} há ${fmtDur(r.wait_time)}` : '', blockedBy: r.blocking_session_id || null, database: r.database_name, avgReads: r.logical_reads },
+          }))} />
+        )}
       </div>
       <div className="db-detail__body tk-scroll">
+        {aiOn(cfg) && <AiPanel ai={ai} className="lg-ai" />}
         <div className="db-facts">
           <span>Status</span><b>{r.status || (fromTree && fromTree.idle ? 'ociosa' : '—')}{r.command ? ` · ${r.command}` : ''}</b>
           <span>Banco</span><b>{r.database_name || '—'}</b>
