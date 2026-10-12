@@ -48,7 +48,14 @@ function validate(c = CONTENT) {
     if (kind === 'cat' && !c.category[id]) errors.push(`${where}: categoria inexistente ${id}`);
   };
   for (const g of c.GENERATORS) if (!c.category[g.category]) errors.push(`gen ${g.id}: categoria ${g.category}`);
-  for (const u of c.UPGRADES) for (const e of u.effects) if (e.target) checkTarget('upgrade ' + u.id, e.target);
+  for (const u of c.UPGRADES) for (const e of u.effects) {
+    if (e.target) checkTarget('upgrade ' + u.id, e.target);
+    if (e.type === 'per') {
+      if (!c.gen[e.gen]) errors.push(`upgrade ${u.id}: combo com gerador inexistente ${e.gen}`);
+      if (!String(e.target).startsWith('gen:') || e.target === 'gen:' + e.gen) errors.push(`upgrade ${u.id}: combo deve mirar outro gerador`);
+      if (!(e.per > 0) || !(e.value > 0)) errors.push(`upgrade ${u.id}: combo com per/value inválidos`);
+    }
+  }
   for (const p of c.PETS) {
     if (!c.ability[p.ability]) errors.push(`pet ${p.id}: habilidade ${p.ability}`);
     if (!c.RARITY[p.rarity]) errors.push(`pet ${p.id}: raridade ${p.rarity}`);

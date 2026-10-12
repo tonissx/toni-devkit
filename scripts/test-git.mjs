@@ -111,6 +111,16 @@ test('parsePatch e hunkPatch', () => {
 
 /* ─────────────── grafo ─────────────── */
 
+test('sideWidth: respeita mínimo, máximo e o espaço disponível', () => {
+  const { sideWidth, SIDE_MIN, SIDE_MAX, SIDE_DEFAULT } = require('../src/git/panel.js');
+  assert.equal(sideWidth(100), SIDE_MIN);
+  assert.equal(sideWidth(5000), SIDE_MAX);
+  assert.equal(sideWidth(500.4), 500);
+  assert.equal(sideWidth(800, 600), 600);
+  assert.equal(sideWidth(800, 100), SIDE_MIN);
+  assert.equal(sideWidth(undefined), SIDE_DEFAULT);
+});
+
 test('layoutGraph: linha reta, branch e merge', () => {
   // M (merge de F em C) → C → B → A ; F → B
   const commits = [

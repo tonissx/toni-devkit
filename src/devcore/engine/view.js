@@ -25,6 +25,10 @@ function describeEffect(e, c = CONTENT) {
     : kind === 'gen' ? (c.gen[id] || { name: id }).name : e.target;
   if (e.type === 'mul') return '×' + formatNum(e.value, { rate: true }) + ' ' + what;
   if (e.type === 'add') return pct(e.value) + ' ' + what;
+  if (e.type === 'per') {
+    const src = (c.gen[e.gen] || { name: e.gen }).name;
+    return `${pct(e.value)} ${what} a cada ${e.per === 1 ? '' : e.per + ' '}${src}`;
+  }
   return '';
 }
 
@@ -65,6 +69,8 @@ function snapshot(s, now, c = CONTENT) {
       cost1: costOf(g, owned, 1, div), cost10: costOf(g, owned, 10, div), max, costMax: costOf(g, owned, max, div),
       costDiv: div, mk: bpOf(s, g.id).mk, mult: generatorMult(s, g.id, c), nextMilestone: nextMilestone(owned, c),
       blueprint: blueprintView(s, g.id, now, c),
+      share: prod.rate > 0 ? (prod.gens[g.id] || 0) / prod.rate : 0, // fração da produção total
+      ...comboView(s, g, prod, now, c),
     };
   });
 
@@ -76,6 +82,10 @@ function snapshot(s, now, c = CONTENT) {
       status: owned ? 'owned' : available ? 'available' : 'locked',
       affordable: available && u.cost <= amount,
       requirement: owned || available ? '' : describeCondition(u.requires, c),
+      effects: u.effects.map((e) => describeEffect(e, c)).filter(Boolean),
+      // Combo: quanto renderia agora (o alvo ganha isto com as unidades atuais do gerador fonte).
+      combo: comboInfo(s, u, c),
+      comboNow: u.kind === 'combo' ? u.effects.filter((e) => e.type === 'per').map((e) => pct(e.value * ((s.run.generators[e.gen] || {}).owned || 0) / e.per) + ' ' + (c.gen[e.target.split(':')[1]] || {}).name) : [],
     };
   });
 
@@ -140,6 +150,7 @@ function snapshot(s, now, c = CONTENT) {
   return {
     at: now,
     amount, lifetime: res.lifetime, rate: prod.rate,
+    rateInfo: rateBreakdown(s, now, prod, c),
     // Próximo instante em que a taxa/cena muda (a UI busca um snapshot novo nessa hora).
     nextChange: Math.min(...[
       ...Object.values(s.run.abilities).map((a) => a.activeUntil),
@@ -171,6 +182,61 @@ function snapshot(s, now, c = CONTENT) {
     freshSkins: [...s.cosmetics.fresh],
     hasNews: s.discoveries.unseen.length > 0 || newUpgrades.length > 0 || s.cosmetics.fresh.length > 0,
   };
+}
+
+const TEMPORARY = /^(ability|boost|incident):/;
+
+/**
+ * Produção por segundo discriminada: a base (sem nada temporário) e cada efeito temporário ativo — habilidade de
+ * DevPet, consumível (boost) ou incidente não contido — com o que ele faz, até quando e quanto mexe na taxa agora
+ * (delta = taxa − taxa sem ele; como os efeitos se multiplicam, os deltas não somam exatamente a diferença).
+ */
+function rateBreakdown(s, now, prod, c) {
+  const sources = [...new Set(prod.effects.filter((e) => TEMPORARY.test(e.source)).map((e) => e.source))];
+  const base = sources.length ? production(s, now, c, { skip: sources }).rate : prod.rate;
+  const items = sources.map((src) => {
+    const [kind, id] = src.split(':');
+    const effects = prod.effects.filter((e) => e.source === src).map((e) => describeEffect(e, c));
+    const delta = prod.rate - production(s, now, c, { skip: [src] }).rate;
+    if (kind === 'ability') {
+      const pet = c.PETS.find((p) => p.ability === id);
+      return { kind, id, name: c.ability[id].name, pet: pet ? pet.id : null, effects, delta, until: s.run.abilities[id].activeUntil };
+    }
+    if (kind === 'boost') {
+      const k = c.consumable[id] || { name: id, icon: 'package' };
+      const b = s.run.boosts.find((x) => x.id === id && x.until > now);
+      return { kind, id, name: k.name, icon: k.icon, effects, delta, until: b ? b.until : now };
+    }
+    const inc = c.incident[id];
+    return { kind, id, name: inc.name, villain: { id: inc.villain.id, name: inc.villain.name, color: inc.villain.color }, effects, delta, until: s.run.incidents.active ? s.run.incidents.active.end : now };
+  });
+  return { base, total: prod.rate, items: items.sort((a, b) => b.delta - a.delta) };
+}
+
+/** Combo de um upgrade: { from, to, fromName, toName, visible } (visible = os dois geradores já liberados). */
+function comboInfo(s, u, c) {
+  const e = u.effects.find((x) => x.type === 'per');
+  if (!e) return null;
+  const to = e.target.split(':')[1];
+  const tierOk = (id) => !!c.gen[id] && c.gen[id].tier <= s.run.tier;
+  return { from: e.gen, to, fromName: (c.gen[e.gen] || { name: e.gen }).name, toName: (c.gen[to] || { name: to }).name, visible: tierOk(e.gen) && tierOk(to) };
+}
+
+/**
+ * Combos de um gerador (como o tooltip das grandmas do Cookie Clicker):
+ * boosts: quanto ele soma em cada alvo · boostRate/boostShare: quanto esses boosts rendem agora (e % do total)
+ * boostedBy: quem soma nele.
+ */
+function comboView(s, g, prod, now, c) {
+  const sum = (pred, key) => {
+    const m = new Map();
+    for (const e of prod.effects) if (e.type === 'add' && String(e.source).startsWith('combo:') && pred(e)) m.set(key(e), (m.get(key(e)) || 0) + e.value);
+    return [...m].map(([id, v]) => ({ id, name: (c.gen[id] || { name: id }).name, pct: v }));
+  };
+  const boosts = sum((e) => e.source === 'combo:' + g.id, (e) => e.target.split(':')[1]);
+  const boostedBy = sum((e) => e.target === 'gen:' + g.id, (e) => e.source.split(':')[1]);
+  const boostRate = boosts.length ? Math.max(0, prod.rate - production(s, now, c, { exclude: g.id }).rate) : 0;
+  return { boosts, boostedBy, boostRate, boostShare: prod.rate > 0 ? boostRate / prod.rate : 0 };
 }
 
 /** Blueprint do próximo nível de um gerador: peças obtidas/faltantes, custos, pronto para Refactor. */

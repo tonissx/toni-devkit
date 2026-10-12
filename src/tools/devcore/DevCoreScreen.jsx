@@ -5,6 +5,7 @@ import { REACTION_MS } from '../../devcore/director.js';
 import { Scene } from './Scene.jsx';
 import { GeneratorsPanel, UpgradesPanel, PetsPanel, TechPanel } from './Panels.jsx';
 import { OpsPanel } from './OpsPanel.jsx';
+import { RateWithDetails } from './RateDetails.jsx';
 
 const { Tabs, Modal, Button, ProgressBar, Spinner, Icon } = DS;
 
@@ -214,7 +215,7 @@ export function DevCoreScreen({ toast, request }) {
         <div className="dc-amount">
           <span className="dc-amount__label">Compute</span>
           <LiveCompute snap={snap} receivedAt={receivedAt} />
-          <span className="dc-amount__rate">+{formatNum(snap.rate, { rate: true })}/s</span>
+          <RateWithDetails snap={snap} now={serverNow} />
         </div>
         <div className="dc-head__next">
           {next ? <>

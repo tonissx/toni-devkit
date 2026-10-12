@@ -92,7 +92,7 @@ function BindsCard({ onChange }) {
   return (
     <Card padding={24}>
       <div className="tk-card__title">Smart Binds</div>
-      <Row label="Como usar" hint="Copie o texto, aperte o atalho e cole — o Devkit formata o clipboard sem abrir janela, com as opções salvas em cada ferramenta">
+      <Row label="Como usar" hint="Selecione o texto (SQL ou XML) em qualquer programa e aperte o atalho — o Devkit formata a seleção e copia o resultado, sem abrir janela, com as opções salvas em cada ferramenta">
         <Button variant="ghost" size="sm" onClick={() => save(state.defaults)}>Restaurar padrão</Button>
       </Row>
       {state.bindable.map(({ id, name }) => {
@@ -193,6 +193,9 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater, toast }) 
           </Row>
           <Row label="Sidebar recolhida" hint="Mostra só os ícones das ferramentas">
             <Toggle checked={prefs.collapsed} onChange={(collapsed) => setPrefs((p) => ({ ...p, collapsed }))} />
+          </Row>
+          <Row label="Foto do Gravatar no histórico do Git" hint="Mostra a foto de cada autor no grafo. Envia ao gravatar.com só o hash do e-mail (nunca o e-mail); quem não tem foto fica com as iniciais">
+            <Toggle checked={!!prefs.gitAvatars} onChange={(gitAvatars) => setPrefs((p) => ({ ...p, gitAvatars }))} />
           </Row>
         </Card>
         <PaletteCard />

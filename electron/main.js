@@ -8,7 +8,8 @@ const palette = require('./palette');
 const binds = require('./binds');
 const { createPaster } = require('./paste');
 const { createWinHelper } = require('./winfocus');
-const { UI_BINDABLE_IDS } = require('../src/commands/binds.js');
+const { UI_BINDABLE_IDS, SELECTION_BIND_IDS } = require('../src/commands/binds.js');
+const { createSelectionCopier } = require('./selection');
 const { createNotesService } = require('./notes/service');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
@@ -17,6 +18,7 @@ const { createLinksService } = require('./links/service');
 const { createVaultService } = require('./vault/service');
 const { createStickiesService } = require('./stickies/service');
 const { createGitService } = require('./git/service');
+const { createAvatarService } = require('./git/avatars');
 const { createLogsService } = require('./logs/service');
 const { createAiService } = require('./ai/service');
 const { primaryIndex } = require('../src/vault/entry.js');
@@ -329,11 +331,19 @@ ipcMain.handle('binds:set', (_e, next) => binds.set(next && typeof next === 'obj
 ipcMain.handle('binds:suspend', (_e, on) => binds.suspend(!!on));
 ipcMain.on('binds:result', (_e, result) => binds.notify(result));
 
-/** Dispara um bind: a maioria roda oculta na palette; os de UI (lista de snippets) mostram a palette. */
-const runBind = (id) => (UI_BINDABLE_IDS.includes(id) ? palette.show('snippets') : palette.run(id));
+/**
+ * Dispara um bind: a maioria roda oculta na palette; os de UI (lista de snippets) mostram a palette.
+ * Os de formatação (SELECTION_BIND_IDS) primeiro copiam o texto selecionado no programa em foco (electron/selection.js).
+ */
+const runBind = (id) => {
+  if (UI_BINDABLE_IDS.includes(id)) return palette.show('snippets');
+  if (!SELECTION_BIND_IDS.includes(id)) return palette.run(id);
+  return copySelection().then(() => palette.run(id), (e) => binds.notify({ ok: false, message: e.message }));
+};
 
 // Colar snippet: a palette esconde, o foco volta ao programa anterior e o Ctrl+V é simulado (ver electron/paste.js).
 const winHelper = createWinHelper();
+const copySelection = createSelectionCopier({ clipboard, win: winHelper });
 const snippetPaster = createPaster({ clipboard, win: winHelper, hide: () => palette.hide(), notify: (r) => binds.notify(r) });
 ipcMain.handle('snippet:paste', (_e, payload) => snippetPaster.paste(payload && typeof payload === 'object' ? payload : {}));
 // Abertura por atalho: guarda a janela ativa (o foco volta para ela ao colar ou no Esc). Outras origens esquecem a antiga.
@@ -581,6 +591,9 @@ const GIT_API = ['version', 'list', 'add', 'remove', 'scan', 'open', 'summaries'
 for (const fn of GIT_API) {
   ipcMain.handle('git:' + fn, async (_e, ...args) => { await gitReady; return gitSvc[fn](...args); });
 }
+// Fotos do Gravatar (opcional, ligado em Configurações): a busca é aqui para a CSP da tela continuar fechada.
+const gitAvatars = createAvatarService();
+ipcMain.handle('git:avatars', (_e, emails) => gitAvatars.get(Array.isArray(emails) ? emails : []));
 // Adicionar escolhendo a pasta no diálogo do sistema.
 ipcMain.handle('git:pick', async (e) => {
   await gitReady;
@@ -786,7 +799,7 @@ if (!app.requestSingleInstanceLock()) {
   // o mesmo ID. Instalado, é o atalho do instalador. Em dev, sem ID explícito o processo fica com o padrão
   // electron.app.Electron e herda o ícone de qualquer atalho "Electron" que exista; com um ID sem atalho, o
   // Windows usa o ícone da janela. O sufixo .dev evita agrupar com o Devkit instalado.
-  if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'br.com.navship.tonidevkit' : 'br.com.navship.tonidevkit.dev');
+  if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'io.github.tonissx.tonidevkit' : 'io.github.tonissx.tonidevkit.dev');
 
   app.whenReady().then(() => {
     initNotes();

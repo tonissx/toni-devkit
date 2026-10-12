@@ -214,6 +214,18 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0;
   background: var(--tk-bg); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); padding: 10px;
 }
+/* Canto entre as barras vertical e horizontal: sem isto o Chromium pinta um quadrado branco. */
+.tk-scroll::-webkit-scrollbar-corner { background: transparent; }
+.nts__side { position: relative; transition: width .12s ease; }
+.nts__side.is-dragging { transition: none; user-select: none; }
+/* Recolhida: sobra só uma faixa com a seta para reabrir; o conteúdo some (sem espremer). */
+.nts__side.is-collapsed { padding: 0; gap: 0; align-items: stretch; }
+.nts__side.is-collapsed > *:not(.nts__grip):not(.nts__reopen) { display: none; }
+.nts__reopen { flex: 1; display: flex; align-items: flex-start; justify-content: center; padding-top: 10px; border: 0; background: none; color: var(--tk-text-3); cursor: pointer; border-radius: var(--tk-radius-md); }
+.nts__reopen:hover { color: var(--tk-text); background: var(--tk-surface-hover); }
+.nts__grip { position: absolute; top: 0; bottom: 0; right: -12px; width: 12px; z-index: 5; cursor: col-resize; touch-action: none; outline: 0; }
+.nts__grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 5px; width: 2px; background: transparent; transition: background .12s; }
+.nts__grip:hover::after, .nts__grip:focus-visible::after, .nts__side.is-dragging .nts__grip::after { background: var(--tk-accent); }
 .nts__main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 /* Abas de visão (Nota | Tarefas | Grafo): trocam a área principal — diferente dos filtros da lateral. */
 .nts-views { display: flex; align-items: flex-end; gap: 2px; margin-bottom: 8px; border-bottom: 1px solid var(--tk-border); }
@@ -330,18 +342,27 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-task__main { min-width: 0; flex: 1; }
 .nts-task__text { display: block; max-width: 100%; padding: 0; border: 0; background: none; color: var(--tk-text); font: 400 13px/1.4 var(--tk-font-sans); text-align: left; cursor: pointer; }
 .nts-task__text:hover { color: var(--tk-accent-text); }
+.nts-task__text code { font: 400 12px var(--tk-font-mono); padding: 1px 5px; border-radius: 4px; background: var(--tk-surface-3); color: var(--tk-text); }
 .nts-task.is-done .nts-task__text { color: var(--tk-text-3); text-decoration: line-through; }
 .nts-task__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .nts-task__note { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--tk-text-3); }
 .nts-pill { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 6px; border-radius: 4px; font: 500 10.5px var(--tk-font-mono); background: var(--tk-surface-3); color: var(--tk-text-2); }
 .nts-pill.is-p1 { color: var(--tk-red); background: color-mix(in srgb, var(--tk-red) 12%, transparent); }
 .nts-pill.is-p2 { color: var(--tk-amber); background: color-mix(in srgb, var(--tk-amber) 12%, transparent); }
+.nts-pill.is-p3 { color: var(--tk-blue); background: color-mix(in srgb, var(--tk-blue) 12%, transparent); }
+/* Etiqueta de prioridade: bandeira + rótulo. Alta tem a bandeira cheia (o nível não depende só da cor); "Sem prioridade" é discreta, tracejada. */
+.nts-pill.nts-pri { font: 500 11px var(--tk-font-sans); }
+.nts-pri.is-p1 svg { fill: currentColor; }
+.nts-pri.is-p0 { color: var(--tk-text-3); background: none; box-shadow: inset 0 0 0 1px var(--tk-border); }
+.nts-pri.is-p0 svg { opacity: .7; }
 .nts-pill.is-late { color: var(--tk-red); background: color-mix(in srgb, var(--tk-red) 12%, transparent); }
 .md-preview .md-due, .md-preview .md-pri { display: inline-block; padding: 0 5px; margin: 0 2px; border-radius: 4px; font: 500 11px/18px var(--tk-font-mono); background: var(--tk-surface-3); color: var(--tk-text-2); }
 .md-preview .md-due.is-late, .md-preview .md-pri.is-p1 { color: var(--tk-red); background: color-mix(in srgb, var(--tk-red) 12%, transparent); }
 .md-preview li:has(> .md-task:checked) .md-due.is-late { color: var(--tk-text-2); background: var(--tk-surface-3); }
 .md-preview .md-pri.is-p2 { color: var(--tk-amber); background: color-mix(in srgb, var(--tk-amber) 12%, transparent); }
-.nts-row__tasks { margin-left: 6px; color: var(--tk-accent-text); font: 400 10.5px var(--tk-font-mono); }
+.md-preview .md-pri.is-p3 { color: var(--tk-blue); background: color-mix(in srgb, var(--tk-blue) 12%, transparent); }
+.md-preview .md-pri { font-family: var(--tk-font-sans); }
+.nts-row__tasks { display: inline-flex; align-items: center; gap: 3px; vertical-align: -1px; margin-left: 6px; color: var(--tk-accent-text); font: 400 10.5px var(--tk-font-mono); }
 .nts-error { display: block; margin-bottom: 6px; font: 400 12px var(--tk-font-mono); }
 
 .nts-editor__body { flex: 1; min-height: 0; display: grid; }
@@ -430,7 +451,10 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-amount { display: flex; align-items: baseline; gap: 10px; }
 .dc-amount__label { font: 500 11px var(--tk-font-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--tk-text-3); }
 .dc-amount__value { font: 600 30px/1 var(--tk-font-mono); color: var(--tk-text); font-variant-numeric: tabular-nums; min-width: 6ch; text-align: right; }
-.dc-amount__rate { font: 500 13px var(--tk-font-mono); color: var(--tk-accent-text); }
+.dc-amount__rate { display: inline-flex; align-items: center; gap: 4px; font: 500 13px var(--tk-font-mono); color: var(--tk-accent-text); cursor: help; }
+.dc-amount__rate.is-down, .dc-amount__down { color: var(--tk-warning); }
+.dc-amount__down { display: inline-flex; }
+.dc-amount__rate .lucide, .dc-amount__rate svg { flex-shrink: 0; }
 .dc-head__next { justify-self: end; width: min(280px, 100%); display: flex; flex-direction: column; gap: 6px; font-size: 11.5px; color: var(--tk-text-3); }
 .dc-head__next b { color: var(--tk-text-2); font-weight: 500; }
 
@@ -730,6 +754,59 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   .villain-svg *, .villain-svg, .dc-station.is-alert .dc-station__box, .dc-station.is-refactored .dc-station__box, .dc-bp-toggle.is-ready { animation: none !important; }
   .dc-villain { transition: none; }
 }
+
+/* Upgrades: ilustrações e seção de combos */
+.dc-upgrades { display: flex; flex-direction: column; gap: 18px; }
+.dc-upgrades > section > .tk-menu__heading { padding-left: 0; }
+.dc-upgrades__head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+.dc-upgrades__head .tk-menu__heading { display: inline-flex; align-items: center; gap: 5px; padding-left: 0; }
+.dc-upgrades__hint { font-size: 11.5px; color: var(--tk-text-3); }
+.dc-upg__head { display: flex; align-items: center; gap: 10px; width: 100%; cursor: help; }
+.dc-upg__text { min-width: 0; }
+.dc-upg__summary { margin-top: 2px; font: 400 11px var(--tk-font-mono); color: var(--tk-text-3); }
+.dc-upgrades .dc-grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.dc-upg-art {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  border-radius: var(--tk-radius-md); background: var(--tk-surface-3); color: var(--tk-text-2);
+}
+.dc-upg.is-locked .dc-upg-art { color: var(--tk-text-3); }
+.dc-chip--art { padding-left: 2px; }
+.dc-chip--art .dc-upg-art { border-radius: 3px; background: transparent; }
+
+/* Combos entre geradores: selo na linha (detalhes no hover) */
+.dc-combo-badge { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--tk-accent) 45%, var(--tk-border)); color: var(--tk-accent-text); font: 500 10.5px var(--tk-font-mono); cursor: help; }
+
+/* Cartão de detalhes (InfoCard): resumo na tela, detalhes no hover/foco. Visual do tk-popover do DS. */
+.dc-info-anchor { display: inline-flex; align-items: center; border-radius: 4px; }
+.dc-info-anchor:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+.dc-info-label { cursor: help; text-decoration: underline dotted transparent; text-underline-offset: 3px; transition: text-decoration-color var(--tk-dur); }
+.dc-info-anchor:hover .dc-info-label, .dc-info-anchor:focus-visible .dc-info-label { text-decoration-color: var(--tk-text-3); }
+.dc-info {
+  position: fixed; z-index: 60; width: max-content; max-width: 280px; padding: 10px 12px; pointer-events: none;
+  display: flex; flex-direction: column; gap: 5px;
+  background: var(--tk-surface-3); border: 1px solid var(--tk-border-strong); border-radius: var(--tk-radius-lg);
+  box-shadow: var(--tk-shadow-pop); color: var(--tk-text-2); font: 400 12px/1.4 var(--tk-font-sans); animation: tk-pop-in var(--tk-dur) var(--tk-ease);
+}
+.dc-info__title { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--tk-text); }
+.dc-info__title:not(:first-child) { margin-top: 4px; }
+.dc-info__text { margin: 0; line-height: 1.45; color: var(--tk-text-3); }
+.dc-info__row { display: flex; justify-content: space-between; gap: 16px; }
+.dc-info__row span { color: var(--tk-text-3); }
+.dc-info__row .dc-info__gen { display: inline-flex; align-items: center; gap: 6px; color: var(--tk-text); }
+.dc-info__gen .lucide, .dc-info__gen svg { color: var(--tk-text-3); flex-shrink: 0; }
+.dc-info__row b { font: 500 11.5px var(--tk-font-mono); color: var(--tk-accent-text); text-align: right; }
+@media (prefers-reduced-motion: reduce) { .dc-info { animation: none; } }
+
+/* Produção por segundo discriminada (cartão da taxa no cabeçalho) */
+.dc-rate { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; min-width: 250px; }
+.dc-rate__icon { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; color: var(--tk-text-3); }
+.dc-rate__name { display: flex; flex-direction: column; color: var(--tk-text); }
+.dc-rate__name em { font-style: normal; color: var(--tk-text-3); }
+.dc-rate__name small { font: 400 10.5px var(--tk-font-mono); color: var(--tk-text-3); }
+.dc-rate b { font: 500 11.5px var(--tk-font-mono); color: var(--tk-accent-text); text-align: right; }
+.dc-rate.is-down b { color: var(--tk-warning); }
+.dc-rate.is-total { margin-top: 2px; padding-top: 6px; border-top: 1px solid var(--tk-border); }
+.dc-rate.is-total .dc-rate__name { font-weight: 600; }
 
 /* Versões anteriores (modal): lista à esquerda, diff à direita. */
 .nts-history { display: grid; grid-template-columns: 240px 1fr; gap: 12px; height: min(62vh, 560px); min-height: 280px; }
