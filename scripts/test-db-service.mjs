@@ -88,6 +88,17 @@ function setup(world = {}, { locked = false } = {}) {
 
 const req = (id, blocker, extra = {}) => ({ session_id: id, blocking_session_id: blocker, wait_time: 15000, total_elapsed_time: 15000, start_time: 1, program_name: 'App', login_name: 'u', ...extra });
 
+test('datas: hora de parede do servidor → instante certo, com servidor e PC em fusos diferentes', async () => {
+  const { toMs } = require('../electron/db/driver.js');
+  // O tedious monta "10:00" como hora local deste PC; o servidor está em UTC+0 → o instante é 10:00Z.
+  const wall = new Date(2026, 9, 12, 10, 0, 0);
+  assert.equal(toMs(wall, 0), Date.UTC(2026, 9, 12, 10, 0, 0));
+  // Servidor no mesmo fuso do PC: nada muda.
+  assert.equal(toMs(wall, -wall.getTimezoneOffset()), wall.getTime());
+  // Sem fuso conhecido (conexão antiga): como veio.
+  assert.equal(toMs(wall, null), wall.getTime());
+});
+
 test('cadastro valida e não guarda senha', async () => {
   const { svc, dir } = setup();
   await svc.init();
@@ -137,7 +148,7 @@ test('ao vivo: amostras no disco, incidente de bloqueio abre e fecha, aviso para
   const h = await svc.history(s.id, { from: clock.now() - 3600e3, to: clock.now() });
   assert.equal(h.incidents.length, 1);
   assert.equal(h.incidents[0].open, false);
-  assert.equal(h.incidents[0].durMs, 5000);
+  assert.equal(h.incidents[0].durMs, 20000); // 15 s de espera já corridos + 5 s até resolver
   assert.ok(h.samples >= 3);
   assert.ok(h.series.b.some((v) => v === 1));
   const files = fs.readdirSync(path.join(dir, 'db-monitor', s.id));
@@ -165,7 +176,7 @@ test('sem ninguém olhando, em segundo plano o ciclo fica em 15 s', async () => 
 
 test('deadlock: registrado uma vez (retomar do offset repete o bloco)', async () => {
   const utc = new Date(2026, 9, 12, 9, 59, 0).getTime();
-  const w = { deadlocks: [{ file_name: 'x', file_offset: 100, deadlock_xml: DEADLOCK, event_utc: utc }] };
+  const w = { deadlocks: [{ file_name: 'x', file_offset: 100, deadlock_xml: DEADLOCK, event_time: utc }] };
   const { svc, clock } = setup(w);
   await svc.init();
   const s = await svc.add({ host: 'srv', vaultEntryId: 'v1' });

@@ -130,6 +130,7 @@ function createDbService({ file, dir, getCredential, broadcast = () => {}, conne
       });
       c.conn = conn;
       const info = rowsOf(await conn.query(Q.SERVER_INFO))[0] || {};
+      if (conn.setServerOffset) conn.setServerOffset(info.utc_offset_min);
       if (info.has_view_server_state) {
         try { Object.assign(info, rowsOf(await conn.query(Q.SYS_INFO))[0] || {}); } catch { /* sem permissão mesmo */ }
       }
@@ -195,7 +196,11 @@ function createDbService({ file, dir, getCredential, broadcast = () => {}, conne
       // Deadlocks (a cada 60 s, só o que é novo).
       if (t - c.deadlockAt >= 59000 && c.info && c.info.has_view_server_state) {
         c.deadlockAt = t;
-        try { records.push(...(await readDeadlocks(conn, t))); } catch { /* system_health desligado/sem permissão */ }
+        // system_health desligado/sem permissão não para o monitor — mas fica registrado (não some em silêncio).
+        try { records.push(...(await readDeadlocks(conn, t))); c.deadlockError = null; } catch (e) {
+          if (c.deadlockError !== e.message) console.warn('[db] deadlocks:', e.message);
+          c.deadlockError = e.message;
+        }
       }
       await append(c.id, records);
       const newIncidents = records.filter((r) => r.k === 'i');
@@ -210,7 +215,7 @@ function createDbService({ file, dir, getCredential, broadcast = () => {}, conne
       if (last) c.deadlockPos = { file_name: last.file_name, file_offset: Number(last.file_offset) };
       const out = [];
       for (const d of rowsOf(sets, 1)) {
-        const utc = Number(d.event_utc) || 0;
+        const utc = Number(d.event_time) || 0; // instante do deadlock (o driver já converteu do fuso do servidor)
         if (utc <= c.lastDeadlockUtc) continue; // retomar do offset repete o bloco
         c.lastDeadlockUtc = utc;
         // Na primeira leitura não traz o passado inteiro para o histórico de hoje — só as últimas 24 h.
@@ -264,7 +269,10 @@ function createDbService({ file, dir, getCredential, broadcast = () => {}, conne
     const s = serverOf(id);
     const cred = col && col.c.cred ? col.c.cred : await getCredential(s.vaultEntryId);
     const conn = await connect(tediousConfig(s, cred, { requestTimeout: 30000 }));
-    try { return await fn(conn, col ? col.c : null); } finally { conn.close(); }
+    try {
+      if (conn.setServerOffset) conn.setServerOffset((rowsOf(await conn.query(Q.SERVER_TZ))[0] || {}).utc_offset_min);
+      return await fn(conn, col ? col.c : null);
+    } finally { conn.close(); }
   }
 
   /* ─────────────── API ─────────────── */
@@ -324,6 +332,7 @@ function createDbService({ file, dir, getCredential, broadcast = () => {}, conne
       const conn = await connect(tediousConfig(s, cred));
       try {
         const info = rowsOf(await conn.query(Q.SERVER_INFO))[0] || {};
+        if (conn.setServerOffset) conn.setServerOffset(info.utc_offset_min);
         if (info.has_view_server_state) Object.assign(info, rowsOf(await conn.query(Q.SYS_INFO))[0] || {});
         return { ok: true, ms: now() - t0, info };
       } finally { conn.close(); }

@@ -22,7 +22,16 @@ function friendlyError(e) {
   return m.replace(/^RequestError: /, '');
 }
 
-const conv = (v) => (v instanceof Date ? v.getTime() : v);
+/**
+ * Datas do SQL Server chegam como "hora de parede" do servidor; o tedious (useUTC: false) monta o Date como se fosse
+ * a hora local deste PC. Com o fuso do servidor (utc_offset_min, lido ao conectar), corrige para o instante certo —
+ * servidor e PC em fusos diferentes continuam mostrando a hora certa.
+ */
+const toMs = (d, serverOffsetMin) => {
+  if (serverOffsetMin == null) return d.getTime();
+  const clientOffsetMin = -d.getTimezoneOffset();
+  return d.getTime() + (clientOffsetMin - serverOffsetMin) * 60000;
+};
 
 /**
  * Abre a conexão. config: de src/db/connstr.js tediousConfig. → { query(sql) → [conjuntos de linhas], close(), alive,
@@ -35,6 +44,7 @@ function openConnection(config, { create = (cfg) => new Connection(cfg) } = {}) 
     let deadCbs = [];
     let chain = Promise.resolve();
     let settled = false;
+    let serverOffsetMin = null;
     const die = (e) => {
       if (!alive && settled) return;
       alive = false;
@@ -59,7 +69,7 @@ function openConnection(config, { create = (cfg) => new Connection(cfg) } = {}) 
       req.on('row', (cols) => {
         if (!cur) return;
         const o = {};
-        for (const c of cols) o[c.metadata.colName] = conv(c.value);
+        for (const c of cols) o[c.metadata.colName] = c.value instanceof Date ? toMs(c.value, serverOffsetMin) : c.value;
         cur.rows.push(o);
       });
       // Lote simples (sem sp_executesql): o monitor não usa parâmetros — os números são validados em queries.js.
@@ -71,9 +81,11 @@ function openConnection(config, { create = (cfg) => new Connection(cfg) } = {}) 
       close() { alive = false; try { conn.close(); } catch { /* já fechada */ } },
       get alive() { return alive; },
       onDead(cb) { deadCbs.push(cb); },
+      /** Fuso do servidor em minutos (DATEDIFF(MINUTE, GETUTCDATE(), GETDATE())) para converter as datas. */
+      setServerOffset(min) { serverOffsetMin = Number.isFinite(Number(min)) ? Number(min) : null; },
     };
     try { conn.connect(); } catch (e) { settled = true; reject(new Error(friendlyError(e))); }
   });
 }
 
-module.exports = { openConnection, friendlyError };
+module.exports = { openConnection, friendlyError, toMs };

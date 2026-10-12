@@ -85,7 +85,8 @@ function detectIncidents(state, snap, opts = {}) {
     const cur = state.open[key];
     if (!cur) {
       const id = newId();
-      state.open[key] = { id, t, kind: 'blocking', peakBlocked: h.blockedCount, peakWaitMs: h.maxWaitMs };
+      // since: quando o bloqueio começou de fato (a espera mais longa já vinha correndo antes de passar do limite).
+      state.open[key] = { id, t, since: t - h.maxWaitMs, kind: 'blocking', peakBlocked: h.blockedCount, peakWaitMs: h.maxWaitMs };
       out.push({ k: 'i', t, id, kind: 'blocking', title: headSummary(h), data: { head: h.id, tree: treeSnapshot(h) } });
     } else {
       cur.peakBlocked = Math.max(cur.peakBlocked, h.blockedCount);
@@ -101,7 +102,7 @@ function detectIncidents(state, snap, opts = {}) {
     const cur = state.open[key];
     if (!cur) {
       const id = newId();
-      state.open[key] = { id, t, kind: 'long', peakMs: Number(r.total_elapsed_time) };
+      state.open[key] = { id, t, since: t - Number(r.total_elapsed_time), kind: 'long', peakMs: Number(r.total_elapsed_time) };
       const who = [r.program_name, r.login_name].filter(Boolean).join(' · ');
       out.push({ k: 'i', t, id, kind: 'long', title: `Query rodando há ${Math.round(r.total_elapsed_time / 1000)} s na sessão ${r.session_id}${who ? ` (${who})` : ''}`, data: { row: slimRow(r) } });
     } else cur.peakMs = Math.max(cur.peakMs, Number(r.total_elapsed_time));
@@ -110,7 +111,7 @@ function detectIncidents(state, snap, opts = {}) {
   for (const [key, cur] of Object.entries(state.open)) {
     if (seen.has(key)) continue;
     delete state.open[key];
-    out.push({ k: 'e', t, id: cur.id, kind: cur.kind, durMs: t - cur.t, peakBlocked: cur.peakBlocked, peakWaitMs: cur.peakWaitMs, peakMs: cur.peakMs });
+    out.push({ k: 'e', t, id: cur.id, kind: cur.kind, durMs: t - (cur.since != null ? cur.since : cur.t), peakBlocked: cur.peakBlocked, peakWaitMs: cur.peakWaitMs, peakMs: cur.peakMs });
   }
   return out;
 }
@@ -127,11 +128,14 @@ function parseLines(text, from = -Infinity, to = Infinity) {
   return out;
 }
 
-/** Junta incidentes 'i' com seus 'e' (duração, pico); os abertos ficam com `open: true`. */
+// Incidentes que têm começo e fim (os outros — deadlock, KILL, queda — são um instante).
+const SPAN_KINDS = new Set(['blocking', 'long']);
+
+/** Junta incidentes 'i' com seus 'e' (duração, pico); os de duração ainda abertos ficam com `open: true`. */
 function incidentsOf(records) {
   const map = new Map();
   for (const r of records) {
-    if (r.k === 'i') map.set(r.id, { ...r, open: true });
+    if (r.k === 'i') map.set(r.id, { ...r, open: SPAN_KINDS.has(r.kind) });
     else if (r.k === 'e' && map.has(r.id)) Object.assign(map.get(r.id), { open: false, endT: r.t, durMs: r.durMs, peakBlocked: r.peakBlocked, peakWaitMs: r.peakWaitMs, peakMs: r.peakMs });
   }
   return [...map.values()].sort((a, b) => b.t - a.t);

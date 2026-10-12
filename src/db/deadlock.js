@@ -69,7 +69,8 @@ function parseDeadlock(xml) {
     const frames = kids(kid(p, 'executionStack'), 'frame').map((f) => ({
       proc: f.attrs.procname && f.attrs.procname !== 'adhoc' && f.attrs.procname !== 'unknown' ? f.attrs.procname : '',
       line: Number(f.attrs.line) || null,
-      text: textOf(f).slice(0, 4000),
+      // Lote ad hoc no 2019+: o frame vem como "unknown" — o texto de verdade está no inputbuf.
+      text: /^unknown$/i.test(textOf(f)) ? '' : textOf(f).slice(0, 4000),
     }));
     return {
       id: a.id, spid: Number(a.spid) || null, login: a.loginname || '', host: a.hostname || '', app: a.clientapp || '',

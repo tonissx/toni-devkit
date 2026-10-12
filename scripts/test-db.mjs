@@ -139,6 +139,8 @@ test('deadlock: processos, recursos, vítima e arestas (quem espera → quem seg
 test('deadlock: entidades e texto vazio; XML sem deadlock dá erro claro', () => {
   const g = parseDeadlock('<deadlock><victim-list/><process-list><process id="p1" spid="5"><inputbuf>SELECT 1 WHERE a &lt; b &amp;&amp; c</inputbuf></process></process-list><resource-list/></deadlock>');
   assert.equal(g.processes[0].inputBuffer, 'SELECT 1 WHERE a < b && c');
+  // 2019+: frame ad hoc com texto "unknown" não vale como SQL.
+  assert.equal(parseDeadlock('<deadlock><process-list><process id="p"><executionStack><frame procname="unknown" line="1">unknown</frame></executionStack><inputbuf>UPDATE x</inputbuf></process></process-list></deadlock>').processes[0].frames[0].text, '');
   assert.throws(() => parseDeadlock('<x/>'), /sem <deadlock>/);
 });
 
@@ -159,7 +161,8 @@ test('incidente de bloqueio: abre acima do limite, guarda o pico, fecha quando s
   assert.equal(opened[0].data.tree.length, 3);
   assert.deepEqual(H.detectIncidents(state, snap(11000, 20000, 5), { blockMs: 10000 }), []); // mesmo incidente
   const closed = H.detectIncidents(state, { t: 16000, requests: [], tree: blockingTree([], []) }, { blockMs: 10000 });
-  assert.deepEqual(closed.map((r) => [r.k, r.id === opened[0].id, r.durMs, r.peakBlocked, r.peakWaitMs]), [['e', true, 10000, 5, 20000]]);
+  // Duração desde o começo real (a espera de 12 s já corria quando passou do limite, em t=6 s): 16 − (6 − 12) = 22 s.
+  assert.deepEqual(closed.map((r) => [r.k, r.id === opened[0].id, r.durMs, r.peakBlocked, r.peakWaitMs]), [['e', true, 22000, 5, 20000]]);
 });
 
 test('incidente de query longa: ignora quem só está bloqueado e manutenção', () => {
@@ -262,8 +265,20 @@ test('CREATE INDEX sugerido', () => {
 
 /* ─────────────── Consultas (segurança) ─────────────── */
 
+test('tabela temporária: limpa antes e depois (o coletor reaproveita a mesma sessão)', () => {
+  for (const sql of [Q.QUERY_STORE_DBS, Q.deadlocksSince(), Q.deadlocksSince('C:\\x\\a.xel', 10)]) {
+    const temps = [...new Set(sql.match(/#\w+/g) || [])];
+    assert.ok(temps.length > 0);
+    for (const t of temps) {
+      assert.match(sql, new RegExp(`DROP TABLE IF EXISTS ${t};[\\s\\S]*DROP TABLE ${t};\\s*$`), t);
+    }
+  }
+});
+
 test('consultas: preâmbulo leve, métricas e números só de listas fechadas', () => {
   for (const sql of [Q.NOW, Q.COUNTERS, Q.WAITS, Q.FILES, Q.topQueries()]) assert.ok(sql.startsWith(Q.PREAMBLE));
+  assert.ok(Q.PREAMBLE.startsWith(Q.MARK));
+  assert.match(Q.topQueries(), new RegExp(`NOT LIKE N'${Q.MARK.replace(/[*/]/g, '\\$&')}%'`)); // o monitor não aparece no próprio top
   assert.match(Q.PREAMBLE, /READ UNCOMMITTED/);
   assert.match(Q.PREAMBLE, /LOCK_TIMEOUT 1000/);
   assert.match(Q.PREAMBLE, /DEADLOCK_PRIORITY LOW/);

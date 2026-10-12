@@ -10,7 +10,9 @@
  * - Nada de texto do usuário concatenado: métricas e bancos vêm de listas fechadas; números são validados.
  */
 
-const PREAMBLE = 'SET NOCOUNT ON; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; SET LOCK_TIMEOUT 1000; SET DEADLOCK_PRIORITY LOW;\n';
+// A marca no começo identifica as consultas do próprio monitor (o top queries não as mostra).
+const MARK = '/* toni-devkit-monitor */';
+const PREAMBLE = `${MARK} SET NOCOUNT ON; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; SET LOCK_TIMEOUT 1000; SET DEADLOCK_PRIORITY LOW;\n`;
 
 // Trecho do comando que está rodando (offsets em bytes de nvarchar → /2).
 const stmt = (alias, textAlias) => `LEFT(SUBSTRING(${textAlias}.text, ${alias}.statement_start_offset / 2 + 1,
@@ -29,7 +31,11 @@ SELECT
     IS_SRVROLEMEMBER('sysadmin')                             AS is_sysadmin,
     HAS_PERMS_BY_NAME(NULL, NULL, 'ALTER ANY CONNECTION')    AS can_kill,
     @@SPID                                                   AS own_spid,
-    SUSER_SNAME()                                            AS login_name;`;
+    SUSER_SNAME()                                            AS login_name,
+    DATEDIFF(MINUTE, GETUTCDATE(), GETDATE())                AS utc_offset_min;`;
+
+/** Só o fuso do servidor (conexões avulsas: o driver precisa dele para converter as datas). */
+const SERVER_TZ = `${PREAMBLE}SELECT DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()) AS utc_offset_min;`;
 
 /** Início do SQL Server e CPUs (precisa de VIEW SERVER STATE). */
 const SYS_INFO = `${PREAMBLE}
@@ -134,6 +140,8 @@ WITH agg AS (
         MAX(qs.last_execution_time)    AS last_execution,
         COUNT(DISTINCT qs.plan_handle) AS plans
     FROM sys.dm_exec_query_stats AS qs
+    CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) AS st
+    WHERE st.text NOT LIKE N'${MARK}%'
     GROUP BY qs.query_hash
 ),
 ranked AS (
@@ -166,7 +174,9 @@ ORDER BY ranked.${col} DESC;`;
 }
 
 /** Bancos com Query Store ligado (para oferecer na aba Queries). */
+// Tabelas temporárias vivem na sessão — e o coletor reaproveita a conexão: sempre DROP antes e depois.
 const QUERY_STORE_DBS = `${PREAMBLE}
+DROP TABLE IF EXISTS #qs;
 CREATE TABLE #qs (database_name sysname, actual_state_desc nvarchar(60));
 DECLARE @db sysname, @sql nvarchar(max);
 DECLARE dbs CURSOR LOCAL FAST_FORWARD FOR
@@ -179,7 +189,8 @@ BEGIN
     FETCH NEXT FROM dbs INTO @db;
 END
 CLOSE dbs; DEALLOCATE dbs;
-SELECT database_name, actual_state_desc FROM #qs ORDER BY database_name;`;
+SELECT database_name, actual_state_desc FROM #qs ORDER BY database_name;
+DROP TABLE #qs;`;
 
 /** Bracketed name seguro para o T-SQL (o nome precisa ter vindo de QUERY_STORE_DBS / sys.databases). */
 const quoteName = (s) => '[' + String(s).replace(/]/g, ']]') + ']';
@@ -232,8 +243,8 @@ function livePlanFor(sessionId) {
  * Deadlocks do system_health a partir de um ponto (arquivo + offset da última leitura), para não reler os arquivos
  * inteiros a cada minuto. Primeira vez: sem ponto, lê tudo o que houver (só converte para XML os deadlocks).
  * → 1º conjunto: a posição mais nova lida ({ file_name, file_offset }, para a próxima chamada);
- *   2º: os deadlocks ({ file_name, file_offset, deadlock_xml, event_utc }).
- * Retomar de um offset devolve de novo os eventos daquele bloco: quem chama descarta os já vistos (event_utc).
+ *   2º: os deadlocks ({ file_name, file_offset, deadlock_xml, event_time } — hora do servidor).
+ * Retomar de um offset devolve de novo os eventos daquele bloco: quem chama descarta os já vistos (event_time).
  */
 function deadlocksSince(fileName, fileOffset) {
   const ok = fileName && /^[^'\r\n]{1,400}\.xel$/i.test(fileName) && Number.isSafeInteger(Number(fileOffset));
@@ -245,6 +256,7 @@ DECLARE @target nvarchar(400) = (
     JOIN sys.dm_xe_sessions AS s ON s.address = t.event_session_address
     WHERE s.name = N'system_health' AND t.target_name = N'event_file');
 DECLARE @pattern nvarchar(400) = LEFT(@target, LEN(@target) - CHARINDEX(N'\\', REVERSE(@target)) + 1) + N'system_health*.xel';
+DROP TABLE IF EXISTS #xe;
 SELECT f.file_name, f.file_offset, f.object_name,
        CASE WHEN f.object_name = N'xml_deadlock_report' THEN f.event_data END AS event_data
 INTO #xe
@@ -254,10 +266,12 @@ SELECT TOP (1) file_name, file_offset FROM #xe ORDER BY file_name DESC, file_off
 SELECT
     file_name, file_offset,
     CAST(CONVERT(xml, event_data).query('(event/data/value/deadlock)[1]') AS nvarchar(max)) AS deadlock_xml,
-    CONVERT(xml, event_data).value('(event/@timestamp)[1]', 'datetime2') AS event_utc
+    -- O XE grava em UTC; passa para a hora do servidor, como todas as outras datas que o monitor lê.
+    DATEADD(MINUTE, DATEDIFF(MINUTE, GETUTCDATE(), GETDATE()), CONVERT(xml, event_data).value('(event/@timestamp)[1]', 'datetime2')) AS event_time
 FROM #xe
 WHERE object_name = N'xml_deadlock_report'
-ORDER BY file_name, file_offset;`;
+ORDER BY file_name, file_offset;
+DROP TABLE #xe;`;
 }
 
 /** Saúde: arquivos (tamanho, crescimento, espaço livre do disco). */
@@ -337,7 +351,7 @@ function killSql(sessionId, ownSpid) {
 }
 
 module.exports = {
-  PREAMBLE, SERVER_INFO, SYS_INFO, NOW, COUNTERS, COUNTER_NAMES, CPU, WAITS, TOP_METRICS, topQueries, QUERY_STORE_DBS,
+  MARK, PREAMBLE, SERVER_INFO, SERVER_TZ, SYS_INFO, NOW, COUNTERS, COUNTER_NAMES, CPU, WAITS, TOP_METRICS, topQueries, QUERY_STORE_DBS,
   queryStoreTop, planFor, livePlanFor, deadlocksSince, FILES, LOG_USAGE, BACKUPS, FAILED_JOBS, CONNECTIONS, MISSING_INDEXES,
   killSql, quoteName,
 };
