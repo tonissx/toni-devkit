@@ -752,11 +752,13 @@ const DB_API = ['list', 'settings', 'setSettings', 'add', 'update', 'remove', 't
 for (const fn of DB_API) {
   ipcMain.handle('db:' + fn, async (_e, ...args) => { await dbReady; return dbSvc[fn](...args); });
 }
-// Plano de execução: salvar como .sqlplan (abre no SSMS).
-ipcMain.handle('db:savePlan', async (e, xml, name) => {
+// Plano de execução (.sqlplan) e grafo de deadlock (.xdl): os dois abrem no SSMS como desenho.
+const DB_FILE_KINDS = { sqlplan: { title: 'Salvar plano de execução', name: 'Plano do SQL Server' }, xdl: { title: 'Salvar grafo do deadlock', name: 'Deadlock do SQL Server' } };
+ipcMain.handle('db:savePlan', async (e, xml, name, ext = 'sqlplan') => {
+  const kind = DB_FILE_KINDS[ext] ? ext : 'sqlplan';
   const r = await dialog.showSaveDialog(fromEvent(e), {
-    title: 'Salvar plano de execução', defaultPath: String(name || 'plano').replace(/[\\/:*?"<>|]+/g, '_') + '.sqlplan',
-    filters: [{ name: 'Plano do SQL Server', extensions: ['sqlplan'] }],
+    title: DB_FILE_KINDS[kind].title, defaultPath: String(name || 'plano').replace(/[\\/:*?"<>|]+/g, '_') + '.' + kind,
+    filters: [{ name: DB_FILE_KINDS[kind].name, extensions: [kind] }],
   });
   if (r.canceled || !r.filePath) return null;
   await fs.writeFile(r.filePath, String(xml || ''), 'utf8');

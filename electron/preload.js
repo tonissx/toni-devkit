@@ -364,7 +364,8 @@ contextBridge.exposeInMainWorld('devkit', {
     queryStoreTop: (id, database, opts) => ipcRenderer.invoke('db:queryStoreTop', id, database, opts),
     health: (id) => ipcRenderer.invoke('db:health', id),
     plan: (id, opts) => ipcRenderer.invoke('db:plan', id, opts),
-    savePlan: (xml, name) => ipcRenderer.invoke('db:savePlan', xml, name),
+    /** Salva XML como .sqlplan (ext padrão) ou .xdl (deadlock) — os dois abrem no SSMS. */
+    savePlan: (xml, name, ext) => ipcRenderer.invoke('db:savePlan', xml, name, ext),
     /** Encerra a sessão; expect = { login_name, program_name } do que a pessoa viu (recusa se a sessão mudou). */
     kill: (id, sessionId, expect) => ipcRenderer.invoke('db:kill', id, sessionId, expect),
     summaries: () => ipcRenderer.invoke('db:summaries'),

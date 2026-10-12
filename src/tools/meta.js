@@ -58,6 +58,15 @@ const TOOL_META = [
     keywords: ['log', 'logs', 'tail', 'server.log', 'fluig', 'jboss', 'wildfly', 'iis', 'nginx', 'apache', 'erro', 'exception', 'stack trace', 'ndjson', 'monitorar'],
   },
   {
+    id: 'db',
+    name: 'Banco',
+    icon: 'database-zap',
+    group: 'Texto & código',
+    desc: 'Monitor de SQL Server: quem bloqueia quem, queries lentas, deadlocks e saúde — ao vivo e no histórico',
+    shortcutKey: '0',
+    keywords: ['banco', 'sql server', 'mssql', 'monitor', 'bloqueio', 'blocking', 'lock', 'deadlock', 'kill', 'sessão', 'dmv', 'query lenta', 'dba', 'backup', 'log de transação'],
+  },
+  {
     id: 'notes',
     name: 'Notes',
     icon: 'notebook-pen',
