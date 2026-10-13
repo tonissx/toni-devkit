@@ -362,7 +362,7 @@ function ShopModal({ p, snap, act, open, setOpen }) {
                 {o.owned != null && <small>Você tem {o.owned}/{o.cap}</small>}
               </span>
               {o.bought ? <span className="dc-chip is-ok"><Icon name="check" size={11} />comprado</span>
-                : <Button size="sm" variant={o.affordable && !o.full ? 'primary' : 'secondary'} disabled={!o.affordable || o.full} onClick={() => act({ type: 'mapBuy', offer: o.index })}>{o.full ? 'Estoque cheio' : formatNum(o.price)}</Button>}
+                : <Button size="sm" variant={o.affordable && !o.full && !o.soldOut ? 'primary' : 'secondary'} disabled={!o.affordable || o.full || o.soldOut} onClick={() => act({ type: 'mapBuy', offer: o.index })}>{o.soldOut ? 'Esgotado' : o.full ? 'Estoque cheio' : formatNum(o.price)}</Button>}
             </div>
           ))}
         </div>

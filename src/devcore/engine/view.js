@@ -400,6 +400,8 @@ function mapView(s, now, c) {
         name: o.kind === 'item' ? c.consumable[o.id].name : o.kind === 'part' ? 'Peça de Blueprint' : 'Patch ' + c.RARITIES[o.rarity].name.toLowerCase(),
         icon: o.kind === 'item' ? c.consumable[o.id].icon : o.kind === 'part' ? 'package' : 'sparkles',
         full: o.kind === 'item' && (s.run.inventory[o.id] || 0) >= S.capOf(s, c.consumable[o.id], c),
+        // Patch: a run já tem todos dessa raridade (Loot Tables, chefes e Patch Notes podem esgotar a lista).
+        soldOut: o.kind === 'patch' && !c.PATCHES.some((x) => x.rarity === o.rarity && !s.run.patches.includes(x.id)),
         desc: o.kind === 'item' ? c.consumable[o.id].description : o.kind === 'part' ? 'Uma peça para montar o Blueprint de um gerador.' : 'Um Patch aleatório desta raridade, ativo até o fim da run.',
         owned: o.kind === 'item' ? (s.run.inventory[o.id] || 0) : null, cap: o.kind === 'item' ? S.capOf(s, c.consumable[o.id], c) : null,
       })) };

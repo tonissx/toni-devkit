@@ -12,15 +12,27 @@ const { production } = require('./engine/production.js');
 const S = require('./engine/singularity.js');
 
 /**
- * Robô da Rede da Singularity: compra o nó disponível mais barato (empate: a ordem de setores do plano), escolhe os
- * paradigmas "a" (os que só somam) e deixa os infinitos por último. → ids comprados
+ * Robô da Rede da Singularity. Plano padrão: compra o nó disponível mais barato (empate: a ordem de setores), escolhe
+ * os paradigmas "a" (os que só somam) e deixa os infinitos por último.
+ * plan: { sectors, avoid: [ids], priority?: [ids] (na ordem; um nó da lista disponível mas caro faz o robô guardar
+ *   Insight para ele), repeats?: [ids] (ordem dos infinitos), respec? (reorganiza a cada Singularity) }
  */
 const TREE_PLAN = { sectors: ['infra', 'map', 'archive', 'pets', 'combat', 'ops'], avoid: ['inf-5b', 'ops-5b', 'cmb-5b', 'pet-5b', 'map-5b', 'arc-5b'] };
 function botTreePick(s, c, plan = TREE_PLAN) {
-  const rank = (k) => (k.kind === 'repeat' ? 1e6 : 0) + S.perkCost(s, k) * 10 + Math.max(0, plan.sectors.indexOf(k.sector || (k.sectors || [])[0]));
+  const insight = s.meta.insight || 0;
+  const status = (k) => S.perkState(s, k, c).status;
+  const open = (k) => status(k) === 'available' || (status(k) === 'owned' && k.kind === 'repeat');
+  for (const id of plan.priority || []) {
+    const k = c.perk[id];
+    if (!k || plan.avoid.includes(id) || (status(k) === 'owned' && k.kind !== 'repeat')) continue;
+    if (!open(k)) continue;                       // ainda sem caminho: os ids do caminho vêm antes na lista
+    return S.perkCost(s, k) <= insight ? k : null; // caro: guarda Insight para ele
+  }
+  const rep = plan.repeats || [];
+  const rank = (k) => (k.kind === 'repeat' ? 1e6 + (rep.includes(k.id) ? rep.indexOf(k.id) * 1e4 : 9e4) : 0) + S.perkCost(s, k) * 10 + Math.max(0, plan.sectors.indexOf(k.sector || (k.sectors || [])[0]));
   return c.TREE.filter((k) => k.kind !== 'core' && !plan.avoid.includes(k.id))
-    .filter((k) => { const st = S.perkState(s, k, c).status; return st === 'available' || (st === 'owned' && k.kind === 'repeat'); })
-    .filter((k) => S.perkCost(s, k) <= (s.meta.insight || 0))
+    .filter(open)
+    .filter((k) => S.perkCost(s, k) <= insight)
     .sort((a, b) => rank(a) - rank(b))[0] || null;
 }
 
@@ -132,7 +144,7 @@ function botSquad(s, enemies, kind, c, now = null) {
 }
 
 /** Próximo passo do robô no mapa: { action, cost } ou null. Guarda Compute para lutas que valem a pena. */
-function botMapChoice(s, now, c, budget = Infinity) {
+function botMapChoice(s, now, c, budget = Infinity, opts = {}) {
   const m = s.run.map;
   if (!m || m.cleared) return null;
   if (m.pending && m.pending.kind !== 'shop') {
@@ -151,8 +163,9 @@ function botMapChoice(s, now, c, budget = Infinity) {
     const squad = botSquad(s, n.group, n.type, c, now);
     if (!Object.values(squad.slots).some(Boolean)) return { n, cost, chance: 0, score: -1 };
     const p = preview(setupBattle(s, squad, n.group, n.col, m.area, c, n.type, now), (s.seed ^ (m.attempts[n.id] || 0)) >>> 0, c).chance;
-    const min = n.type === 'elite' ? 0.8 : 0.5;
-    return { n, cost, chance: p, squad, score: p >= min ? p + (n.type === 'elite' ? 0.2 : 0) : -1 };
+    // Caçador de elites (opts.elites): aceita elite com chance menor e prefere elas (+1 Insight cada na Singularity).
+    const min = n.type === 'elite' ? (opts.elites ? 0.6 : 0.8) : 0.5;
+    return { n, cost, chance: p, squad, score: p >= min ? p + (n.type === 'elite' ? (opts.elites ? 1 : 0.2) : 0) : -1 };
   }).filter((o) => o.score >= 0).sort((a, b) => b.score - a.score || a.cost - b.cost);
   // Prefere o que cabe no orçamento (o que tem + o que vai guardar): não fica parado esperando um elite caro.
   const fits = options.filter((o) => o.cost <= budget);
@@ -166,17 +179,18 @@ function botMapChoice(s, now, c, budget = Infinity) {
  * Joga o mapa enquanto houver o que fazer com o Compute atual. `step` aplica a ação e devolve { state } (o estado é
  * substituído a cada ação). → Compute a guardar para o próximo ponto.
  */
-function playMap(s, now, c, step, marks, reserveHours) {
+function playMap(s, now, c, step, marks, reserveHours, opts = {}) {
   for (let guard = 0; guard < 30; guard++) {
     const m = s.run.map;
     if (!m) return 0;
     if (m.pending && m.pending.kind === 'shop') {
       const node = m.nodes[m.pending.node];
-      const o = node.offers.find((x) => !x.bought && x.kind === 'patch' && x.price <= s.run.resources.compute.amount * 0.5);
+      const left = (r) => c.PATCHES.some((p) => p.rarity === r && !s.run.patches.includes(p.id)); // sem Patch dessa raridade: esgotado
+      const o = node.offers.find((x) => !x.bought && x.kind === 'patch' && left(x.rarity) && x.price <= s.run.resources.compute.amount * 0.5);
       if (o) { s = step({ type: 'mapBuy', offer: o.index }).state; continue; }
     }
     const rate = production(s, now, c).rate;
-    const pick = botMapChoice(s, now, c, s.run.resources.compute.amount + rate * reserveHours * 3600);
+    const pick = botMapChoice(s, now, c, s.run.resources.compute.amount + rate * reserveHours * 3600, opts);
     // Por que o robô parou nesta checagem (por área): sem luta com chance boa (vida baixa), juntando Compute, ou jogou.
     const why = m.area + ':' + (!pick ? 'semChance' : pick.cost > s.run.resources.compute.amount ? 'compute' : 'joga');
     marks.map.waits[why] = (marks.map.waits[why] || 0) + 1;
@@ -201,7 +215,8 @@ function playMap(s, now, c, step, marks, reserveHours) {
 
 /**
  * profile: { checkEverySec, onlineHoursPerDay, days, events(day) → [{name,data}], strategy?, quiet?, blueprints?,
- *   singularity? (faz a Singularity e compra na rede), tree? ({ id: nível } já comprado), treePlan? }
+ *   singularity? (faz a Singularity e compra na rede), tree? ({ id: nível } já comprado), treePlan? (ver botTreePick),
+ *   eliteHunter? (o robô prefere elites) }
  * Retorna marcos { t2, t3, pets:{id:t}, synergies:{id:t}, incidents, items, finalAmount, … }.
  */
 function simulate(profile, c = CONTENT) {
@@ -255,13 +270,14 @@ function simulate(profile, c = CONTENT) {
     let reserve = 0;
     if (profile.map !== false) {
       if (s.run.map && marks.map.opened == null) marks.map.opened = now;
-      reserve = playMap(s, now, c, step, marks, profile.mapReserveHours || 4);
+      reserve = playMap(s, now, c, step, marks, profile.mapReserveHours || 4, { elites: !!profile.eliteHunter });
       if (s.run.map) marks.map.byDay[Math.floor((now - t0) / 86400e3)] = s.run.map.visited.length;
     }
     // Singularity (profile.singularity): assim que der, recomeça e gasta o Insight na rede.
     if (profile.singularity && S.singularityReady(s, c)) {
       const br = S.insightBreakdown(s, now, c);
       step({ type: 'singularity' });
+      if (profile.treePlan && profile.treePlan.respec) step({ type: 'treeRespec' }); // remonta a rede do zero a cada run
       const bought = [];
       for (let guard = 0; guard < 300; guard++) {
         const k = botTreePick(s, c, profile.treePlan);
