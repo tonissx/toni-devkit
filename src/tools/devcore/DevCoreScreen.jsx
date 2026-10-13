@@ -124,6 +124,33 @@ function IncidentChip({ ops, now, onOpen }) {
   );
 }
 
+/** Boas-vindas da grande atualização (uma vez): o que chegou, o que recomeçou, o que ficou e o presente de Fundador. */
+function FounderWelcome({ snap, onClose, onTab }) {
+  return (
+    <Modal open title="A GRANDE ATUALIZAÇÃO CHEGOU" icon="star" onClose={onClose} width={700}
+      footer={<><Button variant="ghost" onClick={() => { onClose(); onTab('pets'); }}>Ver o visual Fundador</Button><Button variant="primary" icon="rocket" onClick={onClose}>Começar</Button></>}>
+      <div className="dc-founder">
+        <div className="dc-founder__hero">
+          <span className="dc-founder__star"><Icon name="star" size={30} /></span>
+          <p>O DevCore ganhou um <b>mapa</b> com batalhas, chefes e Patches, e a <b>Singularity</b>: vença o pipeline
+            inteiro (Floresta, Pântano e Pico) e troque a run por Insight numa rede permanente. Para caber tudo isso, o farm
+            recomeçou do zero. Você jogava antes, então isto é para você:</p>
+        </div>
+        <div className="dc-founder__gifts">
+          <div className="dc-founder__gift"><Icon name="palette" size={18} /><span><b>Coleção Fundador</b>Um visual exclusivo para todos os DevPets. Nunca mais sai em lugar nenhum. Escolha na aba DevPets.</span></div>
+          <div className="dc-founder__gift"><Icon name="star" size={18} /><span><b>Estrela do Fundador</b>Já brilha na Rede da Singularity: +10% em toda a produção e +1 Insight em cada Singularity, para sempre.</span></div>
+        </div>
+        <div className="dc-founder__cols">
+          <div><div className="dc-sgm__h is-reset"><Icon name="rotate-ccw" size={13} /> Recomeçou</div>
+            <ul><li>Compute, geradores e upgrades</li><li>Tiers (voltam conforme o Compute)</li><li>Blueprints e consumíveis</li><li>Níveis dos DevPets</li></ul></div>
+          <div><div className="dc-sgm__h is-keep"><Icon name="shield-check" size={13} /> Continua com você</div>
+            <ul><li>{snap.pets.filter((p) => p.owned).length} DevPets encontrados</li><li>Descobertas e visuais</li><li>Bestiário</li><li>Missões</li></ul></div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function DevCoreScreen({ toast, request }) {
   const [ui, setUi] = usePersisted('devcore.ui', { tab: 'generators' });
   const [snap, setSnap] = React.useState(null);
@@ -257,6 +284,7 @@ export function DevCoreScreen({ toast, request }) {
           <span className="dc-logo">DEVCORE</span>
           <IncidentChip ops={snap.ops} now={serverNow} onOpen={() => setUi((u) => ({ ...u, tab: 'ops' }))} />
           <span className="dc-tierchip">Tier {snap.tier.id} · {snap.tier.name}</span>
+          {snap.founder && <span className="dc-founder-chip" title="Jogava o DevCore antes da grande atualização"><Icon name="star" size={11} /> Fundador</span>}
         </div>
         <div className="dc-amount">
           <span className="dc-amount__label">Compute</span>
@@ -289,7 +317,8 @@ export function DevCoreScreen({ toast, request }) {
       </div>
 
       <ItemPopups queue={gains} held={arenaOpen} onDone={(key) => setGains((g) => g.filter((x) => x.key !== key))} />
-      {snap.welcome && <WelcomeBack snap={snap} onClose={() => act({ type: 'ackWelcome' })} />}
+      {snap.founderNews ? <FounderWelcome snap={snap} onClose={() => act({ type: 'ackFounder' })} onTab={(tab) => setUi((u) => ({ ...u, tab }))} />
+        : snap.welcome && <WelcomeBack snap={snap} onClose={() => act({ type: 'ackWelcome' })} />}
     </div>
   );
 }

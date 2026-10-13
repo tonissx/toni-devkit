@@ -5,6 +5,7 @@
  *
  * Ações:
  *   boot                      avança o tempo fechado (com teto), achados dos pets, resumo de retorno
+ *   ackFounder                fecha a boas-vindas da grande atualização (pacote Fundador)
  *   tick                      avança o tempo online (heartbeat)
  *   buy { gen, qty|'max' }    upgrade { id }    train { pet }    station { pet, on }
  *   ability { id }            event { name, data }    ackWelcome    seen { upgrades? }
@@ -212,6 +213,9 @@ function act(s, action, now, c, log) {
       return null;
     case 'ackWelcome':
       s.pending.welcome = null;
+      return null;
+    case 'ackFounder':
+      s.pending.founder = null;
       return null;
     case 'skin': {
       if (!s.run.pets[action.pet]) return 'DevPet indisponível';

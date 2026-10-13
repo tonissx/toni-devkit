@@ -23,7 +23,12 @@ const { createRun } = require('./state.js');
 const { rng } = require('./rng.js');
 
 const rankOf = (s, id) => (s.meta.tree && s.meta.tree[id]) || 0;
-const owned = (s, c = CONTENT) => Object.entries(s.meta.tree || {}).filter(([id, r]) => r > 0 && c.perk[id]).map(([id, r]) => ({ k: c.perk[id], rank: r }));
+/** Nós valendo: os comprados (com o nível) e a Estrela do Fundador, para quem a tem. */
+const owned = (s, c = CONTENT) => {
+  const list = Object.entries(s.meta.tree || {}).filter(([id, r]) => r > 0 && c.perk[id] && c.perk[id].kind !== 'founder').map(([id, r]) => ({ k: c.perk[id], rank: r }));
+  if (s.meta.founder && c.perk.founder) list.push({ k: c.perk.founder, rank: 1 });
+  return list;
+};
 
 /** Produto de um multiplicador de regra da árvore (1 se nenhum). Repetíveis: valor^nível. */
 function treeMod(s, key, c = CONTENT) {
@@ -113,7 +118,8 @@ function insightBreakdown(s, now, c = CONTENT) {
   const depth = life >= I.depth.from ? Math.min(I.depth.max, Math.floor(Math.log(life / I.depth.from) / Math.log(I.depth.per) + 1e-9)) : 0;
   const raw = bosses + elites + speed + depth;
   const mult = treeMod(s, 'insight', c);
-  return { bosses, elites, speed, depth, days, raw, mult, total: Math.floor(raw * mult + 1e-9) };
+  const founder = Math.round(treeAdd(s, 'insightFlat', c)); // Estrela do Fundador: +1 fixo
+  return { bosses, elites, speed, depth, days, raw, mult, founder, total: Math.floor(raw * mult + 1e-9) + founder };
 }
 
 /** Pode fazer a Singularity agora? → erro ou null. */
@@ -157,7 +163,7 @@ function syncPlan(s, now, c, log) {
   const live = insightBreakdown({ ...s, meta: { ...M, tree: M.plan.tree } }, now, c);
   if (live.depth <= p.depth) return;
   const raw = p.bosses + p.elites + p.speed + live.depth;
-  const total = Math.floor(raw * p.mult + 1e-9);
+  const total = Math.floor(raw * p.mult + 1e-9) + (p.founder || 0);
   if (total <= p.total) return;
   M.insight = (M.insight || 0) + (total - p.total);
   M.plan.breakdown = { ...p, depth: live.depth, raw, total };
@@ -245,6 +251,7 @@ const sectorCount = (s, sector, c = CONTENT) => c.TREE.filter((k) => k.sector ==
  */
 function perkState(s, k, c = CONTENT) {
   if (k.kind === 'core') return { status: 'owned', reason: null };
+  if (k.kind === 'founder') return s.meta.founder ? { status: 'owned', reason: null } : { status: 'locked', reason: 'Exclusiva de quem jogava antes da grande atualização' };
   const r = rankOf(s, k.id);
   if (r > 0 && k.kind !== 'repeat') return { status: 'owned', reason: null };
   if (k.excl) {
@@ -263,6 +270,7 @@ function perkState(s, k, c = CONTENT) {
 function treeBuy(s, id, c, log) {
   const k = c.perk[id];
   if (!k || k.kind === 'core') return 'Nó inexistente';
+  if (k.kind === 'founder') return 'A Estrela do Fundador não se compra';
   const st = perkState(s, k, c);
   if (st.status === 'owned' && k.kind !== 'repeat') return 'Nó já comprado';
   if (st.status !== 'available' && !(st.status === 'owned' && k.kind === 'repeat')) return st.reason;

@@ -15,14 +15,14 @@ const R0 = 72;        // raio do anel 1
 const STEP = 58;      // distância entre anéis
 const SPREAD = 26;    // graus de `at` = ±1 dentro do setor (60° por setor; sobra a fronteira para as sinapses)
 const HALF = 530;     // metade do mundo (unidades)
-const SIZE = { core: 66, minor: 30, notable: 40, keystone: 44, mastery: 52, repeat: 36, bridge: 34 };
+const SIZE = { core: 66, minor: 30, notable: 40, keystone: 44, mastery: 52, repeat: 36, bridge: 34, founder: 38 };
 
 function layout(nodes, sectors) {
   const idx = Object.fromEntries(sectors.map((s, i) => [s.id, i]));
   const pos = {};
   for (const n of nodes) {
     if (n.kind === 'core') { pos[n.id] = { x: 0, y: 0 }; continue; }
-    const deg = n.kind === 'bridge' ? -90 + idx[n.sectors[0]] * 60 + 30 : -90 + idx[n.sector] * 60 + n.at * SPREAD;
+    const deg = n.angle != null ? n.angle : n.kind === 'bridge' ? -90 + idx[n.sectors[0]] * 60 + 30 : -90 + idx[n.sector] * 60 + n.at * SPREAD;
     const r = R0 + (n.ring - 1) * STEP;
     const a = (deg * Math.PI) / 180;
     pos[n.id] = { x: r * Math.cos(a), y: r * Math.sin(a) };
@@ -30,7 +30,7 @@ function layout(nodes, sectors) {
   return pos;
 }
 
-const hueOf = (n, sec) => (n.kind === 'core' ? '#E9E3FF' : sec[n.sector || (n.sectors || [])[0]].hue);
+const hueOf = (n, sec) => (n.kind === 'core' ? '#E9E3FF' : n.kind === 'founder' ? '#FFD27A' : sec[n.sector || (n.sectors || [])[0]].hue);
 
 /** Pan e zoom do palco: arrastar move, roda do mouse aproxima (em volta do cursor), botões para ajustar. */
 function usePanZoom(stage) {
@@ -235,7 +235,7 @@ function Inspector({ n, sg, sec, byId, act }) {
     );
   }
   const hue = hueOf(n, sec);
-  const where = n.kind === 'core' ? 'Centro da rede' : n.kind === 'bridge' ? `Entre ${sec[n.sectors[0]].name} e ${sec[n.sectors[1]].name}` : sec[n.sector].name;
+  const where = n.kind === 'core' ? 'Centro da rede' : n.kind === 'founder' ? 'Presente de quem joga desde o começo' : n.kind === 'bridge' ? `Entre ${sec[n.sectors[0]].name} e ${sec[n.sectors[1]].name}` : sec[n.sector].name;
   const rival = n.excl && sg.nodes.find((x) => x.excl === n.excl && x.id !== n.id);
   const canBuy = n.affordable;
   const buyText = n.kind === 'repeat' && n.rank > 0 ? `Subir para o nível ${n.rank + 1}` : 'Comprar';
@@ -261,8 +261,9 @@ function Inspector({ n, sg, sec, byId, act }) {
           <Button variant="primary" icon="plus" disabled={!canBuy} onClick={() => act({ type: 'treeBuy', id: n.id })}>{buyText}</Button>
         </div>
       )}
-      {n.status === 'owned' && n.kind !== 'repeat' && n.kind !== 'core' && <div className="dc-sg__fact is-on"><Icon name="check" size={12} /> {n.fresh ? "Comprado agora: desfaz de graça até confirmar a Singularity." : "Comprado: vale em todas as runs."}</div>}
-      {n.rank > 0 && n.kind !== 'core' && (n.undo != null
+      {n.kind === 'founder' && <div className="dc-sg__fact is-on"><Icon name="star" size={12} /> Sua: não se compra, não sai ao reorganizar.</div>}
+      {n.status === 'owned' && n.kind !== 'repeat' && n.kind !== 'core' && n.kind !== 'founder' && <div className="dc-sg__fact is-on"><Icon name="check" size={12} /> {n.fresh ? "Comprado agora: desfaz de graça até confirmar a Singularity." : "Comprado: vale em todas as runs."}</div>}
+      {n.rank > 0 && n.kind !== 'core' && n.kind !== 'founder' && (n.undo != null
         ? <Button variant="ghost" icon="undo-2" onClick={() => act({ type: 'treeUndo', id: n.id })}>Desfazer (devolve {n.undo})</Button>
         : n.fresh > 0 ? <div className="dc-sg__fact"><Icon name="lock" size={12} /> Outros nós dependem deste: desfaça-os antes.</div>
           : sg.planning ? <div className="dc-sg__fact"><Icon name="lock" size={12} /> Comprado antes: só sai reorganizando a rede ({sg.refundPct}%).</div> : null)}
@@ -299,6 +300,7 @@ function SingularityModal({ sg, onClose, onConfirm }) {
         <p className="dc-sgm__lead">O pipeline inteiro rodou, da floresta ao topo. A infraestrutura se dobra sobre si mesma e recomeça do zero, com a Rede que você montou{spentNow ? ` (${spentNow} nó${spentNow > 1 ? 's' : ''} novo${spentNow > 1 ? 's' : ''})` : ''}. Sobram <b>{sg.insight} Insight</b> para a próxima.</p>
         <div className="dc-sgm__calc">
           {rows.map(([icon, label, v]) => <div key={label} className="dc-sgm__row"><Icon name={icon} size={13} /><span>{label}</span><b>+{v}</b></div>)}
+          {b.founder > 0 && <div className="dc-sgm__row"><Icon name="star" size={13} /><span>Estrela do Fundador</span><b>+{b.founder}</b></div>}
           {b.mult !== 1 && <div className="dc-sgm__row"><Icon name="lightbulb" size={13} /><span>Multiplicador da Rede</span><b>×{b.mult.toFixed(2).replace('.', ',')}</b></div>}
           <div className="dc-sgm__row is-total"><Icon name="sparkles" size={14} /><span>Insight</span><b>+{b.total}</b></div>
         </div>

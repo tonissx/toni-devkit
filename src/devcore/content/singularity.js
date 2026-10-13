@@ -64,6 +64,7 @@ const KIND = {
   mastery: { name: 'Maestria' },
   repeat: { name: 'Infinito' },
   bridge: { name: 'Sinapse' },
+  founder: { name: 'Fundador' },
 };
 
 /**
@@ -226,6 +227,14 @@ const BRIDGES = [
 const CORE = { id: 'core', sector: null, ring: 0, at: 0, kind: 'core', cost: 0, links: [], name: 'Singularity Core', icon: 'atom',
   description: 'O que sobra de cada Singularity. +10% em toda a produção por Singularity feita (para sempre).' };
 
-const TREE = [CORE, ...INFRA, ...OPS, ...COMBAT, ...PETS, ...MAP, ...ARCHIVE, ...BRIDGES];
+/**
+ * Estrela do Fundador: presente para quem já jogava o DevCore antes do mapa e da Singularity (ver engine/state.js,
+ * migração da versão 1). Já vem ligada ao Núcleo; não se compra nem sai ao reorganizar. `angle`: posição fixa (graus).
+ */
+const FOUNDER = { id: 'founder', sector: null, ring: 1.4, angle: -120, kind: 'founder', cost: 0, links: ['core'], name: 'Estrela do Fundador', icon: 'star',
+  description: 'Para quem jogava o DevCore antes do mapa e da Singularity. +10% em toda a produção e +1 Insight em cada Singularity, para sempre.',
+  effects: [{ type: 'add', target: 'global', value: 0.1 }], adds: { insightFlat: 1 } };
+
+const TREE = [CORE, ...INFRA, ...OPS, ...COMBAT, ...PETS, ...MAP, ...ARCHIVE, ...BRIDGES, FOUNDER];
 
 module.exports = { INSIGHT, SECTORS, KIND, TREE };

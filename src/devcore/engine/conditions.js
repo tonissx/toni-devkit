@@ -11,6 +11,7 @@
  *   { stationed:[petIds] }    → algum desses DevPets está em estação
  *   { questsDone:n }          → n missões diárias concluídas na vida
  *   { petQuests:{pet,n} }     → n missões diárias concluídas do tema de um DevPet
+ *   { founder:true }          → jogava antes da grande atualização (mapa + Singularity)
  *   { all:[…] } · { any:[…] }
  */
 const { CONTENT } = require('../content/index.js');
@@ -31,6 +32,7 @@ function check(cond, s) {
   if (cond.stationed) return cond.stationed.some((id) => s.run.pets[id] && s.run.pets[id].station);
   if (cond.questsDone != null) return s.quests.total >= cond.questsDone;
   if (cond.petQuests) return (s.quests.byPet[cond.petQuests.pet] || 0) >= cond.petQuests.n;
+  if (cond.founder) return !!(s.meta && s.meta.founder);
   if (cond.anyPetMaxed) return Object.entries(s.run.pets).some(([id, p]) => CONTENT.pet[id] && p.level >= CONTENT.RARITY[CONTENT.pet[id].rarity].maxLevel);
   return false;
 }

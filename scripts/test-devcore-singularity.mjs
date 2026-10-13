@@ -349,6 +349,92 @@ test('singularity: save antigo no meio da run conta os chefes já vencidos', () 
   assert.equal(snapshot(m, T0).singularity.ready, true);
 });
 
+/* ─────────────── grande atualização: pacote Fundador ─────────────── */
+/** Um save do app lançado (versão 1): sem mapa, sem Singularity, com farm, pets, descobertas e visuais. */
+function v1Save() {
+  const s = createState(T0 - 30 * DAY);
+  s.version = 1;
+  delete s.run.map; delete s.run.patches; delete s.run.squad; delete s.run.battleBuff; delete s.run.stats; delete s.arena;
+  s.meta = { fragments: 0, rebuilds: 0, perks: {} };
+  delete s.pending.founder;
+  s.run.tier = 3;
+  s.run.resources.compute = { amount: 4e9, lifetime: 9e9 };
+  s.run.generators = { 'terminal-worker': { owned: 120 }, agent: { owned: 8 } };
+  s.run.upgrades = { 'faster-shell': T0 };
+  s.run.pets = { byte: { level: 10, station: true }, noxi: { level: 7, station: false }, armo: { level: 5, station: false } };
+  s.run.inventory = { coffee: 3 };
+  s.run.blueprints = { 'terminal-worker': { mk: 3, parts: {} } };
+  s.run.scrap = 9;
+  s.discoveries.found = { 'tier-2': T0 - 20 * DAY, toolsmith: T0 - 10 * DAY };
+  s.cosmetics = { skins: { byte: 'neon' }, unlocked: ['default', 'neon'], fresh: [] };
+  s.bestiary = { leaky: { seen: 3, contained: 2, escaped: 1, defeated: 0 } };
+  s.quests.total = 17;
+  return JSON.parse(JSON.stringify(s));
+}
+
+test('fundador: save da versão 1 zera só o farm; pets, descobertas, visuais, bestiário e missões ficam', () => {
+  const m = migrate(v1Save(), T0);
+  assert.equal(m.version, 2);
+  assert.equal(m.run.resources.compute.amount, CONTENT.BALANCE.start.compute);
+  assert.equal(m.run.resources.compute.lifetime, 0);
+  assert.equal(m.run.tier, 1);
+  assert.deepEqual(m.run.upgrades, {});
+  assert.deepEqual(m.run.inventory, {});
+  assert.deepEqual(m.run.blueprints, {});
+  assert.equal(m.run.scrap, 0);
+  assert.equal(m.run.generators['terminal-worker'].owned, 1);
+  assert.deepEqual(Object.keys(m.run.pets).sort(), ['armo', 'byte', 'noxi']);
+  assert.ok(Object.values(m.run.pets).every((p) => p.level === 1 && !p.station));
+  assert.ok(m.discoveries.found.toolsmith && m.discoveries.found['tier-2']);
+  assert.deepEqual(m.cosmetics.skins, { byte: 'neon' });
+  assert.ok(m.cosmetics.unlocked.includes('neon'));
+  assert.equal(m.bestiary.leaky.seen, 3);
+  assert.equal(m.quests.total, 17);
+  assert.equal(m.meta.founder, true);
+  assert.ok(m.pending.founder);
+  assert.equal(m.run.map, null);
+});
+
+test('fundador: visual exclusivo, Estrela na rede (+10% de produção, +1 Insight) e a boas-vindas uma vez', () => {
+  let s = run(migrate(v1Save(), T0), { type: 'tick' }).state;
+  assert.ok(s.cosmetics.unlocked.includes('fundador'));
+  assert.ok(s.cosmetics.fresh.includes('fundador'));
+  assert.equal(run(s, { type: 'skin', pet: 'noxi', skin: 'fundador' }).error, undefined);
+  const v = snapshot(s, T0);
+  assert.equal(v.founder, true);
+  assert.ok(v.founderNews);
+  const star = v.singularity.nodes.find((n) => n.id === 'founder');
+  assert.equal(star.status, 'owned');
+  assert.match(run(s, { type: 'treeBuy', id: 'founder' }).error, /não se compra/);
+  // +10% de produção (soma com as outras somas globais) e +1 Insight fixo na Singularity.
+  const plain = JSON.parse(JSON.stringify(s));
+  plain.meta.founder = false; // o mesmo save, sem a estrela
+  const g = production(plain, T0).agg.get('global') || { add: 0, mul: 1 };
+  near(production(s, T0).rate, production(plain, T0).rate * (1 + g.add + 0.1) / (1 + g.add));
+  const r = ready();
+  r.meta.founder = true;
+  const b = S.insightBreakdown(r, T0);
+  assert.equal(b.founder, 1);
+  assert.equal(b.total, Math.floor(b.raw * b.mult) + 1);
+  // Reorganizar não tira a estrela; a boas-vindas some depois de vista.
+  s.meta.respec = true;
+  s = run(s, { type: 'treeRespec' }).state;
+  assert.equal(snapshot(s, T0).singularity.nodes.find((n) => n.id === 'founder').status, 'owned');
+  s = run(s, { type: 'ackFounder' }).state;
+  assert.equal(snapshot(s, T0).founderNews, null);
+});
+
+test('fundador: jogador novo não ganha nada (nem estrela, nem visual); save já na versão 2 não zera de novo', () => {
+  const fresh = run(createState(T0), { type: 'tick' }).state;
+  assert.equal(fresh.meta.founder, false);
+  assert.ok(!fresh.cosmetics.unlocked.includes('fundador'));
+  assert.ok(!snapshot(fresh, T0).singularity.nodes.some((n) => n.id === 'founder'));
+  const m = migrate(v1Save(), T0);
+  m.run.resources.compute.amount = 777;
+  const again = migrate(JSON.parse(JSON.stringify(m)), T0 + DAY);
+  assert.equal(again.run.resources.compute.amount, 777);
+});
+
 /* ─────────────── produção e economia ─────────────── */
 test('rede: efeitos de produção (soma, ×, por categoria ativa, infinito por nível)', () => {
   const base = make();

@@ -27,6 +27,8 @@ const SKINS = [
   { id: 'gruvbox', name: 'Gruvbox', colors: { body: '#FE8019', eye: '#B8BB26' }, unlock: { questsDone: 50 } },
   { id: 'synthwave', name: 'Synthwave', colors: { body: '#FF00A0', eye: '#00F0FF' }, unlock: { questsDone: 100 } },
   { id: 'matrix', name: 'Matrix', colors: { body: '#12662A', eye: '#00FF41' }, unlock: { questsDone: 200 } },
+  // Fundador: só para quem já jogava antes da grande atualização (mapa + Singularity) — ver engine/state.js.
+  { id: 'fundador', name: 'Fundador', colors: { body: '#3A2A6E', eye: '#FFD27A' }, unlock: { founder: true } },
   { id: 'cyberpunk', name: 'Cyberpunk', colors: { body: '#FCEE0A', eye: '#00F0FF' }, unlock: { discovery: 'always-on' } },
   // Exclusivos de um DevPet: cada missão do tema dele conta (pet = só ele pode usar).
   { id: 'pergaminho', name: 'Pergaminho', pet: 'memo', colors: { body: '#D9B77E', eye: '#5B3A1E' }, unlock: { petQuests: { pet: 'memo', n: 5 } } },

@@ -145,7 +145,7 @@ function validate(c = CONTENT) {
   for (const k of c.TREE) {
     if (!c.KIND[k.kind]) errors.push(`tree ${k.id}: tipo ${k.kind}`);
     if (k.sector && !c.SECTORS.some((x) => x.id === k.sector)) errors.push(`tree ${k.id}: setor ${k.sector}`);
-    if (k.kind !== 'core' && !(k.cost > 0)) errors.push(`tree ${k.id}: custo`);
+    if (k.kind !== 'core' && k.kind !== 'founder' && !(k.cost > 0)) errors.push(`tree ${k.id}: custo`);
     if (!k.name || !k.icon || !k.description) errors.push(`tree ${k.id}: nome, ícone e descrição`);
     for (const l of k.links) {
       if (!perk[l]) { errors.push(`tree ${k.id}: ligação para ${l} inexistente`); continue; }

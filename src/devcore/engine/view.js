@@ -183,6 +183,8 @@ function snapshot(s, now, c = CONTENT) {
     bestiary: c.INCIDENTS.map((i) => ({ id: i.villain.id, incident: i.id, category: i.category, defeatedLine: i.villain.lines.defeated[0], name: i.villain.name, species: i.villain.species, color: i.villain.color, boss: !!i.villain.boss, description: i.description, counterText: i.counterText, stats: s.bestiary[i.villain.id] || null })),
     offlineCapHours: offlineCapMs(s, c) / 3600e3,
     welcome: s.pending.welcome,
+    founder: !!s.meta.founder,
+    founderNews: s.pending.founder || null, // boas-vindas da grande atualização (uma vez)
     unseen: [...s.discoveries.unseen],
     newUpgrades: newUpgrades.map((u) => u.id),
     freshSkins: [...s.cosmetics.fresh],
@@ -457,11 +459,11 @@ function singularityView(s, now, c) {
   const br = S.insightBreakdown(s, now, c);
   const amount = M.insight || 0;
   const cfg = S.startConfig(s, c);
-  const nodes = c.TREE.map((k) => {
+  const nodes = c.TREE.filter((k) => k.kind !== 'founder' || M.founder).map((k) => {
     const st = S.perkState(s, k, c);
     const cost = S.perkCost(s, k);
     return {
-      id: k.id, kind: k.kind, kindName: c.KIND[k.kind].name, sector: k.sector, sectors: k.sectors || null, ring: k.ring, at: k.at,
+      id: k.id, kind: k.kind, kindName: c.KIND[k.kind].name, sector: k.sector, sectors: k.sectors || null, ring: k.ring, at: k.at, angle: k.angle != null ? k.angle : null,
       name: k.name, icon: k.icon, description: k.description, links: k.links, excl: k.excl || null, needs: k.needs || null,
       rank: S.rankOf(s, k.id), cost, status: st.status, reason: st.reason,
       // Desfazer (só o comprado nesta janela, e se nada depender dele): devolve o último nível inteiro.

@@ -444,6 +444,22 @@ Mecânicas novas que vêm da rede:
 - Fluxo: vencer o Pico → distribuir o Insight na rede → Confirmar → a constelação colapsa no Núcleo → clarão "SINGULARITY" → run nova.
 - O banner do Pico concluído leva até a aba.
 
+## 9.3 Lançamento: a grande atualização e o pacote Fundador
+
+- O save sobe para a **versão 2**. Todo save da versão 1 (o app de antes do mapa) passa pela migração uma vez:
+  - **Zera só o farm:** Compute, geradores, upgrades, tiers, Blueprints, consumíveis, níveis dos DevPets,
+    habilidades e incidentes.
+  - **Ficam:** DevPets encontrados (no nível 1), descobertas, visuais, bestiário, missões e o uso do DevKit. Os tiers
+    voltam pelas descobertas, com o Compute da run nova.
+- **Pacote Fundador**, igual para todos que já jogavam, sem graus:
+  - **Coleção "Fundador":** visual exclusivo (índigo com olhos dourados) para todos os DevPets. Nunca sai em outro
+    lugar.
+  - **Estrela do Fundador:** um nó dourado na Rede, ligado ao Núcleo, que não se compra e não sai ao reorganizar.
+    Dá +10% em toda a produção e +1 Insight em cada Singularity.
+  - Um selo "Fundador" no topo e uma tela de boas-vindas na primeira abertura, explicando o que chegou, o que
+    recomeçou e o que ficou.
+- Jogadores novos (saves criados já na versão 2) não ganham o pacote.
+
 ## 10. Arquitetura prevista
 
 Segue o padrão atual: conteúdo como dados, engine puro, view derivada, UI fina, simulador.
@@ -494,6 +510,7 @@ A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa d
 | Data | Decisão |
 |---|---|
 | 2026-10-13 | **Singularity e a Rede**: Insight por chefes, elites, rapidez e profundidade; árvore em constelação de 6 setores com adjacência, paradigmas excludentes, sinapses entre setores, maestrias e infinitos; reorganizar só logo depois do reset |
+| 2026-10-14 | **Lançamento**: saves da versão 1 zeram só o farm (pets, descobertas, visuais, bestiário e missões ficam) e ganham o pacote Fundador: coleção visual exclusiva + Estrela do Fundador (+10% de produção, +1 Insight por Singularity), igual para todos |
 | 2026-10-13 | **Reorganizar custa**: devolve 80% do que já estava na rede; o comprado no planejamento atual se desfaz de graça |
 | 2026-10-13 | **A Singularity se monta antes do reset**: vencer o Pico já põe o Insight no saldo (planejamento abre sozinho) → distribuir na rede → confirmar (colapso e clarão) → run nova já com a rede; "limpar escolhas" volta a rede |
 | 2026-10-06 | O prestige passa a ser mapa + Singularity; o Legado/Rebuild fica guardado (branch `worktree-devcore-legacy`) |
