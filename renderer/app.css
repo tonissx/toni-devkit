@@ -1972,3 +1972,4 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   100% { transform: rotate(320deg) scale(0); filter: brightness(4); opacity: .2; }
 }
 @media (prefers-reduced-motion: reduce) { .dc-sg__stage.is-collapsing .dc-sg__collapse { animation: none; opacity: .3; } }
+.dc-sg__pending { font-size: 12px; font-weight: 600; color: #7CF5B0; animation: dc-sg-ready 1.8s ease-in-out infinite; }

@@ -267,6 +267,7 @@ export function SingularityPanel({ snap, act }) {
       <header className="dc-sg__head">
         <div className="dc-sg__wallet">
           <span className="dc-sg__insight"><Icon name="sparkles" size={18} /> <b>{sg.insight}</b> Insight</span>
+          {sg.ready && !sg.planning && <span className="dc-sg__pending">+{sg.breakdown.total} esperando: clique em Preparar a Singularity</span>}
           <small>{sg.count ? `${sg.count} Singularit${sg.count > 1 ? 'ies' : 'y'} · Núcleo +${sg.corePct}% de produção · ${sg.earned} ganho no total` : 'Nenhuma Singularity ainda'}</small>
         </div>
         <div className="dc-sg__goal">
