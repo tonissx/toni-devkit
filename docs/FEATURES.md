@@ -286,6 +286,8 @@ ambiente Fluig/RM: o que mais custa achar no SSMS — **quem está segurando que
   Key Lookups, derrame para o tempdb, conversão implícita (e se ela impede o Seek), estimado × real (plano real), índice
   sugerido com o `CREATE INDEX` pronto, memory grant exagerado ou em fila, plano serial, otimizador que desistiu,
   parameter sniffing e estatísticas desatualizadas — cada um diz o que viu, por que importa e o que fazer
+  **Explicar o plano** (IA): manda só um resumo do plano — números, achados e operadores mais caros, com segredos
+  removidos — e devolve o que está caro, por quê e o que fazer em ordem de ganho
 - **Deadlocks**: lidos do `system_health` do próprio SQL Server a cada minuto (só os novos). Cada um vira um **desenho** —
   processos em cima, recursos embaixo, seta tracejada = espera, contínua = segura, **vítima** com ícone — e um cartão por
   processo com programa, login, o lock que pedia, isolamento, procedure/linha e o SQL. **Copiar XML**, **Salvar .xdl**

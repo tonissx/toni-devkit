@@ -2,7 +2,8 @@
 // às tabelas (direita), como no SSMS: cada caixa mostra o operador, o objeto e a fatia do custo; a espessura da seta é
 // o volume de linhas. À direita, os insights (o que está caro/errado e o que fazer) e o detalhe do operador escolhido.
 import { DS } from '../../lib/ds.js';
-import { parsePlan, analyze, layout } from '../../db/showplan.js';
+import { parsePlan, analyze, aiSummary, layout } from '../../db/showplan.js';
+import { useAiMode, useAiTask, AiButton, AiPanel, aiOn } from '../../ai/ui.jsx';
 import { copyText, fmtNum, fmtDur } from './shared.jsx';
 
 const { Icon, Modal, Button } = DS;
@@ -151,9 +152,11 @@ export function PlanView({ xml, title, onClose, onSave, toast }) {
   const [tab, setTab] = React.useState('graph');
   const [sel, setSel] = React.useState(null);
   const graphRef = React.useRef(null);
+  const cfg = useAiMode();
+  const ai = useAiTask('dbPlan', cfg);
   const stmt = parsed.statements ? parsed.statements[Math.min(si, parsed.statements.length - 1)] : null;
   const an = React.useMemo(() => (stmt ? analyze(stmt) : null), [stmt]);
-  React.useEffect(() => { setSel(null); }, [si]);
+  React.useEffect(() => { setSel(null); ai.close(); }, [si]);
   const node = stmt && sel != null ? stmt.nodes.find((n) => n.id === sel) : null;
   const pick = (id) => {
     setSel(id);
@@ -207,6 +210,12 @@ export function PlanView({ xml, title, onClose, onSave, toast }) {
           <aside className="db-plan__side tk-scroll">
             <section className="db-plan__sec">
               <h4><Icon name="sparkles" size={13} /> Insights</h4>
+              {aiOn(cfg) && (
+                <div className="db-plan__ai">
+                  <AiButton ai={ai} label="Explicar o plano" title="Explicar com IA (só o resumo do plano é enviado, e o texto passa pelo filtro de segredos)" onClick={() => ai.start(() => aiSummary(stmt, an))} />
+                  <AiPanel ai={ai} className="lg-ai" />
+                </div>
+              )}
               {an.insights.length === 0 && <div className="db-note"><Icon name="circle-check" size={13} /><span>Nada de errado saltou aos olhos neste plano.</span></div>}
               <div className="db-plan__ins">
                 {an.insights.map((i, k) => (

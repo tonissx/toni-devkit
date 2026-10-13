@@ -279,4 +279,28 @@ function layout(tree) {
   return { pos, cols, rows: Math.max(row, 1) };
 }
 
-module.exports = { parseXml, parsePlan, analyze, layout, opInfo };
+/**
+ * O que vai para a IA: um resumo do plano (nunca o XML inteiro) — instrução, números, achados já calculados e os
+ * operadores mais caros. A IA explica e prioriza; os fatos vêm daqui, não de adivinhação.
+ */
+function aiSummary(stmt, an) {
+  const a = an || analyze(stmt);
+  const g = stmt.grant;
+  return {
+    sql: stmt.text,
+    plan: {
+      cost: stmt.cost, estRows: stmt.estRows, operators: stmt.nodes.length, dop: stmt.dop, serialReason: stmt.nonParallelReason || '', actual: stmt.isActual,
+      grant: g ? { grantedKb: g.grantedKb, usedKb: g.usedKb, waitMs: g.waitMs } : null,
+      elapsedMs: stmt.timeStats ? stmt.timeStats.elapsedMs : null, cardinalityModel: stmt.cardinalityModel,
+    },
+    insights: a.insights.slice(0, 14).map((i) => ({ severity: i.severity, title: i.title, detail: i.detail, sql: i.sql || '' })),
+    operators: [...stmt.nodes].sort((x, y) => y.ownCost - x.ownCost).slice(0, 12).map((n) => ({
+      id: n.id, op: n.label, object: n.object ? `${n.object.table}${n.object.index ? ` (${n.object.index})` : ''}` : '', costPct: Math.round(n.costPct * 10) / 10,
+      estRows: n.estRows, actualRows: n.runtime ? n.runtime.rows : null, executions: n.runtime ? n.runtime.executions : null,
+      predicate: n.predicate.concat(n.seek).slice(0, 2),
+    })),
+    params: stmt.params.map((p) => ({ name: p.name, type: p.type, compiled: p.compiled, runtime: p.runtime })),
+  };
+}
+
+module.exports = { parseXml, parsePlan, analyze, aiSummary, layout, opInfo };

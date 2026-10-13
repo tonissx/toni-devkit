@@ -300,7 +300,7 @@ test('consultas: preâmbulo leve, métricas e números só de listas fechadas', 
 
 /* ─────────────── Plano de execução (Showplan) ─────────────── */
 
-const { parsePlan, analyze, layout } = require('../src/db/showplan.js');
+const { parsePlan, analyze, layout, aiSummary } = require('../src/db/showplan.js');
 const PLAN = (stmt, ns = true) => `<?xml version="1.0"?><ShowPlanXML ${ns ? 'xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"' : ''} Version="1.6" Build="16.0"><BatchSequence><Batch><Statements>${stmt}</Statements></Batch></BatchSequence></ShowPlanXML>`;
 const STMT = `<StmtSimple StatementText="SELECT * FROM T WHERE A = @p &amp; 1" StatementSubTreeCost="10" StatementEstRows="5" StatementType="SELECT" CardinalityEstimationModelVersion="150" StatementOptmEarlyAbortReason="TimeOut" QueryHash="0xAB">
 <QueryPlan DegreeOfParallelism="1" NonParallelPlanReason="MaxDOPSetToOne" CachedPlanSize="32">
@@ -371,6 +371,18 @@ test('plano: XML inválido ou sem operadores não quebra', () => {
   assert.ok(parsePlan('<a/>').error);
   assert.ok(parsePlan(PLAN('<StmtSimple StatementText="DECLARE @x int"/>')).error);
   assert.ok(parsePlan('').error);
+});
+
+test('plano: resumo para a IA leva achados e operadores mais caros, sem o XML', () => {
+  const s = parsePlan(PLAN(STMT)).statements[0];
+  const r = aiSummary(s);
+  assert.equal(r.plan.cost, 10);
+  assert.equal(r.plan.actual, true);
+  assert.equal(r.operators[0].id, 1);
+  assert.ok(r.insights.some((i) => i.title.includes('Seek')));
+  assert.ok(r.insights.find((i) => i.sql));
+  assert.equal(r.params[0].name, '@p');
+  assert.ok(!JSON.stringify(r).includes('<RelOp'));
 });
 
 test('plano: vários statements e IF (StmtCond)', () => {
