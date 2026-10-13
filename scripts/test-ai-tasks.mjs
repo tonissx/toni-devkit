@@ -18,6 +18,8 @@ test('todas as tarefas montam system + user em texto', () => {
     paletteAsk: { question: 'q', commands: [{ id: 'go:git', name: 'Git' }] }, clipExplain: { text: 'select 1', kind: 'sql' },
     logError: { text: 'ERROR x\n\tat a.B.c(B.java:1)', format: 'jboss' },
     logIncident: { groups: [{ level: 'ERROR', count: 3, title: 'x', first: '10:00', last: '10:05' }], total: 10 },
+    dbQuery: { sql: 'SELECT * FROM t WHERE a = 1', stats: { executions: 10 } },
+    dbDeadlock: { processes: [{ spid: 63, victim: true, sql: 'UPDATE a' }], resources: [{ type: 'keylock', object: 'db.dbo.T', holders: ['58'], waiters: ['63'] }] },
   };
   for (const [id, t] of Object.entries(TASKS)) {
     assert.ok(inputs[id], 'falta entrada de teste para ' + id);
@@ -35,6 +37,18 @@ test('entradas vazias viram erro em português', () => {
   assert.throws(() => TASKS.clipExplain.build({ text: '' }), /vazia/);
   assert.throws(() => TASKS.logError.build({ text: ' ' }), /vazia/);
   assert.throws(() => TASKS.logIncident.build({ groups: [] }), /Nenhum problema/);
+});
+
+test('banco: query e deadlock vão sem segredos e com as métricas', () => {
+  const q = TASKS.dbQuery.build({ sql: "SELECT * FROM Cliente WHERE Email = 'ana@x.com' AND Cpf = '123.456.789-09'", stats: { executions: 120, avgDuration: '2,3 s', wait: 'PAGEIOLATCH_SH', blockedBy: 57 } });
+  assert.doesNotMatch(q.user, /ana@x\.com|123\.456\.789-09/);
+  assert.match(q.user, /execuções: 120 · duração média: 2,3 s · esperando agora: PAGEIOLATCH_SH · bloqueada pela sessão 57/);
+  assert.throws(() => TASKS.dbQuery.build({ sql: ' ' }), /vazia/);
+  const d = TASKS.dbDeadlock.build({ processes: [{ spid: 63, victim: true, app: 'RM', lockMode: 'U', sql: "UPDATE p SET s = 'x' WHERE email = 'b@y.com'" }, { spid: 58, app: 'Fluig', sql: 'UPDATE e' }], resources: [{ type: 'keylock', object: 'db.dbo.Pedido', index: 'PK', holders: ['58'], waiters: ['63'] }] });
+  assert.match(d.user, /Sessão 63 \(VÍTIMA\) · RM/);
+  assert.match(d.user, /keylock em db\.dbo\.Pedido \(índice PK\): segurado por 58; esperado por 63/);
+  assert.doesNotMatch(d.user, /b@y\.com/);
+  assert.throws(() => TASKS.dbDeadlock.build({ processes: [] }), /sem processos/);
 });
 
 test('logs: segredos saem antes do envio; contexto Fluig quando o log é do Fluig', () => {

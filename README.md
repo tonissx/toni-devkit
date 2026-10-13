@@ -33,6 +33,7 @@ lugar do sistema.
 | 🕸️ | **JSON Visualizer** | JSON como grafo, árvore, YAML ou CSV; JSONPath; gera tipos TypeScript, C# e JSON Schema |
 | 🌿 | **Git** | Interface visual com grafo, stage por trecho, merge com prévia, rebase visual, blame, bisect e **desfazer** |
 | 📜 | **Logs** | Logs grandes (Fluig/JBoss, JSON por linha, IIS, Nginx/Apache) com filtros, erros agrupados, gráficos e acompanhamento ao vivo |
+| 🗄️ | **Banco** | Monitor de SQL Server: quem bloqueia quem, queries lentas, deadlocks e saúde — ao vivo e no histórico |
 | 📝 | **Notes** | Markdown com `[[links]]`, tags, grafo, snippets, tarefas e sticky notes |
 | 🔐 | **Vault** | Cofre local (AES-256-GCM) com senha mestra e cópia que se apaga |
 | 🎮 | **DevCore** | Um jogo idle opcional, com DevPets que você descobre usando o próprio Devkit |
@@ -61,6 +62,20 @@ e antes de qualquer operação que reescreve histórico ou descarta trabalho o D
 
 Editor à esquerda e, à direita, o documento como grafo, árvore, YAML ou CSV. Busca por texto ou JSONPath, **Consertar**
 (comentários, vírgulas sobrando, aspas simples) e exportação em PNG ou SVG.
+
+### Banco: quem está travando o SQL Server
+
+Abre o servidor e mostra, a cada poucos segundos, a **árvore de bloqueio** (a sessão que segura as outras no topo —
+inclusive a clássica transação esquecida, ociosa com `BEGIN TRAN` aberto), as sessões ativas com o que estão esperando, e
+o detalhe de cada uma com o SQL, o plano e **Encerrar** (com confirmação). Em segundo plano ele grava um **histórico**:
+dá para voltar a qualquer momento das últimas horas ou dias e ver o retrato do bloqueio, da query longa ou do deadlock.
+
+- **Leve para produção**: só views de sistema, leitura suja, tempo limite curto e prioridade baixa em deadlock — no
+  teste, ~4 ms de CPU por ciclo. A senha mora no **Vault**
+- **Deadlocks** lidos do próprio `system_health`, desenhados (quem espera × quem segura, vítima destacada) e salvos em `.xdl`
+- **Queries** mais caras (cache de planos ou Query Store) e **Saúde**: log enchendo e o motivo, disco, backups, jobs que
+  falharam, conexões por programa e índices sugeridos
+- Integra com os **Logs**: num erro de timeout do `server.log`, "O que o banco fazia?" abre o histórico naquela hora
 
 ### Logs: o erro certo em segundos
 
@@ -135,15 +150,16 @@ npm start
 | --- | --- |
 | `Ctrl+Alt+Space` | Abre a palette de qualquer lugar |
 | `Ctrl+K` | Palette dentro do app |
-| `Ctrl+1` … `Ctrl+9` | Vai direto para a ferramenta |
+| `Ctrl+1` … `Ctrl+9`, `Ctrl+0` | Vai direto para a ferramenta |
 | `Ctrl+Enter` | Formatar / comparar |
 | `Ctrl+,` | Configurações |
 
 ## Como é feito
 
-Electron + React, com o renderer compilado por esbuild. Os motores (SQL, XML, Diff, JSON, Git, Logs, Notes, Vault,
-DevCore) são módulos puros, testados no Node sem abrir janela. O SQL roda `sqlparse` em Pyodide num *worker thread*, e os
-Logs indexam e filtram em outro, com a tela pedindo só as linhas visíveis. A estrutura de
+Electron + React, com o renderer compilado por esbuild. Os motores (SQL, XML, Diff, JSON, Git, Logs, Banco, Notes, Vault,
+DevCore) são módulos puros, testados no Node sem abrir janela. O SQL roda `sqlparse` em Pyodide num *worker thread*, os
+Logs indexam e filtram em outro, com a tela pedindo só as linhas visíveis, e o Banco fala com o SQL Server pelo `tedious`
+(driver em JavaScript, sem nada nativo para instalar). A estrutura de
 pastas e como adicionar uma ferramenta nova estão no [guia completo](docs/FEATURES.md#estrutura).
 
 ## Status

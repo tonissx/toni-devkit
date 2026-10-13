@@ -521,8 +521,32 @@ function logsRecentCommands(recents) {
   }));
 }
 
-const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands, ...gitCommands, ...logsCommands];
+/* ─────────────── Banco (monitor de SQL Server) ─────────────── */
+const dbCommands = [
+  {
+    id: 'db:blocking', name: 'Banco: quem está bloqueando?', description: 'Abre o monitor de SQL Server na árvore de bloqueio',
+    category: 'actions', icon: 'octagon-x', keywords: ['banco', 'sql server', 'bloqueio', 'blocking', 'lock', 'travado', 'kill', 'dba'],
+    run: (ctx) => ctx.openApp('db', { tab: 'now' }),
+  },
+  {
+    id: 'db:add', name: 'Banco: adicionar servidor…', description: 'Monitorar um SQL Server (credencial no Vault)',
+    category: 'actions', icon: 'database-zap', keywords: ['banco', 'sql server', 'monitor', 'adicionar', 'servidor'],
+    run: (ctx) => ctx.openApp('db', { action: 'add' }),
+  },
+];
+
+/** Um comando por servidor do Banco (lista dinâmica, carregada quando a palette abre). */
+function dbServerCommands(servers) {
+  return (servers || []).map((s) => ({
+    id: 'db:server:' + s.id, name: 'Banco: ' + (s.name || s.label), category: 'actions', icon: s.blocked ? 'octagon-x' : 'database-zap', dynamic: true,
+    description: s.status === 'ok' ? (s.blocked ? `${s.blocked} sessão(ões) bloqueada(s) agora` : `${s.active || 0} sessão(ões) ativa(s)`) : s.label,
+    keywords: ['banco', 'sql server', 'monitor', s.label],
+    run: (ctx) => ctx.openApp('db', { server: s.id, tab: 'now' }),
+  }));
+}
+
+const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands, ...gitCommands, ...logsCommands, ...dbCommands];
 
 const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : id === 'vault' ? 'Vault' : id === 'links' ? 'Link' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
 
-module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands, gitRepoCommands, logsRecentCommands, detectClipboardKind };
+module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands, gitRepoCommands, logsRecentCommands, dbServerCommands, detectClipboardKind };

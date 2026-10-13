@@ -129,6 +129,23 @@ test('logsAttention: erros novos primeiro, com resumo legível', () => {
   assert.deepEqual(H.logsAttention(null), []);
 });
 
+test('dbAttention: bloqueio primeiro, depois sem conexão', () => {
+  const rows = H.dbAttention([
+    { id: 'a', name: 'Homolog', status: 'idle', background: false },
+    { id: 'b', name: 'RM', status: 'offline' },
+    { id: 'c', name: 'Fluig', status: 'ok', blocked: 3, heads: [{ id: 57, program: 'Fluig' }] },
+    { id: 'd', name: 'BI', status: 'ok', blocked: 0, active: 4, background: true },
+    { id: 'e', name: 'Novo', status: 'locked' },
+  ]);
+  assert.deepEqual(rows.map((r) => [r.id, r.level, r.note]), [
+    ['c', 'block', '3 bloqueada(s) · cabeça 57 (Fluig)'],
+    ['e', 'down', 'Vault trancado'],
+    ['b', 'down', 'sem conexão'],
+    ['d', 'ok', '4 sessão(ões) ativa(s) · segundo plano'],
+    ['a', 'idle', 'parado (abre ao entrar no Banco)'],
+  ]);
+});
+
 test('PANELS tem ids únicos', () => {
   const ids = H.PANELS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length);

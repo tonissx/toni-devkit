@@ -401,6 +401,44 @@ const TASKS = {
     clean: tidy,
   },
 
+  /* ───────── Banco (monitor de SQL Server) ───────── */
+  // Textos de query passam por redact(): literais podem trazer CPF, e-mail, senha em connection string…
+  dbQuery: {
+    label: 'Por que está lenta', maxTokens: 1100,
+    build(i) {
+      const sql = redact(i.sql || '').text;
+      if (!sql.trim()) throw new Error('Query vazia');
+      const s = i.stats || {};
+      const facts = [
+        s.executions != null ? `execuções: ${s.executions}` : '', s.avgDuration ? `duração média: ${s.avgDuration}` : '', s.avgCpu ? `CPU média: ${s.avgCpu}` : '',
+        s.avgReads != null ? `leituras lógicas por execução: ${s.avgReads}` : '', s.elapsed ? `rodando há: ${s.elapsed}` : '', s.wait ? `esperando agora: ${s.wait}` : '',
+        s.blockedBy ? `bloqueada pela sessão ${s.blockedBy}` : '', s.plans > 1 ? `planos diferentes no cache: ${s.plans}` : '', s.database ? `banco: ${s.database}` : '',
+      ].filter(Boolean);
+      return {
+        system: ['Você é um DBA sênior de SQL Server ajudando a entender uma consulta lenta.', PT, MD,
+          'Responda com: **O que a consulta faz** (1–2 frases), **Por que pode estar lenta** (ligue às métricas e à espera informadas — sem inventar o que não foi dado), **O que conferir** (plano de execução, índices, estatísticas, sargabilidade, conversões implícitas, parâmetros) e **Sugestões** concretas (reescrita, índice, hint só se fizer sentido). Se a espera for de bloqueio, diga que o problema é quem segura o lock, não a consulta.'].join('\n'),
+        user: [facts.length ? `Métricas: ${facts.join(' · ')}` : '', `\nConsulta:\n${clip(sql, 12000)}`].filter(Boolean).join('\n'),
+      };
+    },
+    clean: tidy,
+  },
+
+  dbDeadlock: {
+    label: 'Explicar o deadlock', maxTokens: 1100,
+    build(i) {
+      const procs = (i.processes || []).slice(0, 8);
+      if (!procs.length) throw new Error('Deadlock sem processos');
+      const p = procs.map((x) => `- Sessão ${x.spid}${x.victim ? ' (VÍTIMA)' : ''} · ${x.app || '?'} · ${x.login || '?'} · isolamento ${x.isolation || '?'} · pedia ${x.lockMode || '?'} em ${x.waitResource || '?'}\n  SQL: ${clip(redact(x.sql || '').text, 2500)}`).join('\n');
+      const r = (i.resources || []).slice(0, 10).map((x) => `- ${x.type} em ${x.object || '?'}${x.index ? ` (índice ${x.index})` : ''}: segurado por ${x.holders.join(', ') || '?'}; esperado por ${x.waiters.join(', ') || '?'}`).join('\n');
+      return {
+        system: ['Você é um DBA sênior de SQL Server explicando um deadlock a partir do relatório do system_health.', PT, MD,
+          'Responda com: **O que aconteceu** (o ciclo em linguagem simples: quem segurava o quê e esperava o quê), **Por que acontece** (ordem de acesso, falta de índice levando a varredura, transação longa, escalonamento de lock, isolamento) e **Como evitar** (ações concretas: mesma ordem de acesso, índice que torna a busca pontual, transação mais curta, retry na aplicação, READ_COMMITTED_SNAPSHOT se couber). Não invente tabelas ou colunas que não estão no relatório.'].join('\n'),
+        user: `Processos:\n${p}\n\nRecursos:\n${r || '(sem detalhes)'}`,
+      };
+    },
+    clean: tidy,
+  },
+
   /* ───────── Palette ───────── */
   paletteAsk: {
     label: 'Pergunta', maxTokens: 600,

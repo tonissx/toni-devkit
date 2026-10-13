@@ -1006,6 +1006,13 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .home-panel.is-git { --hue: var(--tk-syn-key); }
 .home-chip.is-git { color: var(--tk-amber); border-color: color-mix(in srgb, var(--tk-amber) 30%, transparent); background: color-mix(in srgb, var(--tk-amber) 10%, transparent); }
 .home-panel.is-logs { --hue: var(--tk-red); }
+.home-panel.is-db { --hue: var(--tk-blue); }
+.home-db > svg { color: var(--tk-text-3); }
+.home-db.is-block > svg { color: var(--tk-red); }
+.home-db.is-block .home-row__sub { color: var(--tk-text); }
+.home-db.is-down > svg { color: var(--tk-amber); }
+.home-db.is-ok > svg { color: var(--tk-accent-text); }
+.home-db.is-idle .home-row__title { color: var(--tk-text-2); font-weight: 400; }
 .home-log > svg { color: var(--tk-text-3); }
 .home-log.is-new > svg { color: var(--tk-red); }
 .home-log.is-new .home-row__sub { color: var(--tk-text); }

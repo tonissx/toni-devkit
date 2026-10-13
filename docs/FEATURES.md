@@ -38,6 +38,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **JSON Visualizer**: edita, formata e explora JSON como grafo (estilo JSON Crack), árvore, YAML ou CSV | ✅ |
 | **Git**: repositórios locais com grafo do histórico, stage por trecho, merge com prévia, conflitos, rebase visual, blame, bisect e desfazer qualquer coisa | ✅ |
 | **Logs**: logs grandes (Fluig/JBoss, JSON por linha, IIS, Nginx/Apache, texto) com filtros, erros agrupados, gráficos e acompanhamento ao vivo | ✅ |
+| **Banco**: monitor de SQL Server — bloqueios, sessões, queries caras, deadlocks e saúde, ao vivo e com histórico | ✅ |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
 | **Vault**: cofre de senhas, tokens e credenciais de banco, com senha mestra e cópia que se apaga | ✅ |
 | **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
@@ -246,6 +247,54 @@ Recentes, filtros salvos e formato escolhido à mão ficam em `%APPDATA%\Toni De
 
 **IA**: explicar o erro e resumir os problemas — ver [IA (opcional)](#ia-opcional)
 
+### Banco
+
+Monitor de SQL Server (2016 ou mais novo) para acompanhar ao vivo e investigar depois (`Ctrl+0`). Pensado para DBA de
+ambiente Fluig/RM: o que mais custa achar no SSMS — **quem está segurando quem** — aparece em destaque.
+
+- **Servidores**: **Adicionar servidor** com a credencial de uma entrada do **Vault** (login SQL; a senha nunca fica na
+  configuração do servidor nem chega à tela). Dá para colar uma connection string ADO.NET ou JDBC: os campos se preenchem
+  e, se ela trouxer usuário e senha, **Guardar no Vault** cria a entrada. **Testar conexão** mostra versão, edição e se o
+  login tem `VIEW SERVER STATE` (sem ela, só as próprias sessões aparecem). Instância nomeada usa o SQL Browser ou a porta
+  informada. Os servidores ficam em `%APPDATA%\Toni Devkit\db-servers.json`
+- **Leve para produção**: uma conexão por servidor (`Toni Devkit Monitor`, fora das listas), só views de sistema, leitura
+  suja (`READ UNCOMMITTED`), `LOCK_TIMEOUT` de 1 s e prioridade baixa em deadlock — se algo der errado, o monitor é a
+  vítima. Plano de execução nunca no ciclo, só sob demanda. Ciclo de 5 s com a tela aberta (2–30 s, ajustável) e de 15 s
+  em segundo plano; esperas a cada 15 s, CPU e deadlocks a cada minuto. Medido num SQL Server Express: ~4 ms de CPU e ~130
+  leituras lógicas por ciclo
+- **Agora**: CPU do SQL, lotes/s, conexões, sessões ativas, bloqueadas e page life expectancy, com o desenho dos últimos
+  minutos. A **árvore de bloqueio** mostra a cabeça no topo (inclusive **ociosa com transação aberta** — o `BEGIN TRAN`
+  esquecido) e quem espera, há quanto tempo e em quê. Sessões ativas ordenáveis e filtráveis (programa, login, banco,
+  espera, texto), esperas do momento por categoria (lock, disco, log, CPU, rede…) com o que cada uma costuma significar.
+  O detalhe da sessão traz o SQL (comando ou lote inteiro), espera, recurso, transações, isolamento, **Plano** (salva
+  `.sqlplan`, que abre no SSMS), **SQL Formatter** e **Encerrar**
+- **Encerrar (KILL)**: só com confirmação, que mostra login, programa, computador, banco, quantas sessões ela segura e há
+  quanto tempo a transação está aberta (e avisa que desfazer uma transação antiga pode demorar). Antes de encerrar, o
+  Devkit confere se a sessão ainda é a mesma — o número é reaproveitado pelo SQL Server — e registra no histórico
+- **Histórico**: com **Monitorar em segundo plano**, o Devkit grava enquanto estiver aberto (inclusive na bandeja), em
+  `%APPDATA%\Toni Devkit\db-monitor\<servidor>\AAAA-MM-DD.ndjson`, por 7 dias. As séries (bloqueadas, sessões ativas, CPU,
+  lotes/s, esperas de lock, PLE) ficam uma embaixo da outra, cada uma com a sua escala; os **incidentes** aparecem como
+  marcadores — **bloqueio** acima de 10 s, **query** acima de 30 s, **deadlock**, **sessão encerrada** e **queda da
+  conexão**. Arrastar aproxima; clicar mostra o **retrato** daquele momento; cada incidente guarda a árvore e o SQL de
+  quem estava envolvido (e vai para o **Notes** num clique)
+- **Queries**: as mais caras por CPU, duração, leituras ou execuções (totais e médias), do cache de planos (agrupadas por
+  `query_hash` — a mesma query com parâmetros diferentes) ou do **Query Store** de um banco, com período. Riscos comuns
+  do texto (como no SQL Formatter), plano sob demanda
+- **Deadlocks**: lidos do `system_health` do próprio SQL Server a cada minuto (só os novos). Cada um vira um **desenho** —
+  processos em cima, recursos embaixo, seta tracejada = espera, contínua = segura, **vítima** com ícone — e um cartão por
+  processo com programa, login, o lock que pedia, isolamento, procedure/linha e o SQL. **Copiar XML**, **Salvar .xdl**
+  (o SSMS abre como desenho) e **Notes**
+- **Saúde**: o que pede atenção (log acima de 80% **com o motivo** — `LOG_BACKUP`, `ACTIVE_TRANSACTION`…, disco com pouco
+  espaço, banco sem backup completo ou em FULL sem backup de log, job do Agent que falhou, PLE baixo, queries esperando
+  memória), uso do log por banco, discos, backups, **conexões por programa** (com quantas têm transação aberta) e
+  **índices sugeridos** pelo otimizador — só sugestão: o `CREATE INDEX` é para copiar e revisar, nunca aplicado
+- **Integrações**: no detalhe de um erro dos **Logs** que fala de banco (timeout, SQLException, deadlock…), **O que o banco
+  fazia?** abre o histórico naquele horário. Palette: "Banco: quem está bloqueando?" e um comando por servidor. Início:
+  painel com os servidores e os bloqueios do momento
+- Datas na hora certa mesmo com o servidor em outro fuso (o monitor lê o fuso do servidor ao conectar)
+
+Testes: `npm run test:db`. **IA**: por que a query está lenta e explicar o deadlock — ver [IA (opcional)](#ia-opcional)
+
 ## IA (opcional)
 
 Desligada por padrão: com ela desligada nenhum botão de IA aparece. Ligada, cada ferramenta ganha botões ✦ que fazem um
@@ -262,6 +311,7 @@ pedido nenhum** — notas vão com as referências dos blocos `secret`, nunca co
 | SQL Formatter | **Explicar consulta** · **Escrever ou alterar com IA**: *Nova consulta* a partir de uma descrição, ou *Alterar a atual* (“trocar o LEFT JOIN por INNER”, “só 2025”…) — muda só o que foi pedido, com **Comparar no Diff Checker** e **Desfazer**; o esquema das tabelas é opcional e fica lembrado no PC |
 | JSON Visualizer | **Melhorar nomes** dos tipos gerados (só os nomes mudam; o Devkit aplica no código original) · **Explicar o erro** quando o Consertar não resolve |
 | Diff Checker | **Resumir diferenças** (adicionado, removido, alterado e o que parece arriscado) |
+| Banco | **Por que está lenta** (sessão ou query do top: o que faz, por que pode estar lenta pelas métricas e pela espera, o que conferir e sugestões) · **Explicar** o deadlock (o ciclo, por que acontece, como evitar). O SQL passa antes pelo filtro de segredos |
 | Logs | **Explicar** o erro selecionado (o que aconteceu, causa provável, onde olhar, como confirmar — com o contexto do Fluig quando é um log do Fluig) · Problemas → **Resumir** (triagem dos grupos do filtro). O texto passa antes pelo filtro de segredos |
 | Notes | Botão **IA** no editor: **título e tags** (em chips, reaproveitando as tags que já existem), **Resumir** (insere no topo), **Transformar em checklist** (seleção ou nota toda) · **Perguntar às notas**: digite a pergunta na busca |
 | Palette | Comece com **`?`** para perguntar (pode sugerir ações do Devkit) · em Notes, `?` pergunta às notas · **IA: explicar o que está copiado** (SQL, JSON, XML, código ou erro com stack) |
@@ -650,6 +700,8 @@ electron/
   logs/engine.js     Logs: leitura em blocos, encoding, índice e consultas (roda no worker)
   logs/worker.js     worker thread dos Logs
   logs/service.js    Logs: abertos, ao vivo (watch + tamanho), rotação, recentes e filtros salvos
+  db/driver.js       Banco: conexão tedious com fila, queda tratada, datas no fuso do servidor
+  db/service.js      Banco: servidores, coletor por servidor, histórico em disco, saúde, queries, plano e KILL
 renderer/
   index.html         carrega React UMD, Lucide, o DS e dist/app.js
   palette.html       janela da command palette (dist/palette.js + palette.css)
@@ -675,6 +727,9 @@ src/                 código do app (JSX → renderer/dist/app.js via esbuild)
   logs/              parse.js (formatos e detecção), index.js (índice em typed arrays), query.js (mini-linguagem),
                      fingerprint.js (grupos de erro), aggregate.js, rotate.js, redact.js — JS puro
   tools/logs/        tela Logs: LogsScreen, LogView, LogList + VirtualList, FilterBar, Timeline, Detail, Problems, Charts
+  db/                queries.js (T-SQL das coletas), blocking.js (árvore), waits.js, deadlock.js, history.js, connstr.js, health.js
+  tools/db/          tela Banco: DbScreen, ServerForm, Now, History, Queries, Deadlocks, Health
+  lib/               charts.jsx, TimeSeries.jsx, VirtualList.jsx e fmt.jsx — peças de gráfico e formatação compartilhadas
   screens/Home.jsx, screens/Settings.jsx
 vendor/python/       wheel do sqlparse (offline)
 ```
