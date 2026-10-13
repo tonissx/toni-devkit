@@ -28,9 +28,9 @@ export function gainsFrom(log, snap) {
   };
   for (const e of log || []) {
     if (e.type === 'battle' && e.win) for (const r of e.rewards) add(r, true);
-    if (e.type === 'mapBuy') add(e.reward);
+    if (e.type === 'mapBuy' || e.type === 'mapGift') add(e.reward);
     if (e.type === 'mapChoice') for (const r of e.rewards) add(r);
-    if (e.type === 'craft') add({ type: 'item', id: e.id });
+    if (e.type === 'craft') { add({ type: 'item', id: e.id }); if (e.double) add({ type: 'item', id: e.id }); }
     if (e.type === 'quest' && e.item) add({ type: 'item', id: e.item });
   }
   return out;

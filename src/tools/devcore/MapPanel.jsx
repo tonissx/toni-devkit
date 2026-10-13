@@ -471,7 +471,7 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
   const isDown = (id) => (roster.find((p) => p.id === id) || {}).down;
   const initial = () => {
     const items = saved.items.filter((id) => (map.items.find((k) => k.id === id) || {}).n > 0);
-    if (saved.valid && saved.pets.length) return { slots: { ...saved.slots }, triggers: saved.triggers, items };
+    if (saved.valid && saved.pets.length) return { slots: { ...saved.slots }, triggers: saved.triggers, items, reserve: map.reserve ? saved.reserve : null };
     // Sugestão inicial: os melhores disponíveis, cada um no slot do seu papel.
     const best = roster.filter((p) => !p.down).sort((x, y) => y.level * y.life - x.level * x.life || y.atk - x.atk).slice(0, 3).map((p) => p.id);
     const slots = { vanguard: null, center: null, rear: null };
@@ -480,29 +480,36 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
       slots[sl] = pick || null;
     }
     for (const id of best) if (!Object.values(slots).includes(id)) { const free = ['vanguard', 'center', 'rear'].find((x) => !slots[x]); if (free) slots[free] = id; }
-    return { slots, triggers: {}, items: [] };
+    return { slots, triggers: {}, items: [], reserve: null };
   };
   const [sq, setSq] = React.useState(initial);
   const [picked, setPicked] = React.useState(null);  // slot selecionado (alternativa ao arrastar: clique no slot e depois no pet)
   const [over, setOver] = React.useState(null);      // slot sob o arraste
   const placed = Object.values(sq.slots).filter(Boolean);
+  const maxItems = map.maxItems || 2;
   // Cada mudança salva a preparação: a view devolve a previsão e quais traços o esquadrão anula.
   React.useEffect(() => { if (placed.length) act({ type: 'mapSquad', squad: sq, node: node.id }); }, [JSON.stringify(sq), node.id]);
   const set = (patch) => setSq((s) => ({ ...s, ...patch }));
-  const slotOf = (id) => Object.keys(sq.slots).find((k) => sq.slots[k] === id) || null;
+  const slotOf = (id) => (sq.reserve === id ? 'reserve' : Object.keys(sq.slots).find((k) => sq.slots[k] === id) || null);
 
   /** Põe um pet num slot: sai do slot antigo; quem estava no destino troca de lugar (ou volta ao elenco). */
   const place = (id, target) => {
     if (!id || isDown(id)) return;
-    const slots = { ...sq.slots };
+    // A reserva (Hot Standby, Rede da Singularity) é uma vaga à parte: fica fora da luta até alguém cair.
+    const all = { ...sq.slots, reserve: sq.reserve || null };
     const from = slotOf(id);
-    const occupant = slots[target];
-    if (from) slots[from] = from !== target && occupant ? occupant : null;
-    slots[target] = id;
-    set({ slots });
+    const occupant = all[target];
+    if (from) all[from] = from !== target && occupant ? occupant : null;
+    all[target] = id;
+    const { reserve, ...slots } = all;
+    set({ slots, reserve: reserve || null });
     setPicked(null);
   };
-  const remove = (id) => { const from = slotOf(id); if (from) set({ slots: { ...sq.slots, [from]: null } }); };
+  const remove = (id) => {
+    const from = slotOf(id);
+    if (from === 'reserve') set({ reserve: null });
+    else if (from) set({ slots: { ...sq.slots, [from]: null } });
+  };
   /** Clique num pet do elenco: vai para o slot selecionado, senão para o primeiro vazio do papel dele (ou qualquer vazio). */
   const clickPet = (id) => {
     if (isDown(id)) return;
@@ -511,8 +518,9 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
     const free = ['vanguard', 'center', 'rear'].filter((k) => !sq.slots[k]);
     const best = free.sort((x, y) => SLOT_PREF[x].indexOf(role(id)) - SLOT_PREF[y].indexOf(role(id)))[0];
     if (best) place(id, best);
+    else if (map.reserve && !sq.reserve) place(id, 'reserve');
   };
-  const toggleItem = (id) => set({ items: sq.items.includes(id) ? sq.items.filter((x) => x !== id) : sq.items.length < 2 ? [...sq.items, id] : sq.items });
+  const toggleItem = (id) => set({ items: sq.items.includes(id) ? sq.items.filter((x) => x !== id) : sq.items.length < maxItems ? [...sq.items, id] : sq.items });
   const f = map.forecast && map.forecast.node === node.id ? map.forecast : null;
   const drag = (id) => (e) => { e.dataTransfer.setData('text/plain', id); e.dataTransfer.effectAllowed = 'move'; };
   const lifeBar = (p) => <span className={'dc-life' + (p.life < 0.5 ? ' is-low' : '')} title={'Vida ' + pct(p.life)}><ProgressBar value={p.life * 100} size="sm" /></span>;
@@ -582,6 +590,32 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
               </div>
             );
           })}
+          {map.reserve && (() => {
+            const id = sq.reserve;
+            const p = id && roster.find((x) => x.id === id);
+            return (
+              <div className={'dc-slotbox is-reserve' + (picked === 'reserve' ? ' is-picked' : '') + (over === 'reserve' ? ' is-over' : '') + (p ? ' is-filled' : '')}
+                onDragOver={(e) => { e.preventDefault(); setOver('reserve'); }} onDragLeave={() => setOver((o) => (o === 'reserve' ? null : o))}
+                onDrop={(e) => { e.preventDefault(); setOver(null); place(e.dataTransfer.getData('text/plain'), 'reserve'); }}>
+                <InfoCard content={<><div className="dc-info__title">Reserva · Hot Standby</div><p className="dc-info__text">Fica fora da luta e entra no lugar do primeiro DevPet que cair (com o slot e o bônus dele). Vem da Rede da Singularity.</p></>} focusable={false}>
+                  <button type="button" className="dc-slotbox__head" aria-pressed={picked === 'reserve'} onClick={() => setPicked(picked === 'reserve' ? null : 'reserve')}
+                    title="Selecionar a reserva (depois clique num DevPet)">
+                    <b>Reserva</b><small>entra quando alguém cair</small>
+                  </button>
+                </InfoCard>
+                {p ? (
+                  <div className="dc-slotbox__pet" draggable onDragStart={drag(id)}>
+                    <Pet snap={snap} id={id} size={36} />
+                    <div className="dc-slotbox__info">
+                      <b>{p.name}</b>
+                      <span className={'dc-slot__life' + (p.life < 0.5 ? ' is-low' : '')}>{pct(p.life)} de vida</span>
+                    </div>
+                    <button type="button" className="dc-slotbox__remove" aria-label={'Tirar ' + p.name + ' da reserva'} onClick={() => remove(id)}><Icon name="x" size={12} /></button>
+                  </div>
+                ) : <div className="dc-slotbox__empty">{picked === 'reserve' ? 'Clique num DevPet' : 'Arraste um DevPet'}</div>}
+              </div>
+            );
+          })()}
         </div>
         {roster.some((p) => p.life < 1) && (
           <div className="dc-heal">
@@ -594,7 +628,7 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
             ))}
           </div>
         )}
-        <div className="tk-menu__heading">Consumíveis ({sq.items.length}/2)</div>
+        <div className="tk-menu__heading">Consumíveis ({sq.items.length}/{maxItems})</div>
         <div className="dc-prep__items">
           {map.items.map((k) => (
             <InfoCard key={k.id} content={<><div className="dc-info__title">{k.name}</div><p className="dc-info__text">{k.text}</p></>} focusable={false}>
@@ -621,7 +655,7 @@ function PrepPanel({ map, snap, node, act, onCancel }) {
   );
 }
 
-export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio = () => {}, onArena = () => {} }) {
+export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio = () => {}, onArena = () => {}, onSingularity = () => {} }) {
   const live = snap.map;
   const [prep, setPrep] = React.useState(null);
   const [decision, setDecision] = React.useState(true); // modal da escolha pendente aberto (fechar no X só adia)
@@ -676,8 +710,9 @@ export function MapPanel({ snap, act, audio = { on: false, volume: 0 }, setAudio
           <Icon name="crown" size={16} />
           <span><b>{map.area.name} concluída!</b> {map.boss.name} caiu.{' '}
             {map.next ? <>Além dele começa o <b>{map.next.name}</b>. {map.next.description} Os Patches da run seguem com você.</>
-              : map.area.id === 'production' ? 'Você venceu o pipeline inteiro — da floresta ao topo. A Singularity chega em breve.' : 'A próxima área chega em breve.'}</span>
+              : snap.singularity && snap.singularity.ready ? <>Você venceu o pipeline inteiro, da floresta ao topo. A <b>Singularity</b> está pronta: +{snap.singularity.breakdown.total} Insight para a Rede.</> : 'A próxima área chega em breve.'}</span>
           {map.next && <Button variant="primary" icon="footprints" onClick={() => act({ type: 'mapAdvance' })}>Atravessar para {map.next.name}</Button>}
+          {!map.next && snap.singularity && snap.singularity.ready && <Button variant="primary" icon="atom" onClick={onSingularity}>Ir para a Singularity</Button>}
         </div>
       )}
       <div className={'dc-stage' + (prepNode ? ' is-prep' : '')}>

@@ -19,6 +19,7 @@ const { ENEMIES } = require('./enemies.js');
 const { AREAS, NODE_TYPES } = require('./areas.js');
 const { PATCHES, RARITIES } = require('./patches.js');
 const { EVENTS, REST_OPTIONS, SHOP, BATTLE_REWARDS } = require('./events.js');
+const { INSIGHT, SECTORS, KIND, TREE } = require('./singularity.js');
 
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 
@@ -28,6 +29,8 @@ const CONTENT = {
   // Mapa e batalhas (docs/devcore-mapa-singularity.md)
   ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS, BATTLE_TIMEOUT_LORE, SLOTS, ENEMIES, AREAS, NODE_TYPES, PATCHES, RARITIES,
   EVENTS, REST_OPTIONS, SHOP, BATTLE_REWARDS,
+  // Singularity (prestígio): Insight e a Rede (árvore permanente)
+  INSIGHT, SECTORS, KIND, TREE, perk: byId(TREE), sector: byId(SECTORS),
   enemy: byId(ENEMIES), area: byId(AREAS), patch: byId(PATCHES), event: byId(EVENTS),
   quest: byId(QUESTS),
   gen: byId(GENERATORS), upgrade: byId(UPGRADES), pet: byId(PETS), ability: byId(ABILITIES),
@@ -135,6 +138,32 @@ function validate(c = CONTENT) {
     for (const r of d.rewards) if (r.pet && !c.pet[r.pet]) errors.push(`discovery ${d.id}: pet ${r.pet}`);
     if (d.finder && !c.pet[d.finder]) errors.push(`discovery ${d.id}: finder ${d.finder}`);
   }
+  // Rede da Singularity
+  uniq('tree', c.TREE);
+  const perk = Object.fromEntries(c.TREE.map((k) => [k.id, k]));
+  const adj = Object.fromEntries(c.TREE.map((k) => [k.id, new Set()]));
+  for (const k of c.TREE) {
+    if (!c.KIND[k.kind]) errors.push(`tree ${k.id}: tipo ${k.kind}`);
+    if (k.sector && !c.SECTORS.some((x) => x.id === k.sector)) errors.push(`tree ${k.id}: setor ${k.sector}`);
+    if (k.kind !== 'core' && !(k.cost > 0)) errors.push(`tree ${k.id}: custo`);
+    if (!k.name || !k.icon || !k.description) errors.push(`tree ${k.id}: nome, ícone e descrição`);
+    for (const l of k.links) {
+      if (!perk[l]) { errors.push(`tree ${k.id}: ligação para ${l} inexistente`); continue; }
+      adj[k.id].add(l); adj[l].add(k.id);
+    }
+    for (const e of k.effects || []) if (e.target) checkTarget('tree ' + k.id, e.target);
+    for (const [g] of Object.entries((k.start || {}).gens || {})) if (!c.gen[g]) errors.push(`tree ${k.id}: gerador ${g}`);
+    for (const [id] of Object.entries((k.start || {}).items || {})) if (!c.consumable[id]) errors.push(`tree ${k.id}: consumível ${id}`);
+    for (const r of Object.keys((k.start || {}).patches || {})) if (!c.RARITIES[r]) errors.push(`tree ${k.id}: raridade ${r}`);
+    if (k.kind === 'bridge' && (!k.sectors || k.sectors.length !== 2)) errors.push(`tree ${k.id}: sinapse liga dois setores`);
+  }
+  for (const k of c.TREE) if (k.excl && c.TREE.filter((x) => x.excl === k.excl).length < 2) errors.push(`tree ${k.id}: grupo excludente com um nó só`);
+  // Tudo alcançável a partir do Núcleo.
+  const seen = new Set(['core']);
+  const queue = ['core'];
+  while (queue.length) for (const n of adj[queue.shift()] || []) if (!seen.has(n)) { seen.add(n); queue.push(n); }
+  for (const k of c.TREE) if (!seen.has(k.id)) errors.push(`tree ${k.id}: inalcançável a partir do Núcleo`);
+  for (const id of Object.keys(c.INSIGHT.boss)) if (!c.area[id]) errors.push(`insight: área ${id}`);
   return errors;
 }
 

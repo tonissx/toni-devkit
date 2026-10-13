@@ -15,6 +15,7 @@ const { grantItem } = require('./incidents.js');
 const { dropPart } = require('./blueprints.js');
 const { setupBattle, resolve, petDown, msUntilHp, setPetHp, slotsOf, petsOf } = require('./battle.js');
 const { formatDuration } = require('./format.js');
+const { treeMod, treeAdd, treeFlag, capOf } = require('./singularity.js');
 
 /** Hash inteiro estável de uma string (semente por ponto). */
 function hash(str) {
@@ -27,7 +28,7 @@ const nodeId = (col, lane) => `${col}-${lane}`;
 const pick = (list, rand) => list[Math.floor(rand() * list.length)];
 
 /** Gera o mapa de uma área: { area, nodes: { id: node } }. node: { id, col, lane, type, next[], shortcut?, group?, event?, offers? } */
-function generate(area, seed, c = CONTENT) {
+function generate(area, seed, c = CONTENT, opts = {}) {
   const rand = rng(seed >>> 0);
   const nodes = {};
   const types = Object.entries(c.NODE_TYPES).filter(([, t]) => t.weight > 0);
@@ -69,7 +70,7 @@ function generate(area, seed, c = CONTENT) {
   for (let lane = 0; lane < area.lanes; lane++) nodes[nodeId(area.columns - 1, lane)].next.push('boss');
   // Elite com atalho: depois de vencer, também dá para ir direto à coluna +2.
   for (const n of Object.values(nodes)) {
-    if (n.type === 'elite' && n.col >= 1 && n.col <= area.columns - 3 && rand() < area.shortcutChance) n.shortcut = nodeId(n.col + 2, n.lane);
+    if (n.type === 'elite' && n.col >= 1 && n.col <= area.columns - 3 && rand() < (opts.shortcuts ? 1 : area.shortcutChance)) n.shortcut = nodeId(n.col + 2, n.lane);
   }
   return { area: area.id, nodes };
 }
@@ -92,7 +93,7 @@ function shopOffers(area, col, rand, c) {
 /** Estado inicial do mapa de uma área. */
 function createMap(s, area, c = CONTENT) {
   return {
-    ...generate(area, (s.seed ^ hash('map:' + area.id)) >>> 0, c),
+    ...generate(area, (s.seed ^ hash('map:' + area.id)) >>> 0, c, { shortcuts: treeFlag(s, 'shortcuts', c) }), // Shortcuts (Rede)
     at: null, visited: [], cleared: false, attempts: {}, pending: null, lastBattle: null, battles: 0,
   };
 }
@@ -118,8 +119,18 @@ function reachable(s) {
 /** Custo de entrar num ponto (Compute). */
 function nodeCost(s, node, c = CONTENT) {
   const area = c.area[s.run.map.area];
-  return area.costs[Math.min(node.col, area.costs.length - 1)] * c.NODE_TYPES[node.type].costMult;
+  const express = node.type === 'express' ? treeMod(s, 'expressCost', c) : 1;
+  return area.costs[Math.min(node.col, area.costs.length - 1)] * c.NODE_TYPES[node.type].costMult * treeMod(s, 'mapCost', c) * express;
 }
+
+/** Custo de uma escolha de evento (Rede: custos do mapa; Express Lane: grátis). */
+const choiceCost = (s, ch, col, c = CONTENT) => (treeFlag(s, 'eventFree', c) ? 0 : (ch.cost || 0) * c.area[s.run.map.area].costs[col] * treeMod(s, 'mapCost', c));
+
+/** Preço de uma oferta da loja (Rede: Haggling). */
+const shopPrice = (s, o, c = CONTENT) => o.price * treeMod(s, 'shopPrice', c);
+
+/** Consumíveis por batalha (Rede: Chaos Engineering). */
+const maxItemsOf = (s, c = CONTENT) => c.BATTLE.maxItems + Math.round(treeAdd(s, 'maxItems', c));
 
 /** Valida a preparação (now: confere quem está fora de combate). → erro ou null */
 function squadError(s, squad, c = CONTENT, now = null) {
@@ -132,8 +143,15 @@ function squadError(s, squad, c = CONTENT, now = null) {
   if (pets.some((id) => !s.run.pets[id])) return 'DevPet indisponível';
   const down = now == null ? null : pets.find((id) => petDown(s, id, now, c));
   if (down) return `${c.pet[down].name} está fora de combate (volta em ${formatDuration(msUntilHp(s, down, c.BATTLE.recovery.koMin, now, c))})`;
+  if (squad.reserve != null) {
+    if (!treeFlag(s, 'reserve', c)) return 'A reserva vem da Rede da Singularity (Hot Standby)';
+    if (!s.run.pets[squad.reserve]) return 'DevPet da reserva indisponível';
+    if (pets.includes(squad.reserve)) return 'A reserva não pode estar também no esquadrão';
+    if (now != null && petDown(s, squad.reserve, now, c)) return `${c.pet[squad.reserve].name} está fora de combate`;
+  }
   const items = squad.items || [];
-  if (items.length > B.maxItems || new Set(items).size !== items.length) return `Leve até ${B.maxItems} consumíveis diferentes`;
+  const maxItems = maxItemsOf(s, c);
+  if (items.length > maxItems || new Set(items).size !== items.length) return `Leve até ${maxItems} consumíveis diferentes`;
   if (items.some((id) => !c.BATTLE_ITEMS[id] || !(s.run.inventory[id] > 0))) return 'Consumível indisponível';
   if (Object.values(squad.triggers || {}).some((t) => !c.TRIGGERS.some((x) => x.id === t))) return 'Gatilho inválido';
   return null;
@@ -147,11 +165,16 @@ const cleanSquad = (squad) => {
     slots, pets, front: slots.vanguard ? [slots.vanguard] : [],
     triggers: Object.fromEntries(Object.entries(squad.triggers || {}).filter(([id]) => pets.includes(id))),
     items: [...(squad.items || [])],
+    reserve: squad.reserve && !pets.includes(squad.reserve) ? squad.reserve : null,
   };
 };
 
 /** Concede um Patch da raridade (que a run ainda não tem). → id | null */
 function grantPatch(s, rarity, rand, c = CONTENT) {
+  // Loot Tables (Rede): às vezes sobe uma raridade (se ainda houver Patch dela para ganhar).
+  const up = { common: 'rare', rare: 'epic' }[rarity];
+  const chance = treeAdd(s, 'rarityUp', c);
+  if (up && chance > 0 && rand() < chance && c.PATCHES.some((p) => p.rarity === up && !s.run.patches.includes(p.id))) rarity = up;
   const pool = c.PATCHES.filter((p) => p.rarity === rarity && !s.run.patches.includes(p.id));
   if (!pool.length) return null;
   const p = pick(pool, rand);
@@ -178,7 +201,7 @@ function grantRewards(s, rewards, rand, c, now = null) {
     if (r.petLevel) { const id = petToLevel(s, c); if (id) { s.run.pets[id].level += r.petLevel; out.push({ type: 'petLevel', pet: id, level: s.run.pets[id].level }); } }
     if (r.battleBuff) { s.run.battleBuff = { atk: ((s.run.battleBuff && s.run.battleBuff.atk) || 0) + r.battleBuff.atk }; out.push({ type: 'battleBuff', atk: s.run.battleBuff.atk }); }
     if (r.healAll) { for (const id of Object.keys(s.run.pets)) setPetHp(s, id, 1, now); out.push({ type: 'healAll' }); }
-    if (r.restock) { for (const k of c.CONSUMABLES) s.run.inventory[k.id] = Math.min(k.cap, (s.run.inventory[k.id] || 0) + 1); out.push({ type: 'restock' }); }
+    if (r.restock) { for (const k of c.CONSUMABLES) s.run.inventory[k.id] = Math.min(capOf(s, k, c), (s.run.inventory[k.id] || 0) + 1); out.push({ type: 'restock' }); }
     if (r.swapPatch) {
       const i = s.run.patches.findIndex((id) => c.patch[id] && c.patch[id].rarity === 'common');
       if (i !== -1) { const old = s.run.patches.splice(i, 1)[0]; const id = grantPatch(s, r.swapPatch, rand, c); out.push({ type: 'swap', from: old, id }); }
@@ -193,11 +216,12 @@ function battleRewards(s, node, rand, c) {
   const out = [];
   if (node.type === 'battle') {
     out.push(...grantRewards(s, [rand() < 0.5 ? { item: true } : { part: true }], rand, c));
-    if (rand() < R.patchChance) out.push(...grantRewards(s, [{ patch: R.patch }], rand, c));
+    if (rand() < R.patchChance + treeAdd(s, 'patchChance', c)) out.push(...grantRewards(s, [{ patch: R.patch }], rand, c)); // Scouting / Treasure Hunter
   } else if (node.type === 'elite') {
     out.push(...grantRewards(s, [{ patch: R.patch }, { item: true }], rand, c));
   } else {
     out.push(...grantRewards(s, [{ patch: R.patch }], rand, c));
+    if (treeFlag(s, 'bossRare', c)) out.push(...grantRewards(s, [{ patch: 'rare' }], rand, c)); // Continuous Deployment
   }
   return out.filter((x) => x.type !== 'none');
 }
@@ -229,11 +253,15 @@ function mapAct(s, action, now, c, log) {
     const ch = options[action.index];
     if (!ch) return 'Escolha inválida';
     if (ch.needs === 'commonPatch' && !s.run.patches.some((id) => c.patch[id] && c.patch[id].rarity === 'common')) return 'Você não tem um Patch comum';
-    const area = c.area[m.area];
-    const cost = (ch.cost || 0) * area.costs[node.col];
+    const cost = choiceCost(s, ch, node.col, c);
     if (cost > res.amount) return 'Compute insuficiente';
     res.amount -= cost;
     const rewards = grantRewards(s, ch.rewards, randFor(s, 'choose', node.id), c, now);
+    // Rest Stop (Rede): no descanso o time também volta com a vida cheia.
+    if (p.kind === 'rest' && treeFlag(s, 'restHeal', c) && !rewards.some((x) => x.type === 'healAll')) {
+      for (const id of Object.keys(s.run.pets)) setPetHp(s, id, 1, now);
+      rewards.push({ type: 'healAll' });
+    }
     m.pending = null;
     log.push({ type: 'mapChoice', node: node.id, kind: p.kind, index: action.index, rewards });
     return null;
@@ -244,12 +272,13 @@ function mapAct(s, action, now, c, log) {
     const node = m.nodes[m.pending.node];
     const o = node.offers[action.offer];
     if (!o || o.bought) return 'Oferta indisponível';
-    if (o.price > res.amount) return 'Compute insuficiente';
+    const price = shopPrice(s, o, c);
+    if (price > res.amount) return 'Compute insuficiente';
     const rand = randFor(s, 'shop', node.id, action.offer);
     let got = null;
     if (o.kind === 'item') {
       const k = c.consumable[o.id];
-      if ((s.run.inventory[o.id] || 0) >= k.cap) return 'Estoque cheio';
+      if ((s.run.inventory[o.id] || 0) >= capOf(s, k, c)) return 'Estoque cheio';
       s.run.inventory[o.id] = (s.run.inventory[o.id] || 0) + 1;
       got = { type: 'item', id: o.id };
     } else if (o.kind === 'part') {
@@ -259,7 +288,7 @@ function mapAct(s, action, now, c, log) {
       if (!id) return 'Você já tem todos os Patches dessa raridade';
       got = { type: 'patch', id };
     }
-    res.amount -= o.price;
+    res.amount -= price;
     o.bought = true;
     log.push({ type: 'mapBuy', node: node.id, offer: action.offer, reward: got });
     return null;
@@ -274,6 +303,12 @@ function mapAct(s, action, now, c, log) {
     s.run.map = createMap(s, next, c);
     s.run.map.battles = battles; // a numeração das lutas segue na run (a UI usa o número para saber que há luta nova)
     log.push({ type: 'mapOpen', area: next.id, name: next.name, from: area.id });
+    // Rede da Singularity: Continuous Deployment cura o time; Patch Notes dá um Patch comum na área nova.
+    if (treeFlag(s, 'areaHeal', c)) for (const id of Object.keys(s.run.pets)) setPetHp(s, id, 1, now);
+    if (treeFlag(s, 'newAreaPatch', c)) {
+      const id = grantPatch(s, 'common', randFor(s, 'area', next.id), c);
+      if (id) log.push({ type: 'mapGift', reward: { type: 'patch', id } });
+    }
     return null;
   }
 
@@ -308,7 +343,14 @@ function mapAct(s, action, now, c, log) {
     const result = resolve(setup, (s.seed ^ hash('battle:' + node.id) ^ Math.imul(attempt + 1, 2654435761)) >>> 0, c);
     // A vida que sobrou fica nos pets (recupera com o tempo); quem caiu fica fora de combate.
     for (const u of result.units) if (u.side === 'pet') setPetHp(s, u.id, u.end / u.maxHp, now);
-    for (const id of result.usedItems) s.run.inventory[id] = Math.max(0, (s.run.inventory[id] || 0) - 1);
+    // Self-Healing (Rede): ao vencer, cada consumível usado pode voltar ao estoque.
+    const refund = result.win ? treeAdd(s, 'itemRefund', c) : 0;
+    const back = [];
+    const rr = randFor(s, 'refund', node.id, attempt);
+    for (const id of result.usedItems) {
+      if (refund > 0 && rr() < refund) { back.push(id); continue; }
+      s.run.inventory[id] = Math.max(0, (s.run.inventory[id] || 0) - 1);
+    }
     s.run.battleBuff = null;
     m.pending = null;
     let rewards = [];
@@ -318,16 +360,24 @@ function mapAct(s, action, now, c, log) {
       for (const id of node.group) A.defeated[id] = (A.defeated[id] || 0) + 1;
       rewards = battleRewards(s, node, randFor(s, 'reward', node.id, attempt), c);
       enter(m, node);
-      if (node.type === 'boss') { m.cleared = true; A.areas[m.area] = (A.areas[m.area] || 0) + 1; }
+      const st = s.run.stats || (s.run.stats = { startedAt: now, elites: 0, bosses: [] });
+      if (node.type === 'elite') st.elites += 1;
+      if (node.type === 'boss') {
+        m.cleared = true; A.areas[m.area] = (A.areas[m.area] || 0) + 1;
+        if (!st.bosses.includes(m.area)) st.bosses.push(m.area); // rende Insight na Singularity
+      }
+      // Field Trip (Rede): a vitória cura parte da vida de quem lutou (e de pé).
+      const vh = treeAdd(s, 'victoryHeal', c);
+      if (vh > 0) for (const u of result.units) if (u.side === 'pet' && u.end > 0 && !u.benched) setPetHp(s, u.id, u.end / u.maxHp + vh, now);
     } else {
       A.losses += 1;
     }
     m.battles += 1;
-    m.lastBattle = { id: m.battles, node: node.id, kind: node.type, win: result.win, reason: result.reason, maxRounds: result.maxRounds, rounds: result.rounds, units: result.units, log: result.log, usedItems: result.usedItems, rewards, cost };
+    m.lastBattle = { id: m.battles, node: node.id, kind: node.type, win: result.win, reason: result.reason, maxRounds: result.maxRounds, rounds: result.rounds, units: result.units, log: result.log, usedItems: result.usedItems, refunded: back, rewards, cost };
     log.push({ type: 'battle', node: node.id, kind: node.type, win: result.win, rewards, cleared: m.cleared });
     return null;
   }
   return 'Ação desconhecida: ' + action.type;
 }
 
-module.exports = { generate, createMap, ensureMap, reachable, nodeCost, squadError, mapAct, grantPatch, hash };
+module.exports = { generate, createMap, ensureMap, reachable, nodeCost, choiceCost, shopPrice, maxItemsOf, squadError, mapAct, grantPatch, hash };

@@ -89,6 +89,7 @@ function BattleSummary({ battle, snap, itemName }) {
 function sound(e) {
   if (e.k === 'atk') return e.a && e.a[0] === 'e' ? 'enemyHit' : e.c ? 'crit' : e.a === 'item' ? 'hit' : null; // pets: som do próprio ataque (no início do golpe)
   if (e.k === 'revive' && e.f === 'merge') return 'ability';
+  if (e.k === 'enter') return 'ability';
   return { miss: 'miss', heal: 'heal', revive: 'heal', ab: 'ability', item: 'item', down: 'down', decoy: 'miss', split: 'down', race: 'miss', blackout: 'crit', warm: 'ability' }[e.k] || null;
 }
 
@@ -113,6 +114,7 @@ function bubble(e, abilityName, itemName) {
   if (e.k === 'ab') return abilityName(e.v) + '!';
   if (e.k === 'item') return itemName(e.v) + '!';
   if (e.k === 'decoy') return 'clone!';
+  if (e.k === 'enter') return 'entrei!';
   if (e.k === 'revive') return e.f === 'merge' ? 'merge!' : 'rollback!';
   if (e.k === 'split') return e.f === 'flood' ? 'chamou reforço!' : 'dividiu!';
   if (e.k === 'fortify') return 'fortificou';
@@ -285,6 +287,7 @@ function FeedLine({ e, unit, abilityName, itemName, age }) {
   }
   else if (e.k === 'split') { icon = e.f === 'flood' ? 'bird' : 'copy'; body = e.f === 'flood' ? <><N uid={e.a} /> chamou mais um corvo: <N uid={e.t} /> chegou</> : <><N uid={e.a} /> se dividiu: <N uid={e.t} /> apareceu</>; }
   else if (e.k === 'fortify') { icon = 'shield'; body = <><N uid={e.t} /> se fortificou (defesa {e.v})</>; }
+  else if (e.k === 'enter') { icon = 'user-plus'; body = <><N uid={e.t} /> entrou da reserva no lugar de <N uid={e.a} /></>; }
   else if (e.k === 'decoy') { icon = 'ghost'; body = <><N uid={e.a} /> acertou um clone em vez de <N uid={e.t} /></>; }
   else return null;
   return (
@@ -342,7 +345,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
   const hp = {};
   const alive = {};
   const visible = {};
-  for (const u of battle.units) { hp[u.uid] = u.hp != null ? u.hp : u.maxHp; alive[u.uid] = true; visible[u.uid] = !u.child; }  // começa da vida atual
+  for (const u of battle.units) { hp[u.uid] = u.hp != null ? u.hp : u.maxHp; alive[u.uid] = true; visible[u.uid] = !u.child && !u.reserve; }  // começa da vida atual; a reserva só aparece quando entra
   // Estados ativos das habilidades (para os efeitos visuais): escudo, buff de ataque, aceleração, marcados, carregados, clones.
   const fx = battle.abilityFx || {};
   const st = { shieldUntil: 0, buffUntil: 0, hasteUntil: 0, marked: new Set(), charged: new Set(), decoys: 0 };
@@ -367,6 +370,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     if (e.k === 'down') alive[e.t] = false;
     if (e.k === 'revive') { alive[e.t] = true; hp[e.t] = e.v; }
     if (e.k === 'split') visible[e.t] = true;
+    if (e.k === 'enter') { visible[e.t] = true; visible[e.a] = false; } // Hot Standby: a reserva toma o lugar de quem caiu
     if (e.k === 'grow') hp[e.t] += e.v;
   }
   const cur = !done ? log[i] : null;
@@ -419,7 +423,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
     const hit = cur && cur.t === u.uid && (cur.k === 'atk' || cur.k === 'miss');
     const lunge = sk && sk.a === u.uid; // corre até o alvo (ou dá um pulo, se ataca de longe)
     // O balão vai em quem recebe (dano, cura, revive, fortificação, clone novo) ou, senão, em quem age.
-    const popAt = cur && (['atk', 'miss', 'heal', 'revive', 'fortify', 'split', 'drift', 'warm', 'grow'].includes(cur.k) ? cur.t : cur.a);
+    const popAt = cur && (['atk', 'miss', 'heal', 'revive', 'fortify', 'split', 'drift', 'warm', 'grow', 'enter'].includes(cur.k) ? cur.t : cur.a);
     const say = popAt === u.uid ? bubble(cur, abilityName, itemName) : '';
     return (
       <div className={'dc-arena__unit is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (acting ? ' is-acting' : '') + (hit ? ' is-hit' : '') + (u.front ? ' is-front' : '') + (u.boss ? ' is-boss' : '')

@@ -9,6 +9,20 @@ const { createState } = require('./engine/state.js');
 const { dispatch } = require('./engine/index.js');
 const { snapshot } = require('./engine/view.js');
 const { production } = require('./engine/production.js');
+const S = require('./engine/singularity.js');
+
+/**
+ * Robô da Rede da Singularity: compra o nó disponível mais barato (empate: a ordem de setores do plano), escolhe os
+ * paradigmas "a" (os que só somam) e deixa os infinitos por último. → ids comprados
+ */
+const TREE_PLAN = { sectors: ['infra', 'map', 'archive', 'pets', 'combat', 'ops'], avoid: ['inf-5b', 'ops-5b', 'cmb-5b', 'pet-5b', 'map-5b', 'arc-5b'] };
+function botTreePick(s, c, plan = TREE_PLAN) {
+  const rank = (k) => (k.kind === 'repeat' ? 1e6 : 0) + S.perkCost(s, k) * 10 + Math.max(0, plan.sectors.indexOf(k.sector || (k.sectors || [])[0]));
+  return c.TREE.filter((k) => k.kind !== 'core' && !plan.avoid.includes(k.id))
+    .filter((k) => { const st = S.perkState(s, k, c).status; return st === 'available' || (st === 'owned' && k.kind === 'repeat'); })
+    .filter((k) => S.perkCost(s, k) <= (s.meta.insight || 0))
+    .sort((a, b) => rank(a) - rank(b))[0] || null;
+}
 
 /** Ganho de produção (por Compute gasto) de cada opção de compra disponível. */
 function options(s, now, c, strategy = 'prepared') {
@@ -163,6 +177,9 @@ function playMap(s, now, c, step, marks, reserveHours) {
     }
     const rate = production(s, now, c).rate;
     const pick = botMapChoice(s, now, c, s.run.resources.compute.amount + rate * reserveHours * 3600);
+    // Por que o robô parou nesta checagem (por área): sem luta com chance boa (vida baixa), juntando Compute, ou jogou.
+    const why = m.area + ':' + (!pick ? 'semChance' : pick.cost > s.run.resources.compute.amount ? 'compute' : 'joga');
+    marks.map.waits[why] = (marks.map.waits[why] || 0) + 1;
     if (!pick) return 0;
     // Guarda para o próximo ponto se ele couber em ~reserveHours de produção; o chefe vale até um dia de espera.
     const hours = pick.boss ? Math.max(reserveHours, 12) : reserveHours;
@@ -183,17 +200,20 @@ function playMap(s, now, c, step, marks, reserveHours) {
 }
 
 /**
- * profile: { checkEverySec, onlineHoursPerDay, days, events(day) → [{name,data}], strategy?, quiet?, blueprints? }
+ * profile: { checkEverySec, onlineHoursPerDay, days, events(day) → [{name,data}], strategy?, quiet?, blueprints?,
+ *   singularity? (faz a Singularity e compra na rede), tree? ({ id: nível } já comprado), treePlan? }
  * Retorna marcos { t2, t3, pets:{id:t}, synergies:{id:t}, incidents, items, finalAmount, … }.
  */
 function simulate(profile, c = CONTENT) {
   const t0 = Date.UTC(2026, 0, 5, 9); // uma segunda-feira, 9h UTC
   const strategy = profile.strategy || 'prepared';
   let s = createState(t0, c);
+  if (profile.tree) { s.meta.tree = { ...profile.tree }; s.meta.singularities = profile.singularities || 0; } // rede já montada (medir o efeito dos nós)
   let now = t0;
   const marks = { t2: null, t3: null, pets: {}, synergies: {}, purchases: 0, maxWaitSec: 0, maxCheapestSec: 0,
     incidents: { seen: 0, contained: 0, escaped: 0, hotfixed: 0 }, items: 0, parts: 0, firstMk2: null, firstMk3: null,
-    map: { opened: null, cleared: null, areas: {}, wins: 0, losses: 0, byDay: [] } };
+    map: { opened: null, cleared: null, areas: {}, wins: 0, losses: 0, byDay: [], waits: {} },
+    runs: [] }; // Singularity: { days, insight, total, nodes } de cada run concluída
   const step = (action) => {
     const r = dispatch(s, action, now, c);
     s = r.state;
@@ -238,6 +258,24 @@ function simulate(profile, c = CONTENT) {
       reserve = playMap(s, now, c, step, marks, profile.mapReserveHours || 4);
       if (s.run.map) marks.map.byDay[Math.floor((now - t0) / 86400e3)] = s.run.map.visited.length;
     }
+    // Singularity (profile.singularity): assim que der, recomeça e gasta o Insight na rede.
+    if (profile.singularity && S.singularityReady(s, c)) {
+      const br = S.insightBreakdown(s, now, c);
+      step({ type: 'singularity' });
+      const bought = [];
+      for (let guard = 0; guard < 300; guard++) {
+        const k = botTreePick(s, c, profile.treePlan);
+        if (!k) break;
+        step({ type: 'treeBuy', id: k.id });
+        bought.push(k.id);
+      }
+      const start = now - br.days * 86400e3;
+      const areaDays = Object.fromEntries(Object.entries(marks.map.areas).map(([id, at]) => [id, +((at - start) / 86400e3).toFixed(1)]));
+      marks.runs.push({ days: br.days, insight: br.total, breakdown: br, total: s.meta.earned, bought, areaDays, t2: marks.runT2 });
+      marks.map.areas = {};
+      marks.runT2 = null;
+      continue;
+    }
     // Compra enquanto houver o que comprar (melhor valor primeiro), como um jogador atento.
     for (let guard = 0; guard < 200; guard++) {
       const best = options(s, now, c, strategy)[0];
@@ -255,6 +293,7 @@ function simulate(profile, c = CONTENT) {
       if (rate > 0 && Number.isFinite(cheapest)) marks.maxCheapestSec = Math.max(marks.maxCheapestSec, Math.max(0, cheapest - s.run.resources.compute.amount) / rate);
     }
     if (!marks.t2 && s.run.tier >= 2) marks.t2 = now - t0;
+    if (marks.runT2 == null && s.run.tier >= 2 && s.run.stats) marks.runT2 = +((now - s.run.stats.startedAt) / 86400e3).toFixed(2);
     if (!marks.t3 && s.run.tier >= 3) marks.t3 = now - t0;
     for (const id of Object.keys(s.run.pets)) if (marks.pets[id] == null) marks.pets[id] = now - t0;
     const v = snapshot(s, now, c);
@@ -294,4 +333,4 @@ const PROFILES = {
   },
 };
 
-module.exports = { simulate, PROFILES, options, incidentLoss, botSquad, botMapChoice };
+module.exports = { simulate, PROFILES, options, incidentLoss, botSquad, botMapChoice, botTreePick, TREE_PLAN };

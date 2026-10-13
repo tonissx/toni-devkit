@@ -7,6 +7,7 @@ import { GeneratorsPanel, UpgradesPanel, PetsPanel, TechPanel } from './Panels.j
 import { OpsPanel } from './OpsPanel.jsx';
 import { RateWithDetails } from './RateDetails.jsx';
 import { MapPanel } from './MapPanel.jsx';
+import { SingularityPanel } from './SingularityPanel.jsx';
 import { ItemPopups, gainsFrom, mergeGains } from './ItemPopups.jsx';
 import { configureAudio } from './audio.js';
 
@@ -171,6 +172,7 @@ export function DevCoreScreen({ toast, request }) {
     }
     for (const e of log || []) {
       if (e.type === 'mapOpen') toast(e.from ? 'Nova área' : 'Mapa liberado', e.from ? `${e.name}: novos inimigos, novos perigos — e um novo chefe no fim` : `${e.name}: batalhas, eventos e Patches na aba Mapa`);
+      if (e.type === 'singularity') toast('Singularity', `+${e.gained} Insight. Uma run nova começa: gaste o Insight na Rede (dá para reorganizar até o primeiro passo no mapa).`);
       if (e.type === 'battle' && e.cleared) setAfterBattle((q) => [...q, [s.map.area.name + ' concluída', (s.map.boss ? s.map.boss.name : 'O chefe') + ' caiu!']]); // só depois da arena
       if (e.type !== 'quest') continue;
       const item = e.item && (s.inventory.find((k) => k.id === e.item) || {}).name;
@@ -245,6 +247,7 @@ export function DevCoreScreen({ toast, request }) {
     { value: 'tech', label: 'Tech', icon: 'radar', dot: freshUnseen.length > 0 },
     { value: 'ops', label: 'Ops', icon: 'shield', dot: !!(snap.ops.active && !snap.ops.active.contained) },
     ...(snap.map.unlocked ? [{ value: 'map', label: 'Mapa', icon: 'map', dot: !!snap.map.pending || (!snap.map.cleared && snap.map.nodes.some((n) => n.status === 'reachable' && n.affordable)) }] : []),
+    ...(snap.singularity.visible ? [{ value: 'singularity', label: 'Singularity', icon: 'atom', count: snap.singularity.insight || undefined, dot: snap.singularity.ready }] : []),
   ];
 
   return (
@@ -268,7 +271,7 @@ export function DevCoreScreen({ toast, request }) {
         </div>
       </header>
 
-      {ui.tab !== 'map' && <Scene snap={snap} reactions={reactions} now={now} />}
+      {ui.tab !== 'map' && ui.tab !== 'singularity' && <Scene snap={snap} reactions={reactions} now={now} />}
 
       <div className="dc-tabs">
         <Tabs items={tabs} value={ui.tab} onChange={(tab) => setUi((u) => ({ ...u, tab }))} />
@@ -280,7 +283,8 @@ export function DevCoreScreen({ toast, request }) {
         {ui.tab === 'upgrades' && <UpgradesPanel snap={snap} amount={liveAmount} act={act} />}
         {ui.tab === 'tech' && <TechPanel snap={snap} freshUnseen={freshUnseen} />}
         {ui.tab === 'ops' && <OpsPanel snap={snap} amount={liveAmount} act={act} now={serverNow} />}
-        {ui.tab === 'map' && snap.map.unlocked && <MapPanel snap={snap} act={act} audio={audio} setAudio={setAudio} onArena={setArenaOpen} />}
+        {ui.tab === 'map' && snap.map.unlocked && <MapPanel snap={snap} act={act} audio={audio} setAudio={setAudio} onArena={setArenaOpen} onSingularity={() => setUi((u) => ({ ...u, tab: 'singularity' }))} />}
+        {ui.tab === 'singularity' && snap.singularity.visible && <SingularityPanel snap={snap} act={act} />}
         </PanelBoundary>
       </div>
 

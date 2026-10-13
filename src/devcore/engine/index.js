@@ -21,6 +21,9 @@
  *   mapChoose { index }       mapa: opção do evento/descanso · mapBuy { offer }: compra na loja
  *   mapAdvance                mapa: área concluída → atravessa para a próxima (areas.js `next`)
  *   mapSquad { squad, node? } mapa: salva a preparação (a view mostra a previsão para `node`)
+ *   singularity               venceu o Pico Production: recomeça a run e ganha Insight — ver engine/singularity.js
+ *   treeBuy { id }            compra (ou sobe o nível de) um nó da Rede da Singularity
+ *   treeRespec                reorganiza a rede (devolve o Insight; só logo depois de uma Singularity)
  */
 const { CONTENT } = require('../content/index.js');
 const { advanceTo } = require('./advance.js');
@@ -36,19 +39,29 @@ const { bpOf, partId, levelOf, parsePart, partError, dropPart, costDivOf } = req
 const { ensureMap, mapAct } = require('./map.js');
 const { patchMod } = require('./patches.js');
 const { petHp, setPetHp } = require('./battle.js');
+const { treeMod, treeAdd, treeFlag, capOf, singularity, treeBuy, treeRespec } = require('./singularity.js');
 
 const upgradeAvailable = (s, u) => !s.run.upgrades[u.id] && check(u.requires, s);
 
 /** Custo de comprar uma peça: N minutos da produção atual (Mk II: 3 h, Mk III: 12 h; mínimo 500). */
-const partCost = (s, mk, now, c = CONTENT) => Math.max(500, c.BALANCE.blueprints.buyMinutes[mk] * 60 * production(s, now, c).rate);
+const partCost = (s, mk, now, c = CONTENT) => Math.max(500, c.BALANCE.blueprints.buyMinutes[mk] * 60 * production(s, now, c).rate) * treeMod(s, 'partCost', c);
 
 /** Custo para fabricar um consumível: N minutos da produção atual (mínimo 50). */
-const craftCost = (s, k, now, c = CONTENT) => Math.max(50, k.craftMinutes * 60 * production(s, now, c).rate);
+const craftCost = (s, k, now, c = CONTENT) => Math.max(50, k.craftMinutes * 60 * production(s, now, c).rate) * treeMod(s, 'craftCost', c);
+
+/** Custo de um upgrade (Rede da Singularity: Upgrade Path, Lean Startup). */
+const upgradeCost = (s, u, c = CONTENT) => u.cost * treeMod(s, 'upgradeCost', c);
+
+/** Custo de treinar um DevPet (Patches e Rede da Singularity). */
+const trainCostOf = (s, p, level, c = CONTENT) => trainCost(p, level) * patchMod(s, 'trainCost', c) * treeMod(s, 'trainCost', c);
+
+/** Recarga de uma habilidade em segundos (Rede da Singularity: Runbook, Throughput…). */
+const cooldownOf = (s, def, c = CONTENT) => def.cooldownSec * treeMod(s, 'abilityCooldown', c);
 
 /** Achados dos pets durante o tempo fechado: a cada N horas um cache de 1–3 min de produção ou um consumível. */
 function petFinds(s, countedMs, from, now, c) {
   const B = c.BALANCE;
-  const n = Math.floor(countedMs / (B.petFindEveryHours * 3600e3));
+  const n = Math.floor(countedMs / (B.petFindEveryHours * treeMod(s, 'petFindEvery', c) * 3600e3));
   const pets = Object.keys(s.run.pets);
   if (!n || !pets.length) return [];
   const rand = rng(s.seed ^ Math.floor(from / 1000));
@@ -129,8 +142,9 @@ function act(s, action, now, c, log) {
       const u = c.upgrade[action.id];
       if (!u || !upgradeAvailable(s, u)) return 'Upgrade indisponível';
       const res = s.run.resources.compute;
-      if (u.cost > res.amount) return 'Compute insuficiente';
-      res.amount -= u.cost;
+      const cost = upgradeCost(s, u, c);
+      if (cost > res.amount) return 'Compute insuficiente';
+      res.amount -= cost;
       s.run.upgrades[u.id] = now;
       log.push({ type: 'upgrade', id: u.id });
       return null;
@@ -140,7 +154,7 @@ function act(s, action, now, c, log) {
       const st = s.run.pets[action.pet];
       if (!p || !st) return 'DevPet indisponível';
       if (st.level >= c.RARITY[p.rarity].maxLevel) return 'Nível máximo';
-      const cost = trainCost(p, st.level) * patchMod(s, 'trainCost', c);
+      const cost = trainCostOf(s, p, st.level, c);
       const res = s.run.resources.compute;
       if (cost > res.amount) return 'Compute insuficiente';
       res.amount -= cost;
@@ -171,7 +185,7 @@ function act(s, action, now, c, log) {
       const a = s.run.abilities[def.id] || { activeUntil: 0, readyAt: 0 };
       if (a.readyAt > now) return 'Em recarga';
       const e = def.effect;
-      if (e.type === 'burst') a.activeUntil = now + e.durationSec * patchMod(s, 'abilityDuration', c) * 1000;
+      if (e.type === 'burst') a.activeUntil = now + e.durationSec * patchMod(s, 'abilityDuration', c) * treeMod(s, 'abilityDuration', c) * 1000;
       if (e.type === 'instant') {
         const gained = production(s, now, c).rate * e.seconds;
         s.run.resources.compute.amount += gained;
@@ -183,7 +197,7 @@ function act(s, action, now, c, log) {
           if (id !== def.id && other.readyAt > now) other.readyAt = now + (other.readyAt - now) * e.factor;
         }
       }
-      a.readyAt = now + def.cooldownSec * 1000;
+      a.readyAt = now + cooldownOf(s, def, c) * 1000;
       s.run.abilities[def.id] = a;
       log.push({ type: 'ability', id: def.id, pet: owner.id });
       return null;
@@ -217,7 +231,7 @@ function act(s, action, now, c, log) {
         if (!a || a.contained) return 'Nenhum incidente para corrigir';
         endIncident(s, now, c, log, 'hotfixed');
       } else if (e.type === 'shield') {
-        if (s.run.shields >= k.cap) return 'Rollback já armado';
+        if (s.run.shields >= capOf(s, k, c)) return 'Rollback já armado';
         s.run.shields += 1;
       } else if (e.type === 'heal') {
         // Um DevPet indicado (ou o mais machucado) recupera `value` da vida e sai do fora de combate.
@@ -225,7 +239,7 @@ function act(s, action, now, c, log) {
         const id = action.pet || hurt.sort((a, b) => petHp(s, a, now, c) - petHp(s, b, now, c))[0];
         if (!id || !s.run.pets[id]) return 'Nenhum DevPet machucado';
         if (petHp(s, id, now, c) >= 1) return 'Esse DevPet já está com a vida cheia';
-        setPetHp(s, id, petHp(s, id, now, c) + e.value, now);
+        setPetHp(s, id, petHp(s, id, now, c) + e.value + treeAdd(s, 'healItem', c), now); // Field Medic: cura a vida toda
         log.push({ type: 'healed', pet: id });
       } else if (e.type === 'resetCooldown') {
         const waiting = Object.entries(s.run.abilities).filter(([, a]) => a.readyAt > now);
@@ -240,13 +254,16 @@ function act(s, action, now, c, log) {
     case 'craft': {
       const k = c.consumable[action.item];
       if (!k) return 'Item indisponível';
-      if ((s.run.inventory[k.id] || 0) >= k.cap) return 'Estoque cheio';
+      const cap = capOf(s, k, c);
+      if ((s.run.inventory[k.id] || 0) >= cap) return 'Estoque cheio';
       const cost = craftCost(s, k, now, c);
       const res = s.run.resources.compute;
       if (cost > res.amount) return 'Compute insuficiente';
       res.amount -= cost;
-      s.run.inventory[k.id] = (s.run.inventory[k.id] || 0) + 1;
-      log.push({ type: 'craft', id: k.id });
+      // Batch Jobs (Rede da Singularity): às vezes rende dois.
+      const extra = rng((s.seed ^ Math.floor(now / 1000) ^ k.id.length * 7919) >>> 0)() < treeAdd(s, 'craftDouble', c) ? 1 : 0;
+      s.run.inventory[k.id] = Math.min(cap, (s.run.inventory[k.id] || 0) + 1 + extra);
+      log.push({ type: 'craft', id: k.id, double: !!extra });
       return null;
     }
     case 'buyPart': {
@@ -292,8 +309,18 @@ function act(s, action, now, c, log) {
       }
       return null;
     }
-    case 'mapSquad': case 'mapMove': case 'mapFight': case 'mapChoose': case 'mapBuy': case 'mapAdvance':
-      return mapAct(s, action, now, c, log);
+    case 'mapSquad': case 'mapMove': case 'mapFight': case 'mapChoose': case 'mapBuy': case 'mapAdvance': {
+      const err = mapAct(s, action, now, c, log);
+      // O primeiro passo no mapa da run fecha a janela de reorganizar a Rede da Singularity.
+      if (!err && (action.type === 'mapMove' || action.type === 'mapFight')) s.meta.respec = false;
+      return err;
+    }
+    case 'singularity':
+      return singularity(s, now, c, log);
+    case 'treeBuy':
+      return treeBuy(s, action.id, c, log);
+    case 'treeRespec':
+      return treeRespec(s, c, log);
     case 'seen':
       s.discoveries.unseen = [];
       if (action.skins) s.cosmetics.fresh = [];
@@ -301,6 +328,17 @@ function act(s, action, now, c, log) {
       return null;
     default:
       return 'Ação desconhecida: ' + action.type;
+  }
+}
+
+/** Full Automation (Rede da Singularity): habilidades prontas disparam sozinhas a cada ação (com o app aberto). */
+function autoCast(s, now, c, log) {
+  if (s.run.tier < 2 || !treeFlag(s, 'autoCast', c) || abilitiesLocked(s, now, c)) return;
+  for (const def of c.ABILITIES) {
+    if (!c.PETS.some((p) => p.ability === def.id && s.run.pets[p.id])) continue;
+    const a = s.run.abilities[def.id];
+    if (a && a.readyAt > now) continue;
+    act(s, { type: 'ability', id: def.id }, now, c, log);
   }
 }
 
@@ -314,9 +352,10 @@ function dispatch(state, action, now, c = CONTENT) {
     if (action.type !== 'tick') error = act(s, action, now, c, log);
   }
   log.push(...evaluate(s, now, c), ...evaluateQuests(s, now, c), ...evaluateSkins(s, c), ...ensureMap(s, c));
+  autoCast(s, now, c, log);
   s.run.boosts = s.run.boosts.filter((b) => b.until > now);
   ensureScheduled(s, now, c); // um tier novo (ou sair do modo tranquilo) liga os incidentes a partir de agora
   return error ? { state: s, log, error } : { state: s, log };
 }
 
-module.exports = { dispatch, upgradeAvailable, craftCost, partCost };
+module.exports = { dispatch, upgradeAvailable, craftCost, partCost, upgradeCost, trainCostOf, cooldownOf };

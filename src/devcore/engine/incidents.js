@@ -8,6 +8,7 @@ const { CONTENT, stationedPets } = require('../content/index.js');
 const { check } = require('./conditions.js');
 const { rng } = require('./rng.js');
 const { dropPart } = require('./blueprints.js');
+const { capOf } = require('./singularity.js');
 
 const incidentsEnabled = (s, c = CONTENT) => !s.settings.quiet && s.run.tier >= c.BALANCE.incidents.minTier;
 const randFor = (s, salt) => rng(((s.seed >>> 0) ^ Math.imul((salt >>> 0) + 1, 2654435761)) >>> 0);
@@ -36,7 +37,7 @@ function ensureScheduled(s, t, c = CONTENT) {
 
 /** +1 consumível sorteado entre os que não estão no teto (null se tudo cheio). */
 function grantItem(s, rand, c = CONTENT) {
-  const open = c.CONSUMABLES.filter((k) => (s.run.inventory[k.id] || 0) < k.cap);
+  const open = c.CONSUMABLES.filter((k) => (s.run.inventory[k.id] || 0) < capOf(s, k, c));
   if (!open.length) return null;
   const k = open[Math.floor(rand() * open.length)];
   s.run.inventory[k.id] = (s.run.inventory[k.id] || 0) + 1;

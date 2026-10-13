@@ -1,0 +1,242 @@
+'use strict';
+/**
+ * Singularity (prestígio) — regras puras. Conteúdo e explicação da árvore em content/singularity.js;
+ * desenho em docs/devcore-mapa-singularity.md §9.
+ *
+ * Estado (meta, nunca zera): insight (não gasto) · earned (ganho na vida) · singularities · tree { id: nível }
+ *   · respec (pode reorganizar: logo depois de uma Singularity, até o primeiro passo no mapa) · lifetime (Compute de
+ *   runs passadas) · best (menos dias numa run) · lastAt
+ * Run: stats { startedAt, elites, bosses[] } — o que rende Insight.
+ *
+ * Ações (engine/index.js): singularity · treeBuy { id } · treeRespec
+ */
+const { CONTENT } = require('../content/index.js');
+const { createRun } = require('./state.js');
+const { rng } = require('./rng.js');
+
+const rankOf = (s, id) => (s.meta.tree && s.meta.tree[id]) || 0;
+const owned = (s, c = CONTENT) => Object.entries(s.meta.tree || {}).filter(([id, r]) => r > 0 && c.perk[id]).map(([id, r]) => ({ k: c.perk[id], rank: r }));
+
+/** Produto de um multiplicador de regra da árvore (1 se nenhum). Repetíveis: valor^nível. */
+function treeMod(s, key, c = CONTENT) {
+  let m = 1;
+  for (const { k, rank } of owned(s, c)) if (k.mods && k.mods[key] != null) m *= Math.pow(k.mods[key], rank);
+  return m;
+}
+/** Soma de uma regra aditiva da árvore (0 se nenhuma). Repetíveis: valor × nível. */
+function treeAdd(s, key, c = CONTENT) {
+  let n = 0;
+  for (const { k, rank } of owned(s, c)) if (k.adds && k.adds[key] != null) n += k.adds[key] * rank;
+  return n;
+}
+/** Algum nó comprado liga essa regra? */
+const treeFlag = (s, key, c = CONTENT) => owned(s, c).some(({ k }) => k.flags && k.flags[key]);
+
+/**
+ * Efeitos de produção da árvore (somados aos dos upgrades): os dos nós (× nível) e o Núcleo
+ * (+corePerRun por Singularity feita). perActiveCategory fica para production.js (sabe as categorias ativas).
+ */
+function treeEffects(s, c = CONTENT) {
+  const out = [];
+  const n = s.meta.singularities || 0;
+  if (n > 0) out.push({ type: 'mul', target: 'global', value: 1 + c.INSIGHT.corePerRun * n, source: 'tree:core' });
+  for (const { k, rank } of owned(s, c)) {
+    for (const e of k.effects || []) out.push({ ...e, value: e.type === 'mul' ? Math.pow(e.value, rank) : e.value * rank, source: 'tree:' + k.id });
+  }
+  return out;
+}
+
+/**
+ * Como a próxima run começa (somando os nós): o maior valor para níveis/tier/Compute/unidades, a soma para estoques
+ * e Patches. Clean Slate desliga tudo isso (e o que atravessa).
+ */
+function startConfig(s, c = CONTENT) {
+  const out = { compute: 0, gens: {}, tier: 1, petLevel: 1, items: {}, patches: {}, keep: { inventory: false, scrap: false, mk: 1 } };
+  if (treeFlag(s, 'cleanSlate', c)) return out;
+  for (const { k } of owned(s, c)) {
+    const st = k.start || {};
+    out.compute = Math.max(out.compute, st.compute || 0);
+    for (const [g, n] of Object.entries(st.gens || {})) out.gens[g] = Math.max(out.gens[g] || 0, n);
+    out.tier = Math.max(out.tier, st.tier || 1);
+    out.petLevel = Math.max(out.petLevel, st.petLevel || 1);
+    for (const [id, n] of Object.entries(st.items || {})) out.items[id] = (out.items[id] || 0) + n;
+    for (const [r, n] of Object.entries(st.patches || {})) out.patches[r] = (out.patches[r] || 0) + n;
+    const kp = k.keep || {};
+    if (kp.inventory) out.keep.inventory = true;
+    if (kp.scrap) out.keep.scrap = true;
+    out.keep.mk = Math.max(out.keep.mk, kp.mk || 1);
+  }
+  return out;
+}
+
+/** Nível com que um DevPet começa a run (no teto da raridade). */
+function petStartLevel(s, petId, c = CONTENT) {
+  const p = c.pet[petId];
+  const max = p ? c.RARITY[p.rarity].maxLevel : 1;
+  return Math.min(max, startConfig(s, c).petLevel);
+}
+
+/** Limite de um consumível (o do conteúdo + Bigger Pockets). */
+const capOf = (s, k, c = CONTENT) => k.cap + Math.round(treeAdd(s, 'itemCap', c));
+
+/** Patch aleatório da raridade que a run ainda não tem. → id | null */
+function randomPatch(s, rarity, rand, c = CONTENT) {
+  const pool = c.PATCHES.filter((p) => p.rarity === rarity && !s.run.patches.includes(p.id));
+  if (!pool.length) return null;
+  const p = pool[Math.floor(rand() * pool.length)];
+  s.run.patches.push(p.id);
+  return p.id;
+}
+
+/* ─────────────── Insight e a Singularity ─────────────── */
+
+/** A run já venceu o último chefe (Pico Production)? */
+const singularityReady = (s, c = CONTENT) => ((s.run.stats && s.run.stats.bosses) || []).includes(c.AREAS[c.AREAS.length - 1].id);
+
+/** Quanto Insight uma Singularity agora renderia, e de onde vem. */
+function insightBreakdown(s, now, c = CONTENT) {
+  const I = c.INSIGHT;
+  const st = s.run.stats || { bosses: [], elites: 0, startedAt: now };
+  const bosses = (st.bosses || []).reduce((n, id) => n + (I.boss[id] || 0), 0);
+  const elites = (st.elites || 0) * I.elite;
+  const days = Math.max(0, (now - (st.startedAt || now)) / 86400e3);
+  const speed = Math.max(0, Math.min(I.speed.max, Math.floor(I.speed.days - days)));
+  const life = s.run.resources.compute.lifetime;
+  const depth = life >= I.depth.from ? Math.min(I.depth.max, Math.floor(Math.log(life / I.depth.from) / Math.log(I.depth.per) + 1e-9)) : 0;
+  const raw = bosses + elites + speed + depth;
+  const mult = treeMod(s, 'insight', c);
+  return { bosses, elites, speed, depth, days, raw, mult, total: Math.floor(raw * mult + 1e-9) };
+}
+
+/** Pode fazer a Singularity agora? → erro ou null. */
+const singularityError = (s, c = CONTENT) => (singularityReady(s, c) ? null : `A Singularity libera ao vencer o chefe de ${c.AREAS[c.AREAS.length - 1].name}`);
+
+/**
+ * Singularity: converte a run em Insight e recomeça.
+ * Zera: a run (Compute, geradores, upgrades, combos, tiers, Blueprints, consumíveis, Patches, mapa, níveis dos pets).
+ * Fica: DevPets encontrados (no nível inicial da árvore), meta (Insight e árvore), descobertas, uso, visuais,
+ * bestiário, estatísticas da arena, missões, configurações. Os tiers voltam pelas descobertas (Compute da run nova).
+ */
+function singularity(s, now, c, log) {
+  const err = singularityError(s, c);
+  if (err) return err;
+  const br = insightBreakdown(s, now, c);
+  const old = s.run;
+  const M = s.meta;
+  M.insight = (M.insight || 0) + br.total;
+  M.earned = (M.earned || 0) + br.total;
+  M.singularities = (M.singularities || 0) + 1;
+  M.lifetime = (M.lifetime || 0) + old.resources.compute.lifetime;
+  M.best = M.best ? Math.min(M.best, br.days) : br.days;
+  M.lastAt = now;
+  M.respec = true; // pode reorganizar a rede até o primeiro passo no mapa da run nova
+  // Semente nova: outro mapa, outras lutas.
+  s.seed = ((Math.imul(s.seed, 48271) >>> 0) % 2147483646) + 1;
+
+  const run = createRun(c, old.incidents.seq, now);
+  applyStart(s, run, old, c);
+  s.run = run;
+  log.push({ type: 'singularity', gained: br.total, count: M.singularities, breakdown: br });
+  return null;
+}
+
+/** Aplica os bônus de início da árvore a uma run nova (pets encontrados voltam no nível inicial). */
+function applyStart(s, run, old, c) {
+  const cfg = startConfig(s, c);
+  run.resources.compute.amount = Math.max(run.resources.compute.amount, cfg.compute);
+  for (const [g, n] of Object.entries(cfg.gens)) run.generators[g] = { owned: Math.max((run.generators[g] || {}).owned || 0, n) };
+  run.tier = Math.max(run.tier, cfg.tier);
+  for (const id of Object.keys(old.pets)) if (c.pet[id]) run.pets[id] = { level: 1, station: false };
+  for (const id of Object.keys(run.pets)) run.pets[id].level = petStartLevel(s, id, c);
+  if (cfg.keep.inventory) run.inventory = { ...old.inventory };
+  for (const [id, n] of Object.entries(cfg.items)) {
+    const k = c.consumable[id];
+    run.inventory[id] = Math.min(capOf(s, k, c), (run.inventory[id] || 0) + n);
+  }
+  for (const [id, n] of Object.entries(run.inventory)) if (c.consumable[id]) run.inventory[id] = Math.min(capOf(s, c.consumable[id], c), n);
+  if (cfg.keep.scrap) run.scrap = old.scrap || 0;
+  for (const [gen, bp] of Object.entries(old.blueprints || {})) {
+    const mk = Math.min(bp.mk, cfg.keep.mk);
+    if (mk > 1) run.blueprints[gen] = { mk, parts: {} };
+  }
+  const rand = rng((s.seed ^ 0x5eed) >>> 0);
+  const tmp = { run };
+  for (const [rarity, n] of Object.entries(cfg.patches)) for (let i = 0; i < n; i++) randomPatch(tmp, rarity, rand, c);
+}
+
+/* ─────────────── A rede ─────────────── */
+
+const ADJ = new WeakMap();
+/** Vizinhos de cada nó (ligações nos dois sentidos). */
+function adjacency(c = CONTENT) {
+  if (ADJ.has(c)) return ADJ.get(c);
+  const adj = Object.fromEntries(c.TREE.map((k) => [k.id, new Set()]));
+  for (const k of c.TREE) for (const l of k.links) { adj[k.id].add(l); adj[l].add(k.id); }
+  ADJ.set(c, adj);
+  return adj;
+}
+const isOwned = (s, id) => id === 'core' || rankOf(s, id) > 0;
+
+/** Custo do próximo nível de um nó. */
+const perkCost = (s, k) => k.cost + (k.step || 0) * rankOf(s, k.id);
+
+/** Nós comprados num setor (sem contar maestria e infinito) — para a maestria. */
+const sectorCount = (s, sector, c = CONTENT) => c.TREE.filter((k) => k.sector === sector && k.kind !== 'mastery' && k.kind !== 'repeat' && rankOf(s, k.id) > 0).length;
+
+/**
+ * Situação de um nó: owned (comprado; repetível segue comprável) · available · locked (sem caminho) · excluded
+ * (outro paradigma do grupo) · needs (maestria sem nós suficientes). → { status, reason }
+ */
+function perkState(s, k, c = CONTENT) {
+  if (k.kind === 'core') return { status: 'owned', reason: null };
+  const r = rankOf(s, k.id);
+  if (r > 0 && k.kind !== 'repeat') return { status: 'owned', reason: null };
+  if (k.excl) {
+    const other = c.TREE.find((x) => x.excl === k.excl && x.id !== k.id && rankOf(s, x.id) > 0);
+    if (other) return { status: 'excluded', reason: `Paradigma excludente: você escolheu ${other.name}` };
+  }
+  const adj = adjacency(c)[k.id];
+  if (k.kind === 'bridge') {
+    if (!k.links.every((id) => isOwned(s, id))) return { status: 'locked', reason: 'Sinapse: precisa de um vizinho comprado dos dois setores' };
+  } else if (![...adj].some((id) => isOwned(s, id))) return { status: 'locked', reason: 'Compre um nó ligado a este primeiro' };
+  if (k.needs && sectorCount(s, k.sector, c) < k.needs) return { status: 'needs', reason: `Maestria: precisa de ${k.needs} nós do setor (tem ${sectorCount(s, k.sector, c)})` };
+  return { status: r > 0 ? 'owned' : 'available', reason: null };
+}
+
+/** Compra (ou sobe um nível de) um nó. → erro ou null */
+function treeBuy(s, id, c, log) {
+  const k = c.perk[id];
+  if (!k || k.kind === 'core') return 'Nó inexistente';
+  const st = perkState(s, k, c);
+  if (st.status === 'owned' && k.kind !== 'repeat') return 'Nó já comprado';
+  if (st.status !== 'available' && !(st.status === 'owned' && k.kind === 'repeat')) return st.reason;
+  const cost = perkCost(s, k);
+  if ((s.meta.insight || 0) < cost) return 'Insight insuficiente';
+  s.meta.insight -= cost;
+  s.meta.tree[k.id] = rankOf(s, k.id) + 1;
+  log.push({ type: 'treeBuy', id: k.id, name: k.name, rank: s.meta.tree[k.id] });
+  return null;
+}
+
+/** Insight gasto na rede (o que a reorganização devolve). */
+function spentInsight(s, c = CONTENT) {
+  let n = 0;
+  for (const { k, rank } of owned(s, c)) for (let i = 0; i < rank; i++) n += k.cost + (k.step || 0) * i;
+  return n;
+}
+
+/** Reorganiza a rede: devolve todo o Insight gasto (só logo depois de uma Singularity). → erro ou null */
+function treeRespec(s, c, log) {
+  if (!s.meta.respec) return 'A rede só se reorganiza logo depois de uma Singularity (até o primeiro passo no mapa)';
+  const back = spentInsight(s, c);
+  s.meta.insight = (s.meta.insight || 0) + back;
+  s.meta.tree = {};
+  log.push({ type: 'treeRespec', refunded: back });
+  return null;
+}
+
+module.exports = {
+  treeMod, treeAdd, treeFlag, treeEffects, startConfig, petStartLevel, capOf, randomPatch,
+  singularityReady, singularityError, insightBreakdown, singularity, applyStart,
+  adjacency, perkCost, perkState, sectorCount, treeBuy, treeRespec, spentInsight, rankOf,
+};

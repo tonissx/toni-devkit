@@ -6,11 +6,11 @@
 const { CONTENT } = require('../content/index.js');
 const { production, stationSlots, synergyActive, hasMechanic, activeCategories, generatorUnlocked } = require('./production.js');
 const { costOf, maxAffordable, trainCost } = require('./economy.js');
-const { upgradeAvailable, craftCost, partCost } = require('./index.js');
+const { upgradeAvailable, craftCost, partCost, upgradeCost, trainCostOf, cooldownOf } = require('./index.js');
 const { bpOf, partId, levelOf, nextMilestone, generatorMult, costDivOf } = require('./blueprints.js');
 const { patchMod } = require('./patches.js');
-const { reachable, nodeCost, squadError } = require('./map.js');
-const { setupBattle, preview, petStats, enemyStats, countered, petHp, petDown, msUntilHp, slotsOf, petsOf } = require('./battle.js');
+const { reachable, nodeCost, choiceCost, shopPrice, maxItemsOf, squadError } = require('./map.js');
+const { treeBattle, setupBattle, preview, petStats, enemyStats, countered, petHp, petDown, msUntilHp, slotsOf, petsOf } = require('./battle.js');
 const { abilitiesLocked, incidentsEnabled } = require('./incidents.js');
 const { check } = require('./conditions.js');
 const { stationedPets } = require('../content/index.js');
@@ -18,6 +18,7 @@ const { offlineCapMs } = require('./advance.js');
 const { formatNum } = require('./format.js');
 const { stageOf, nextStageOf, skinOf } = require('./appearance.js');
 const { questsView } = require('./quests.js');
+const S = require('./singularity.js');
 
 const pct = (v) => (v >= 0 ? '+' : '') + Math.round(v * 1000) / 10 + '%';
 
@@ -81,9 +82,9 @@ function snapshot(s, now, c = CONTENT) {
     const owned = !!s.run.upgrades[u.id];
     const available = upgradeAvailable(s, u);
     return {
-      id: u.id, name: u.name, description: u.description, kind: u.kind, cost: u.cost,
+      id: u.id, name: u.name, description: u.description, kind: u.kind, cost: upgradeCost(s, u, c),
       status: owned ? 'owned' : available ? 'available' : 'locked',
-      affordable: available && u.cost <= amount,
+      affordable: available && upgradeCost(s, u, c) <= amount,
       requirement: owned || available ? '' : describeCondition(u.requires, c),
       effects: u.effects.map((e) => describeEffect(e, c)).filter(Boolean),
       // Combo: quanto renderia agora (o alvo ganha isto com as unidades atuais do gerador fonte).
@@ -110,12 +111,12 @@ function snapshot(s, now, c = CONTENT) {
       // Cor efetiva (visual escolhido) + estágio de evolução.
       color: skin.colors.body || p.color, eye: skin.colors.eye || null, baseColor: p.color,
       skin: skin.id, stage: { id: stage.id, name: stage.name, next: next && next.minLevel <= maxLevel ? { name: next.name, level: next.minLevel } : null },
-      trainCost: st.level < maxLevel ? trainCost(p, st.level) * patchMod(s, 'trainCost', c) : null,
+      trainCost: st.level < maxLevel ? trainCostOf(s, p, st.level, c) : null,
       bonus: p.bonus.map((e) => describeEffect({ ...e, value: e.value * (1 + p.perLevel * (st.level - 1)) }, c) + (e.perActiveCategory ? ' por categoria ativa' : '')),
       station: st.station, canStation: slots > 0 && (st.station || used < slots),
       lines: p.lines,
       ability: {
-        id: ability.id, name: ability.name, description: ability.description, cooldownSec: ability.cooldownSec,
+        id: ability.id, name: ability.name, description: ability.description, cooldownSec: cooldownOf(s, ability, c),
         locked: s.run.tier < 2, blocked: abilitiesLocked(s, now, c), activeUntil: a.activeUntil, readyAt: a.readyAt,
         ready: s.run.tier >= 2 && a.readyAt <= now && !abilitiesLocked(s, now, c),
       },
@@ -177,7 +178,8 @@ function snapshot(s, now, c = CONTENT) {
     quests: questsView(s, c),
     stations: { slots, used },
     ops: opsView(s, now, c),
-    inventory: c.CONSUMABLES.map((k) => ({ id: k.id, name: k.name, icon: k.icon, description: k.description, n: s.run.inventory[k.id] || 0, cap: k.cap, craftCost: craftCost(s, k, now, c) })),
+    inventory: c.CONSUMABLES.map((k) => ({ id: k.id, name: k.name, icon: k.icon, description: k.description, n: s.run.inventory[k.id] || 0, cap: S.capOf(s, k, c), craftCost: craftCost(s, k, now, c) })),
+    singularity: singularityView(s, now, c),
     bestiary: c.INCIDENTS.map((i) => ({ id: i.villain.id, incident: i.id, category: i.category, defeatedLine: i.villain.lines.defeated[0], name: i.villain.name, species: i.villain.species, color: i.villain.color, boss: !!i.villain.boss, description: i.description, counterText: i.counterText, stats: s.bestiary[i.villain.id] || null })),
     offlineCapHours: offlineCapMs(s, c) / 3600e3,
     welcome: s.pending.welcome,
@@ -388,18 +390,18 @@ function mapView(s, now, c) {
     if (m.pending.kind === 'event') {
       const ev = c.event[node.event];
       pending = { kind: 'event', node: node.id, title: ev.title, text: ev.text, finder: ev.finder,
-        choices: ev.choices.map((ch, i) => ({ index: i, text: ch.text, cost: (ch.cost || 0) * base, reward: ch.rewards[0] || null,
-          disabled: (ch.cost || 0) * base > amount || (ch.needs === 'commonPatch' && !hasCommon) })) };
+        choices: ev.choices.map((ch, i) => ({ index: i, text: ch.text, cost: choiceCost(s, ch, node.col, c), reward: ch.rewards[0] || null,
+          disabled: choiceCost(s, ch, node.col, c) > amount || (ch.needs === 'commonPatch' && !hasCommon) })) };
     } else if (m.pending.kind === 'rest') {
       pending = { kind: 'rest', node: node.id, title: 'Descanso', choices: c.REST_OPTIONS.map((o, i) => ({ index: i, text: o.text, cost: 0, reward: o.rewards[0] || null, disabled: false })) };
     } else {
       pending = { kind: 'shop', node: node.id, title: 'Loja', offers: node.offers.map((o) => ({
-        index: o.index, kind: o.kind, price: o.price, bought: o.bought, affordable: o.price <= amount,
+        index: o.index, kind: o.kind, price: shopPrice(s, o, c), bought: o.bought, affordable: shopPrice(s, o, c) <= amount,
         name: o.kind === 'item' ? c.consumable[o.id].name : o.kind === 'part' ? 'Peça de Blueprint' : 'Patch ' + c.RARITIES[o.rarity].name.toLowerCase(),
         icon: o.kind === 'item' ? c.consumable[o.id].icon : o.kind === 'part' ? 'package' : 'sparkles',
-        full: o.kind === 'item' && (s.run.inventory[o.id] || 0) >= c.consumable[o.id].cap,
+        full: o.kind === 'item' && (s.run.inventory[o.id] || 0) >= S.capOf(s, c.consumable[o.id], c),
         desc: o.kind === 'item' ? c.consumable[o.id].description : o.kind === 'part' ? 'Uma peça para montar o Blueprint de um gerador.' : 'Um Patch aleatório desta raridade, ativo até o fim da run.',
-        owned: o.kind === 'item' ? (s.run.inventory[o.id] || 0) : null, cap: o.kind === 'item' ? c.consumable[o.id].cap : null,
+        owned: o.kind === 'item' ? (s.run.inventory[o.id] || 0) : null, cap: o.kind === 'item' ? S.capOf(s, c.consumable[o.id], c) : null,
       })) };
     }
   }
@@ -419,7 +421,9 @@ function mapView(s, now, c) {
     at: m.at, cleared: m.cleared, nodes, pending,
     patches: s.run.patches.map((id) => patchInfo(id, c)).filter(Boolean),
     battleBuff: s.run.battleBuff,
-    squad: { slots: sqSlots, pets: petsOf(sq, c), triggers: sq.triggers, items: sq.items, node: sq.node, valid: squadOk },
+    squad: { slots: sqSlots, pets: petsOf(sq, c), triggers: sq.triggers, items: sq.items, reserve: sq.reserve || null, node: sq.node, valid: squadOk },
+    // Regras da Rede da Singularity que a preparação precisa saber: consumíveis por batalha e a vaga de reserva.
+    maxItems: maxItemsOf(s, c), reserve: S.treeFlag(s, 'reserve', c),
     slots: c.SLOTS.map((sl) => ({ id: sl.id, name: sl.name, text: sl.text, bonus: sl.bonus, roles: sl.roles })),
     forecast,
     roster: Object.keys(s.run.pets).filter((id) => c.pet[id]).map((id) => {
@@ -441,7 +445,45 @@ function mapView(s, now, c) {
       abilityFx: Object.fromEntries(Object.entries(c.BATTLE_ABILITIES).map(([id, a]) => [id, { type: a.type, rounds: a.rounds || 0 }])),
       units: lb.units.map((u) => (u.side === 'enemy' ? { ...u, sprite: c.enemy[u.id].sprite, color: c.enemy[u.id].color } : u)) } : null,
     stats: { wins: s.arena.wins, losses: s.arena.losses },
-    maxRounds: c.BATTLE.maxRounds,
+    maxRounds: treeBattle(s, c).rules.maxRounds, // Fortress (Rede) soma rodadas
+  };
+}
+
+/** Rede da Singularity para a UI: Insight, a prévia da próxima Singularity, os nós e o que a próxima run traz. */
+function singularityView(s, now, c) {
+  const M = s.meta;
+  const br = S.insightBreakdown(s, now, c);
+  const amount = M.insight || 0;
+  const cfg = S.startConfig(s, c);
+  const nodes = c.TREE.map((k) => {
+    const st = S.perkState(s, k, c);
+    const cost = S.perkCost(s, k);
+    return {
+      id: k.id, kind: k.kind, kindName: c.KIND[k.kind].name, sector: k.sector, sectors: k.sectors || null, ring: k.ring, at: k.at,
+      name: k.name, icon: k.icon, description: k.description, links: k.links, excl: k.excl || null, needs: k.needs || null,
+      rank: S.rankOf(s, k.id), cost, status: st.status, reason: st.reason,
+      affordable: (st.status === 'available' || (st.status === 'owned' && k.kind === 'repeat')) && cost <= amount,
+    };
+  });
+  return {
+    // A aba aparece quando o mapa abre (o objetivo fica à vista) ou depois da primeira Singularity.
+    visible: !!s.run.map || (M.singularities || 0) > 0,
+    ready: S.singularityReady(s, c),
+    insight: amount, earned: M.earned || 0, count: M.singularities || 0, best: M.best || 0, respec: !!M.respec,
+    spent: S.spentInsight(s, c), corePct: Math.round(c.INSIGHT.corePerRun * (M.singularities || 0) * 100),
+    breakdown: br,
+    run: { bosses: (s.run.stats && s.run.stats.bosses) || [], elites: (s.run.stats && s.run.stats.elites) || 0 },
+    lastArea: { id: c.AREAS[c.AREAS.length - 1].id, name: c.AREAS[c.AREAS.length - 1].name },
+    // O que a próxima run traz (para a confirmação).
+    start: {
+      compute: Math.max(c.BALANCE.start.compute, cfg.compute), tier: cfg.tier, petLevel: cfg.petLevel,
+      gens: Object.entries(cfg.gens).map(([id, n]) => ({ name: c.gen[id].name, n })),
+      items: Object.entries(cfg.items).map(([id, n]) => ({ name: c.consumable[id].name, n })),
+      patches: Object.entries(cfg.patches).map(([r, n]) => ({ rarity: c.RARITIES[r].name.toLowerCase(), n })),
+      keep: cfg.keep, cleanSlate: S.treeFlag(s, 'cleanSlate', c),
+    },
+    sectors: c.SECTORS.map((x) => ({ ...x, owned: S.sectorCount(s, x.id, c) })),
+    nodes,
   };
 }
 

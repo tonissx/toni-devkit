@@ -8,12 +8,14 @@
  * maxRounds sem vencer (derrota).
  *
  * Log (compacto, para a arena): { r, k, a?, t?, v?, c? }
- *   k: atk · miss · heal · ab (habilidade) · item · down · split · decoy · revive · fortify · end (v: 1 vitória, 0 derrota)
+ *   k: atk · miss · heal · ab (habilidade) · item · down · split · decoy · revive · fortify · enter (a reserva `t` entra
+ *      no lugar de `a`) · end (v: 1 vitória, 0 derrota)
  *   a: uid de quem age · t: uid do alvo · v: valor (dano/cura) · c: crítico
  */
 const { CONTENT } = require('../content/index.js');
 const { rng } = require('./rng.js');
 const { stageOf } = require('./appearance.js');
+const { treeMod, treeAdd, treeFlag } = require('./singularity.js');
 
 const sum = (list) => list.reduce((n, x) => n + x, 0);
 
@@ -29,20 +31,23 @@ function patchBattle(s, c = CONTENT) {
   return out;
 }
 
+/** Recuperação de vida por hora (Rede da Singularity: Fast Recovery, Speedrun). */
+const recoveryPerHour = (s, c = CONTENT) => c.BATTLE.recovery.perHour * treeMod(s, 'recovery', c);
+
 /** Fração de vida de um pet agora (persiste entre batalhas; recupera perHour por hora, também offline). */
 function petHp(s, petId, now, c = CONTENT) {
   const st = s.run.pets[petId];
   if (!st) return 0;
   const hp = st.hp == null ? 1 : st.hp;
   if (now == null || hp >= 1) return Math.min(1, hp);
-  return Math.min(1, hp + c.BATTLE.recovery.perHour * Math.max(0, now - (st.hpAt || now)) / 3600e3);
+  return Math.min(1, hp + recoveryPerHour(s, c) * Math.max(0, now - (st.hpAt || now)) / 3600e3);
 }
 
 /** Fora de combate: caiu a 0 numa luta e ainda não recuperou koMin. */
 const petDown = (s, petId, now, c = CONTENT) => !!(s.run.pets[petId] && s.run.pets[petId].ko) && petHp(s, petId, now, c) < c.BATTLE.recovery.koMin;
 
 /** Milissegundos até um valor de vida (0 se já passou). */
-const msUntilHp = (s, petId, target, now, c = CONTENT) => Math.max(0, (target - petHp(s, petId, now, c)) / c.BATTLE.recovery.perHour * 3600e3);
+const msUntilHp = (s, petId, target, now, c = CONTENT) => Math.max(0, (target - petHp(s, petId, now, c)) / recoveryPerHour(s, c) * 3600e3);
 
 /** Grava a vida de um pet (fração) agora. */
 function setPetHp(s, petId, frac, now) {
@@ -67,13 +72,37 @@ function slotsOf(squad, c = CONTENT) {
 }
 /** Pets da preparação na ordem dos slots (vanguarda → retaguarda). */
 const petsOf = (squad, c = CONTENT) => Object.values(slotsOf(squad, c)).filter(Boolean);
-/** Bônus de um slot para um pet (o do slot + o extra do papel). */
-function slotBonus(slotId, petId, c = CONTENT) {
+/**
+ * Bônus de um slot para um pet (o do slot + o extra do papel). Com o estado, valem as regras da Rede da Singularity:
+ * Specialists (papel em dobro; fora do papel −10% de ataque e vida) e Generalists (qualquer pet ganha o bônus de papel
+ * do slot; o bônus base cai pela metade).
+ */
+function slotBonus(slotId, petId, c = CONTENT, s = null) {
   const sl = c.SLOTS.find((x) => x.id === slotId);
   const out = { atk: 0, def: 0, hp: 0, spd: 0, heal: 0 };
   if (!sl) return out;
-  for (const b of [sl.bonus || {}, (sl.roles || {})[c.PET_ROLES[petId]] || {}]) for (const k of Object.keys(out)) out[k] += b[k] || 0;
+  const roles = sl.roles || {};
+  const own = roles[c.PET_ROLES[petId]];
+  const generalist = !!s && treeFlag(s, 'generalist', c);
+  const role = own || (generalist ? Object.values(roles)[0] : null);
+  const baseMult = 1 + (s ? treeAdd(s, 'slotBase', c) : 0);
+  const roleMult = 1 + (s ? treeAdd(s, 'slotRole', c) : 0);
+  for (const k of Object.keys(out)) out[k] += ((sl.bonus || {})[k] || 0) * baseMult + ((role || {})[k] || 0) * roleMult;
+  if (s && !own && !generalist && Object.keys(roles).length) {
+    const off = treeAdd(s, 'offRole', c);
+    out.atk += off; out.hp += off;
+  }
   return out;
+}
+
+/** Bônus de batalha da Rede da Singularity para o esquadrão e as regras da luta (crítico, rodadas, consumíveis). */
+function treeBattle(s, c = CONTENT) {
+  const B = c.BATTLE;
+  return {
+    atk: treeAdd(s, 'atk', c), hp: treeAdd(s, 'hp', c), def: treeAdd(s, 'def', c), spd: treeAdd(s, 'spd', c),
+    heal: treeAdd(s, 'heal', c), maxed: treeAdd(s, 'maxedStats', c), firstCrit: treeFlag(s, 'firstCrit', c), reserve: treeFlag(s, 'reserve', c),
+    rules: { crit: B.critChance + treeAdd(s, 'crit', c), critMult: B.critMult + treeAdd(s, 'critMult', c), maxRounds: B.maxRounds + Math.round(treeAdd(s, 'maxRounds', c)), itemPower: 1 + treeAdd(s, 'itemPower', c) },
+  };
 }
 
 /** Atributos de combate de um pet no nível atual (sem Patches). */
@@ -106,28 +135,35 @@ function enemyStats(enemyId, col, area, c = CONTENT, kind = 'battle') {
 function setupBattle(s, squad, enemyIds, col, areaId, c = CONTENT, kind = 'battle', now = null) {
   const area = c.area[areaId];
   const pb = patchBattle(s, c);
+  const tb = treeBattle(s, c);
   const buff = (s.run.battleBuff && s.run.battleBuff.atk) || 0;
   const slots = slotsOf(squad, c);
   const placed = c.SLOTS.map((sl, rank) => ({ slot: sl.id, rank, id: slots[sl.id] })).filter((x) => x.id);
-  const pets = placed.map(({ slot, rank, id }, i) => {
+  const unit = ({ slot, rank, id }, uid) => {
     const st = petStats(s, id, c);
-    const sb = slotBonus(slot, id, c);
-    const maxHp = Math.round(st.hp * (1 + pb.hp + sb.hp));
+    const sb = slotBonus(slot, id, c, s);
+    const maxed = s.run.pets[id].level >= c.RARITY[c.pet[id].rarity].maxLevel ? tb.maxed : 0; // Pair Programming
+    const maxHp = Math.max(1, Math.round(st.hp * (1 + pb.hp + sb.hp + tb.hp + maxed)));
     const hp = now == null ? maxHp : Math.max(1, Math.round(maxHp * petHp(s, id, now, c)));
     return {
-      uid: 'p' + i, side: 'pet', id, name: c.pet[id].name, role: c.PET_ROLES[id], slot, rank, front: slot === 'vanguard',
-      hp, maxHp, atk: st.atk * (1 + pb.atk + buff + sb.atk), def: st.def * (1 + pb.def + sb.def), spd: st.spd + sb.spd, healMult: 1 + sb.heal,
+      uid, side: 'pet', id, name: c.pet[id].name, role: c.PET_ROLES[id], slot, rank, front: slot === 'vanguard',
+      hp, maxHp, atk: st.atk * Math.max(0.1, 1 + pb.atk + buff + sb.atk + tb.atk + maxed), def: st.def * (1 + pb.def + sb.def + tb.def + maxed), spd: st.spd + sb.spd + tb.spd, healMult: 1 + sb.heal + tb.heal,
       ability: c.pet[id].ability, trigger: (squad.triggers && squad.triggers[id]) || 'start',
     };
-  });
+  };
+  const pets = placed.map((x, i) => unit(x, 'p' + i));
+  // Reserva (Hot Standby): fora da luta até o primeiro pet cair; entra no lugar dele (slot e bônus do slot dele).
+  const resId = tb.reserve && squad.reserve && s.run.pets[squad.reserve] && !placed.some((x) => x.id === squad.reserve) ? squad.reserve : null;
+  const reserve = resId ? { ...unit({ slot: null, rank: 99, id: resId }, 'p' + placed.length), reserve: true } : null;
   const enemies = enemyIds.map((id, i) => {
     const st = enemyStats(id, col, area, c, kind);
     return { uid: 'e' + i, side: 'enemy', id, name: c.enemy[id].name, traits: c.enemy[id].traits, boss: !!c.enemy[id].boss, hp: st.hp, maxHp: st.hp, atk: st.atk, baseAtk: st.atk, def: st.def, baseDef: st.def, spd: st.spd };
   });
   return {
-    pets, enemies, items: [...(squad.items || [])],
+    pets, enemies, items: [...(squad.items || [])], reserve,
     counters: { anyOf: new Set(placed.map((x) => x.id)), front: new Set(slots.vanguard ? [slots.vanguard] : []) },
-    firstCrit: pb.firstCrit,
+    firstCrit: pb.firstCrit || tb.firstCrit,
+    rules: tb.rules,
   };
 }
 
@@ -143,8 +179,11 @@ function countered(trait, counters, c) {
 /** Resolve uma batalha (cópia interna do setup — não altera o argumento). → { win, rounds, log, units, usedItems } */
 function resolve(setup, seed, c = CONTENT) {
   const B = c.BATTLE;
+  const R = setup.rules || { crit: B.critChance, critMult: B.critMult, maxRounds: B.maxRounds, itemPower: 1 }; // regras da Rede da Singularity
   const rand = rng(seed >>> 0);
-  const pets = setup.pets.map((u) => ({ ...u, energy: 0, alive: true, abilityUsed: false, drain: 0, burst: 1, attacked: false }));
+  const fresh = (u) => ({ ...u, energy: 0, alive: true, abilityUsed: false, drain: 0, burst: 1, attacked: false });
+  const pets = setup.pets.map(fresh);
+  let reserve = setup.reserve ? fresh(setup.reserve) : null; // entra quando o primeiro pet cair
   const enemies = setup.enemies.map((u) => ({ ...u, baseAtk: u.baseAtk || u.atk, baseSpd: u.spd, energy: 0, alive: true, mark: 0, child: false, mergeAt: 0 }));
   const units = [...pets, ...enemies];
   const log = [];
@@ -200,11 +239,11 @@ function resolve(setup, seed, c = CONTENT) {
     if (!foes.length) return;
     const t = foes.sort((a, b) => b.mark - a.mark || a.hp - b.hp)[0]; // marcado primeiro, depois o mais fraco
     if (has('evade', t) && rand() < c.TRAITS.evade.value) { log.push({ r, k: 'miss', a: p.uid, t: t.uid }); p.attacked = true; return; }
-    const crit = (setup.firstCrit && !p.attacked) || rand() < B.critChance;
+    const crit = (setup.firstCrit && !p.attacked) || rand() < R.crit;
     p.attacked = true;
     const atk = p.atk * (1 - 0.1 * p.drain) * atkMult() * p.burst;
     p.burst = 1;
-    const dmg = Math.max(1, Math.round(atk * 100 / (100 + t.def) * (1 + t.mark) * (crit ? B.critMult : 1)));
+    const dmg = Math.max(1, Math.round(atk * 100 / (100 + t.def) * (1 + t.mark) * (crit ? R.critMult : 1)));
     t.hp -= dmg;
     log.push({ r, k: 'atk', a: p.uid, t: t.uid, v: dmg, c: crit || undefined });
     if (has('drain', t)) p.drain = Math.min(5, p.drain + 1);
@@ -245,7 +284,13 @@ function resolve(setup, seed, c = CONTENT) {
     if (t.hp <= 0) {
       t.hp = 0; t.alive = false;
       log.push({ r, k: 'down', t: t.uid });
-      if (items.has('rollback')) { useItem('rollback'); t.alive = true; t.hp = Math.round(t.maxHp * c.BATTLE_ITEMS.rollback.value); log.push({ r, k: 'revive', t: t.uid, v: t.hp }); }
+      if (items.has('rollback')) { useItem('rollback'); t.alive = true; t.hp = Math.min(t.maxHp, Math.round(t.maxHp * c.BATTLE_ITEMS.rollback.value * R.itemPower)); log.push({ r, k: 'revive', t: t.uid, v: t.hp }); }
+      else if (reserve) {
+        const u = { ...reserve, slot: t.slot, rank: t.rank, front: t.front };
+        reserve = null;
+        pets.push(u); units.push(u);
+        log.push({ r, k: 'enter', a: t.uid, t: u.uid });
+      }
     }
     checkAllyLow();
     // Corrida (Race Condition): às vezes age de novo na mesma hora.
@@ -256,17 +301,17 @@ function resolve(setup, seed, c = CONTENT) {
   }
 
   let win = false;
-  for (r = 1; r <= B.maxRounds; r++) {
+  for (r = 1; r <= R.maxRounds; r++) {
     // Início da rodada: Cache Warmer, gatilhos, itens de início, fortificação.
     if (refire && refire.alive) { refire.abilityUsed = false; const p = refire; refire = null; useAbility(p); }
     for (const p of pets) if ((p.trigger === 'start' && r === 1) || (p.trigger === 'round3' && r === 3)) useAbility(p);
     if (r === 1) {
-      if (items.has('coffee')) { useItem('coffee'); const k = c.BATTLE_ITEMS.coffee; squad.buffs.push({ value: k.value, until: r + k.rounds - 1 }); }
+      if (items.has('coffee')) { useItem('coffee'); const k = c.BATTLE_ITEMS.coffee; squad.buffs.push({ value: k.value * R.itemPower, until: r + k.rounds - 1 }); }
       if (items.has('hotfix')) {
         const t = strongest();
         if (t) {
           useItem('hotfix');
-          const dmg = Math.round(Math.max(...pets.map((p) => p.atk)) * c.BATTLE_ITEMS.hotfix.mult);
+          const dmg = Math.round(Math.max(...pets.map((p) => p.atk)) * c.BATTLE_ITEMS.hotfix.mult * R.itemPower);
           t.hp -= dmg;
           log.push({ r, k: 'atk', a: 'item', t: t.uid, v: dmg });
           if (t.hp <= 0) { t.hp = 0; t.alive = false; log.push({ r, k: 'down', t: t.uid }); }
@@ -344,13 +389,15 @@ function resolve(setup, seed, c = CONTENT) {
   }
   // Motivo do fim: vitória, esquadrão derrubado ou tempo esgotado (maxRounds sem derrubar os inimigos).
   const reason = win ? 'win' : alivePets().length ? 'timeout' : 'wiped';
-  log.push({ r: Math.min(r, B.maxRounds), k: 'end', v: win ? 1 : 0, why: reason });
+  log.push({ r: Math.min(r, R.maxRounds), k: 'end', v: win ? 1 : 0, why: reason });
+  // A reserva que não entrou também vai na lista (a arena não a mostra; o mapa mantém a vida dela).
+  if (reserve) units.push({ ...reserve, benched: true });
   return {
-    win, reason, maxRounds: B.maxRounds, rounds: Math.min(r, B.maxRounds), log, usedItems: used,
+    win, reason, maxRounds: R.maxRounds, rounds: Math.min(r, R.maxRounds), log, usedItems: used,
     // hp: vida no início (a arena começa daí) · end: vida que sobrou (o mapa grava nos pets)
     units: units.map((u) => {
-      const start = (setup.pets.find((x) => x.uid === u.uid) || setup.enemies.find((x) => x.uid === u.uid) || u).hp;
-      return { uid: u.uid, side: u.side, id: u.id, name: u.name, hp: u.child ? u.maxHp : start, maxHp: u.maxHp, end: u.alive ? u.hp : 0, front: !!u.front, slot: u.slot || null, rank: u.rank != null ? u.rank : null, boss: !!u.boss, child: !!u.child };
+      const start = (setup.pets.find((x) => x.uid === u.uid) || setup.enemies.find((x) => x.uid === u.uid) || (setup.reserve && setup.reserve.uid === u.uid ? setup.reserve : u)).hp;
+      return { uid: u.uid, side: u.side, id: u.id, name: u.name, hp: u.child ? u.maxHp : start, maxHp: u.maxHp, end: u.alive ? u.hp : 0, front: !!u.front, slot: u.slot || null, rank: u.rank != null ? u.rank : null, boss: !!u.boss, child: !!u.child, reserve: !!u.reserve, benched: !!u.benched };
     }),
   };
 }
@@ -372,4 +419,4 @@ function preview(setup, seed, c = CONTENT) {
   return { chance, label: chance >= c.BATTLE.chance.good ? 'favorável' : chance >= c.BATTLE.chance.risky ? 'arriscado' : 'muito arriscado', timeouts: timeouts / n };
 }
 
-module.exports = { slotsOf, petsOf, slotBonus, petHp, petDown, msUntilHp, setPetHp, scaleAt, petStats, enemyStats, setupBattle, resolve, preview, patchBattle, countered };
+module.exports = { treeBattle, recoveryPerHour, slotsOf, petsOf, slotBonus, petHp, petDown, msUntilHp, setPetHp, scaleAt, petStats, enemyStats, setupBattle, resolve, preview, patchBattle, countered };

@@ -1,6 +1,6 @@
 # DevCore — Mapa, batalhas e Singularity
 
-Documento de design do próximo grande sistema do DevCore. **Ainda não implementado.**
+Documento de design do mapa, das batalhas e da Singularity do DevCore (implementados; ver as seções "feito").
 Substitui a ideia de *Legado/Rebuild* (prestige por fragmentos e árvore de perks), que ficou guardada no branch
 `worktree-devcore-legacy` e pode ter partes reaproveitadas na árvore de Singularity.
 
@@ -346,18 +346,83 @@ literalmente). Aqui tudo é real e exposto — e nada pode cair.
 - O custo **não acompanha a produção atual** de propósito: se acompanhasse, investir em geradores nunca ajudaria a
   avançar e a tensão sumiria.
 
-## 9. Singularity
+## 9. Singularity (feito)
 
-- **Quando:** ao vencer o chefe da Área 3 (e das áreas extras, quando existirem), o jogador **pode** fazer a
-  Singularity. É uma escolha; ele pode continuar a run.
-- **Zera:** a run inteira (Compute, geradores, upgrades, combos, tiers, Blueprints, consumíveis, **níveis dos pets**
-  (decidido)), o progresso do mapa (volta à Área 1, com mapa novo) e os Patches.
-- **Fica:** pets já encontrados (voltam no nível 1), descobertas, fatos de uso do DevKit, visuais, bestiário,
-  missões, pontos de Singularity e a árvore.
-- **Pontos de Singularity** (proposta): uma base por chefe vencido + bônus por Elites vencidas e por terminar mais
-  rápido. Gastos numa **árvore de skill permanente**, que será desenhada depois.
-- Ideias que já servem de ponto de partida para a árvore (do Legado guardado): pets voltam num nível maior, começar
-  já no Tier 2, consumíveis iniciais, +1 vaga no esquadrão, custo do mapa menor, Patch inicial.
+Conteúdo em `content/singularity.js`, regras em `engine/singularity.js`, tela em `SingularityPanel.jsx`.
+
+- **Quando:** ao vencer o chefe do **Pico Production** (Área 3) na run atual. É uma escolha: dá para seguir jogando,
+  e a run continua rendendo Insight pela profundidade.
+- **Zera:** a run inteira (Compute, geradores, upgrades, combos, tiers, Blueprints, consumíveis, níveis dos pets,
+  Patches) e o mapa (volta à Floresta com um **mapa novo**: a semente muda a cada Singularity).
+- **Fica:** pets já encontrados (voltam no nível inicial da rede), Insight e a rede, descobertas, uso do DevKit,
+  visuais, bestiário, estatísticas da arena e missões. **Os tiers voltam pelas descobertas** quando o Compute da run
+  nova chega lá, sem anunciar de novo.
+
+### 9.1 Insight
+
+| Fonte | Valor |
+|---|---|
+| Chefe vencido nesta run | Floresta +3 · Pântano +4 · Pico +5 |
+| Elite vencida nesta run | +1 cada |
+| Rapidez | +1 por dia inteiro abaixo de 14 dias de run (até +8) |
+| Profundidade | +1 a cada ×3 de Compute da run acima de 10¹⁴ (até +8) |
+| Multiplicadores da rede | Insight Engine, Clean Slate, Time Capsule, Compound Insight |
+
+- O **Núcleo** dá +10% de produção por Singularity feita, para sempre.
+- **Simulador (casual):** 1ª run ~14 dias → ~13 Insight; a 2ª cai para ~7 dias (~20 Insight); depois 5–8 dias e
+  20–24 Insight por run. A rede inteira (240 Insight, sem os infinitos) leva ~11 runs (~2,5 meses).
+- **O gargalo de fim de jogo é o Pico:** a produção estabiliza (~10⁹/s) e o chefe custa 1,2 × 10¹⁴, então nós de
+  produção pura rendem cada vez menos tempo de run, e os descontos do mapa ganham peso. É uma escolha de verdade entre
+  Infra e Mapa.
+
+### 9.2 A Rede da Singularity
+
+Constelação com o **Núcleo** no centro e **6 setores** em hexágono:
+- **Infra:** produção e economia.
+- **Ops:** habilidades e consumíveis.
+- **Combate:** o esquadrão.
+- **DevPets:** níveis, estações, recuperação.
+- **Mapa:** custos, recompensas, Patches.
+- **Arquivo:** como a run começa e o que atravessa.
+
+79 nós no total.
+
+**O que impede uma linha reta:**
+- **Adjacência:** só dá para comprar um nó ligado a outro já comprado. Chegar longe custa o caminho.
+- **Bifurcação:** cada setor abre em dois braços (anel 2) que se juntam no meio (anel 3).
+- **Paradigmas (anel 5):** dois nós-chave **excludentes** por setor, fortes e com um preço. Exemplos:
+  - Hyperscale (produção ×2, geradores +50%) × Lean Startup (custos −60%, produção ×0,8).
+  - Glass Cannon × Fortress.
+  - Full Automation × Manual Override.
+  - Specialists × Generalists.
+  - Speedrun × Treasure Hunter.
+  - Time Capsule × **Clean Slate** (+50% de Insight, mas desliga todo bônus de início de run, inclusive os de outros
+    setores).
+- **Sinapses:** uma ponte entre cada par de setores vizinhos, que exige um nó comprado **dos dois lados**. Exemplos:
+  Autoscaling (Infra–Ops), Chaos Engineering (Ops–Combate, 3 consumíveis por batalha), Pair Programming, Field Trip,
+  Patch Notes, Seed Funding.
+- **Maestria (anel 6):** pede 7 nós do setor.
+- **Infinitos (anel 7):** sobem de nível sem limite, com custo 6 + 4 por nível.
+- **Reorganizar:** devolve todo o Insight, mas só logo depois de uma Singularity e até o primeiro passo no mapa da
+  run nova. As escolhas valem a run inteira.
+
+**Custos:** anéis 1–2 custam 1; anel 3 custa 2; notáveis 4; paradigmas 8; maestria 12; sinapses 3.
+
+Mecânicas novas que vêm da rede:
+- **Reserva** (Hot Standby): um 4º pet entra no lugar do primeiro que cair. Evento `enter` na arena.
+- **Disparo automático** de habilidades (Full Automation).
+- **Atalho em toda elite** (Shortcuts).
+- **Patch garantido em vitórias comuns** (Treasure Hunter).
+- **Raridade que sobe** (Loot Tables).
+- **Consumíveis que voltam** ao vencer (Self-Healing).
+- **Começar no Tier 2 ou 3** (Warm Start, Akashic Records).
+
+**Tela:** aba **Singularity**, que aparece quando o mapa abre.
+- Constelação com arrastar e zoom.
+- Inspetor: o nó sob o mouse ou selecionado, com o motivo de estar bloqueado e a compra.
+- Cerimônia de confirmação: a conta do Insight, o que recomeça, o que fica e com o que a próxima run começa.
+- Clarão "SINGULARITY" no reset.
+- O banner do Pico concluído leva até a aba.
 
 ## 10. Arquitetura prevista
 
@@ -400,7 +465,7 @@ entre investir em produção ou avançar) para medir o ritmo por área e a taxa 
 | 2 | Mapa da Área 1 no engine + robô no simulador | Ritmo "~3 dias" e custos calibrados |
 | 3 | UI: aba Mapa, preparação e arena da Floresta Localhost | App de teste com saves semeados |
 | 4 | Áreas 2–3, chefes e a Singularity (reset) | Simulador: Singularity em 1–2 semanas |
-| 5 | Árvore de Singularity | Desenho próprio antes de construir |
+| 5 | Árvore de Singularity (feito) | Testes de regras + simulador com o robô fazendo Singularities |
 
 A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa depende dela.
 
@@ -408,6 +473,7 @@ A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa d
 
 | Data | Decisão |
 |---|---|
+| 2026-10-13 | **Singularity e a Rede**: Insight por chefes, elites, rapidez e profundidade; árvore em constelação de 6 setores com adjacência, paradigmas excludentes, sinapses entre setores, maestrias e infinitos; reorganizar só logo depois do reset |
 | 2026-10-06 | O prestige passa a ser mapa + Singularity; o Legado/Rebuild fica guardado (branch `worktree-devcore-legacy`) |
 | 2026-10-06 | Batalha: **auto-battler com preparação** (não tower defense nem tática por turnos) |
 | 2026-10-06 | Ritmo: **alguns dias por área** (Singularity em 1–2 semanas de uso casual) |
@@ -427,10 +493,10 @@ A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa d
 
 - **Deploy expresso:** ponto próprio no mapa (proposta atual) ou uma opção "pagar para pular" em qualquer batalha?
 - **Abandonar a área:** dá para gerar um mapa novo da área (pagando) se o caminho ficou ruim?
-- **Combos e upgrades:** algum atravessa a Singularity, ou tudo vem da árvore?
+- **Combos e upgrades:** nada atravessa sozinho; o que atravessa vem da rede (Arquivo: Design Docs, Time Capsule).
 - **Avisos:** notificar quando o Compute para o próximo ponto estiver disponível?
-- **4º lugar no esquadrão:** via Patch raro ou perk da árvore?
-- **Árvore de Singularity:** estrutura, custos e quanto ela acelera as runs seguintes.
+- **4º lugar no esquadrão:** resolvido em parte pela **Reserva** (Hot Standby): o 4º pet entra quando alguém cai.
+- **Áreas extras depois de algumas Singularities** (Área 4+) e talvez um infinito de Insight por área.
 
 ## 14. Riscos
 

@@ -5,6 +5,7 @@
  * o Refactor consome o conjunto e sobe o Mk.
  */
 const { CONTENT } = require('../content/index.js');
+const { treeMod } = require('./singularity.js');
 
 const bpOf = (s, gen) => s.run.blueprints[gen] || { mk: 1, parts: {} };
 const partId = (gen, mk, i) => `${gen}:mk${mk}:${i}`;
@@ -43,7 +44,7 @@ function generatorMult(s, gen, c = CONTENT) {
 
 /** Divisor de custo das próximas unidades pelos Mk alcançados (Mk II ÷4, Mk III ÷10 → ÷40). */
 function costDivOf(s, gen, c = CONTENT) {
-  let d = 1;
+  let d = 1 / treeMod(s, 'genCost', c); // Rede da Singularity (Bulk Discount, Hyperscale…)
   const mk = bpOf(s, gen).mk;
   for (const l of (c.blueprint[gen] || { levels: [] }).levels) if (l.mk <= mk) d *= l.costDiv || 1;
   return d;

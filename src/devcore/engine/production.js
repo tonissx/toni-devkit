@@ -11,6 +11,7 @@ const { CONTENT } = require('../content/index.js');
 const { incidentEffects } = require('./incidents.js');
 const { blueprintEffects } = require('./blueprints.js');
 const { patchEffects } = require('./patches.js');
+const { treeEffects, treeAdd } = require('./singularity.js');
 
 /** Agrega efeitos por alvo. */
 function aggregate(effects) {
@@ -45,9 +46,13 @@ function stationSlots(s, c = CONTENT) {
   return base + sumAdd(aggregate(upgradeEffects(s, c)), 'stationSlots');
 }
 
+/** Upgrades da run + a Rede da Singularity (mesmos alvos: global, petBonus, offlineCap, stationSlots…). */
 function upgradeEffects(s, c) {
   const out = [];
   for (const id of Object.keys(s.run.upgrades)) for (const e of (c.upgrade[id] || { effects: [] }).effects) out.push({ ...e, source: 'upgrade:' + id });
+  const tree = treeEffects(s, c);
+  const active = tree.some((e) => e.perActiveCategory) ? activeCategories(s, c).size : 0;
+  for (const e of tree) out.push(e.perActiveCategory ? { ...e, value: e.value * active } : e);
   return out;
 }
 
@@ -121,7 +126,11 @@ function collectEffects(s, t, c = CONTENT, opts = {}) {
     if (!synergyActive(s, syn, active, c)) continue;
     for (const e of syn.effects) effects.push({ ...e, value: e.perActiveCategory ? e.value * active.size : e.value, source: 'synergy:' + syn.id });
   }
-  effects.push(...discoveryEffects(s, c), ...abilityEffects(s, t, c), ...incidentEffects(s, t, c), ...blueprintEffects(s, c), ...patchEffects(s, c));
+  const abilities = abilityEffects(s, t, c);
+  effects.push(...discoveryEffects(s, c), ...abilities, ...incidentEffects(s, t, c), ...blueprintEffects(s, c), ...patchEffects(s, c));
+  // Autoscaling (Rede da Singularity): produção a mais enquanto alguma habilidade estiver ativa.
+  const glow = treeAdd(s, 'abilityGlow', c);
+  if (glow && abilities.length) effects.push({ type: 'add', target: 'global', value: glow, source: 'tree:br-autoscaling' });
   return { effects: opts.skip ? effects.filter((e) => !opts.skip.includes(e.source)) : effects, active };
 }
 
