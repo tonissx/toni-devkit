@@ -3,6 +3,7 @@
 // As tarefas (o que é enviado) ficam em src/ai/tasks.js; quem chama só monta a entrada e decide o que fazer com a saída.
 import { DS } from '../lib/ds.js';
 import { renderMarkdown } from '../notes/markdown.js';
+import { buildImprovePrompt } from './improvePrompt.js';
 
 const { Icon, Spinner } = DS;
 const api = () => window.devkit.ai;
@@ -119,6 +120,29 @@ export function AiButton({ ai, label, onClick, disabled, reason, className = '',
   );
 }
 
+/** Copiar a resposta e gerar um prompt de melhoria a partir dela — em todo painel que mostra a resposta em texto. */
+function AnswerTools({ st, req }) {
+  const [done, setDone] = React.useState(null); // 'answer' | 'prompt' | 'err'
+  const t = React.useRef(null);
+  React.useEffect(() => () => clearTimeout(t.current), []);
+  const run = async (kind, text) => {
+    try { await window.devkit.clipboard.write(text); setDone(kind); } catch { setDone('err'); }
+    clearTimeout(t.current); t.current = setTimeout(() => setDone(null), 2000);
+  };
+  return (
+    <>
+      <button type="button" className="ai-act" title="Copiar a resposta (texto em Markdown)" onClick={() => run('answer', st.text)}>
+        <Icon name={done === 'answer' ? 'check' : 'copy'} size={12} /><span>{done === 'answer' ? 'Copiado' : 'Copiar resposta'}</span>
+      </button>
+      <button type="button" className="ai-act" title="Copia um prompt pronto para colar no Claude Code, Copilot ou ChatGPT aplicar as melhorias sugeridas"
+        onClick={() => run('prompt', buildImprovePrompt({ label: req && req.label, task: req && req.task, request: req && req.user, answer: st.text }))}>
+        <Icon name={done === 'prompt' ? 'check' : 'wand-sparkles'} size={12} /><span>{done === 'prompt' ? 'Prompt copiado' : 'Gerar prompt de melhoria'}</span>
+      </button>
+      {done === 'err' && <span className="ai-panel__muted">Não foi possível copiar</span>}
+    </>
+  );
+}
+
 /**
  * Painel de resultado: status (destino, tempo, erro), "Ver o que é enviado", confirmação da Nuvem e ações.
  * body: 'markdown' (padrão) | 'none' | função (st) → nó. actions: [{ label, icon, onClick, primary, hidden }] — só com a
@@ -133,6 +157,8 @@ export function AiPanel({ ai, body = 'markdown', actions = [], extraLinks = [], 
   // Recolhido: só a linha de status (a resposta continua guardada; expandir mostra de novo). A confirmação não recolhe.
   const folded = !!st.collapsed && st.phase !== 'confirm';
   const showBody = !folded && (st.phase === 'busy' || st.phase === 'done') && body !== 'none';
+  // Só quando a resposta é o texto em Markdown do painel (nos que desenham a própria saída, como lista de branches, não há o que copiar).
+  const tools = body === 'markdown' && st.phase === 'done' && !!String(st.text || '').trim();
   return (
     <div className={'ai-panel is-' + st.phase + (folded ? ' is-folded' : '') + ' ' + className}>
       <div className="ai-panel__line">
@@ -169,8 +195,9 @@ export function AiPanel({ ai, body = 'markdown', actions = [], extraLinks = [], 
           {typeof body === 'function' ? body(st) : st.text ? <AiMarkdown text={st.text} onLink={onLink} resolve={resolve} /> : <span className="ai-panel__muted"><Spinner size={11} /> pensando…</span>}
         </div>
       )}
-      {!folded && st.phase === 'done' && actions.some((a) => !a.hidden) && (
+      {!folded && st.phase === 'done' && (tools || actions.some((a) => !a.hidden)) && (
         <div className="ai-panel__actions">
+          {tools && <AnswerTools st={st} req={req} />}
           {actions.filter((a) => !a.hidden).map((a) => (
             <button key={a.label} type="button" className={'ai-act' + (a.primary ? ' is-primary' : '')} disabled={a.disabled} onClick={a.onClick}>
               {a.icon && <Icon name={a.icon} size={12} />}<span>{a.label}</span>

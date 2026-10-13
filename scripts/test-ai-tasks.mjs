@@ -233,3 +233,17 @@ test('palette: aviso de comandos que apagam trabalho', () => {
   assert.equal(riskyCommands('git checkout -- .').length, 1);
   assert.equal(riskyCommands('git checkout main').length, 0);
 });
+
+test('prompt de melhoria: leva o pedido e a resposta, ajusta o papel pela tarefa e recusa resposta vazia', () => {
+  const { buildImprovePrompt } = require('../src/ai/improvePrompt.js');
+  const p = buildImprovePrompt({ label: 'Por que está lenta', task: 'dbQuery', request: 'Consulta:\nSELECT 1', answer: 'Crie um índice em (A, B).' });
+  assert.match(p, /DBA de SQL Server/);
+  assert.match(p, /Consulta:\nSELECT 1/);
+  assert.match(p, /Crie um índice em \(A, B\)\./);
+  assert.match(p, /CREATE INDEX/);
+  assert.match(p, /não invente/i);
+  assert.match(buildImprovePrompt({ task: 'paletteAsk', answer: 'x' }), /desenvolvedor sênior/);
+  assert.match(buildImprovePrompt({ task: 'sqlModify', answer: 'x' }), /engenheiro de dados/);
+  assert.ok(buildImprovePrompt({ task: 'dbPlan', request: 'a'.repeat(20000), answer: 'b'.repeat(20000) }).length < 20000);
+  assert.throws(() => buildImprovePrompt({ answer: '  ' }), /Sem resposta/);
+});

@@ -309,6 +309,9 @@ Desligada por padrão: com ela desligada nenhum botão de IA aparece. Ligada, ca
 pedido só quando clicados. Em todos: **Ver o que é enviado** mostra o pedido exato, a resposta aparece aos poucos,
 `Esc`/**Parar** interrompe, e nada é aplicado sem clique (quase tudo tem **Desfazer**). **O Vault nunca entra em
 pedido nenhum** — notas vão com as referências dos blocos `secret`, nunca com o segredo.
+Toda resposta em texto traz **Copiar resposta** e **Gerar prompt de melhoria**: o segundo copia um prompt pronto (o pedido
+que já saiu filtrado, a resposta e o passo a passo para aplicar com senso crítico) para colar no Claude Code, Copilot ou
+ChatGPT — montado localmente, sem outra chamada à IA.
 
 | Onde | O quê |
 | --- | --- |
