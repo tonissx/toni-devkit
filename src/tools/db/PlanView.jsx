@@ -42,15 +42,45 @@ function Graph({ stmt, insights, selected, onSelect, containerRef }) {
   const sevOf = (id) => worst(insights.filter((i) => i.nodeId === id));
   const fit = () => { const el = containerRef.current; if (el) setZoom(Math.max(0.4, Math.min(1, (el.clientWidth - 8) / W))); };
   React.useEffect(() => { setZoom(1); }, [stmt]);
+  // Clicar e arrastar move o desenho. Só vira arrasto depois de alguns pixels: um clique simples ainda seleciona o
+  // operador, e o clique que encerra um arrasto é engolido para não selecionar o que estava debaixo do cursor.
+  const [panning, setPanning] = React.useState(false);
+  const pan = React.useRef(null);
+  const swallow = React.useRef(false);
+  const panHandlers = {
+    onPointerDown: (e) => {
+      if (e.button !== 0) return;
+      const el = e.currentTarget;
+      swallow.current = false;
+      pan.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, id: e.pointerId, moved: false };
+    },
+    onPointerMove: (e) => {
+      const p = pan.current; if (!p || p.id !== e.pointerId) return;
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      if (!p.moved) {
+        if (Math.abs(dx) + Math.abs(dy) < 5) return;
+        p.moved = true; setPanning(true);
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      }
+      e.currentTarget.scrollLeft = p.left - dx; e.currentTarget.scrollTop = p.top - dy;
+    },
+    onPointerUp: (e) => {
+      const p = pan.current; pan.current = null;
+      if (!p) return;
+      if (p.moved) { swallow.current = true; setPanning(false); try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ignore */ } }
+    },
+    onPointerCancel: () => { pan.current = null; setPanning(false); },
+    onClickCapture: (e) => { if (swallow.current) { e.stopPropagation(); e.preventDefault(); swallow.current = false; } },
+  };
   return (
     <div className="db-plan__graphwrap">
-      <div className="db-plan__zoom" role="group" aria-label="Zoom">
+      <div className="db-plan__zoom" role="group" aria-label="Zoom" onPointerDown={(e) => e.stopPropagation()}>
         <button type="button" className="lg-icon" onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.1).toFixed(2)))} aria-label="Diminuir" title="Diminuir"><Icon name="zoom-out" size={14} /></button>
         <span>{Math.round(zoom * 100)}%</span>
         <button type="button" className="lg-icon" onClick={() => setZoom((z) => Math.min(1.6, +(z + 0.1).toFixed(2)))} aria-label="Aumentar" title="Aumentar"><Icon name="zoom-in" size={14} /></button>
         <button type="button" className="lg-icon" onClick={fit} aria-label="Ajustar à largura" title="Ajustar à largura"><Icon name="maximize" size={14} /></button>
       </div>
-      <div className="db-plan__graph tk-scroll" ref={containerRef}>
+      <div className={'db-plan__graph tk-scroll' + (panning ? ' is-panning' : '')} ref={containerRef} {...panHandlers}>
         <div style={{ width: W * zoom, height: H * zoom }}>
           <div className="db-plan__canvas" style={{ width: W, height: H, transform: `scale(${zoom})` }}>
             <svg className="db-plan__edges" width={W} height={H} aria-hidden="true">
