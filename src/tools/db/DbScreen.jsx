@@ -32,17 +32,44 @@ class Boundary extends React.Component {
   }
 }
 
-function Rail({ servers, current, onPick, onAdd, onEdit, onRemove }) {
+// Largura da bandeja, como a de repositórios do Git: arrastar a borda define; abaixo de RAIL_SNAP vira a coluna de siglas.
+const RAIL_COMPACT = 52, RAIL_MIN = 170, RAIL_MAX = 420, RAIL_SNAP = 120, RAIL_DEFAULT = 236;
+const railWidth = (raw) => (raw < RAIL_SNAP ? RAIL_COMPACT : Math.min(RAIL_MAX, Math.max(RAIL_MIN, Math.round(raw))));
+const initials = (name) => {
+  const p = String(name || '?').split(/[\s._\\/-]+/).filter(Boolean);
+  return ((p[0] || '?')[0] + (p.length > 1 ? p[1][0] : (p[0] || '')[1] || '')).toUpperCase();
+};
+
+function Rail({ servers, current, width, onResize, onPick, onAdd, onEdit, onRemove }) {
+  const railRef = React.useRef(null);
+  const [live, setLive] = React.useState(null); // largura durante o arrasto (só grava ao soltar)
+  const w = live ?? width;
+  const collapsed = w <= RAIL_COMPACT;
+  const drag = {
+    onPointerDown: (e) => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); setLive(width); },
+    onPointerMove: (e) => { if (live != null && railRef.current) setLive(railWidth(e.clientX - railRef.current.getBoundingClientRect().left)); },
+    onPointerUp: () => { if (live != null) { onResize(live); setLive(null); } },
+    onLostPointerCapture: () => setLive(null),
+    onDoubleClick: () => onResize(collapsed ? RAIL_DEFAULT : RAIL_COMPACT),
+    onKeyDown: (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      onResize(e.key === 'ArrowRight' ? (width <= RAIL_COMPACT ? RAIL_MIN : railWidth(width + 16)) : railWidth(width - 16));
+    },
+  };
   return (
-    <aside className="gt-rail db-rail">
-      <div className="gt-rail__head"><span className="home-section__title">Servidores</span></div>
+    <aside ref={railRef} className={'gt-rail db-rail' + (collapsed ? ' is-collapsed' : '') + (live != null ? ' is-dragging' : '')} style={{ width: w }}>
+      <div className="gt-rail__head">{!collapsed && <span className="home-section__title">Servidores</span>}</div>
       <div className="gt-rail__list tk-scroll">
         {servers.map((s) => {
           const st = STATUS[s.status] || STATUS.idle;
           return (
             <div key={s.id} className="gt-repo-wrap">
-              <button type="button" className={'gt-repo' + (s.id === current ? ' is-sel' : '')} onClick={() => onPick(s.id)} title={s.label}>
-                <StatusDot s={s} />
+              <button type="button" className={'gt-repo' + (s.id === current ? ' is-sel' : '')} onClick={() => onPick(s.id)}
+                title={collapsed ? `${s.name || s.label} — ${st.label}${s.blocked ? ` · ${s.blocked} bloqueada(s)` : ''}\n${s.label}` : s.label}
+                aria-label={collapsed ? s.name || s.label : undefined}>
+                {collapsed && <span className="gt-repo__abbr">{initials(s.name || s.label)}</span>}
+                {!collapsed && <StatusDot s={s} />}
                 <span className="gt-repo__main">
                   <span className="gt-repo__name">{s.name || s.label}</span>
                   <span className="gt-repo__branch">{s.status === 'ok' && s.blocked ? <span className="db-railwarn"><Icon name="octagon-x" size={10} /> {s.blocked} bloqueada(s)</span> : <>{s.background && <Icon name="history" size={10} />} {s.status === 'ok' ? `${fmtNum(s.active)} ativa(s)` : st.label}</>}</span>
@@ -56,8 +83,10 @@ function Rail({ servers, current, onPick, onAdd, onEdit, onRemove }) {
         {servers.length === 0 && <div className="gt-msg">Nenhum servidor ainda.</div>}
       </div>
       <div className="gt-rail__foot">
-        <button type="button" className="gt-op is-accent is-md" onClick={onAdd}><Icon name="plus" size={14} /><span>Adicionar servidor</span></button>
+        <button type="button" className="gt-op is-accent is-md" onClick={onAdd} title="Adicionar servidor" aria-label="Adicionar servidor"><Icon name="plus" size={14} />{!collapsed && <span>Adicionar servidor</span>}</button>
       </div>
+      <div className="gt-rail__grip" role="separator" aria-orientation="vertical" aria-label="Largura da lista de servidores (arraste; duplo clique alterna entre siglas e padrão)"
+        aria-valuemin={RAIL_COMPACT} aria-valuemax={RAIL_MAX} aria-valuenow={w} tabIndex={0} title="Arraste para ajustar a largura · duplo clique alterna" {...drag} />
     </aside>
   );
 }
@@ -125,7 +154,7 @@ export function DbScreen({ toast, request }) {
   const ring = (id && rings.current[id]) || [];
   return (
     <div className="gt db">
-      <Rail servers={servers} current={id} onPick={(sid) => setUi((u) => ({ ...u, server: sid }))} onAdd={() => setForm({})} onEdit={(s) => setForm(s)} onRemove={setRemoving} />
+      <Rail servers={servers} current={id} width={ui.railW ?? (window.innerWidth < 1100 ? RAIL_COMPACT : RAIL_DEFAULT)} onResize={(railW) => setUi((u) => ({ ...u, railW }))} onPick={(sid) => setUi((u) => ({ ...u, server: sid }))} onAdd={() => setForm({})} onEdit={(s) => setForm(s)} onRemove={setRemoving} />
       <div className="gt-main">
         {!current ? (
           <EmptyState title="Adicione um SQL Server" animate="none"
