@@ -81,7 +81,7 @@
 /* Faixa das abas: rola na horizontal (muitos logs abertos) e nunca na vertical. A linha de baixo é uma sombra interna
    — a aba ativa, com o fundo do conteúdo, passa por cima dela e "cola" no painel sem precisar vazar 1px para fora. */
 .lg-srcs { display: flex; align-items: flex-end; gap: 4px; padding: 8px 12px 0; background: var(--tk-bg); box-shadow: inset 0 -1px 0 var(--tk-border);
-  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; flex-shrink: 0; }
+  overflow-x: auto; overflow-y: hidden; flex-shrink: 0; }
 .lg-src { display: inline-flex; align-items: center; gap: 2px; height: 30px; max-width: 260px; padding: 0 4px 0 0; border: 1px solid transparent; border-bottom: 0;
   border-radius: var(--tk-radius-md) var(--tk-radius-md) 0 0; color: var(--tk-text-3); font: 500 12px var(--tk-font-sans); flex-shrink: 0; }
 .lg-src.is-on { background: var(--tk-surface-1); border-color: var(--tk-border); color: var(--tk-text); }
