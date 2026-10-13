@@ -11,7 +11,8 @@
  *  - **Sinapses:** pontes entre setores vizinhos, que exigem um vizinho comprado **dos dois lados**.
  *  - **Maestria:** o último nó do setor exige `needs` nós do próprio setor.
  *  - **Infinitos:** nós repetíveis (custo sobe a cada nível) para o fim do jogo.
- *  - **Reorganizar** só é possível logo depois de uma Singularity, até o primeiro passo no mapa da run nova.
+ *  - **Janela:** logo depois de uma Singularity, até o primeiro passo no mapa da run nova. Nela, o que foi comprado
+ *    na própria janela se desfaz de graça; reorganizar a rede inteira devolve só 80% do que vem de runs anteriores.
  *
  * Nó: { id, sector, ring (distância do centro), at (−1…1: posição angular dentro do setor), kind, name, icon, cost,
  *       links: [ids] (ligações não direcionadas; declarar de um lado basta), excl?, needs?, step? (custo a mais por
@@ -42,6 +43,7 @@ const INSIGHT = {
   speed: { days: 14, max: 8 },                       // +1 por dia inteiro abaixo de `days` (até `max`)
   depth: { from: 1e14, per: 3, max: 8 },             // +1 a cada ×`per` de Compute (da run) acima de `from` (seguir jogando rende)
   corePerRun: 0.1,                                   // Núcleo: +10% de produção por Singularity feita (para sempre)
+  respecRefund: 0.8,                                 // reorganizar devolve 80% do que foi comprado antes da janela atual
 };
 
 /** Setores, no sentido horário a partir do topo. Vizinhos: o anterior e o seguinte. */

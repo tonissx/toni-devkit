@@ -23,7 +23,8 @@
  *   mapSquad { squad, node? } mapa: salva a preparação (a view mostra a previsão para `node`)
  *   singularity               venceu o Pico Production: recomeça a run e ganha Insight — ver engine/singularity.js
  *   treeBuy { id }            compra (ou sobe o nível de) um nó da Rede da Singularity
- *   treeRespec                reorganiza a rede (devolve o Insight; só logo depois de uma Singularity)
+ *   treeUndo { id }           desfaz um nível comprado nesta janela (devolve 100%)
+ *   treeRespec                reorganiza a rede (devolve 100% do que é da janela e 80% do resto; só na janela)
  */
 const { CONTENT } = require('../content/index.js');
 const { advanceTo } = require('./advance.js');
@@ -39,7 +40,7 @@ const { bpOf, partId, levelOf, parsePart, partError, dropPart, costDivOf } = req
 const { ensureMap, mapAct } = require('./map.js');
 const { patchMod } = require('./patches.js');
 const { petHp, setPetHp } = require('./battle.js');
-const { treeMod, treeAdd, treeFlag, capOf, singularity, treeBuy, treeRespec } = require('./singularity.js');
+const { treeMod, treeAdd, treeFlag, capOf, singularity, treeBuy, treeUndo, treeRespec, closeWindow } = require('./singularity.js');
 
 const upgradeAvailable = (s, u) => !s.run.upgrades[u.id] && check(u.requires, s);
 
@@ -312,13 +313,15 @@ function act(s, action, now, c, log) {
     case 'mapSquad': case 'mapMove': case 'mapFight': case 'mapChoose': case 'mapBuy': case 'mapAdvance': {
       const err = mapAct(s, action, now, c, log);
       // O primeiro passo no mapa da run fecha a janela de reorganizar a Rede da Singularity.
-      if (!err && (action.type === 'mapMove' || action.type === 'mapFight')) s.meta.respec = false;
+      if (!err && (action.type === 'mapMove' || action.type === 'mapFight')) closeWindow(s);
       return err;
     }
     case 'singularity':
       return singularity(s, now, c, log);
     case 'treeBuy':
       return treeBuy(s, action.id, c, log);
+    case 'treeUndo':
+      return treeUndo(s, action.id, c, log);
     case 'treeRespec':
       return treeRespec(s, c, log);
     case 'seen':

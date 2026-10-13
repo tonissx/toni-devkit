@@ -111,19 +111,69 @@ test('rede: maestria exige 7 nós do setor; infinito sobe de nível com custo cr
   assert.equal(S.spentInsight(s), 1 + 1 + 1 + 2 + 2 + 8 + 4 + 12 + k.cost + k.cost + k.step);
 });
 
-test('rede: reorganizar devolve todo o Insight, só logo depois de uma Singularity e até o primeiro passo no mapa', () => {
-  let s = make({ tree: has('inf-1', 'inf-2a'), insight: 5 });
+test('rede: reorganizar só na janela; devolve 100% do que é da janela e 80% do resto; o 1º passo no mapa fecha a janela', () => {
+  let s = make({ tree: has('inf-1', 'inf-2a', 'inf-3a'), insight: 5 }); // 4 Insight de runs anteriores
   assert.match(run(s, { type: 'treeRespec' }).error, /logo depois de uma Singularity/);
   s.meta.respec = true;
+  s = run(s, { type: 'treeBuy', id: 'inf-2b' }).state; // 1 nesta janela
+  assert.equal(s.meta.insight, 4);
+  assert.equal(S.respecRefund(s), 1 + Math.floor(4 * 0.8));
+  const v = snapshot(s, T0).singularity;
+  assert.equal(v.refund, 4);
+  assert.equal(v.spent, 5);
   const r = run(s, { type: 'treeRespec' });
   assert.equal(r.error, undefined);
-  assert.equal(r.state.meta.insight, 7);
+  assert.equal(r.state.meta.insight, 8);
   assert.deepEqual(r.state.meta.tree, {});
-  // O primeiro passo no mapa fecha a janela.
-  let t = r.state;
+  assert.ok(r.log.some((e) => e.type === 'treeRespec' && e.refunded === 4 && e.lost === 1));
+  // O que se compra depois de reorganizar (ainda na janela) também se desfaz de graça.
+  let t = run(r.state, { type: 'treeBuy', id: 'inf-1' }).state;
+  assert.equal(run(t, { type: 'treeUndo', id: 'inf-1' }).state.meta.insight, 8);
+  // O primeiro passo no mapa fecha a janela: o que foi comprado fica.
   const first = Object.values(t.run.map.nodes).find((n) => n.col === 0);
   t = run(t, { type: 'mapFight', node: first.id, squad: { slots: { vanguard: 'byte' }, triggers: {}, items: [] } }).state;
   assert.equal(t.meta.respec, false);
+  assert.deepEqual(t.meta.fresh, {});
+  assert.match(run(t, { type: 'treeUndo', id: 'inf-1' }).error, /antes do primeiro passo/);
+  assert.match(run(t, { type: 'treeRespec' }).error, /logo depois/);
+});
+
+test('rede: desfazer devolve 100%, só o que é da janela, e não deixa nó solto', () => {
+  let s = make({ tree: has('cmb-1'), insight: 20 });
+  s.meta.respec = true;
+  for (const id of ['cmb-2a', 'cmb-3a']) s = run(s, { type: 'treeBuy', id }).state;
+  assert.equal(s.meta.insight, 17);
+  assert.match(run(s, { type: 'treeUndo', id: 'cmb-1' }).error, /run anterior/);
+  assert.match(run(s, { type: 'treeUndo', id: 'cmb-2a' }).error, /dependem deste/);
+  const v = snapshot(s, T0).singularity.nodes;
+  assert.equal(v.find((n) => n.id === 'cmb-2a').undo, null);
+  assert.equal(v.find((n) => n.id === 'cmb-3a').undo, 2);
+  s = run(s, { type: 'treeUndo', id: 'cmb-3a' }).state;
+  s = run(s, { type: 'treeUndo', id: 'cmb-2a' }).state;
+  assert.equal(s.meta.insight, 20);
+  assert.deepEqual(s.meta.tree, { 'cmb-1': 1 });
+  // Infinito: desfaz um nível por vez (o mais caro primeiro).
+  let r = make({ tree: { ...has('inf-1', 'inf-2a', 'inf-2b', 'inf-3a', 'inf-3b', 'inf-3c', 'inf-4a', 'inf-4b', 'inf-5a', 'inf-6'), 'inf-r': 1 }, insight: 40 });
+  r.meta.respec = true;
+  const k = CONTENT.perk['inf-r'];
+  r = run(r, { type: 'treeBuy', id: 'inf-r' }).state;
+  r = run(r, { type: 'treeUndo', id: 'inf-r' }).state;
+  assert.equal(r.meta.tree['inf-r'], 1);
+  assert.equal(r.meta.insight, 40);
+  assert.match(run(r, { type: 'treeUndo', id: 'inf-r' }).error, /run anterior/);
+  void k;
+});
+
+test('rede: desfazer não derruba maestria nem sinapse que dependem do nó', () => {
+  let s = make({ tree: has('inf-1', 'inf-2b', 'ops-1', 'ops-2a'), insight: 20 });
+  s.meta.respec = true;
+  s = run(s, { type: 'treeBuy', id: 'inf-3c' }).state;
+  s = run(s, { type: 'treeBuy', id: 'ops-3a' }).state;
+  s = run(s, { type: 'treeBuy', id: 'br-autoscaling' }).state;
+  assert.match(run(s, { type: 'treeUndo', id: 'inf-3c' }).error, /dependem deste/);
+  const m = make({ tree: has('cmb-1', 'cmb-2a', 'cmb-2b', 'cmb-3a', 'cmb-3b', 'cmb-4a', 'cmb-5a', 'cmb-6'), insight: 5 });
+  m.meta.respec = true; m.meta.fresh = { 'cmb-3b': 1 };
+  assert.match(run(m, { type: 'treeUndo', id: 'cmb-3b' }).error, /dependem deste/); // a maestria cairia abaixo de 7
 });
 
 /* ─────────────── Singularity ─────────────── */

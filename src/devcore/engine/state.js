@@ -23,7 +23,7 @@ function createState(now, c = CONTENT) {
     run: createRun(c, 0, now),
     // Singularity (prestígio — engine/singularity.js): insight não gasto, ganho na vida, árvore { id: nível }, janela
     // de reorganização, Compute de runs passadas. (fragments/rebuilds/perks: do Legado guardado, sem uso.)
-    meta: { fragments: 0, rebuilds: 0, perks: {}, insight: 0, earned: 0, singularities: 0, tree: {}, respec: false, lifetime: 0, best: 0, lastAt: 0 },
+    meta: { fragments: 0, rebuilds: 0, perks: {}, insight: 0, earned: 0, singularities: 0, tree: {}, respec: false, fresh: {}, lifetime: 0, best: 0, lastAt: 0 },
     usage: { days: {}, distinct: {}, first: {} },
     discoveries: { found: {}, unseen: [], seenUpgrades: [] },
     pending: { welcome: null },

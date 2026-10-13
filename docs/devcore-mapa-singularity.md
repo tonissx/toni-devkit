@@ -403,8 +403,10 @@ Constelação com o **Núcleo** no centro e **6 setores** em hexágono:
   Patch Notes, Seed Funding.
 - **Maestria (anel 6):** pede 7 nós do setor.
 - **Infinitos (anel 7):** sobem de nível sem limite, com custo 6 + 4 por nível.
-- **Reorganizar:** devolve todo o Insight, mas só logo depois de uma Singularity e até o primeiro passo no mapa da
-  run nova. As escolhas valem a run inteira.
+- **Janela de ajuste:** de uma Singularity até o primeiro passo no mapa da run nova.
+  - **Desfazer** um nó comprado nessa janela devolve 100%, desde que nenhum outro nó dependa dele.
+  - **Reorganizar** a rede inteira devolve 100% do que é da janela e **80%** do que veio de runs anteriores.
+  - O primeiro passo no mapa fecha a janela: o que foi comprado fica, e só sai pagando os 20% na próxima janela.
 
 **Custos:** anéis 1–2 custam 1; anel 3 custa 2; notáveis 4; paradigmas 8; maestria 12; sinapses 3.
 
@@ -474,6 +476,7 @@ A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa d
 | Data | Decisão |
 |---|---|
 | 2026-10-13 | **Singularity e a Rede**: Insight por chefes, elites, rapidez e profundidade; árvore em constelação de 6 setores com adjacência, paradigmas excludentes, sinapses entre setores, maestrias e infinitos; reorganizar só logo depois do reset |
+| 2026-10-13 | **Reorganizar custa**: devolve 80% do que veio de runs anteriores; o comprado na janela atual (da Singularity até o 1º passo no mapa) se desfaz de graça, e quem começa a run perde esse direito |
 | 2026-10-06 | O prestige passa a ser mapa + Singularity; o Legado/Rebuild fica guardado (branch `worktree-devcore-legacy`) |
 | 2026-10-06 | Batalha: **auto-battler com preparação** (não tower defense nem tática por turnos) |
 | 2026-10-06 | Ritmo: **alguns dias por área** (Singularity em 1–2 semanas de uso casual) |

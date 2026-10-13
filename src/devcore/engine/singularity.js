@@ -4,11 +4,14 @@
  * desenho em docs/devcore-mapa-singularity.md §9.
  *
  * Estado (meta, nunca zera): insight (não gasto) · earned (ganho na vida) · singularities · tree { id: nível }
- *   · respec (pode reorganizar: logo depois de uma Singularity, até o primeiro passo no mapa) · lifetime (Compute de
- *   runs passadas) · best (menos dias numa run) · lastAt
+ *   · respec (janela aberta: logo depois de uma Singularity, até o primeiro passo no mapa) · fresh { id: níveis
+ *   comprados nesta janela } · lifetime (Compute de runs passadas) · best (menos dias numa run) · lastAt
+ * Desfazer (treeUndo) devolve 100%, só o que foi comprado na janela aberta. Reorganizar (treeRespec) devolve 100% do
+ * que é da janela e INSIGHT.respecRefund (80%) do resto. O primeiro passo no mapa fecha a janela: o que foi comprado
+ * fica (e só sai pagando a reorganização na próxima janela).
  * Run: stats { startedAt, elites, bosses[] } — o que rende Insight.
  *
- * Ações (engine/index.js): singularity · treeBuy { id } · treeRespec
+ * Ações (engine/index.js): singularity · treeBuy { id } · treeUndo { id } · treeRespec
  */
 const { CONTENT } = require('../content/index.js');
 const { createRun } = require('./state.js');
@@ -130,6 +133,7 @@ function singularity(s, now, c, log) {
   M.best = M.best ? Math.min(M.best, br.days) : br.days;
   M.lastAt = now;
   M.respec = true; // pode reorganizar a rede até o primeiro passo no mapa da run nova
+  M.fresh = {};     // nada comprado nesta janela ainda
   // Semente nova: outro mapa, outras lutas.
   s.seed = ((Math.imul(s.seed, 48271) >>> 0) % 2147483646) + 1;
 
@@ -214,29 +218,89 @@ function treeBuy(s, id, c, log) {
   if ((s.meta.insight || 0) < cost) return 'Insight insuficiente';
   s.meta.insight -= cost;
   s.meta.tree[k.id] = rankOf(s, k.id) + 1;
+  if (s.meta.respec) s.meta.fresh = { ...(s.meta.fresh || {}), [k.id]: ((s.meta.fresh || {})[k.id] || 0) + 1 }; // desfazível nesta janela
   log.push({ type: 'treeBuy', id: k.id, name: k.name, rank: s.meta.tree[k.id] });
   return null;
 }
 
-/** Insight gasto na rede (o que a reorganização devolve). */
-function spentInsight(s, c = CONTENT) {
-  let n = 0;
-  for (const { k, rank } of owned(s, c)) for (let i = 0; i < rank; i++) n += k.cost + (k.step || 0) * i;
-  return n;
+/** Níveis de um nó comprados na janela aberta (desfazíveis de graça). */
+const freshOf = (s, id) => (s.meta.respec && s.meta.fresh && s.meta.fresh[id]) || 0;
+
+/** Insight gasto na rede: { fresh (da janela aberta), old (de antes), total }. */
+function spentBreakdown(s, c = CONTENT) {
+  let fresh = 0; let old = 0;
+  for (const { k, rank } of owned(s, c)) {
+    const f = Math.min(rank, freshOf(s, k.id));
+    for (let i = 0; i < rank; i++) { const v = k.cost + (k.step || 0) * i; if (i >= rank - f) fresh += v; else old += v; }
+  }
+  return { fresh, old, total: fresh + old };
+}
+const spentInsight = (s, c = CONTENT) => spentBreakdown(s, c).total;
+
+/** Quanto a reorganização devolve agora: 100% do que é da janela e respecRefund do resto (arredondado para baixo). */
+function respecRefund(s, c = CONTENT) {
+  const b = spentBreakdown(s, c);
+  return b.fresh + Math.floor(b.old * c.INSIGHT.respecRefund + 1e-9);
 }
 
-/** Reorganiza a rede: devolve todo o Insight gasto (só logo depois de uma Singularity). → erro ou null */
+/**
+ * A rede continua de pé sem esse nível? Todo nó comprado precisa de caminho até o Núcleo por nós comprados (sinapse:
+ * os dois lados), e as maestrias, dos nós do setor.
+ */
+function treeValid(s, c = CONTENT) {
+  const adj = adjacency(c);
+  const have = (id) => id === 'core' || rankOf(s, id) > 0;
+  const ok = new Set(['core']);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const k of c.TREE) {
+      if (ok.has(k.id) || !have(k.id)) continue;
+      const linked = k.kind === 'bridge' ? k.links.every((l) => ok.has(l)) : [...adj[k.id]].some((l) => ok.has(l));
+      if (linked) { ok.add(k.id); changed = true; }
+    }
+  }
+  return c.TREE.every((k) => !have(k.id) || (ok.has(k.id) && (!k.needs || sectorCount(s, k.sector, c) >= k.needs)));
+}
+
+/** Desfaz o último nível de um nó comprado nesta janela: devolve 100%. → erro ou null */
+function treeUndo(s, id, c, log) {
+  const k = c.perk[id];
+  if (!k || rankOf(s, id) < 1) return 'Nó não comprado';
+  if (!s.meta.respec) return 'Só dá para desfazer antes do primeiro passo no mapa da run';
+  if (freshOf(s, id) < 1) return 'Comprado numa run anterior: só sai reorganizando a rede (devolve 80%)';
+  const probe = { meta: { ...s.meta, tree: { ...s.meta.tree, [id]: rankOf(s, id) - 1 } } };
+  if (!treeValid(probe, c)) return 'Outros nós comprados dependem deste: desfaça-os antes';
+  const r = rankOf(s, id);
+  const back = k.cost + (k.step || 0) * (r - 1);
+  if (r - 1 > 0) s.meta.tree[id] = r - 1; else delete s.meta.tree[id];
+  s.meta.fresh = { ...s.meta.fresh, [id]: s.meta.fresh[id] - 1 };
+  if (!s.meta.fresh[id]) delete s.meta.fresh[id];
+  s.meta.insight = (s.meta.insight || 0) + back;
+  log.push({ type: 'treeUndo', id, refunded: back });
+  return null;
+}
+
+/** Reorganiza a rede inteira (só na janela): devolve 100% do que é da janela e 80% do resto. → erro ou null */
 function treeRespec(s, c, log) {
   if (!s.meta.respec) return 'A rede só se reorganiza logo depois de uma Singularity (até o primeiro passo no mapa)';
-  const back = spentInsight(s, c);
+  const back = respecRefund(s, c);
+  const spent = spentInsight(s, c);
   s.meta.insight = (s.meta.insight || 0) + back;
   s.meta.tree = {};
-  log.push({ type: 'treeRespec', refunded: back });
+  s.meta.fresh = {};
+  log.push({ type: 'treeRespec', refunded: back, lost: spent - back });
   return null;
+}
+
+/** O primeiro passo no mapa fecha a janela: o que foi comprado nela vira permanente. */
+function closeWindow(s) {
+  s.meta.respec = false;
+  s.meta.fresh = {};
 }
 
 module.exports = {
   treeMod, treeAdd, treeFlag, treeEffects, startConfig, petStartLevel, capOf, randomPatch,
   singularityReady, singularityError, insightBreakdown, singularity, applyStart,
-  adjacency, perkCost, perkState, sectorCount, treeBuy, treeRespec, spentInsight, rankOf,
+  adjacency, perkCost, perkState, sectorCount, treeBuy, treeUndo, treeRespec, treeValid, closeWindow, spentInsight,
+  spentBreakdown, respecRefund, freshOf, rankOf,
 };

@@ -114,7 +114,7 @@ function NodeButton({ n, p, sec, selected, onPick, onHover }) {
   const hue2 = n.kind === 'bridge' ? sec[n.sectors[1]].hue : hue;
   const label = `${n.name} — ${n.kindName}${n.kind === 'repeat' && n.rank ? ' nível ' + n.rank : ''}. ${n.status === 'owned' && n.kind !== 'repeat' ? 'Comprado' : n.cost + ' Insight'}`;
   return (
-    <button type="button" className={'dc-sg__node is-' + n.kind + ' is-' + n.status + (n.affordable ? ' is-affordable' : '') + (selected ? ' is-selected' : '')}
+    <button type="button" className={'dc-sg__node is-' + n.kind + ' is-' + n.status + (n.affordable ? ' is-affordable' : '') + (selected ? ' is-selected' : '') + (n.fresh ? ' is-fresh' : '')}
       style={{ left: HALF + p.x, top: HALF + p.y, '--d': d + 'px', '--hue': hue, '--hue2': hue2 }}
       aria-label={label} aria-pressed={selected}
       onClick={() => onPick(n.id)} onMouseEnter={() => onHover(n.id)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(n.id)} onBlur={() => onHover(null)}>
@@ -137,7 +137,8 @@ function Inspector({ n, sg, sec, byId, act }) {
           <li><Icon name="link" size={13} /> <span><b>Sinapses:</b> pontes entre setores vizinhos. Pedem um nó comprado dos dois lados.</span></li>
           <li><Icon name="crown" size={13} /> <span><b>Maestria:</b> o último nó de cada setor pede 7 nós do setor.</span></li>
           <li><Icon name="infinity" size={13} /> <span><b>Infinitos:</b> sobem de nível sem limite, cada vez mais caros.</span></li>
-          <li><Icon name="rotate-ccw" size={13} /> <span><b>Reorganizar:</b> só logo depois de uma Singularity, até o primeiro passo no mapa. Devolve todo o Insight.</span></li>
+          <li><Icon name="undo-2" size={13} /> <span><b>Desfazer:</b> logo depois de uma Singularity, até o primeiro passo no mapa, o que você comprar se desfaz de graça.</span></li>
+          <li><Icon name="rotate-ccw" size={13} /> <span><b>Reorganizar:</b> na mesma janela, desmonta a rede inteira. Devolve só {sg.refundPct}% do que veio de runs anteriores.</span></li>
         </ul>
         <div className="dc-sg__title">Setores</div>
         <div className="dc-sg__legend">
@@ -173,7 +174,11 @@ function Inspector({ n, sg, sec, byId, act }) {
           <Button variant="primary" icon="plus" disabled={!canBuy} onClick={() => act({ type: 'treeBuy', id: n.id })}>{buyText}</Button>
         </div>
       )}
-      {n.status === 'owned' && n.kind !== 'repeat' && n.kind !== 'core' && <div className="dc-sg__fact is-on"><Icon name="check" size={12} /> Comprado: vale em todas as runs.</div>}
+      {n.status === 'owned' && n.kind !== 'repeat' && n.kind !== 'core' && <div className="dc-sg__fact is-on"><Icon name="check" size={12} /> {n.fresh ? "Comprado nesta janela: desfaz de graça até o primeiro passo no mapa." : "Comprado: vale em todas as runs."}</div>}
+      {n.rank > 0 && n.kind !== 'core' && (n.undo != null
+        ? <Button variant="ghost" icon="undo-2" onClick={() => act({ type: 'treeUndo', id: n.id })}>Desfazer (devolve {n.undo})</Button>
+        : n.fresh > 0 ? <div className="dc-sg__fact"><Icon name="lock" size={12} /> Outros nós dependem deste: desfaça-os antes.</div>
+          : sg.respec ? <div className="dc-sg__fact"><Icon name="lock" size={12} /> De uma run anterior: só sai reorganizando a rede ({sg.refundPct}%).</div> : null)}
     </div>
   );
 }
@@ -223,7 +228,7 @@ function SingularityModal({ sg, onClose, onConfirm }) {
           <Icon name="rocket" size={13} /> <b>A próxima run começa com:</b> {starts.length ? starts.join(' · ') : 'nada além do básico. Os nós de Arquivo mudam isso.'}
           {st.cleanSlate && <span className="dc-chip">Clean Slate: sem bônus de início</span>}
         </div>
-        <p className="dc-sgm__note">Depois, você pode reorganizar a Rede de graça até dar o primeiro passo no mapa da run nova.</p>
+        <p className="dc-sgm__note">Depois, até dar o primeiro passo no mapa da run nova, o que você comprar se desfaz de graça; reorganizar a rede inteira devolve {sg.refundPct}% do que já estava nela.</p>
       </div>
     </Modal>
   );
@@ -269,10 +274,11 @@ export function SingularityPanel({ snap, act }) {
               <span>A Singularity libera ao vencer o chefe de <b>{sg.lastArea.name}</b> ({sg.run.bosses.length}/3 chefes nesta run).</span>
             </>
           )}
-          {sg.respec && sg.spent > 0 && <Button variant="secondary" icon="rotate-ccw" onClick={() => act({ type: 'treeRespec' })}>Reorganizar (devolve {sg.spent})</Button>}
+          {sg.respec && sg.spent > 0 && <Button variant="secondary" icon="rotate-ccw" onClick={() => act({ type: 'treeRespec' })}
+            title={`Desmonta a rede inteira: devolve 100% do que foi comprado nesta janela e ${sg.refundPct}% do resto`}>Reorganizar (devolve {sg.refund} de {sg.spent})</Button>}
         </div>
       </header>
-      {sg.respec && <div className="dc-sg__respec"><Icon name="rotate-ccw" size={13} /> Run nova: você pode reorganizar a Rede de graça até dar o primeiro passo no mapa.</div>}
+      {sg.respec && <div className="dc-sg__respec"><Icon name="undo-2" size={13} /> Janela aberta: o que você comprar agora se desfaz de graça. Reorganizar a rede inteira devolve {sg.refundPct}% do que veio de runs anteriores. No primeiro passo no mapa, as escolhas ficam.</div>}
       <div className="dc-sg__body">
         <div className="dc-sg__stage" ref={stage} {...pz.handlers}>
           {pz.view && (

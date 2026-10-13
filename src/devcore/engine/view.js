@@ -464,6 +464,9 @@ function singularityView(s, now, c) {
       id: k.id, kind: k.kind, kindName: c.KIND[k.kind].name, sector: k.sector, sectors: k.sectors || null, ring: k.ring, at: k.at,
       name: k.name, icon: k.icon, description: k.description, links: k.links, excl: k.excl || null, needs: k.needs || null,
       rank: S.rankOf(s, k.id), cost, status: st.status, reason: st.reason,
+      // Desfazer (só o comprado nesta janela, e se nada depender dele): devolve o último nível inteiro.
+      undo: S.freshOf(s, k.id) > 0 && S.treeValid({ meta: { ...M, tree: { ...M.tree, [k.id]: S.rankOf(s, k.id) - 1 } } }, c) ? S.perkCost({ meta: { tree: { [k.id]: S.rankOf(s, k.id) - 1 } } }, k) : null,
+      fresh: S.freshOf(s, k.id),
       affordable: (st.status === 'available' || (st.status === 'owned' && k.kind === 'repeat')) && cost <= amount,
     };
   });
@@ -472,7 +475,7 @@ function singularityView(s, now, c) {
     visible: !!s.run.map || (M.singularities || 0) > 0,
     ready: S.singularityReady(s, c),
     insight: amount, earned: M.earned || 0, count: M.singularities || 0, best: M.best || 0, respec: !!M.respec,
-    spent: S.spentInsight(s, c), corePct: Math.round(c.INSIGHT.corePerRun * (M.singularities || 0) * 100),
+    spent: S.spentInsight(s, c), refund: S.respecRefund(s, c), refundPct: Math.round(c.INSIGHT.respecRefund * 100), corePct: Math.round(c.INSIGHT.corePerRun * (M.singularities || 0) * 100),
     breakdown: br,
     run: { bosses: (s.run.stats && s.run.stats.bosses) || [], elites: (s.run.stats && s.run.stats.elites) || 0 },
     lastArea: { id: c.AREAS[c.AREAS.length - 1].id, name: c.AREAS[c.AREAS.length - 1].name },

@@ -1959,3 +1959,5 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   .dc-sg__edge.is-open, .dc-sg__node.is-core, .dc-sg__node.is-available.is-affordable, .dc-sg__flash, .dc-sg__flash span { animation: none; }
   .dc-sg__flash { opacity: 0; }
 }
+.dc-sg__node.is-fresh::after { content: ''; position: absolute; left: -5px; top: -5px; width: 9px; height: 9px; border-radius: 50%; background: #E9DBFF; box-shadow: 0 0 6px #B98CFF; }
+.dc-sg__node.is-keystone.is-fresh::after { transform: rotate(-45deg); }
