@@ -5,6 +5,7 @@ import { DS } from '../../lib/ds.js';
 import { useAiMode, useAiTask, AiButton, AiPanel, aiOn } from '../../ai/ui.jsx';
 import { WAIT_HINT, CATEGORY_LABEL } from '../../db/waits.js';
 import { Stat } from '../../lib/charts.jsx';
+import { PlanView } from './PlanView.jsx';
 import { dbApi, errText, fmtNum, fmtCompact, fmtTime, Sparkline, copyText, fmtDur, whoOf, sqlOf, oneLine, Tone, WAIT_CAT, STATUS } from './shared.jsx';
 
 const { Icon, Modal, Button, Spinner } = DS;
@@ -216,9 +217,7 @@ export function SessionDetail({ serverId, sid, now, onClose, onKill, toast, onOp
     setPlan({ busy: true });
     try {
       const p = await dbApi().plan(serverId, { sessionId: r.command ? r.session_id : null, planHandle: r.plan_handle });
-      const file = await dbApi().savePlan(p.xml, `sessao-${r.session_id}`);
-      setPlan(file ? { file } : null);
-      if (file) toast('Plano salvo', `${file} — abra no SSMS ou no Azure Data Studio`, 'ok');
+      setPlan({ xml: p.xml, name: `sessao-${r.session_id}`, title: `Plano · sessão ${r.session_id}` });
     } catch (e) { setPlan(null); toast('Sem plano', errText(e), 'error'); }
   };
   const node = fromTree || { id: sid, row: r, blockedCount: 0 };
@@ -268,6 +267,7 @@ export function SessionDetail({ serverId, sid, now, onClose, onKill, toast, onOp
         </div>
         <pre className="db-sql">{text || '(sem texto)'}</pre>
       </div>
+      {plan && plan.xml && <PlanView xml={plan.xml} title={plan.title} toast={toast} onClose={() => setPlan(null)} onSave={async () => { const f = await dbApi().savePlan(plan.xml, plan.name); if (f) toast('Plano salvo', `${f} — abra no SSMS ou no Azure Data Studio`, 'ok'); }} />}
     </aside>
   );
 }
