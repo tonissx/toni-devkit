@@ -278,7 +278,8 @@ export function SingularityPanel({ snap, act }) {
             title={`Desmonta a rede inteira: devolve 100% do que foi comprado nesta janela e ${sg.refundPct}% do resto`}>Reorganizar (devolve {sg.refund} de {sg.spent})</Button>}
         </div>
       </header>
-      {sg.respec && <div className="dc-sg__respec"><Icon name="undo-2" size={13} /> Janela aberta: o que você comprar agora se desfaz de graça. Reorganizar a rede inteira devolve {sg.refundPct}% do que veio de runs anteriores. No primeiro passo no mapa, as escolhas ficam.</div>}
+      {sg.respec && <div className="dc-sg__respec"><Icon name="undo-2" size={13} /> Janela aberta: o que você comprar agora se desfaz de graça (os nós de início valem na hora e ficam). Reorganizar a rede inteira devolve {sg.refundPct}% do que veio de runs anteriores. No primeiro passo no mapa, as escolhas ficam.</div>}
+      {!snap.map.unlocked && sg.count > 0 && <div className="dc-sg__respec is-map"><Icon name="map" size={13} /> Run nova: o mapa volta no {snap.map.requirement}{snap.tier.next && snap.tier.next.id === 2 ? ` (${formatNum(snap.tier.next.at)} de Compute acumulado)` : ""}, numa Floresta nova. Até lá, cresça a produção nas abas Generators e Upgrades.</div>}
       <div className="dc-sg__body">
         <div className="dc-sg__stage" ref={stage} {...pz.handlers}>
           {pz.view && (

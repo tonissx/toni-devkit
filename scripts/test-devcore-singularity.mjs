@@ -176,6 +176,29 @@ test('rede: desfazer não derruba maestria nem sinapse que dependem do nó', () 
   assert.match(run(m, { type: 'treeUndo', id: 'cmb-3b' }).error, /dependem deste/); // a maestria cairia abaixo de 7
 });
 
+test('rede: nó de início comprado na janela vale já na run atual e não se desfaz de graça', () => {
+  let s = run(ready({ pets: { byte: 10, memo: 9 } }), { type: 'singularity' }).state; // rede vazia: run nova no básico
+  assert.equal(s.run.generators['terminal-worker'].owned, 1);
+  const before = s.run.resources.compute.amount;
+  s = run(s, { type: 'treeBuy', id: 'arc-1' }).state;               // Bootstrap Script
+  assert.equal(s.run.resources.compute.amount, before + 5000);
+  assert.equal(s.run.generators['terminal-worker'].owned, 10);
+  assert.match(run(s, { type: 'treeUndo', id: 'arc-1' }).error, /run anterior|reorganizando/);
+  s = run(s, { type: 'treeBuy', id: 'pet-1' }).state;                // Muscle Memory: pets no nível 3 já
+  assert.equal(s.run.pets.byte.level, 3);
+  assert.equal(s.run.pets.memo.level, 3);
+  s = run(s, { type: 'treeBuy', id: 'arc-2a' }).state;               // Supply Cache
+  assert.equal(s.run.inventory.coffee, 2);
+  s = run(s, { type: 'treeBuy', id: 'inf-1' }).state;                // nó comum: desfaz de graça
+  assert.equal(run(s, { type: 'treeUndo', id: 'inf-1' }).error, undefined);
+  // Warm Start na janela abre o mapa na hora.
+  s.meta.insight = 10;
+  s = run(s, { type: 'treeBuy', id: 'arc-2b' }).state;
+  s = run(s, { type: 'treeBuy', id: 'arc-3a' }).state;
+  assert.equal(s.run.tier, 2);
+  assert.ok(s.run.map, 'o mapa abriu');
+});
+
 /* ─────────────── Singularity ─────────────── */
 test('singularity: só depois de vencer o chefe do Pico Production', () => {
   const s = make();

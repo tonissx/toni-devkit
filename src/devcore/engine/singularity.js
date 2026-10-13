@@ -216,11 +216,43 @@ function treeBuy(s, id, c, log) {
   if (st.status !== 'available' && !(st.status === 'owned' && k.kind === 'repeat')) return st.reason;
   const cost = perkCost(s, k);
   if ((s.meta.insight || 0) < cost) return 'Insight insuficiente';
+  const before = startConfig(s, c);
   s.meta.insight -= cost;
   s.meta.tree[k.id] = rankOf(s, k.id) + 1;
-  if (s.meta.respec) s.meta.fresh = { ...(s.meta.fresh || {}), [k.id]: ((s.meta.fresh || {})[k.id] || 0) + 1 }; // desfazível nesta janela
-  log.push({ type: 'treeBuy', id: k.id, name: k.name, rank: s.meta.tree[k.id] });
+  // Nó de início comprado na janela (logo depois da Singularity): vale já nesta run. Como o bônus já foi entregue,
+  // ele não se desfaz de graça (senão daria para pegar o bônus e pedir o Insight de volta).
+  const started = s.meta.respec && k.start ? applyStartDelta(s, before, startConfig(s, c), c) : false;
+  if (s.meta.respec && !started) s.meta.fresh = { ...(s.meta.fresh || {}), [k.id]: ((s.meta.fresh || {})[k.id] || 0) + 1 }; // desfazível nesta janela
+  log.push({ type: 'treeBuy', id: k.id, name: k.name, rank: s.meta.tree[k.id], started });
   return null;
+}
+
+/** Entrega na run atual o que o início ganhou de `before` para `after` (Compute, unidades, tier, níveis, itens, Patches). */
+function applyStartDelta(s, before, after, c = CONTENT) {
+  const run = s.run;
+  let changed = false;
+  const extra = after.compute - before.compute;
+  if (extra > 0) { run.resources.compute.amount += extra; changed = true; }
+  for (const [g, n] of Object.entries(after.gens)) {
+    const have = (run.generators[g] || {}).owned || 0;
+    if (n > have) { run.generators[g] = { owned: n }; changed = true; }
+  }
+  if (after.tier > run.tier) { run.tier = after.tier; changed = true; }
+  if (after.petLevel > before.petLevel) {
+    for (const id of Object.keys(run.pets)) {
+      const lvl = petStartLevel(s, id, c);
+      if (run.pets[id].level < lvl) { run.pets[id].level = lvl; changed = true; }
+    }
+  }
+  for (const [id, n] of Object.entries(after.items)) {
+    const add = n - (before.items[id] || 0);
+    if (add > 0) { run.inventory[id] = Math.min(capOf(s, c.consumable[id], c), (run.inventory[id] || 0) + add); changed = true; }
+  }
+  const rand = rng((s.seed ^ 0x51a7 ^ Object.keys(s.meta.tree).length) >>> 0);
+  for (const [r, n] of Object.entries(after.patches)) {
+    for (let i = (before.patches[r] || 0); i < n; i++) if (randomPatch(s, r, rand, c)) changed = true;
+  }
+  return changed;
 }
 
 /** Níveis de um nó comprados na janela aberta (desfazíveis de graça). */
@@ -301,6 +333,6 @@ function closeWindow(s) {
 module.exports = {
   treeMod, treeAdd, treeFlag, treeEffects, startConfig, petStartLevel, capOf, randomPatch,
   singularityReady, singularityError, insightBreakdown, singularity, applyStart,
-  adjacency, perkCost, perkState, sectorCount, treeBuy, treeUndo, treeRespec, treeValid, closeWindow, spentInsight,
+  adjacency, perkCost, perkState, sectorCount, treeBuy, applyStartDelta, treeUndo, treeRespec, treeValid, closeWindow, spentInsight,
   spentBreakdown, respecRefund, freshOf, rankOf,
 };
