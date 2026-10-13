@@ -21,8 +21,9 @@
  *   mapChoose { index }       mapa: opção do evento/descanso · mapBuy { offer }: compra na loja
  *   mapAdvance                mapa: área concluída → atravessa para a próxima (areas.js `next`)
  *   mapSquad { squad, node? } mapa: salva a preparação (a view mostra a previsão para `node`)
- *   singularityPlan           venceu o Pico Production: abre o planejamento (Insight provisório) — ver engine/singularity.js
- *   singularityCancel         desiste do planejamento (rede e Insight voltam)
+ *   (vencer o Pico abre o planejamento sozinho: o Insight entra no saldo — ver engine/singularity.js syncPlan)
+ *   singularityPlan           abre o planejamento à mão (normalmente já aberto)
+ *   singularityCancel         limpa as escolhas do planejamento (rede e Insight como ao abrir)
  *   singularity               confirma: recomeça a run com a rede montada
  *   treeBuy { id }            compra (ou sobe o nível de) um nó da Rede da Singularity
  *   treeUndo { id }           desfaz um nível comprado no planejamento (devolve 100%)
@@ -42,7 +43,7 @@ const { bpOf, partId, levelOf, parsePart, partError, dropPart, costDivOf } = req
 const { ensureMap, mapAct } = require('./map.js');
 const { patchMod } = require('./patches.js');
 const { petHp, setPetHp } = require('./battle.js');
-const { treeMod, treeAdd, treeFlag, capOf, singularity, singularityPlan, singularityCancel, treeBuy, treeUndo, treeRespec } = require('./singularity.js');
+const { treeMod, treeAdd, treeFlag, capOf, singularity, singularityPlan, singularityCancel, syncPlan, treeBuy, treeUndo, treeRespec } = require('./singularity.js');
 
 const upgradeAvailable = (s, u) => !s.run.upgrades[u.id] && check(u.requires, s);
 
@@ -359,6 +360,7 @@ function dispatch(state, action, now, c = CONTENT) {
   }
   log.push(...evaluate(s, now, c), ...evaluateQuests(s, now, c), ...evaluateSkins(s, c), ...ensureMap(s, c));
   autoCast(s, now, c, log);
+  syncPlan(s, now, c, log); // Pico vencido: o planejamento da Singularity abre sozinho
   s.run.boosts = s.run.boosts.filter((b) => b.until > now);
   ensureScheduled(s, now, c); // um tier novo (ou sair do modo tranquilo) liga os incidentes a partir de agora
   return error ? { state: s, log, error } : { state: s, log };

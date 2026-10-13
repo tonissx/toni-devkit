@@ -111,7 +111,7 @@ test('rede: maestria exige 7 nós do setor; infinito sobe de nível com custo cr
   assert.equal(S.spentInsight(s), 1 + 1 + 1 + 2 + 2 + 8 + 4 + 12 + k.cost + k.cost + k.step);
 });
 
-test('planejamento: Insight provisório; reorganizar devolve 100% do novo e 80% do resto; mapa travado; cancelar volta tudo', () => {
+test('planejamento: Insight no saldo; reorganizar devolve 100% do novo e 80% do resto; mapa travado; limpar escolhas', () => {
   let s = ready({ tree: has('inf-1', 'inf-2a', 'inf-3a'), insight: 5 }); // 4 Insight de antes
   assert.match(run(s, { type: 'treeRespec' }).error, /planejada/);
   const br = S.insightBreakdown(s, T0);
@@ -127,11 +127,11 @@ test('planejamento: Insight provisório; reorganizar devolve 100% do novo e 80% 
   const v = snapshot(s, T0).singularity;
   assert.equal(v.refund, 4);
   assert.equal(v.spent, 5);
-  // Cancelar: rede e Insight como estavam.
+  // Limpar escolhas: a rede volta como estava e o Insight desta Singularity volta inteiro (o planejamento segue aberto).
   const back = run(s, { type: 'singularityCancel' }).state;
   assert.deepEqual(back.meta.tree, has('inf-1', 'inf-2a', 'inf-3a'));
-  assert.equal(back.meta.insight, 5);
-  assert.equal(back.meta.respec, false);
+  assert.equal(back.meta.insight, 5 + br.total);
+  assert.equal(back.meta.respec, true);
   // Reorganizar: perde 20% do antigo; o que se compra depois ainda se desfaz de graça.
   const r = run(s, { type: 'treeRespec' });
   assert.equal(r.error, undefined);
@@ -148,6 +148,29 @@ test('planejamento: Insight provisório; reorganizar devolve 100% do novo e 80% 
   assert.equal(t2.meta.plan, null);
   assert.match(run(t2, { type: 'treeUndo', id: 'inf-1' }).error, /planejada/);
   assert.match(run(t2, { type: 'treeRespec' }).error, /planejada/);
+});
+
+test('planejamento: abre sozinho ao vencer o Pico (o Insight aparece no saldo sem clicar nada)', () => {
+  const s = ready({ insight: 3 });
+  const br = S.insightBreakdown(s, T0);
+  const r = run(s, { type: 'tick' });
+  assert.equal(r.state.meta.respec, true);
+  assert.equal(r.state.meta.insight, 3 + br.total);
+  assert.ok(r.log.some((e) => e.type === 'singularityPlan'));
+  assert.equal(snapshot(r.state, T0).singularity.planning, true);
+  // Sem Pico vencido, nada abre.
+  assert.equal(run(make(), { type: 'tick' }).state.meta.respec, false);
+});
+
+test('planejamento: a rapidez congela no Pico; a profundidade que a run ganhar depois entra no saldo', () => {
+  let s = run(ready(), { type: 'tick' }).state;
+  const p = s.meta.plan.breakdown;
+  const before = s.meta.insight;
+  s.run.resources.compute.lifetime = 2e15 * 9; // duas triplicações a mais
+  s = run(s, { type: 'tick' }, T0 + 5 * DAY).state;
+  assert.equal(s.meta.plan.breakdown.speed, p.speed, 'rapidez congelada');
+  assert.equal(s.meta.plan.breakdown.depth, p.depth + 2);
+  assert.equal(s.meta.insight, before + 2);
 });
 
 test('planejamento: a conta do Insight congela ao abrir (multiplicador comprado agora vale só na próxima)', () => {

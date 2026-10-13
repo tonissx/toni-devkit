@@ -8,12 +8,13 @@
  *   · fresh { id: níveis comprados no planejamento } · lifetime (Compute de runs passadas) · best · lastAt
  * Run: stats { startedAt, elites, bosses[] } — o que rende Insight.
  *
- * Fluxo: com o Pico vencido, singularityPlan abre o planejamento — o Insight desta Singularity entra no saldo (a conta
- * fica congelada nesse instante; multiplicadores comprados agora valem a partir da próxima). No planejamento, desfazer
- * (treeUndo) devolve 100% do que foi comprado nele e reorganizar (treeRespec) devolve 100% disso e
- * INSIGHT.respecRefund (80%) do resto. singularityCancel volta a rede e o Insight como estavam; singularity confirma:
- * a run recomeça já com a rede nova (bônus de início e o que atravessa vêm dela). Fora do planejamento, comprar na rede
- * é definitivo.
+ * Fluxo: vencer o Pico abre o planejamento sozinho (syncPlan, a cada dispatch) — o Insight desta Singularity entra no
+ * saldo. A rapidez congela nesse instante; a profundidade segue crescendo (se o Compute da run passar do próximo
+ * degrau antes de confirmar, a diferença entra no saldo); os multiplicadores são os da rede de antes do planejamento.
+ * No planejamento, desfazer (treeUndo) devolve 100% do que foi comprado nele e reorganizar (treeRespec) devolve 100%
+ * disso e INSIGHT.respecRefund (80%) do resto. singularityCancel limpa as escolhas (rede e Insight como ao abrir);
+ * singularity confirma: a run recomeça já com a rede nova (bônus de início e o que atravessa vêm dela). Fora do
+ * planejamento, comprar na rede é definitivo.
  *
  * Ações (engine/index.js): singularityPlan · singularityCancel · singularity · treeBuy { id } · treeUndo { id } · treeRespec
  */
@@ -133,17 +134,33 @@ function singularityPlan(s, now, c, log) {
   return null;
 }
 
-/** Cancela o planejamento: a rede e o Insight voltam como estavam. */
+/** Limpa as escolhas do planejamento: a rede volta como estava e o Insight desta Singularity volta inteiro ao saldo. */
 function singularityCancel(s, c, log) {
   const M = s.meta;
   if (!M.respec || !M.plan) return 'Nenhuma Singularity em planejamento';
   M.tree = { ...M.plan.tree };
-  M.insight = M.plan.insight;
-  M.plan = null;
-  M.respec = false;
+  M.insight = M.plan.insight + M.plan.breakdown.total;
   M.fresh = {};
   log.push({ type: 'singularityCancel' });
   return null;
+}
+
+/**
+ * A cada dispatch: abre o planejamento quando o Pico é vencido e, já planejando, soma ao saldo a profundidade que a
+ * run ganhou desde então (a rapidez fica a do momento em que o Pico caiu; os multiplicadores, os da rede de antes).
+ */
+function syncPlan(s, now, c, log) {
+  const M = s.meta;
+  if (!singularityReady(s, c)) return;
+  if (!M.respec || !M.plan) { singularityPlan(s, now, c, log); return; }
+  const p = M.plan.breakdown;
+  const live = insightBreakdown({ ...s, meta: { ...M, tree: M.plan.tree } }, now, c);
+  if (live.depth <= p.depth) return;
+  const raw = p.bosses + p.elites + p.speed + live.depth;
+  const total = Math.floor(raw * p.mult + 1e-9);
+  if (total <= p.total) return;
+  M.insight = (M.insight || 0) + (total - p.total);
+  M.plan.breakdown = { ...p, depth: live.depth, raw, total };
 }
 
 /**
@@ -331,7 +348,7 @@ function treeRespec(s, c, log) {
 
 module.exports = {
   treeMod, treeAdd, treeFlag, treeEffects, startConfig, petStartLevel, capOf, randomPatch,
-  singularityReady, singularityError, insightBreakdown, singularityPlan, singularityCancel, singularity, applyStart,
+  singularityReady, singularityError, insightBreakdown, singularityPlan, singularityCancel, syncPlan, singularity, applyStart,
   adjacency, perkCost, perkState, sectorCount, treeBuy, treeUndo, treeRespec, treeValid, spentInsight,
   spentBreakdown, respecRefund, freshOf, rankOf,
 };

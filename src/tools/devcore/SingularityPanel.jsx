@@ -137,7 +137,7 @@ function Inspector({ n, sg, sec, byId, act }) {
           <li><Icon name="link" size={13} /> <span><b>Sinapses:</b> pontes entre setores vizinhos. Pedem um nó comprado dos dois lados.</span></li>
           <li><Icon name="crown" size={13} /> <span><b>Maestria:</b> o último nó de cada setor pede 7 nós do setor.</span></li>
           <li><Icon name="infinity" size={13} /> <span><b>Infinitos:</b> sobem de nível sem limite, cada vez mais caros.</span></li>
-          <li><Icon name="atom" size={13} /> <span><b>Planejar:</b> com o Pico vencido, prepare a Singularity. O Insight dela entra no saldo e você monta a rede antes de confirmar.</span></li>
+          <li><Icon name="atom" size={13} /> <span><b>Singularity:</b> ao vencer o Pico, o Insight dela entra no saldo. Você distribui na rede e confirma; só então a run recomeça.</span></li>
           <li><Icon name="undo-2" size={13} /> <span><b>Desfazer:</b> durante o planejamento, o que você comprar se desfaz de graça.</span></li>
           <li><Icon name="rotate-ccw" size={13} /> <span><b>Reorganizar:</b> durante o planejamento, desmonta a rede inteira. Devolve só {sg.refundPct}% do que já estava nela.</span></li>
         </ul>
@@ -267,14 +267,13 @@ export function SingularityPanel({ snap, act }) {
       <header className="dc-sg__head">
         <div className="dc-sg__wallet">
           <span className="dc-sg__insight"><Icon name="sparkles" size={18} /> <b>{sg.insight}</b> Insight</span>
-          {sg.ready && !sg.planning && <span className="dc-sg__pending">+{sg.breakdown.total} esperando: clique em Preparar a Singularity</span>}
           <small>{sg.count ? `${sg.count} Singularit${sg.count > 1 ? 'ies' : 'y'} · Núcleo +${sg.corePct}% de produção · ${sg.earned} ganho no total` : 'Nenhuma Singularity ainda'}</small>
         </div>
         <div className="dc-sg__goal">
           {sg.planning ? (
             <>
-              <span>Planejando a Singularity: <b>+{sg.breakdown.total} Insight</b> já estão no saldo.</span>
-              <Button variant="ghost" onClick={() => act({ type: 'singularityCancel' })}>Cancelar</Button>
+              <span>Você venceu o pipeline inteiro: <b>+{sg.breakdown.total} Insight</b> desta Singularity já estão no saldo.</span>
+              {sg.nodes.some((n) => n.fresh) && <Button variant="ghost" icon="eraser" onClick={() => act({ type: 'singularityCancel' })}>Limpar escolhas</Button>}
               <Button variant="primary" icon="atom" onClick={() => setConfirm(true)}>Confirmar a Singularity</Button>
             </>
           ) : sg.ready ? (
@@ -294,7 +293,7 @@ export function SingularityPanel({ snap, act }) {
             title={`Desmonta a rede inteira: devolve 100% do que foi comprado nesta janela e ${sg.refundPct}% do resto`}>Reorganizar (devolve {sg.refund} de {sg.spent})</Button>}
         </div>
       </header>
-      {sg.planning && <div className="dc-sg__respec"><Icon name="atom" size={13} /> Monte a Rede para a próxima run. O que você comprar agora se desfaz de graça; reorganizar devolve {sg.refundPct}% do que já estava. Multiplicadores de Insight comprados agora valem a partir da próxima Singularity. Ao confirmar, a run recomeça já com esta Rede.</div>}
+      {sg.planning && <div className="dc-sg__respec"><Icon name="atom" size={13} /> Distribua o Insight na Rede e confirme: a run recomeça já com ela. O que você comprar agora se desfaz de graça; reorganizar devolve {sg.refundPct}% do que já estava. Multiplicadores de Insight comprados agora valem a partir da próxima Singularity.</div>}
       {!snap.map.unlocked && sg.count > 0 && <div className="dc-sg__respec is-map"><Icon name="map" size={13} /> Run nova: o mapa volta no {snap.map.requirement}{snap.tier.next && snap.tier.next.id === 2 ? ` (${formatNum(snap.tier.next.at)} de Compute acumulado)` : ""}, numa Floresta nova. Até lá, cresça a produção nas abas Generators e Upgrades.</div>}
       <div className="dc-sg__body">
         <div className={'dc-sg__stage' + (phase === 'collapse' ? ' is-collapsing' : '')} ref={stage} {...pz.handlers}>
