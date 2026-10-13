@@ -276,8 +276,9 @@ function simulate(profile, c = CONTENT) {
     // Singularity (profile.singularity): assim que der, recomeça e gasta o Insight na rede.
     if (profile.singularity && S.singularityReady(s, c)) {
       const br = S.insightBreakdown(s, now, c);
-      step({ type: 'singularity' });
-      if (profile.treePlan && profile.treePlan.respec) step({ type: 'treeRespec' }); // remonta a rede do zero a cada run
+      // Como o jogador: planeja (o Insight entra), monta a rede e confirma — a run nova já nasce com ela.
+      step({ type: 'singularityPlan' });
+      if (profile.treePlan && profile.treePlan.respec) step({ type: 'treeRespec' }); // remonta a rede a cada run (perde 20% do antigo)
       const bought = [];
       for (let guard = 0; guard < 300; guard++) {
         const k = botTreePick(s, c, profile.treePlan);
@@ -285,6 +286,7 @@ function simulate(profile, c = CONTENT) {
         step({ type: 'treeBuy', id: k.id });
         bought.push(k.id);
       }
+      step({ type: 'singularity' });
       const start = now - br.days * 86400e3;
       const areaDays = Object.fromEntries(Object.entries(marks.map.areas).map(([id, at]) => [id, +((at - start) / 86400e3).toFixed(1)]));
       marks.runs.push({ days: br.days, insight: br.total, breakdown: br, total: s.meta.earned, bought, areaDays, t2: marks.runT2 });

@@ -4,14 +4,18 @@
  * desenho em docs/devcore-mapa-singularity.md §9.
  *
  * Estado (meta, nunca zera): insight (não gasto) · earned (ganho na vida) · singularities · tree { id: nível }
- *   · respec (janela aberta: logo depois de uma Singularity, até o primeiro passo no mapa) · fresh { id: níveis
- *   comprados nesta janela } · lifetime (Compute de runs passadas) · best (menos dias numa run) · lastAt
- * Desfazer (treeUndo) devolve 100%, só o que foi comprado na janela aberta. Reorganizar (treeRespec) devolve 100% do
- * que é da janela e INSIGHT.respecRefund (80%) do resto. O primeiro passo no mapa fecha a janela: o que foi comprado
- * fica (e só sai pagando a reorganização na próxima janela).
+ *   · respec (planejando a Singularity) · plan { tree, insight, breakdown } (como estava ao começar a planejar)
+ *   · fresh { id: níveis comprados no planejamento } · lifetime (Compute de runs passadas) · best · lastAt
  * Run: stats { startedAt, elites, bosses[] } — o que rende Insight.
  *
- * Ações (engine/index.js): singularity · treeBuy { id } · treeUndo { id } · treeRespec
+ * Fluxo: com o Pico vencido, singularityPlan abre o planejamento — o Insight desta Singularity entra no saldo (a conta
+ * fica congelada nesse instante; multiplicadores comprados agora valem a partir da próxima). No planejamento, desfazer
+ * (treeUndo) devolve 100% do que foi comprado nele e reorganizar (treeRespec) devolve 100% disso e
+ * INSIGHT.respecRefund (80%) do resto. singularityCancel volta a rede e o Insight como estavam; singularity confirma:
+ * a run recomeça já com a rede nova (bônus de início e o que atravessa vêm dela). Fora do planejamento, comprar na rede
+ * é definitivo.
+ *
+ * Ações (engine/index.js): singularityPlan · singularityCancel · singularity · treeBuy { id } · treeUndo { id } · treeRespec
  */
 const { CONTENT } = require('../content/index.js');
 const { createRun } = require('./state.js');
@@ -114,6 +118,34 @@ function insightBreakdown(s, now, c = CONTENT) {
 /** Pode fazer a Singularity agora? → erro ou null. */
 const singularityError = (s, c = CONTENT) => (singularityReady(s, c) ? null : `A Singularity libera ao vencer o chefe de ${c.AREAS[c.AREAS.length - 1].name}`);
 
+/** Abre o planejamento: guarda a rede e o Insight de agora e soma (provisório) o Insight desta Singularity. */
+function singularityPlan(s, now, c, log) {
+  const err = singularityError(s, c);
+  if (err) return err;
+  const M = s.meta;
+  if (M.respec) return 'A Singularity já está sendo planejada';
+  const br = insightBreakdown(s, now, c);
+  M.plan = { tree: { ...M.tree }, insight: M.insight || 0, breakdown: br };
+  M.insight = (M.insight || 0) + br.total;
+  M.respec = true;
+  M.fresh = {};
+  log.push({ type: 'singularityPlan', pending: br.total });
+  return null;
+}
+
+/** Cancela o planejamento: a rede e o Insight voltam como estavam. */
+function singularityCancel(s, c, log) {
+  const M = s.meta;
+  if (!M.respec || !M.plan) return 'Nenhuma Singularity em planejamento';
+  M.tree = { ...M.plan.tree };
+  M.insight = M.plan.insight;
+  M.plan = null;
+  M.respec = false;
+  M.fresh = {};
+  log.push({ type: 'singularityCancel' });
+  return null;
+}
+
 /**
  * Singularity: converte a run em Insight e recomeça.
  * Zera: a run (Compute, geradores, upgrades, combos, tiers, Blueprints, consumíveis, Patches, mapa, níveis dos pets).
@@ -123,17 +155,20 @@ const singularityError = (s, c = CONTENT) => (singularityReady(s, c) ? null : `A
 function singularity(s, now, c, log) {
   const err = singularityError(s, c);
   if (err) return err;
-  const br = insightBreakdown(s, now, c);
-  const old = s.run;
   const M = s.meta;
-  M.insight = (M.insight || 0) + br.total;
+  const planned = M.respec && M.plan;
+  // Planejada: o Insight já entrou no saldo ao abrir o planejamento (com a conta daquele instante).
+  const br = planned ? M.plan.breakdown : insightBreakdown(s, now, c);
+  const old = s.run;
+  if (!planned) M.insight = (M.insight || 0) + br.total;
   M.earned = (M.earned || 0) + br.total;
   M.singularities = (M.singularities || 0) + 1;
   M.lifetime = (M.lifetime || 0) + old.resources.compute.lifetime;
   M.best = M.best ? Math.min(M.best, br.days) : br.days;
   M.lastAt = now;
-  M.respec = true; // pode reorganizar a rede até o primeiro passo no mapa da run nova
-  M.fresh = {};     // nada comprado nesta janela ainda
+  M.respec = false; // a rede montada no planejamento fica
+  M.fresh = {};
+  M.plan = null;
   // Semente nova: outro mapa, outras lutas.
   s.seed = ((Math.imul(s.seed, 48271) >>> 0) % 2147483646) + 1;
 
@@ -216,43 +251,11 @@ function treeBuy(s, id, c, log) {
   if (st.status !== 'available' && !(st.status === 'owned' && k.kind === 'repeat')) return st.reason;
   const cost = perkCost(s, k);
   if ((s.meta.insight || 0) < cost) return 'Insight insuficiente';
-  const before = startConfig(s, c);
   s.meta.insight -= cost;
   s.meta.tree[k.id] = rankOf(s, k.id) + 1;
-  // Nó de início comprado na janela (logo depois da Singularity): vale já nesta run. Como o bônus já foi entregue,
-  // ele não se desfaz de graça (senão daria para pegar o bônus e pedir o Insight de volta).
-  const started = s.meta.respec && k.start ? applyStartDelta(s, before, startConfig(s, c), c) : false;
-  if (s.meta.respec && !started) s.meta.fresh = { ...(s.meta.fresh || {}), [k.id]: ((s.meta.fresh || {})[k.id] || 0) + 1 }; // desfazível nesta janela
-  log.push({ type: 'treeBuy', id: k.id, name: k.name, rank: s.meta.tree[k.id], started });
+  if (s.meta.respec) s.meta.fresh = { ...(s.meta.fresh || {}), [k.id]: ((s.meta.fresh || {})[k.id] || 0) + 1 }; // desfazível no planejamento
+  log.push({ type: 'treeBuy', id: k.id, name: k.name, rank: s.meta.tree[k.id] });
   return null;
-}
-
-/** Entrega na run atual o que o início ganhou de `before` para `after` (Compute, unidades, tier, níveis, itens, Patches). */
-function applyStartDelta(s, before, after, c = CONTENT) {
-  const run = s.run;
-  let changed = false;
-  const extra = after.compute - before.compute;
-  if (extra > 0) { run.resources.compute.amount += extra; changed = true; }
-  for (const [g, n] of Object.entries(after.gens)) {
-    const have = (run.generators[g] || {}).owned || 0;
-    if (n > have) { run.generators[g] = { owned: n }; changed = true; }
-  }
-  if (after.tier > run.tier) { run.tier = after.tier; changed = true; }
-  if (after.petLevel > before.petLevel) {
-    for (const id of Object.keys(run.pets)) {
-      const lvl = petStartLevel(s, id, c);
-      if (run.pets[id].level < lvl) { run.pets[id].level = lvl; changed = true; }
-    }
-  }
-  for (const [id, n] of Object.entries(after.items)) {
-    const add = n - (before.items[id] || 0);
-    if (add > 0) { run.inventory[id] = Math.min(capOf(s, c.consumable[id], c), (run.inventory[id] || 0) + add); changed = true; }
-  }
-  const rand = rng((s.seed ^ 0x51a7 ^ Object.keys(s.meta.tree).length) >>> 0);
-  for (const [r, n] of Object.entries(after.patches)) {
-    for (let i = (before.patches[r] || 0); i < n; i++) if (randomPatch(s, r, rand, c)) changed = true;
-  }
-  return changed;
 }
 
 /** Níveis de um nó comprados na janela aberta (desfazíveis de graça). */
@@ -298,8 +301,8 @@ function treeValid(s, c = CONTENT) {
 function treeUndo(s, id, c, log) {
   const k = c.perk[id];
   if (!k || rankOf(s, id) < 1) return 'Nó não comprado';
-  if (!s.meta.respec) return 'Só dá para desfazer antes do primeiro passo no mapa da run';
-  if (freshOf(s, id) < 1) return 'Comprado numa run anterior: só sai reorganizando a rede (devolve 80%)';
+  if (!s.meta.respec) return 'Só dá para desfazer enquanto a Singularity é planejada';
+  if (freshOf(s, id) < 1) return 'Comprado antes: só sai reorganizando a rede (devolve 80%)';
   const probe = { meta: { ...s.meta, tree: { ...s.meta.tree, [id]: rankOf(s, id) - 1 } } };
   if (!treeValid(probe, c)) return 'Outros nós comprados dependem deste: desfaça-os antes';
   const r = rankOf(s, id);
@@ -314,7 +317,7 @@ function treeUndo(s, id, c, log) {
 
 /** Reorganiza a rede inteira (só na janela): devolve 100% do que é da janela e 80% do resto. → erro ou null */
 function treeRespec(s, c, log) {
-  if (!s.meta.respec) return 'A rede só se reorganiza logo depois de uma Singularity (até o primeiro passo no mapa)';
+  if (!s.meta.respec) return 'A rede só se reorganiza enquanto a Singularity é planejada';
   const back = respecRefund(s, c);
   const spent = spentInsight(s, c);
   s.meta.insight = (s.meta.insight || 0) + back;
@@ -324,15 +327,11 @@ function treeRespec(s, c, log) {
   return null;
 }
 
-/** O primeiro passo no mapa fecha a janela: o que foi comprado nela vira permanente. */
-function closeWindow(s) {
-  s.meta.respec = false;
-  s.meta.fresh = {};
-}
+
 
 module.exports = {
   treeMod, treeAdd, treeFlag, treeEffects, startConfig, petStartLevel, capOf, randomPatch,
-  singularityReady, singularityError, insightBreakdown, singularity, applyStart,
-  adjacency, perkCost, perkState, sectorCount, treeBuy, applyStartDelta, treeUndo, treeRespec, treeValid, closeWindow, spentInsight,
+  singularityReady, singularityError, insightBreakdown, singularityPlan, singularityCancel, singularity, applyStart,
+  adjacency, perkCost, perkState, sectorCount, treeBuy, treeUndo, treeRespec, treeValid, spentInsight,
   spentBreakdown, respecRefund, freshOf, rankOf,
 };

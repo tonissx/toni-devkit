@@ -1961,3 +1961,14 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 }
 .dc-sg__node.is-fresh::after { content: ''; position: absolute; left: -5px; top: -5px; width: 9px; height: 9px; border-radius: 50%; background: #E9DBFF; box-shadow: 0 0 6px #B98CFF; }
 .dc-sg__node.is-keystone.is-fresh::after { transform: rotate(-45deg); }
+/* Confirmar a Singularity: a constelação gira e cai no Núcleo antes do clarão */
+.dc-sg__collapse { position: absolute; inset: 0; transform-origin: 50% 50%; }
+.dc-sg__stage.is-collapsing { pointer-events: none; }
+.dc-sg__stage.is-collapsing .dc-sg__collapse { animation: dc-sg-collapse 1.4s cubic-bezier(.6, 0, .9, .4) forwards; }
+.dc-sg__stage.is-collapsing .dc-sg__node { box-shadow: 0 0 22px var(--hue); }
+@keyframes dc-sg-collapse {
+  0% { transform: rotate(0) scale(1); filter: brightness(1); }
+  60% { transform: rotate(120deg) scale(.55); filter: brightness(1.8) saturate(1.4); }
+  100% { transform: rotate(320deg) scale(0); filter: brightness(4); opacity: .2; }
+}
+@media (prefers-reduced-motion: reduce) { .dc-sg__stage.is-collapsing .dc-sg__collapse { animation: none; opacity: .3; } }

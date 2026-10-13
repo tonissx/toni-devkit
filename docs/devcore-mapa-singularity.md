@@ -403,10 +403,14 @@ Constelação com o **Núcleo** no centro e **6 setores** em hexágono:
   Patch Notes, Seed Funding.
 - **Maestria (anel 6):** pede 7 nós do setor.
 - **Infinitos (anel 7):** sobem de nível sem limite, com custo 6 + 4 por nível.
-- **Janela de ajuste:** de uma Singularity até o primeiro passo no mapa da run nova.
-  - **Desfazer** um nó comprado nessa janela devolve 100%, desde que nenhum outro nó dependa dele.
-  - **Reorganizar** a rede inteira devolve 100% do que é da janela e **80%** do que veio de runs anteriores.
-  - O primeiro passo no mapa fecha a janela: o que foi comprado fica, e só sai pagando os 20% na próxima janela.
+- **Planejar e confirmar:** com o Pico vencido, **Preparar a Singularity** abre o planejamento.
+  - O Insight desta Singularity entra no saldo (a conta congela nesse instante, então multiplicadores comprados agora
+    valem só a partir da próxima).
+  - **Desfazer** um nó comprado no planejamento devolve 100%, desde que nenhum outro nó dependa dele.
+  - **Reorganizar** a rede inteira devolve 100% do que foi comprado no planejamento e **80%** do que já estava.
+  - **Cancelar** volta a rede e o Insight como estavam. Enquanto planeja, o mapa não anda.
+  - **Confirmar** mostra o resumo, a constelação colapsa no Núcleo, vem o clarão e a run recomeça **já com a rede
+    montada** (bônus de início e o que atravessa vêm dela). Fora do planejamento, comprar na rede é definitivo.
 
 **Custos:** anéis 1–2 custam 1; anel 3 custa 2; notáveis 4; paradigmas 8; maestria 12; sinapses 3.
 
@@ -423,7 +427,7 @@ Mecânicas novas que vêm da rede:
 - Constelação com arrastar e zoom.
 - Inspetor: o nó sob o mouse ou selecionado, com o motivo de estar bloqueado e a compra.
 - Cerimônia de confirmação: a conta do Insight, o que recomeça, o que fica e com o que a próxima run começa.
-- Clarão "SINGULARITY" no reset.
+- Fluxo: Preparar → montar a rede → Confirmar → a constelação colapsa no Núcleo → clarão "SINGULARITY" → run nova.
 - O banner do Pico concluído leva até a aba.
 
 ## 10. Arquitetura prevista
@@ -476,7 +480,8 @@ A batalha vem primeiro porque é a parte mais arriscada de balancear, e o mapa d
 | Data | Decisão |
 |---|---|
 | 2026-10-13 | **Singularity e a Rede**: Insight por chefes, elites, rapidez e profundidade; árvore em constelação de 6 setores com adjacência, paradigmas excludentes, sinapses entre setores, maestrias e infinitos; reorganizar só logo depois do reset |
-| 2026-10-13 | **Reorganizar custa**: devolve 80% do que veio de runs anteriores; o comprado na janela atual (da Singularity até o 1º passo no mapa) se desfaz de graça, e quem começa a run perde esse direito |
+| 2026-10-13 | **Reorganizar custa**: devolve 80% do que já estava na rede; o comprado no planejamento atual se desfaz de graça |
+| 2026-10-13 | **A Singularity se planeja antes do reset**: preparar (Insight provisório) → montar a rede → confirmar (animação de colapso e clarão) → run nova já com a rede; cancelar volta tudo |
 | 2026-10-06 | O prestige passa a ser mapa + Singularity; o Legado/Rebuild fica guardado (branch `worktree-devcore-legacy`) |
 | 2026-10-06 | Batalha: **auto-battler com preparação** (não tower defense nem tática por turnos) |
 | 2026-10-06 | Ritmo: **alguns dias por área** (Singularity em 1–2 semanas de uso casual) |

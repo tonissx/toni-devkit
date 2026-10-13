@@ -21,10 +21,12 @@
  *   mapChoose { index }       mapa: opção do evento/descanso · mapBuy { offer }: compra na loja
  *   mapAdvance                mapa: área concluída → atravessa para a próxima (areas.js `next`)
  *   mapSquad { squad, node? } mapa: salva a preparação (a view mostra a previsão para `node`)
- *   singularity               venceu o Pico Production: recomeça a run e ganha Insight — ver engine/singularity.js
+ *   singularityPlan           venceu o Pico Production: abre o planejamento (Insight provisório) — ver engine/singularity.js
+ *   singularityCancel         desiste do planejamento (rede e Insight voltam)
+ *   singularity               confirma: recomeça a run com a rede montada
  *   treeBuy { id }            compra (ou sobe o nível de) um nó da Rede da Singularity
- *   treeUndo { id }           desfaz um nível comprado nesta janela (devolve 100%)
- *   treeRespec                reorganiza a rede (devolve 100% do que é da janela e 80% do resto; só na janela)
+ *   treeUndo { id }           desfaz um nível comprado no planejamento (devolve 100%)
+ *   treeRespec                reorganiza a rede (devolve 100% do comprado no planejamento e 80% do resto; só planejando)
  */
 const { CONTENT } = require('../content/index.js');
 const { advanceTo } = require('./advance.js');
@@ -40,7 +42,7 @@ const { bpOf, partId, levelOf, parsePart, partError, dropPart, costDivOf } = req
 const { ensureMap, mapAct } = require('./map.js');
 const { patchMod } = require('./patches.js');
 const { petHp, setPetHp } = require('./battle.js');
-const { treeMod, treeAdd, treeFlag, capOf, singularity, treeBuy, treeUndo, treeRespec, closeWindow } = require('./singularity.js');
+const { treeMod, treeAdd, treeFlag, capOf, singularity, singularityPlan, singularityCancel, treeBuy, treeUndo, treeRespec } = require('./singularity.js');
 
 const upgradeAvailable = (s, u) => !s.run.upgrades[u.id] && check(u.requires, s);
 
@@ -310,12 +312,13 @@ function act(s, action, now, c, log) {
       }
       return null;
     }
-    case 'mapSquad': case 'mapMove': case 'mapFight': case 'mapChoose': case 'mapBuy': case 'mapAdvance': {
-      const err = mapAct(s, action, now, c, log);
-      // O primeiro passo no mapa da run fecha a janela de reorganizar a Rede da Singularity.
-      if (!err && (action.type === 'mapMove' || action.type === 'mapFight')) closeWindow(s);
-      return err;
-    }
+    case 'mapSquad': case 'mapMove': case 'mapFight': case 'mapChoose': case 'mapBuy': case 'mapAdvance':
+      if (s.meta.respec && s.meta.plan && action.type !== 'mapSquad') return 'Termine (ou cancele) a Singularity antes de seguir no mapa';
+      return mapAct(s, action, now, c, log);
+    case 'singularityPlan':
+      return singularityPlan(s, now, c, log);
+    case 'singularityCancel':
+      return singularityCancel(s, c, log);
     case 'singularity':
       return singularity(s, now, c, log);
     case 'treeBuy':

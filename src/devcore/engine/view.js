@@ -476,7 +476,7 @@ function singularityView(s, now, c) {
     ready: S.singularityReady(s, c),
     insight: amount, earned: M.earned || 0, count: M.singularities || 0, best: M.best || 0, respec: !!M.respec,
     spent: S.spentInsight(s, c), refund: S.respecRefund(s, c), refundPct: Math.round(c.INSIGHT.respecRefund * 100), corePct: Math.round(c.INSIGHT.corePerRun * (M.singularities || 0) * 100),
-    breakdown: br,
+    breakdown: M.respec && M.plan ? M.plan.breakdown : br, planning: !!(M.respec && M.plan),
     run: { bosses: (s.run.stats && s.run.stats.bosses) || [], elites: (s.run.stats && s.run.stats.elites) || 0 },
     lastArea: { id: c.AREAS[c.AREAS.length - 1].id, name: c.AREAS[c.AREAS.length - 1].name },
     // O que a próxima run traz (para a confirmação).

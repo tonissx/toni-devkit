@@ -23,7 +23,7 @@ function createState(now, c = CONTENT) {
     run: createRun(c, 0, now),
     // Singularity (prestígio — engine/singularity.js): insight não gasto, ganho na vida, árvore { id: nível }, janela
     // de reorganização, Compute de runs passadas. (fragments/rebuilds/perks: do Legado guardado, sem uso.)
-    meta: { fragments: 0, rebuilds: 0, perks: {}, insight: 0, earned: 0, singularities: 0, tree: {}, respec: false, fresh: {}, lifetime: 0, best: 0, lastAt: 0 },
+    meta: { fragments: 0, rebuilds: 0, perks: {}, insight: 0, earned: 0, singularities: 0, tree: {}, respec: false, plan: null, fresh: {}, lifetime: 0, best: 0, lastAt: 0 },
     usage: { days: {}, distinct: {}, first: {} },
     discoveries: { found: {}, unseen: [], seenUpgrades: [] },
     pending: { welcome: null },
@@ -92,6 +92,8 @@ function migrate(raw, now, c = CONTENT) {
     s.run.stats = { startedAt: (s.clock && s.clock.startedAt) || now, elites, bosses };
   }
   fill(s, createState(s.clock && s.clock.startedAt ? s.clock.startedAt : now, c));
+  // Janela de reorganizar do fluxo antigo (depois do reset) sem planejamento: fecha (hoje a rede se monta antes de confirmar).
+  if (s.meta.respec && !s.meta.plan) { s.meta.respec = false; s.meta.fresh = {}; }
   s.version = VERSION;
   if (!Number.isFinite(s.run.resources.compute.amount)) s.run.resources.compute.amount = 0;
   return s;

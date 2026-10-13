@@ -111,39 +111,74 @@ test('rede: maestria exige 7 nós do setor; infinito sobe de nível com custo cr
   assert.equal(S.spentInsight(s), 1 + 1 + 1 + 2 + 2 + 8 + 4 + 12 + k.cost + k.cost + k.step);
 });
 
-test('rede: reorganizar só na janela; devolve 100% do que é da janela e 80% do resto; o 1º passo no mapa fecha a janela', () => {
-  let s = make({ tree: has('inf-1', 'inf-2a', 'inf-3a'), insight: 5 }); // 4 Insight de runs anteriores
-  assert.match(run(s, { type: 'treeRespec' }).error, /logo depois de uma Singularity/);
-  s.meta.respec = true;
-  s = run(s, { type: 'treeBuy', id: 'inf-2b' }).state; // 1 nesta janela
-  assert.equal(s.meta.insight, 4);
+test('planejamento: Insight provisório; reorganizar devolve 100% do novo e 80% do resto; mapa travado; cancelar volta tudo', () => {
+  let s = ready({ tree: has('inf-1', 'inf-2a', 'inf-3a'), insight: 5 }); // 4 Insight de antes
+  assert.match(run(s, { type: 'treeRespec' }).error, /planejada/);
+  const br = S.insightBreakdown(s, T0);
+  s = run(s, { type: 'singularityPlan' }).state;
+  assert.equal(s.meta.insight, 5 + br.total);
+  assert.equal(snapshot(s, T0).singularity.planning, true);
+  assert.match(run(s, { type: 'singularityPlan' }).error, /já está sendo planejada/);
+  // Durante o planejamento o mapa não anda.
+  const first = Object.values(s.run.map.nodes).find((n) => n.col === 0);
+  assert.match(run(s, { type: 'mapFight', node: first.id, squad: { slots: { vanguard: 'byte' }, triggers: {}, items: [] } }).error, /Singularity/);
+  s = run(s, { type: 'treeBuy', id: 'inf-2b' }).state; // 1 comprado no planejamento
   assert.equal(S.respecRefund(s), 1 + Math.floor(4 * 0.8));
   const v = snapshot(s, T0).singularity;
   assert.equal(v.refund, 4);
   assert.equal(v.spent, 5);
+  // Cancelar: rede e Insight como estavam.
+  const back = run(s, { type: 'singularityCancel' }).state;
+  assert.deepEqual(back.meta.tree, has('inf-1', 'inf-2a', 'inf-3a'));
+  assert.equal(back.meta.insight, 5);
+  assert.equal(back.meta.respec, false);
+  // Reorganizar: perde 20% do antigo; o que se compra depois ainda se desfaz de graça.
   const r = run(s, { type: 'treeRespec' });
   assert.equal(r.error, undefined);
-  assert.equal(r.state.meta.insight, 8);
+  assert.equal(r.state.meta.insight, 4 + br.total + 4);
   assert.deepEqual(r.state.meta.tree, {});
   assert.ok(r.log.some((e) => e.type === 'treeRespec' && e.refunded === 4 && e.lost === 1));
-  // O que se compra depois de reorganizar (ainda na janela) também se desfaz de graça.
-  let t = run(r.state, { type: 'treeBuy', id: 'inf-1' }).state;
-  assert.equal(run(t, { type: 'treeUndo', id: 'inf-1' }).state.meta.insight, 8);
-  // O primeiro passo no mapa fecha a janela: o que foi comprado fica.
-  const first = Object.values(t.run.map.nodes).find((n) => n.col === 0);
-  t = run(t, { type: 'mapFight', node: first.id, squad: { slots: { vanguard: 'byte' }, triggers: {}, items: [] } }).state;
-  assert.equal(t.meta.respec, false);
-  assert.deepEqual(t.meta.fresh, {});
-  assert.match(run(t, { type: 'treeUndo', id: 'inf-1' }).error, /antes do primeiro passo/);
-  assert.match(run(t, { type: 'treeRespec' }).error, /logo depois/);
+  let t2 = run(r.state, { type: 'treeBuy', id: 'inf-1' }).state;
+  assert.equal(run(t2, { type: 'treeUndo', id: 'inf-1' }).state.meta.insight, r.state.meta.insight);
+  // Confirmar: o Insight não entra de novo; as compras ficam e não se desfazem mais.
+  t2 = run(t2, { type: 'singularity' }).state;
+  assert.equal(t2.meta.insight, r.state.meta.insight - 1);
+  assert.equal(t2.meta.earned, br.total);
+  assert.equal(t2.meta.respec, false);
+  assert.equal(t2.meta.plan, null);
+  assert.match(run(t2, { type: 'treeUndo', id: 'inf-1' }).error, /planejada/);
+  assert.match(run(t2, { type: 'treeRespec' }).error, /planejada/);
 });
 
-test('rede: desfazer devolve 100%, só o que é da janela, e não deixa nó solto', () => {
+test('planejamento: a conta do Insight congela ao abrir (multiplicador comprado agora vale só na próxima)', () => {
+  let s = ready({ tree: has('arc-1', 'arc-2b'), insight: 0 });
+  const br = S.insightBreakdown(s, T0);
+  s = run(s, { type: 'singularityPlan' }).state;
+  s = run(s, { type: 'treeBuy', id: 'arc-3b' }).state; // Insight Engine (+15%)
+  assert.equal(snapshot(s, T0).singularity.breakdown.total, br.total);
+  s = run(s, { type: 'singularity' }, T0 + 3 * DAY).state; // 3 dias depois: a conta não muda
+  assert.equal(s.meta.earned, br.total);
+});
+
+test('planejamento: a run nova já nasce com a rede montada (início e o que atravessa)', () => {
+  let s = ready({ pets: { byte: 10, memo: 9 }, inventory: { coffee: 4 } });
+  s = run(s, { type: 'singularityPlan' }).state;
+  for (const id of ['arc-1', 'arc-2a', 'pet-1', 'arc-2b', 'arc-3a']) s = run(s, { type: 'treeBuy', id }).state;
+  s = run(s, { type: 'singularity' }).state;
+  assert.ok(s.run.resources.compute.amount >= 5e4, 'Warm Start');
+  assert.equal(s.run.generators['terminal-worker'].owned, 10, 'Bootstrap');
+  assert.equal(s.run.pets.byte.level, 3, 'Muscle Memory');
+  assert.equal(s.run.inventory.coffee, 2, 'Supply Cache (o estoque antigo não atravessa sem Time Capsule)');
+  assert.equal(s.run.tier, 2);
+  assert.ok(s.run.map, 'o mapa já abre');
+});
+
+test('rede: desfazer devolve 100%, só o comprado no planejamento, e não deixa nó solto', () => {
   let s = make({ tree: has('cmb-1'), insight: 20 });
   s.meta.respec = true;
   for (const id of ['cmb-2a', 'cmb-3a']) s = run(s, { type: 'treeBuy', id }).state;
   assert.equal(s.meta.insight, 17);
-  assert.match(run(s, { type: 'treeUndo', id: 'cmb-1' }).error, /run anterior/);
+  assert.match(run(s, { type: 'treeUndo', id: 'cmb-1' }).error, /Comprado antes/);
   assert.match(run(s, { type: 'treeUndo', id: 'cmb-2a' }).error, /dependem deste/);
   const v = snapshot(s, T0).singularity.nodes;
   assert.equal(v.find((n) => n.id === 'cmb-2a').undo, null);
@@ -160,7 +195,7 @@ test('rede: desfazer devolve 100%, só o que é da janela, e não deixa nó solt
   r = run(r, { type: 'treeUndo', id: 'inf-r' }).state;
   assert.equal(r.meta.tree['inf-r'], 1);
   assert.equal(r.meta.insight, 40);
-  assert.match(run(r, { type: 'treeUndo', id: 'inf-r' }).error, /run anterior/);
+  assert.match(run(r, { type: 'treeUndo', id: 'inf-r' }).error, /Comprado antes/);
   void k;
 });
 
@@ -174,29 +209,6 @@ test('rede: desfazer não derruba maestria nem sinapse que dependem do nó', () 
   const m = make({ tree: has('cmb-1', 'cmb-2a', 'cmb-2b', 'cmb-3a', 'cmb-3b', 'cmb-4a', 'cmb-5a', 'cmb-6'), insight: 5 });
   m.meta.respec = true; m.meta.fresh = { 'cmb-3b': 1 };
   assert.match(run(m, { type: 'treeUndo', id: 'cmb-3b' }).error, /dependem deste/); // a maestria cairia abaixo de 7
-});
-
-test('rede: nó de início comprado na janela vale já na run atual e não se desfaz de graça', () => {
-  let s = run(ready({ pets: { byte: 10, memo: 9 } }), { type: 'singularity' }).state; // rede vazia: run nova no básico
-  assert.equal(s.run.generators['terminal-worker'].owned, 1);
-  const before = s.run.resources.compute.amount;
-  s = run(s, { type: 'treeBuy', id: 'arc-1' }).state;               // Bootstrap Script
-  assert.equal(s.run.resources.compute.amount, before + 5000);
-  assert.equal(s.run.generators['terminal-worker'].owned, 10);
-  assert.match(run(s, { type: 'treeUndo', id: 'arc-1' }).error, /run anterior|reorganizando/);
-  s = run(s, { type: 'treeBuy', id: 'pet-1' }).state;                // Muscle Memory: pets no nível 3 já
-  assert.equal(s.run.pets.byte.level, 3);
-  assert.equal(s.run.pets.memo.level, 3);
-  s = run(s, { type: 'treeBuy', id: 'arc-2a' }).state;               // Supply Cache
-  assert.equal(s.run.inventory.coffee, 2);
-  s = run(s, { type: 'treeBuy', id: 'inf-1' }).state;                // nó comum: desfaz de graça
-  assert.equal(run(s, { type: 'treeUndo', id: 'inf-1' }).error, undefined);
-  // Warm Start na janela abre o mapa na hora.
-  s.meta.insight = 10;
-  s = run(s, { type: 'treeBuy', id: 'arc-2b' }).state;
-  s = run(s, { type: 'treeBuy', id: 'arc-3a' }).state;
-  assert.equal(s.run.tier, 2);
-  assert.ok(s.run.map, 'o mapa abriu');
 });
 
 /* ─────────────── Singularity ─────────────── */
@@ -235,7 +247,7 @@ test('singularity: zera a run, mantém os pets (no nível inicial), meta e desco
   assert.equal(s.meta.insight, br.total);
   assert.equal(s.meta.earned, br.total);
   assert.equal(s.meta.singularities, 1);
-  assert.equal(s.meta.respec, true);
+  assert.equal(s.meta.respec, false); // sem planejamento: direto, nada a desfazer
   assert.equal(s.meta.lifetime, 2e15);
   assert.notEqual(s.seed, seed);
   assert.equal(s.run.resources.compute.amount, CONTENT.BALANCE.start.compute);
