@@ -76,7 +76,9 @@
 @media (max-width: 1000px) { .db-plan__side { width: 280px; } }
 .db-plan__ai { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .db-plan__ai .ai-panel { align-self: stretch; }
-.db-plan__graph { cursor: grab; }
-.db-plan__graph.is-panning { cursor: grabbing; user-select: none; }
+.db-plan__graph.is-panning { user-select: none; }
+/* A mãozinha fica no desenho (e no vazio ao redor), nunca na barra de rolagem, que é do contêiner. */
+.db-plan__stage { box-sizing: content-box; min-width: 100%; min-height: 100%; cursor: grab; }
+.db-plan__graph.is-panning .db-plan__stage { cursor: grabbing; }
 .db-plan__graph.is-panning .db-plan__node { pointer-events: none; }
 .db-plan__graph .db-plan__node { cursor: pointer; }
