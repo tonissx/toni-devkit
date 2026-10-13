@@ -250,3 +250,9 @@
 .db-input:focus { outline: none; border-color: color-mix(in srgb, var(--tk-accent) 55%, var(--tk-border)); }
 .db-input.is-mono { font-family: var(--tk-font-mono); font-size: 12px; }
 select.db-input { padding-right: 4px; }
+
+/* Barras de rolagem do DS (.tk-scroll) em todos os contêineres rolantes do Banco, não só nos que levam a classe. */
+.db-table-wrap::-webkit-scrollbar, .db-detail__body::-webkit-scrollbar, .db-sql::-webkit-scrollbar, .db-split__list::-webkit-scrollbar, .db-split__body::-webkit-scrollbar, .db-dlgraph::-webkit-scrollbar { width: 10px; height: 10px; }
+.db-table-wrap::-webkit-scrollbar-thumb, .db-detail__body::-webkit-scrollbar-thumb, .db-sql::-webkit-scrollbar-thumb, .db-split__list::-webkit-scrollbar-thumb, .db-split__body::-webkit-scrollbar-thumb, .db-dlgraph::-webkit-scrollbar-thumb { background: var(--tk-surface-4); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+.db-table-wrap::-webkit-scrollbar-track, .db-detail__body::-webkit-scrollbar-track, .db-sql::-webkit-scrollbar-track, .db-split__list::-webkit-scrollbar-track, .db-split__body::-webkit-scrollbar-track, .db-dlgraph::-webkit-scrollbar-track { background: transparent; }
+.db-table-wrap::-webkit-scrollbar-corner, .db-sql::-webkit-scrollbar-corner, .db-dlgraph::-webkit-scrollbar-corner { background: transparent; }
