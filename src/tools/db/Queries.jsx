@@ -3,6 +3,7 @@
 // Só sob demanda: nada disso roda no ciclo do monitor.
 import { DS } from '../../lib/ds.js';
 import { useAiMode, useAiTask, AiButton, AiPanel, aiOn } from '../../ai/ui.jsx';
+import { PlanView } from './PlanView.jsx';
 import { dbApi, errText, fmtNum, fmtCompact, fmtTime, ago, copyText, oneLine, fmtUs } from './shared.jsx';
 
 const { Icon, Spinner } = DS;
@@ -26,6 +27,7 @@ export function Queries({ server, toast, onOpenSql }) {
   const [error, setError] = React.useState(null);
   const [sel, setSel] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
+  const [plan, setPlan] = React.useState(null); // { busy } enquanto busca · { xml, name, title } com o plano aberto
   const cfg = useAiMode();
   const ai = useAiTask('dbQuery', cfg);
   React.useEffect(() => { ai.close(); }, [sel]);
@@ -95,7 +97,7 @@ export function Queries({ server, toast, onOpenSql }) {
           <div className="db-detail__actions">
             <button type="button" className="lg-btn" onClick={() => copyText(cur.statement_text, toast, 'SQL copiado')}><Icon name="copy" size={13} /><span>Copiar</span></button>
             {onOpenSql && <button type="button" className="lg-btn" onClick={() => onOpenSql(cur.statement_text)}><Icon name="database" size={13} /><span>SQL Formatter</span></button>}
-            {cur.plan_handle && <button type="button" className="lg-btn" onClick={async () => { try { const p = await dbApi().plan(server.id, { planHandle: cur.plan_handle }); const f = await dbApi().savePlan(p.xml, `query-${String(cur.query_hash || sel + 1)}`); if (f) toast('Plano salvo', f, 'ok'); } catch (e) { toast('Sem plano', errText(e), 'error'); } }}><Icon name="list-tree" size={13} /><span>Plano</span></button>}
+            {cur.plan_handle && <button type="button" className="lg-btn" disabled={plan && plan.busy} onClick={async () => { setPlan({ busy: true }); try { const p = await dbApi().plan(server.id, { planHandle: cur.plan_handle }); setPlan({ xml: p.xml, name: `query-${String(cur.query_hash || sel + 1)}`, title: `Plano · #${sel + 1}` }); } catch (e) { setPlan(null); toast('Sem plano', errText(e), 'error'); } }}>{plan && plan.busy ? <Spinner size={11} /> : <Icon name="list-tree" size={13} />}<span>Plano</span></button>}
             {aiOn(cfg) && (
               <AiButton ai={ai} label="Por que está lenta" title="Explicar com IA (o texto passa pelo filtro de segredos)" onClick={() => ai.start(() => ({
                 sql: cur.statement_text,
@@ -122,6 +124,7 @@ export function Queries({ server, toast, onOpenSql }) {
           </div>
         </aside>
       )}
+      {plan && plan.xml && <PlanView xml={plan.xml} title={plan.title} toast={toast} onClose={() => setPlan(null)} onSave={async () => { const f = await dbApi().savePlan(plan.xml, plan.name); if (f) toast('Plano salvo', f, 'ok'); }} />}
     </div>
   );
 }

@@ -266,8 +266,8 @@ ambiente Fluig/RM: o que mais custa achar no SSMS — **quem está segurando que
   minutos. A **árvore de bloqueio** mostra a cabeça no topo (inclusive **ociosa com transação aberta** — o `BEGIN TRAN`
   esquecido) e quem espera, há quanto tempo e em quê. Sessões ativas ordenáveis e filtráveis (programa, login, banco,
   espera, texto), esperas do momento por categoria (lock, disco, log, CPU, rede…) com o que cada uma costuma significar.
-  O detalhe da sessão traz o SQL (comando ou lote inteiro), espera, recurso, transações, isolamento, **Plano** (salva
-  `.sqlplan`, que abre no SSMS), **SQL Formatter** e **Encerrar**
+  O detalhe da sessão traz o SQL (comando ou lote inteiro), espera, recurso, transações, isolamento, **Plano** (abre o
+  visualizador do plano), **SQL Formatter** e **Encerrar**
 - **Encerrar (KILL)**: só com confirmação, que mostra login, programa, computador, banco, quantas sessões ela segura e há
   quanto tempo a transação está aberta (e avisa que desfazer uma transação antiga pode demorar). Antes de encerrar, o
   Devkit confere se a sessão ainda é a mesma — o número é reaproveitado pelo SQL Server — e registra no histórico
@@ -280,6 +280,14 @@ ambiente Fluig/RM: o que mais custa achar no SSMS — **quem está segurando que
 - **Queries**: as mais caras por CPU, duração, leituras ou execuções (totais e médias), do cache de planos (agrupadas por
   `query_hash` — a mesma query com parâmetros diferentes) ou do **Query Store** de um banco, com período. Riscos comuns
   do texto (como no SQL Formatter), plano sob demanda
+- **Plano de execução** (botão **Plano** em Queries e no detalhe da sessão): visualizador dentro do Devkit. Desenho do plano
+  da instrução às tabelas, com % do custo por operador, espessura da seta pelo volume de linhas e selo nos operadores com
+  problema; tabela de operadores ordenável; XML; **Salvar .sqlplan** para o SSMS. Os **insights** apontam scans caros,
+  Key Lookups, derrame para o tempdb, conversão implícita (e se ela impede o Seek), estimado × real (plano real), índice
+  sugerido com o `CREATE INDEX` pronto, memory grant exagerado ou em fila, plano serial, otimizador que desistiu,
+  parameter sniffing e estatísticas desatualizadas — cada um diz o que viu, por que importa e o que fazer
+  **Explicar o plano** (IA): manda só um resumo do plano — números, achados e operadores mais caros, com segredos
+  removidos — e devolve o que está caro, por quê e o que fazer em ordem de ganho
 - **Deadlocks**: lidos do `system_health` do próprio SQL Server a cada minuto (só os novos). Cada um vira um **desenho** —
   processos em cima, recursos embaixo, seta tracejada = espera, contínua = segura, **vítima** com ícone — e um cartão por
   processo com programa, login, o lock que pedia, isolamento, procedure/linha e o SQL. **Copiar XML**, **Salvar .xdl**

@@ -19,6 +19,7 @@ test('todas as tarefas montam system + user em texto', () => {
     logError: { text: 'ERROR x\n\tat a.B.c(B.java:1)', format: 'jboss' },
     logIncident: { groups: [{ level: 'ERROR', count: 3, title: 'x', first: '10:00', last: '10:05' }], total: 10 },
     dbQuery: { sql: 'SELECT * FROM t WHERE a = 1', stats: { executions: 10 } },
+    dbPlan: { sql: 'select 1', plan: { cost: 1, operators: 1 }, insights: [], operators: [] },
     dbDeadlock: { processes: [{ spid: 63, victim: true, sql: 'UPDATE a' }], resources: [{ type: 'keylock', object: 'db.dbo.T', holders: ['58'], waiters: ['63'] }] },
   };
   for (const [id, t] of Object.entries(TASKS)) {
@@ -49,6 +50,21 @@ test('banco: query e deadlock vão sem segredos e com as métricas', () => {
   assert.match(d.user, /keylock em db\.dbo\.Pedido \(índice PK\): segurado por 58; esperado por 63/);
   assert.doesNotMatch(d.user, /b@y\.com/);
   assert.throws(() => TASKS.dbDeadlock.build({ processes: [] }), /sem processos/);
+});
+
+test('banco: plano vai resumido, sem segredos, com achados e operadores', () => {
+  const r = TASKS.dbPlan.build({
+    sql: "SELECT * FROM T WHERE Email = 'ana@x.com'", plan: { cost: 12.5, operators: 4, dop: 1, serialReason: 'MaxDOPSetToOne', actual: true, grant: { grantedKb: 20480, usedKb: 512 } },
+    insights: [{ severity: 'error', title: 'Conversão implícita impede o Seek', detail: 'nvarchar × varchar' }],
+    operators: [{ id: 3, op: 'Index Scan', object: 'T (IX)', costPct: 71.2, estRows: 20000, actualRows: 2, executions: 1, predicate: ["[T].[Cpf]='123.456.789-09'"] }],
+    params: [{ name: '@p', type: 'varchar', compiled: "'a@b.com'", runtime: null }],
+  });
+  assert.match(r.user, /custo estimado: 12\.50 · 4 operadores/);
+  assert.match(r.user, /plano REAL/);
+  assert.match(r.user, /\[error\] Conversão implícita impede o Seek/);
+  assert.match(r.user, /#3 Index Scan em T \(IX\): 71\.2% do custo/);
+  assert.doesNotMatch(r.user, /ana@x\.com|123\.456\.789-09|a@b\.com/);
+  assert.throws(() => TASKS.dbPlan.build({ sql: ' ' }), /vazio/);
 });
 
 test('logs: segredos saem antes do envio; contexto Fluig quando o log é do Fluig', () => {

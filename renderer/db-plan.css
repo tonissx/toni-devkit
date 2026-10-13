@@ -1,0 +1,78 @@
+/* Visualizador do plano de execução (src/tools/db/PlanView.jsx). Só tokens do DS (--tk-*) e as cores de estado dos Logs (--lg-*). */
+.db-planmodal .tk-modal__body { padding: 0; height: min(76vh, 780px); display: flex; flex-direction: column; overflow: hidden; }
+.db-planmodal { max-height: 94vh; }
+.db-plan { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--tk-border); margin-top: 14px; }
+.db-plan__sum { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--tk-border); background: var(--tk-surface-1); }
+.db-plan__stat { display: flex; flex-direction: column; gap: 1px; padding: 5px 11px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-2); min-width: 78px; }
+.db-plan__stat span { font-size: 10.5px; color: var(--tk-text-3); }
+.db-plan__stat b { font: 600 14px var(--tk-font-sans); color: var(--tk-text); }
+.db-plan__stat.is-warn { border-color: var(--lg-warn); }
+.db-plan__stat.is-error { border-color: var(--lg-error); }
+.db-plan__body { flex: 1; min-height: 0; display: flex; }
+.db-plan__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.db-plan__side { width: 360px; flex-shrink: 0; overflow: auto; border-left: 1px solid var(--tk-border); background: var(--tk-surface-1); padding: 4px 14px 16px; }
+.db-plan__sec { padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.db-plan__sec h4 { display: flex; align-items: center; gap: 6px; margin: 0; font: 600 12px var(--tk-font-sans); color: var(--tk-text-2); text-transform: uppercase; letter-spacing: .04em; }
+.db-plan__sec h4 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.db-plan__graphwrap { position: relative; flex: 1; min-height: 0; display: flex; }
+.db-plan__graph { flex: 1; min-width: 0; overflow: auto; background: var(--tk-bg); background-image: var(--tk-dot-grid); }
+.db-plan__zoom { position: absolute; right: 16px; top: 10px; z-index: 3; display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-2); font-size: 11px; color: var(--tk-text-2); }
+.db-plan__zoom span { min-width: 38px; text-align: center; }
+.db-plan__canvas { position: relative; transform-origin: 0 0; }
+.db-plan__edges { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.db-plan__edges path { fill: none; stroke: var(--tk-surface-4); stroke-linecap: round; }
+.db-plan__edges path.is-actual { stroke: color-mix(in srgb, var(--tk-accent) 55%, var(--tk-surface-4)); }
+.db-plan__edges text { font: 10px var(--tk-font-sans); fill: var(--tk-text-3); }
+.db-plan__node { position: absolute; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; gap: 2px; padding: 7px 10px 9px; text-align: left; overflow: hidden;
+  border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-2); color: var(--tk-text); font: 12px var(--tk-font-sans); cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+.db-plan__node:hover:not(:disabled) { border-color: var(--tk-text-3); }
+.db-plan__node.is-warm { border-color: color-mix(in srgb, var(--lg-warn) 60%, var(--tk-border)); }
+.db-plan__node.is-hot { border-color: var(--lg-error); box-shadow: 0 0 0 1px color-mix(in srgb, var(--lg-error) 35%, transparent); }
+.db-plan__node.is-sel { border-color: var(--tk-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tk-accent) 35%, transparent); }
+.db-plan__node.is-root { cursor: default; background: var(--tk-surface-3); }
+.db-plan__nhead { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.db-plan__nhead b { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-plan__nhead > svg { flex-shrink: 0; color: var(--tk-text-3); }
+.db-plan__nbadge { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0; background: var(--tk-surface-4); }
+.db-plan__nbadge.is-error { background: var(--lg-error); color: #fff; }
+.db-plan__nbadge.is-warn { background: var(--lg-warn); color: #1a1a1a; }
+.db-plan__nbadge svg { color: inherit; }
+.db-plan__nobj { font-size: 11px; color: var(--tk-text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 14px; }
+.db-plan__ncost { display: flex; align-items: baseline; gap: 6px; }
+.db-plan__ncost b { font-size: 13px; }
+.db-plan__ncost small { font-size: 10.5px; color: var(--tk-text-3); }
+.db-plan__nbar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--tk-surface-3); }
+.db-plan__nbar span { display: block; height: 100%; background: var(--tk-accent); }
+.db-plan__node.is-warm .db-plan__nbar span { background: var(--lg-warn); }
+.db-plan__node.is-hot .db-plan__nbar span { background: var(--lg-error); }
+.db-plan__ops { flex: 1; max-height: none; }
+.db-plan__sort { display: inline-flex; align-items: center; gap: 3px; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; padding: 0; }
+.db-plan__xml { flex: 1; max-height: none; margin: 0; border-radius: 0; border: 0; overflow: auto; white-space: pre; word-break: normal; }
+.db-plan__ins { display: flex; flex-direction: column; gap: 8px; }
+.db-plan__insight { border: 1px solid var(--tk-border); border-left-width: 3px; border-radius: var(--tk-radius-md); background: var(--tk-surface-2); overflow: hidden; }
+.db-plan__insight.is-error { border-left-color: var(--lg-error); }
+.db-plan__insight.is-warn { border-left-color: var(--lg-warn); }
+.db-plan__insight.is-info { border-left-color: var(--tk-text-3); }
+.db-plan__insight.is-sel { box-shadow: 0 0 0 1px var(--tk-accent); }
+.db-plan__insbtn { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 8px 10px; border: 0; background: none; color: var(--tk-text); font: 12px var(--tk-font-sans); text-align: left; cursor: pointer; }
+.db-plan__insbtn:disabled { cursor: default; }
+.db-plan__insbtn:hover:not(:disabled) { background: var(--tk-surface-3); }
+.db-plan__insbtn b { font-weight: 600; line-height: 1.35; }
+.db-plan__insbtn small { color: var(--tk-text-3); font-size: 11.5px; line-height: 1.45; }
+.db-plan__sev { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--tk-text-2); }
+.db-plan__sql { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 10px; align-items: flex-start; }
+.db-plan__sql .db-sql { width: 100%; box-sizing: border-box; max-height: 130px; font-size: 11px; }
+.db-plan__top { display: flex; flex-direction: column; gap: 4px; }
+.db-plan__top button { display: grid; grid-template-columns: minmax(0, 1fr) 70px 38px; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid transparent; border-radius: var(--tk-radius-md); background: var(--tk-surface-2); color: var(--tk-text); font: 12px var(--tk-font-sans); cursor: pointer; text-align: left; }
+.db-plan__top button:hover { background: var(--tk-surface-3); }
+.db-plan__top button.is-sel { border-color: var(--tk-accent); }
+.db-plan__top b { text-align: right; font-weight: 600; }
+.db-plan__toplabel { display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-pctbar.is-wide { width: 100%; margin-right: 0; }
+.db-plan__code { display: flex; flex-direction: column; gap: 2px; font-size: 11px; }
+.db-plan__code span { color: var(--tk-text-3); }
+.db-plan__code code { padding: 5px 7px; border-radius: var(--tk-radius-md); background: var(--tk-surface-2); border: 1px solid var(--tk-border); font: 11px/1.5 var(--tk-font-mono); color: var(--tk-text); word-break: break-word; }
+.db-plan__side .db-sql { max-height: 160px; font-size: 11px; }
+@media (max-width: 1000px) { .db-plan__side { width: 280px; } }
+.db-plan__ai { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.db-plan__ai .ai-panel { align-self: stretch; }

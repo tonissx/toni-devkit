@@ -423,6 +423,32 @@ const TASKS = {
     clean: tidy,
   },
 
+  dbPlan: {
+    label: 'Explicar o plano', maxTokens: 1400,
+    build(i) {
+      const sql = redact(i.sql || '').text;
+      const p = i.plan || {};
+      if (!sql.trim() && !(i.operators || []).length) throw new Error('Plano vazio');
+      const mb = (kb) => (kb == null ? '?' : kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`);
+      const head = [
+        p.cost != null ? `custo estimado: ${Number(p.cost).toFixed(2)}` : '', p.operators ? `${p.operators} operadores` : '', p.estRows != null ? `linhas estimadas: ${Math.round(p.estRows)}` : '',
+        p.dop > 1 ? `paralelo (DOP ${p.dop})` : `serial${p.serialReason ? ` (${p.serialReason})` : ''}`, p.actual ? 'plano REAL (tem linhas e tempos reais)' : 'plano ESTIMADO (sem dados de execução)',
+        p.grant && p.grant.grantedKb != null ? `memory grant ${mb(p.grant.grantedKb)}${p.grant.usedKb != null ? ` (usou ${mb(p.grant.usedKb)})` : ''}` : '',
+        p.elapsedMs != null ? `tempo: ${p.elapsedMs} ms` : '', p.cardinalityModel ? `estimador de cardinalidade ${p.cardinalityModel}` : '',
+      ].filter(Boolean).join(' · ');
+      const ins = (i.insights || []).slice(0, 14).map((x) => `- [${x.severity}] ${x.title} — ${x.detail}`).join('\n');
+      const ops = (i.operators || []).slice(0, 12).map((o) => `- #${o.id} ${o.op}${o.object ? ` em ${o.object}` : ''}: ${o.costPct}% do custo · linhas est. ${o.estRows != null ? Math.round(o.estRows) : '?'}${o.actualRows != null ? ` / reais ${o.actualRows}` : ''}${o.executions > 1 ? ` · ${o.executions} execuções` : ''}${o.predicate && o.predicate.length ? ` · filtro: ${clip(redact(o.predicate.join(' AND ')).text, 200)}` : ''}`).join('\n');
+      const params = (i.params || []).map((x) => `${x.name} ${x.type}: compilado ${redact(String(x.compiled ?? '—')).text}${x.runtime != null ? `, executado ${redact(String(x.runtime)).text}` : ''}`).join('; ');
+      return {
+        system: ['Você é um DBA sênior de SQL Server lendo o plano de execução de uma consulta para quem não é especialista.', PT, MD,
+          'Os achados e números abaixo já foram calculados a partir do plano: use-os como fatos, não os contradiga nem invente operadores, tabelas ou colunas que não estão na lista.',
+          'Responda com: **Resumo** (1–2 frases: o plano está saudável ou tem um problema dominante), **O que está caro e por quê** (ligue o operador, a fatia do custo e as linhas estimadas × reais), **O que fazer, em ordem de ganho** (ações concretas e curtas: índice com as colunas, reescrita de predicado, ajuste de tipo de parâmetro, estatísticas — cada uma dizendo o efeito esperado) e **Cuidados** (o que não mexer ou validar antes, como índice demais pesar nas gravações). Se o plano for estimado, diga que o real pode divergir.'].join('\n'),
+        user: [`Plano: ${head}`, params ? `Parâmetros: ${params}` : '', ins ? `\nAchados:\n${ins}` : '', ops ? `\nOperadores mais caros:\n${ops}` : '', `\nConsulta:\n${clip(sql, 8000)}`].filter(Boolean).join('\n'),
+      };
+    },
+    clean: tidy,
+  },
+
   dbDeadlock: {
     label: 'Explicar o deadlock', maxTokens: 1100,
     build(i) {

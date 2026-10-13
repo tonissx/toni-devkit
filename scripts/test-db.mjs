@@ -297,3 +297,97 @@ test('consultas: preâmbulo leve, métricas e números só de listas fechadas', 
   assert.equal(Q.quoteName('a]b'), '[a]]b]');
   assert.match(Q.queryStoreTop("db'x", { fromIso: "2026-10-12T10:00:00Z' OR 1=1" }), /DB_ID\(N'db''x'\)[\s\S]*FROM \[db'x\]\.sys\.query_store_runtime_stats[\s\S]*i\.end_time >= '1900-01-01T00:00:00'/);
 });
+
+/* ─────────────── Plano de execução (Showplan) ─────────────── */
+
+const { parsePlan, analyze, layout, aiSummary } = require('../src/db/showplan.js');
+const PLAN = (stmt, ns = true) => `<?xml version="1.0"?><ShowPlanXML ${ns ? 'xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan"' : ''} Version="1.6" Build="16.0"><BatchSequence><Batch><Statements>${stmt}</Statements></Batch></BatchSequence></ShowPlanXML>`;
+const STMT = `<StmtSimple StatementText="SELECT * FROM T WHERE A = @p &amp; 1" StatementSubTreeCost="10" StatementEstRows="5" StatementType="SELECT" CardinalityEstimationModelVersion="150" StatementOptmEarlyAbortReason="TimeOut" QueryHash="0xAB">
+<QueryPlan DegreeOfParallelism="1" NonParallelPlanReason="MaxDOPSetToOne" CachedPlanSize="32">
+<MemoryGrantInfo RequestedMemory="102400" GrantedMemory="102400" MaxUsedMemory="1024" GrantWaitTime="3000"/>
+<Warnings><PlanAffectingConvert ConvertIssue="Seek Plan" Expression="CONVERT_IMPLICIT(nvarchar(20),[T].[EXTERNAL_ID],0)"/></Warnings>
+<MissingIndexes><MissingIndexGroup Impact="87.5"><MissingIndex Database="[db]" Schema="[dbo]" Table="[T]"><ColumnGroup Usage="EQUALITY"><Column Name="[A]"/></ColumnGroup><ColumnGroup Usage="INCLUDE"><Column Name="[B]"/></ColumnGroup></MissingIndex></MissingIndexGroup></MissingIndexes>
+<ParameterList><ColumnReference Column="@p" ParameterDataType="int" ParameterCompiledValue="(1)" ParameterRuntimeValue="(99)"/></ParameterList>
+<RelOp NodeId="0" PhysicalOp="Nested Loops" LogicalOp="Inner Join" EstimateRows="5" EstimatedTotalSubtreeCost="10">
+ <RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="5" ActualExecutions="1"/></RunTimeInformation>
+ <NestedLoops>
+  <RelOp NodeId="1" PhysicalOp="Index Scan" LogicalOp="Index Scan" EstimateRows="20000" TableCardinality="90000" EstimatedTotalSubtreeCost="6">
+   <RunTimeInformation><RunTimeCountersPerThread Thread="0" ActualRows="2" ActualRowsRead="90000" ActualExecutions="1"/></RunTimeInformation>
+   <IndexScan><Object Database="[db]" Schema="[dbo]" Table="[T]" Index="[IX_T]" IndexKind="NonClustered"/><Predicate><ScalarOperator ScalarString="[T].[A]=[@p]"/></Predicate></IndexScan>
+  </RelOp>
+  <RelOp NodeId="2" PhysicalOp="Clustered Index Seek" LogicalOp="Clustered Index Seek" EstimateRows="1" EstimatedTotalSubtreeCost="3">
+   <Warnings><SpillToTempDb SpillLevel="1"/></Warnings>
+   <IndexScan Lookup="1"><Object Database="[db]" Schema="[dbo]" Table="[T]" Index="[PK_T]"/></IndexScan>
+  </RelOp>
+ </NestedLoops>
+</RelOp></QueryPlan></StmtSimple>`;
+
+test('plano: parseia statement, nós, custos próprios e plano real', () => {
+  const r = parsePlan(PLAN(STMT));
+  assert.equal(r.statements.length, 1);
+  const s = r.statements[0];
+  assert.equal(s.text, 'SELECT * FROM T WHERE A = @p & 1');
+  assert.equal(s.cost, 10);
+  assert.equal(s.nodes.length, 3);
+  assert.equal(s.isActual, true);
+  assert.equal(s.grant.grantedKb, 102400);
+  assert.deepEqual(s.nodes.map((n) => n.id), [0, 1, 2]);
+  const [nl, scan, lk] = s.nodes;
+  assert.equal(nl.ownCost, 1);
+  assert.equal(scan.object.full, 'db.dbo.T');
+  assert.equal(scan.predicate[0], '[T].[A]=[@p]');
+  assert.equal(scan.runtime.rowsRead, 90000);
+  assert.equal(lk.lookup, true);
+  assert.equal(lk.label, 'Key Lookup');
+  assert.equal(Math.round(scan.costPct), 60);
+  assert.equal(s.tree.id, -1);
+  assert.equal(s.tree.children[0].id, 0);
+  assert.equal(s.missing[0].impact, 87.5);
+});
+
+test('plano: insights — scan, lookup, spill, conversão, missing index, grant, estimativa, sniffing', () => {
+  const s = parsePlan(PLAN(STMT, false)).statements[0];
+  const { insights, top } = analyze(s);
+  const kinds = insights.map((i) => i.kind);
+  for (const k of ['scan', 'lookup', 'spill', 'convert', 'missingIndex', 'grantWait', 'grantBig', 'estimate', 'sniffing', 'serial', 'abort']) assert.ok(kinds.includes(k), k);
+  assert.equal(insights[0].severity, 'error'); // erros primeiro
+  assert.ok(insights.find((i) => i.kind === 'convert').title.includes('Seek'));
+  assert.match(insights.find((i) => i.kind === 'missingIndex').sql, /CREATE NONCLUSTERED INDEX .*\n.*\(\[A\]\)\nINCLUDE \(\[B\]\)/);
+  assert.equal(top[0].id, 1); // maior custo próprio
+});
+
+test('plano: layout põe a raiz à esquerda e centraliza o pai nos filhos', () => {
+  const s = parsePlan(PLAN(STMT)).statements[0];
+  const { pos, cols, rows } = layout(s.tree);
+  assert.equal(cols, 3);
+  assert.equal(rows, 2);
+  assert.equal(pos.get(0).col, 1);
+  assert.equal(pos.get(0).row, 0.5);
+  assert.equal(pos.get(-1).col, 0); // a instrução (raiz virtual) fica na coluna 0
+});
+
+test('plano: XML inválido ou sem operadores não quebra', () => {
+  assert.ok(parsePlan('<<<').error);
+  assert.ok(parsePlan('<a/>').error);
+  assert.ok(parsePlan(PLAN('<StmtSimple StatementText="DECLARE @x int"/>')).error);
+  assert.ok(parsePlan('').error);
+});
+
+test('plano: resumo para a IA leva achados e operadores mais caros, sem o XML', () => {
+  const s = parsePlan(PLAN(STMT)).statements[0];
+  const r = aiSummary(s);
+  assert.equal(r.plan.cost, 10);
+  assert.equal(r.plan.actual, true);
+  assert.equal(r.operators[0].id, 1);
+  assert.ok(r.insights.some((i) => i.title.includes('Seek')));
+  assert.ok(r.insights.find((i) => i.sql));
+  assert.equal(r.params[0].name, '@p');
+  assert.ok(!JSON.stringify(r).includes('<RelOp'));
+});
+
+test('plano: vários statements e IF (StmtCond)', () => {
+  const one = '<StmtSimple StatementText="A" StatementSubTreeCost="1"><QueryPlan><RelOp NodeId="0" PhysicalOp="Table Scan" LogicalOp="Table Scan" EstimateRows="1" EstimatedTotalSubtreeCost="1"><TableScan><Object Table="[X]"/></TableScan></RelOp></QueryPlan></StmtSimple>';
+  const r = parsePlan(PLAN(one + `<StmtCond StatementText="IF"><Then><Statements>${one}</Statements></Then></StmtCond>`));
+  assert.equal(r.statements.length, 2);
+  assert.equal(r.statements[1].index, 1);
+});
