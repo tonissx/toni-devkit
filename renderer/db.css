@@ -33,6 +33,10 @@
 /* trilho */
 .db-rail .gt-repo { padding-right: 52px; }
 .db-rail__edit { right: 32px !important; }
+.db-rail .gt-rail__foot { display: flex; justify-content: center; padding: 8px 8px 14px; }
+.db-rail.is-collapsed .gt-rail__foot { padding: 8px 0 14px; }
+.db-rail.is-collapsed .gt-rail__foot .gt-op { width: 34px; padding: 0; justify-content: center; }
+.db-rail.is-collapsed .db-rail__edit { display: none !important; }
 .db-railwarn { display: inline-flex; align-items: center; gap: 3px; color: var(--tk-text); font-weight: 600; }
 .db-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; background: var(--tk-text-3); }
 .db-dot.is-ok { background: var(--tk-accent); }
