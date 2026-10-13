@@ -497,8 +497,32 @@ function gitRepoCommands(repos) {
   }));
 }
 
-const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands, ...gitCommands];
+/* ─────────────── Logs ─────────────── */
+// Abrem a ferramenta Logs já com o diálogo de arquivo/pasta (ver src/tools/logs/LogsScreen.jsx → request.action).
+const logsCommands = [
+  {
+    id: 'logs:open-file', name: 'Logs: abrir arquivo…', description: 'server.log, JSON por linha, IIS, Nginx… — acompanha ao vivo',
+    category: 'actions', icon: 'file-text', keywords: ['log', 'logs', 'tail', 'server.log', 'fluig', 'jboss', 'erro', 'abrir'],
+    run: (ctx) => ctx.openApp('logs', { action: 'openFile' }),
+  },
+  {
+    id: 'logs:open-folder', name: 'Logs: abrir pasta de logs…', description: 'Junta os arquivos rotacionados (server.log.2026-10-10, app.log.1, .gz)',
+    category: 'actions', icon: 'folder-open', keywords: ['log', 'logs', 'pasta', 'rotacionados', 'iis', 'fluig', 'abrir'],
+    run: (ctx) => ctx.openApp('logs', { action: 'openFolder' }),
+  },
+];
+
+/** Um comando por log recente da ferramenta Logs (lista dinâmica, carregada quando a palette abre). */
+function logsRecentCommands(recents) {
+  return (recents || []).map((r) => ({
+    id: 'logs:recent:' + r.path + '|' + (r.family || ''), name: 'Logs: ' + r.name, category: 'actions', icon: r.kind === 'folder' ? 'folder-open' : 'scroll-text', dynamic: true,
+    description: r.path, keywords: ['log', 'logs', 'abrir', 'tail'],
+    run: (ctx) => ctx.openApp('logs', { action: 'open', spec: { kind: r.kind, path: r.path, family: r.family || undefined } }),
+  }));
+}
+
+const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands, ...gitCommands, ...logsCommands];
 
 const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : id === 'vault' ? 'Vault' : id === 'links' ? 'Link' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
 
-module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands, gitRepoCommands, detectClipboardKind };
+module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands, gitRepoCommands, logsRecentCommands, detectClipboardKind };

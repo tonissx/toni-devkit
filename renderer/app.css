@@ -1005,6 +1005,13 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 /* Início: painel de repositórios git — cada linha tingida pelo que pede atenção */
 .home-panel.is-git { --hue: var(--tk-syn-key); }
 .home-chip.is-git { color: var(--tk-amber); border-color: color-mix(in srgb, var(--tk-amber) 30%, transparent); background: color-mix(in srgb, var(--tk-amber) 10%, transparent); }
+.home-panel.is-logs { --hue: var(--tk-red); }
+.home-log > svg { color: var(--tk-text-3); }
+.home-log.is-new > svg { color: var(--tk-red); }
+.home-log.is-new .home-row__sub { color: var(--tk-text); }
+.home-log.is-errors > svg { color: var(--tk-amber); }
+.home-log.is-ok > svg { color: var(--tk-accent-text); }
+.home-log.is-ok .home-row__title { color: var(--tk-text-2); font-weight: 400; }
 .home-repo > svg { color: var(--tk-text-3); }
 .home-repo.is-conflict > svg, .home-repo.is-error > svg { color: var(--tk-red); }
 .home-repo.is-conflict .home-row__sub { color: var(--tk-red); }

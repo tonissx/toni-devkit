@@ -6,6 +6,7 @@
  * Regra fixa: nada do Vault entra aqui — as telas mandam só o texto que a pessoa vê (referências, nunca segredos).
  */
 const { prepareDiff, commitMessagePrompt, cleanCommitMessage } = require('./prompts.js');
+const { redact } = require('../logs/redact.js');
 
 const PT = 'Responda em português do Brasil.';
 const MD = 'Use markdown simples (títulos curtos, listas, `código`). Seja direto: nada de introdução nem de despedida.';
@@ -354,6 +355,50 @@ const TASKS = {
     },
     clean: tidy,
     parse: (text) => ({ refs: noteRefs(text) }),
+  },
+
+  /* ───────── Logs ───────── */
+  // Os trechos de log passam por redact() aqui: senhas, tokens, e-mails e CPFs saem antes de qualquer envio.
+  logError: {
+    label: 'Explicar o erro', maxTokens: 900,
+    build(i) {
+      const text = redact(i.text || '').text;
+      if (!text.trim()) throw new Error('Entrada de log vazia');
+      const fluig = /fluig|totvs|wcm|ecm|jboss|wildfly/i.test(text + ' ' + (i.logger || '') + ' ' + (i.format || ''));
+      return {
+        system: ['Você ajuda a diagnosticar erros a partir de logs de aplicação (Java, .NET, Node, Python, servidores web).', PT, MD,
+          fluig ? 'O log é de um servidor Fluig (TOTVS) sobre JBoss/WildFly: considere datasets, eventos de formulário/processo, widgets, integrações com o RM e o banco.' : '',
+          'Responda com: **O que aconteceu** (1–2 frases), **Causa provável** (a causa raiz — o último "Caused by" costuma ser ela), **Onde olhar** (classe/método/arquivo do stack que é do sistema, não do framework) e **Como confirmar ou corrigir** (passos curtos). Se o log não bastar, diga o que falta.'].filter(Boolean).join('\n'),
+        user: [
+          `Formato do log: ${i.format || 'desconhecido'}${i.logger ? ` · logger: ${i.logger}` : ''}`,
+          i.group ? `Este problema aparece ${i.group.total} vez(es) no log (de ${i.group.first} a ${i.group.last}).` : '',
+          i.before ? `\nLinhas logo antes:\n${clip(redact(i.before).text, 3000)}` : '',
+          `\nEntrada com o erro:\n${clip(text, 12000)}`,
+        ].filter(Boolean).join('\n'),
+      };
+    },
+    clean: tidy,
+  },
+
+  logIncident: {
+    label: 'Resumir os problemas', maxTokens: 1200,
+    build(i) {
+      const groups = (i.groups || []).slice(0, 25);
+      if (!groups.length) throw new Error('Nenhum problema para resumir');
+      const list = groups.map((g, k) => `${k + 1}. [${g.level}] ${g.count}× — ${redact(g.title).text}${g.exception ? ` (${g.exception}${g.rootCause && g.rootCause !== g.exception ? ` → causa ${g.rootCause}` : ''})` : ''}${g.frame ? ` em ${g.frame}` : ''} · ${g.first} a ${g.last}`).join('\n');
+      return {
+        system: ['Você faz a triagem de incidentes a partir de um resumo de logs (grupos de erros e avisos já agrupados por falha).', PT, MD,
+          'Responda com: **Resumo** (2–3 frases: o que está acontecendo e desde quando), **Prioridades** (lista do mais urgente ao menos; diga quais grupos parecem ter a mesma causa) e **Próximos passos**. Não invente detalhes que não estão no resumo.'].join('\n'),
+        user: [
+          `Log: ${i.name || '(sem nome)'} · formato ${i.format || '?'} · ${i.total} entradas no filtro${i.filter ? ` (filtro: ${redact(i.filter).text})` : ''}`,
+          i.window ? `Período: ${i.window}` : '',
+          i.counts ? `Por nível: ${i.counts}` : '',
+          i.spikes ? `Picos de erro: ${i.spikes}` : '',
+          `\nProblemas (mais frequentes primeiro):\n${clip(list, 12000)}`,
+        ].filter(Boolean).join('\n'),
+      };
+    },
+    clean: tidy,
   },
 
   /* ───────── Palette ───────── */

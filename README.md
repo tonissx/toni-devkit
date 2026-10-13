@@ -32,6 +32,7 @@ lugar do sistema.
 | 🔍 | **Diff Checker** | Lado a lado ou unificado, destaque dentro da linha, mesclar bloco a bloco |
 | 🕸️ | **JSON Visualizer** | JSON como grafo, árvore, YAML ou CSV; JSONPath; gera tipos TypeScript, C# e JSON Schema |
 | 🌿 | **Git** | Interface visual com grafo, stage por trecho, merge com prévia, rebase visual, blame, bisect e **desfazer** |
+| 📜 | **Logs** | Logs grandes (Fluig/JBoss, JSON por linha, IIS, Nginx/Apache) com filtros, erros agrupados, gráficos e acompanhamento ao vivo |
 | 📝 | **Notes** | Markdown com `[[links]]`, tags, grafo, snippets, tarefas e sticky notes |
 | 🔐 | **Vault** | Cofre local (AES-256-GCM) com senha mestra e cópia que se apaga |
 | 🎮 | **DevCore** | Um jogo idle opcional, com DevPets que você descobre usando o próprio Devkit |
@@ -60,6 +61,18 @@ e antes de qualquer operação que reescreve histórico ou descarta trabalho o D
 
 Editor à esquerda e, à direita, o documento como grafo, árvore, YAML ou CSV. Busca por texto ou JSONPath, **Consertar**
 (comentários, vírgulas sobrando, aspas simples) e exportação em PNG ou SVG.
+
+### Logs: o erro certo em segundos
+
+Abre logs de centenas de MB em segundos, inclusive por caminho de rede (`\\servidor\logs`), e acompanha o arquivo **ao
+vivo** como o `tail -f`. Stack traces viram uma entrada só, a mesma falha com ids e horários diferentes vira um **problema**
+agrupado, e a linha do tempo mostra os picos de erro — arraste nela para filtrar o intervalo.
+
+- Formatos detectados sozinhos: Fluig/JBoss, JSON por linha, IIS, Nginx/Apache, log4j/Spring e texto
+- Pastas de logs rotacionados (`server.log.2026-10-10`, `app.log.1`, `.gz`) viram um log só
+- Busca com `level:error+ logger:fluig status:5xx "frase" /regex/ -esconder`, filtros salvos, `n`/`N` para o próximo erro
+- Gráficos de erros por minuto e, em logs de acesso, status, latência p50/p95 e endpoints mais lentos
+- Copiar sem segredos e, com a IA ligada, **explicar o erro** (senhas e tokens saem antes do envio)
 
 ### Palette global
 
@@ -122,14 +135,15 @@ npm start
 | --- | --- |
 | `Ctrl+Alt+Space` | Abre a palette de qualquer lugar |
 | `Ctrl+K` | Palette dentro do app |
-| `Ctrl+1` … `Ctrl+8` | Vai direto para a ferramenta |
+| `Ctrl+1` … `Ctrl+9` | Vai direto para a ferramenta |
 | `Ctrl+Enter` | Formatar / comparar |
 | `Ctrl+,` | Configurações |
 
 ## Como é feito
 
-Electron + React, com o renderer compilado por esbuild. Os motores (SQL, XML, Diff, JSON, Git, Notes, Vault, DevCore) são
-módulos puros, testados no Node sem abrir janela. O SQL roda `sqlparse` em Pyodide num *worker thread*. A estrutura de
+Electron + React, com o renderer compilado por esbuild. Os motores (SQL, XML, Diff, JSON, Git, Logs, Notes, Vault,
+DevCore) são módulos puros, testados no Node sem abrir janela. O SQL roda `sqlparse` em Pyodide num *worker thread*, e os
+Logs indexam e filtram em outro, com a tela pedindo só as linhas visíveis. A estrutura de
 pastas e como adicionar uma ferramenta nova estão no [guia completo](docs/FEATURES.md#estrutura).
 
 ## Status

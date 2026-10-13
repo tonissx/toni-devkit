@@ -37,6 +37,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **Diff Checker**: compara dois textos nos moldes do diffchecker.com | ✅ |
 | **JSON Visualizer**: edita, formata e explora JSON como grafo (estilo JSON Crack), árvore, YAML ou CSV | ✅ |
 | **Git**: repositórios locais com grafo do histórico, stage por trecho, merge com prévia, conflitos, rebase visual, blame, bisect e desfazer qualquer coisa | ✅ |
+| **Logs**: logs grandes (Fluig/JBoss, JSON por linha, IIS, Nginx/Apache, texto) com filtros, erros agrupados, gráficos e acompanhamento ao vivo | ✅ |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
 | **Vault**: cofre de senhas, tokens e credenciais de banco, com senha mestra e cópia que se apaga | ✅ |
 | **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
@@ -192,6 +193,59 @@ operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nad
 
 **IA**: mensagem de commit, explicar commit, combinar conflito, nome de branch e resumo de PR — ver [IA (opcional)](#ia-opcional)
 
+### Logs
+
+Para achar rápido o que deu errado num log (`Ctrl+9`). Abre arquivos de centenas de MB em segundos, acompanha o arquivo
+**ao vivo** (como o `tail -f`) e junta pastas de **logs rotacionados**. Tudo é lido nesta máquina; nada sai do PC.
+
+- **Abrir**: arquivo, pasta ou **arrastar e soltar** — também por caminho de rede (`\\servidor\fluig\logs`), desde que o
+  Windows já tenha acesso ao compartilhamento. Na pasta, os rotacionados de uma "família" viram um log só, do mais
+  antigo ao atual — `server.log` + `server.log.2026-10-10`, `app.log` + `app.log.1` + `app.log.2.gz`, `app.2026-10-10.log`,
+  `u_ex261011.log` (IIS) — e dá para trocar de família no cabeçalho. Recentes na tela inicial e na palette
+- **Formatos** (detectados sozinhos, ou escolhidos no cabeçalho — fica lembrado): **Fluig / JBoss / WildFly** (`server.log`,
+  inclusive o console que grava só a hora), **JSON por linha** (pino, winston, serilog, bunyan…), **IIS (W3C)** pelo
+  `#Fields:`, **Nginx/Apache** (combined, com `$request_time`), **texto com data** (log4j, logback, Spring, syslog,
+  Python) e **texto simples**. Stack traces e mensagens de várias linhas viram **uma entrada só**. Encoding: UTF-8,
+  UTF-16 e **Windows-1252** (comum no Fluig no Windows), também escolhível
+- **Filtros**: chips de nível com contagem (Ctrl+clique = só este; **Problemas** = avisos e erros) e uma busca com
+  regras simples, todas precisando casar: `timeout`, `"frase exata"`, `/regex/i`, `-esconder`, `level:error+`,
+  `logger:fluig`, `thread:task-12`, `status:5xx`, `ms:>500`, `path:/api/*`, `user.id:42` (campos do JSON ou
+  `chave=valor`), `has:stack`, `exception:NullPointer`. **Filtros salvos** com nome. `Ctrl+F` foca a busca
+- **Linha do tempo**: colunas empilhadas por nível (os erros na base), com os **picos de erro** marcados. Passar o mouse
+  mostra o horário e a contagem de cada nível **no cabeçalho do gráfico** (nada cobre as barras); **arrastar** escolhe um
+  intervalo, mostrando antes de soltar quantas entradas e erros ele tem (vira filtro); **clicar** leva a lista até aquele
+  momento. Pelo teclado: `←`/`→` andam entre as colunas, `Shift` + setas seleciona, `Enter` aplica. O modo **Problemas**
+  mostra só avisos e erros com escala própria, e a linha do tempo pode ser **recolhida** para dar espaço às linhas
+- **Linhas**: lista virtualizada (milhões de linhas sem travar), cor e ícone por nível, termos buscados em destaque e
+  "+N" nas entradas com stack. `↑↓` andam, **`n`/`N`** pulam para o próximo/anterior erro, `w` para o próximo aviso,
+  `End` vai ao fim. Ao vivo, se a lista está no fim ela acompanha; se você subiu para ler, ela para e mostra **↓ N novas**.
+  **Selecionar um texto** destaca as ocorrências iguais nas outras linhas visíveis (sem custo: só as linhas da tela), com
+  a contagem e **Filtrar** (o log inteiro) no rodapé
+- **Detalhe**: mensagem, campos (logger, thread, requisição, status, tempo, JSON), **stack** com os frames do framework
+  (Java, JBoss, Hibernate…) apagados e recolhidos e o `Caused by` em destaque, **contexto** (±50 entradas sem filtro) e o
+  texto original. **Copiar**, **Copiar sem segredos** (senhas, tokens, `Authorization`, e-mails e CPFs viram `‹oculto›`)
+  e **Notes** (cria uma nota com a entrada)
+- **Problemas**: erros e avisos **agrupados** — a mesma falha com ids, números e horários diferentes vira uma linha só
+  (pela exceção, a causa raiz, o primeiro frame do sistema e a mensagem sem as partes que variam). Cada grupo mostra
+  quantas vezes (no filtro e no total), desde quando, a última vez, o desenho no tempo e **novo** (apareceu depois que o
+  log foi aberto ou só na última hora). **Só este problema** / **Esconder** viram filtro (`group:…`)
+- **Gráficos** (respeitam o filtro): erros por minuto, níveis e loggers mais frequentes; nos logs de acesso, **respostas
+  por classe** (2xx–5xx) no tempo, **tempo de resposta p50/p95**, e os endpoints mais chamados, com mais 5xx e mais
+  lentos (ids no caminho viram `:id`). Clicar filtra. Ao vivo, recalculam no máximo a cada 3 s
+- **Exportar** o que está filtrado em `.log` ou `.md`, ou copiar até 200 entradas
+- **Desempenho**: o texto fica num worker thread do processo principal e a tela só pede as linhas visíveis. O índice
+  guarda cada entrada em arrays compactos; a busca de texto roda direto sobre blocos de MB. Num PC comum: 500 MB (4,2
+  milhões de entradas) indexados em ~6 s, filtros de nível e texto em 40–260 ms (`npm run logs:bench`). Acima de
+  1,5 GB, abre só o final e avisa
+- **Ao vivo**: `fs.watch` + conferência de tamanho a cada 1 s (no Windows — e em compartilhamentos de rede — o watch perde
+  gravações). Cresceu → lê só o que chegou; zerado ou rotacionado (outro arquivo no mesmo nome) → reabre e avisa. O
+  arquivo não fica aberto entre as leituras, então não atrapalha a rotação do servidor
+- **Início**: painel **Logs** com os abertos e os **erros novos** desde a última vez que você olhou
+
+Recentes, filtros salvos e formato escolhido à mão ficam em `%APPDATA%\Toni Devkit\logs.json`. Testes: `npm run test:logs`.
+
+**IA**: explicar o erro e resumir os problemas — ver [IA (opcional)](#ia-opcional)
+
 ## IA (opcional)
 
 Desligada por padrão: com ela desligada nenhum botão de IA aparece. Ligada, cada ferramenta ganha botões ✦ que fazem um
@@ -208,6 +262,7 @@ pedido nenhum** — notas vão com as referências dos blocos `secret`, nunca co
 | SQL Formatter | **Explicar consulta** · **Escrever ou alterar com IA**: *Nova consulta* a partir de uma descrição, ou *Alterar a atual* (“trocar o LEFT JOIN por INNER”, “só 2025”…) — muda só o que foi pedido, com **Comparar no Diff Checker** e **Desfazer**; o esquema das tabelas é opcional e fica lembrado no PC |
 | JSON Visualizer | **Melhorar nomes** dos tipos gerados (só os nomes mudam; o Devkit aplica no código original) · **Explicar o erro** quando o Consertar não resolve |
 | Diff Checker | **Resumir diferenças** (adicionado, removido, alterado e o que parece arriscado) |
+| Logs | **Explicar** o erro selecionado (o que aconteceu, causa provável, onde olhar, como confirmar — com o contexto do Fluig quando é um log do Fluig) · Problemas → **Resumir** (triagem dos grupos do filtro). O texto passa antes pelo filtro de segredos |
 | Notes | Botão **IA** no editor: **título e tags** (em chips, reaproveitando as tags que já existem), **Resumir** (insere no topo), **Transformar em checklist** (seleção ou nota toda) · **Perguntar às notas**: digite a pergunta na busca |
 | Palette | Comece com **`?`** para perguntar (pode sugerir ações do Devkit) · em Notes, `?` pergunta às notas · **IA: explicar o que está copiado** (SQL, JSON, XML, código ou erro com stack) |
 
@@ -592,6 +647,9 @@ electron/
   preload.js         API segura exposta ao renderer: window.devkit
   sql/engine.js      Pyodide + sqlparse (mapeia opções da UI → sqlparse.format)
   sql/worker.js      worker thread que hospeda o engine
+  logs/engine.js     Logs: leitura em blocos, encoding, índice e consultas (roda no worker)
+  logs/worker.js     worker thread dos Logs
+  logs/service.js    Logs: abertos, ao vivo (watch + tamanho), rotação, recentes e filtros salvos
 renderer/
   index.html         carrega React UMD, Lucide, o DS e dist/app.js
   palette.html       janela da command palette (dist/palette.js + palette.css)
@@ -614,6 +672,9 @@ src/                 código do app (JSX → renderer/dist/app.js via esbuild)
   tools/xml-formatter/XmlFormatter.jsx, engine.js (parser/serializer XML, JS puro)
   tools/diff-checker/DiffChecker.jsx, DiffView.jsx, engine.js (Myers + diff na linha), syntax.js
   tools/json-visualizer/JsonVisualizer.jsx, GraphView.jsx (SVG), engine.js (parse, grafo, layout, JSONPath, YAML/CSV), exportImage.js
+  logs/              parse.js (formatos e detecção), index.js (índice em typed arrays), query.js (mini-linguagem),
+                     fingerprint.js (grupos de erro), aggregate.js, rotate.js, redact.js — JS puro
+  tools/logs/        tela Logs: LogsScreen, LogView, LogList + VirtualList, FilterBar, Timeline, Detail, Problems, Charts
   screens/Home.jsx, screens/Settings.jsx
 vendor/python/       wheel do sqlparse (offline)
 ```
