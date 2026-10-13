@@ -688,6 +688,8 @@ function blast(t, power = 1) {
   for (let k = 1; k < 5; k++) swish(t + 0.03 + k * 0.022, 0.025, { gain: 0.18 * power, type: 'highpass', from: 4500, to: 4500, attack: 0.001 });
 }
 
+const TREE_SCALE = [72, 74, 76, 79, 81, 84, 86, 88, 91, 93, 96, 98, 100]; // pentatônica de dó subindo (combo de compras)
+
 const SFX = {
   hit: (t) => { tone(t, 64, 0.09, { type: 'square', gain: 0.1, slideTo: 52, decay: 0.09 }); noise(t, 0.05, { gain: 0.05, hp: 2500 }); },
   crit: (t) => { thump(t, 1.1); steel(t, 96, 0.14, 0.09); swish(t, 0.05, { gain: 0.6, type: 'highpass', from: 3000, to: 3000, attack: 0.001 }); tone(t + 0.04, 88, 0.12, { type: 'square', gain: 0.07, decay: 0.12, out: punchBus() }); },
@@ -763,12 +765,56 @@ const SFX = {
     [62, 66, 69, 74].forEach((m) => organ(t + 0.46, m, 0.9, master));
   },
   defeat: (t) => { [62, 61, 57, 50].forEach((m, i) => organ(t + i * 0.22, m, 0.3, master)); },
+  // ── Rede da Singularity: comprar tem que dar vontade de comprar de novo ──
+  // Compra: "plink" de cristal + brilho uma oitava acima + um "tum" macio de peso. A nota sobe na escala pentatônica a
+  // cada compra seguida (combo); parou um pouco, volta ao começo.
+  'tree-buy': (t, step = 0) => {
+    const m = TREE_SCALE[Math.min(step, TREE_SCALE.length - 1)];
+    tone(t, m - 5, 0.05, { type: 'triangle', gain: 0.05, decay: 0.05 });           // apojatura
+    tone(t + 0.035, m, 0.32, { type: 'triangle', gain: 0.11, decay: 0.32 });
+    tone(t + 0.035, m + 12, 0.45, { type: 'sine', gain: 0.045, decay: 0.45 });
+    tone(t + 0.035, m + 19, 0.25, { type: 'sine', gain: 0.02, decay: 0.25, detune: 6 });
+    tone(t + 0.03, 40, 0.16, { type: 'sine', gain: 0.12, slideTo: 30, decay: 0.16 });
+    noise(t + 0.03, 0.05, { gain: 0.04, hp: 6000 });
+  },
+  // Notável e sinapse: um acorde brilhante subindo, com mais corpo.
+  'tree-notable': (t, step = 0) => {
+    const r = TREE_SCALE[Math.min(step, 5)] - 12;
+    [0, 4, 7, 12, 16].forEach((d, i) => tone(t + i * 0.045, r + d, 0.5, { type: 'triangle', gain: 0.07, decay: 0.5 }));
+    organ(t + 0.05, r - 12, 0.7, master);
+    tone(t, 38, 0.3, { type: 'sine', gain: 0.16, slideTo: 28, decay: 0.3 });
+  },
+  // Paradigma: impacto grave, acorde de órgão e uma cascata de brilhos — uma decisão que pesa.
+  'tree-key': (t) => {
+    tone(t, 33, 0.7, { type: 'sine', gain: 0.22, slideTo: 24, decay: 0.7 });
+    noise(t, 0.4, { gain: 0.08, hp: 300 });
+    [57, 64, 69, 73].forEach((m) => organ(t + 0.04, m, 1.4, master));
+    for (let i = 0; i < 9; i++) tone(t + 0.12 + i * 0.05, 84 + [0, 3, 7, 10, 12, 15, 19, 22, 24][i], 0.3, { type: 'sine', gain: 0.035, decay: 0.3 });
+  },
+  // Maestria: o paradigma com uma fanfarra por cima.
+  'tree-mastery': (t) => {
+    SFX['tree-key'](t);
+    [69, 73, 76, 81].forEach((m, i) => lead(t + 0.25 + i * 0.12, m, 0.22, master));
+    lead(t + 0.75, 85, 0.7, master);
+  },
+  // Nós que acabaram de ficar disponíveis: um "ting" de vidro por nó (até 4), em sequência.
+  'tree-unlock': (t, n = 1) => { for (let i = 0; i < Math.min(4, n); i++) tone(t + i * 0.07, 96 + i * 2, 0.22, { type: 'sine', gain: 0.03, decay: 0.22 }); },
+  'tree-undo': (t) => { tone(t, 79, 0.14, { type: 'triangle', gain: 0.07, slideTo: 67, decay: 0.14 }); tone(t + 0.08, 72, 0.18, { type: 'triangle', gain: 0.05, slideTo: 60, decay: 0.18 }); },
+  'tree-respec': (t) => { [84, 79, 76, 72, 67, 60].forEach((m, i) => tone(t + i * 0.05, m, 0.2, { type: 'triangle', gain: 0.06, decay: 0.2 })); tone(t, 45, 0.5, { type: 'sine', gain: 0.12, slideTo: 30, decay: 0.5 }); },
+  // Sem Insight: pancada abafada e curta (sem punir, só avisa).
+  'tree-deny': (t) => { tone(t, 45, 0.12, { type: 'square', gain: 0.05, slideTo: 40, decay: 0.12, filter: 500 }); },
+  // Setor completo: fanfarra curta.
+  'tree-sector': (t) => {
+    [72, 76, 79, 84].forEach((m, i) => lead(t + i * 0.09, m, 0.16, master));
+    [60, 64, 67, 72].forEach((m) => organ(t + 0.4, m, 1.1, master));
+    noise(t + 0.4, 0.5, { gain: 0.05, hp: 5000 });
+  },
   // "Gema" do Vampire Survivors: dois toques brilhantes + brilho.
   gain: (t) => { tone(t, 84, 0.1, { type: 'triangle', gain: 0.09, decay: 0.1 }); tone(t + 0.06, 91, 0.22, { type: 'triangle', gain: 0.09, decay: 0.22 }); tone(t + 0.06, 96, 0.3, { type: 'sine', gain: 0.04, decay: 0.3 }); },
 };
 
-/** Toca um efeito curto. */
-export function sfx(name) {
+/** Toca um efeito curto (args vão para o efeito: ex. o passo da combo em 'tree-buy'). */
+export function sfx(name, ...args) {
   if (!ac() || !SFX[name]) return;
-  SFX[name](ctx.currentTime + 0.01);
+  SFX[name](ctx.currentTime + 0.01, ...args);
 }

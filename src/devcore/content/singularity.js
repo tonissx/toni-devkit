@@ -88,7 +88,8 @@ function sector(id, p, n) {
   ];
 }
 
-const COST = { minor1: 1, minor2: 1, minor3: 2, notable: 4, keystone: 8, mastery: 12, bridge: 3 };
+// Cada anel custa mais: a entrada é um gostinho barato; do meio para fora, cada nó é uma escolha.
+const COST = { minor1: 1, minor2: 2, minor3: 3, notable: 5, keystone: 10, mastery: 15, bridge: 5, repeat: 8, repeatStep: 5 };
 
 const INFRA = sector('infra', 'inf', {
   1: { name: 'Hot Reload', icon: 'flame', cost: COST.minor1, description: '+15% em toda a produção.',
@@ -110,7 +111,7 @@ const INFRA = sector('infra', 'inf', {
     effects: [{ type: 'mul', target: 'global', value: 0.8 }], mods: { genCost: 0.4, upgradeCost: 0.4 } },
   6: { name: 'Dyson Sphere', icon: 'sun', cost: COST.mastery, description: 'Produção ×1,5 e +8 h de trabalho com o app fechado.',
     effects: [{ type: 'mul', target: 'global', value: 1.5 }, { type: 'add', target: 'offlineCap', value: 8 }] },
-  r: { name: 'Overclock', icon: 'gauge', cost: 6, step: 4, description: '+10% em toda a produção por nível.',
+  r: { name: 'Overclock', icon: 'gauge', cost: COST.repeat, step: COST.repeatStep, description: '+10% em toda a produção por nível.',
     effects: [{ type: 'add', target: 'global', value: 0.1 }] },
 });
 
@@ -128,7 +129,7 @@ const OPS = sector('ops', 'ops', {
   '5b': { name: 'Manual Override', icon: 'hand', cost: COST.keystone, description: 'Habilidades duram o dobro e recarregam 30% mais rápido, mas fabricar consumíveis custa o dobro.',
     mods: { abilityDuration: 2, abilityCooldown: 0.7, craftCost: 2 } },
   6: { name: 'Self-Healing', icon: 'refresh-cw', cost: COST.mastery, description: 'Ao vencer uma batalha, cada consumível usado tem 50% de chance de voltar ao estoque.', adds: { itemRefund: 0.5 } },
-  r: { name: 'Throughput', icon: 'timer', cost: 6, step: 4, description: 'Recarga das habilidades 4% mais curta por nível.', mods: { abilityCooldown: 0.96 } },
+  r: { name: 'Throughput', icon: 'timer', cost: COST.repeat, step: COST.repeatStep, description: 'Recarga das habilidades 4% mais curta por nível.', mods: { abilityCooldown: 0.96 } },
 });
 
 const COMBAT = sector('combat', 'cmb', {
@@ -144,7 +145,7 @@ const COMBAT = sector('combat', 'cmb', {
   '5b': { name: 'Fortress', icon: 'castle', cost: COST.keystone, description: 'Esquadrão +40% de vida e de defesa, mas −20% de ataque. As batalhas duram até 10 rodadas a mais.',
     adds: { hp: 0.4, def: 0.4, atk: -0.2, maxRounds: 10 } },
   6: { name: 'Blitzkrieg', icon: 'wind', cost: COST.mastery, description: 'Esquadrão +3 de velocidade e críticos causam ×2 (em vez de ×1,6).', adds: { spd: 3, critMult: 0.4 } },
-  r: { name: 'War Games', icon: 'target', cost: 6, step: 4, description: 'Esquadrão +4% de ataque e de vida por nível.', adds: { atk: 0.04, hp: 0.04 } },
+  r: { name: 'War Games', icon: 'target', cost: COST.repeat, step: COST.repeatStep, description: 'Esquadrão +4% de ataque e de vida por nível.', adds: { atk: 0.04, hp: 0.04 } },
 });
 
 const PETS = sector('pets', 'pet', {
@@ -165,7 +166,7 @@ const PETS = sector('pets', 'pet', {
     flags: { generalist: true }, adds: { slotBase: -0.5 } },
   6: { name: 'Legendary Team', icon: 'sparkles', cost: COST.mastery, description: 'DevPets voltam no nível 8 e têm +15% em todos os atributos de batalha.',
     start: { petLevel: 8 }, adds: { atk: 0.15, hp: 0.15, def: 0.15 } },
-  r: { name: 'Pet Treats', icon: 'cookie', cost: 6, step: 4, description: '+10% nos bônus de produção dos DevPets por nível.',
+  r: { name: 'Pet Treats', icon: 'cookie', cost: COST.repeat, step: COST.repeatStep, description: '+10% nos bônus de produção dos DevPets por nível.',
     effects: [{ type: 'add', target: 'petBonus', value: 0.1 }] },
 });
 
@@ -185,7 +186,7 @@ const MAP = sector('map', 'map', {
     adds: { patchChance: 1 }, mods: { mapCost: 1.2 } },
   6: { name: 'Continuous Deployment', icon: 'infinity', cost: COST.mastery, description: 'Cada chefe derrotado também dá um Patch raro, e cada área nova começa com o time de vida cheia.',
     flags: { bossRare: true, areaHeal: true } },
-  r: { name: 'Deploy Budget', icon: 'wallet', cost: 6, step: 4, description: 'Pontos do mapa custam 4% menos por nível.', mods: { mapCost: 0.96 } },
+  r: { name: 'Deploy Budget', icon: 'wallet', cost: COST.repeat, step: COST.repeatStep, description: 'Pontos do mapa custam 4% menos por nível.', mods: { mapCost: 0.96 } },
 });
 
 const ARCHIVE = sector('archive', 'arc', {
@@ -207,7 +208,7 @@ const ARCHIVE = sector('archive', 'arc', {
   '5b': { name: 'Clean Slate', icon: 'eraser', cost: COST.keystone, description: '+50% de Insight, mas nenhum bônus de início de run nem nada que atravessa vale (Bootstrap, Warm Start, Muscle Memory, Veterans, Design Docs…).',
     flags: { cleanSlate: true }, mods: { insight: 1.5 } },
   6: { name: 'Akashic Records', icon: 'scroll-text', cost: COST.mastery, description: 'Cada run começa no Tier 3 com 10 M de Compute.', start: { tier: 3, compute: 1e7 } },
-  r: { name: 'Compound Insight', icon: 'brain-circuit', cost: 6, step: 4, description: '+6% de Insight por nível.', mods: { insight: 1.06 } },
+  r: { name: 'Compound Insight', icon: 'brain-circuit', cost: COST.repeat, step: COST.repeatStep, description: '+6% de Insight por nível.', mods: { insight: 1.06 } },
 });
 
 /** Sinapses: entre setores vizinhos (ligam o nó 3c de um ao 3a do seguinte; exigem os dois lados). */

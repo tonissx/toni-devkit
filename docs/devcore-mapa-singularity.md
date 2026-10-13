@@ -414,7 +414,19 @@ Constelação com o **Núcleo** no centro e **6 setores** em hexágono:
   - **Confirmar** mostra o resumo, a constelação colapsa no Núcleo, vem o clarão e a run recomeça **já com a rede
     montada** (bônus de início e o que atravessa vêm dela). Fora do planejamento, comprar na rede é definitivo.
 
-**Custos:** anéis 1–2 custam 1; anel 3 custa 2; notáveis 4; paradigmas 8; maestria 12; sinapses 3.
+**Custos** (crescem do centro para fora; a rede completa custa 324, com um paradigma por setor):
+
+| Anel 1 | Anel 2 | Anel 3 | Notável | Paradigma | Maestria | Sinapse | Infinito |
+|---|---|---|---|---|---|---|---|
+| 1 | 2 | 3 | 5 | 10 | 15 | 5 | 8 + 5 por nível |
+
+**Gatilho de compra:**
+- **Som:** "plink" de cristal cuja nota sobe na pentatônica a cada compra seguida (combo); acorde nos notáveis e
+  sinapses; impacto grave com órgão nos paradigmas e maestrias; "ting" para cada nó que abre; fanfarra no setor
+  completo.
+- **Visual:** pop elástico no nó, onda e faíscas na cor do setor com o nome subindo, pulso de energia pela ligação,
+  saldo animado com "−N", pílula **COMBO ×N**, tremor nos nós grandes, setor brilhando ao completar.
+- **Atalho:** clique duplo compra direto; sem Insight, o nó balança.
 
 Mecânicas novas que vêm da rede:
 - **Reserva** (Hot Standby): um 4º pet entra no lugar do primeiro que cair. Evento `enter` na arena.

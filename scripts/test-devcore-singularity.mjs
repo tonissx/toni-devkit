@@ -39,6 +39,7 @@ function ready(opts = {}) {
   return s;
 }
 const has = (...ids) => Object.fromEntries(ids.map((id) => [id, 1]));
+const cost = (...ids) => ids.reduce((n, id) => n + CONTENT.perk[id].cost, 0); // custos vêm do conteúdo
 
 /* ─────────────── conteúdo ─────────────── */
 test('rede: conteúdo válido; 6 setores com entrada, braços, notáveis, dois paradigmas excludentes, maestria e infinito', () => {
@@ -102,17 +103,19 @@ test('rede: maestria exige 7 nós do setor; infinito sobe de nível com custo cr
   s = make({ tree: { ...six, 'cmb-4a': 1 }, insight: 100 });
   s = run(s, { type: 'treeBuy', id: 'cmb-6' }).state;
   assert.equal(s.meta.tree['cmb-6'], 1);
-  assert.equal(s.meta.insight, 88);
+  assert.equal(s.meta.insight, 100 - cost('cmb-6'));
   const k = CONTENT.perk['cmb-r'];
   s = run(s, { type: 'treeBuy', id: 'cmb-r' }).state;
   s = run(s, { type: 'treeBuy', id: 'cmb-r' }).state;
   assert.equal(s.meta.tree['cmb-r'], 2);
-  assert.equal(s.meta.insight, 88 - k.cost - (k.cost + k.step));
-  assert.equal(S.spentInsight(s), 1 + 1 + 1 + 2 + 2 + 8 + 4 + 12 + k.cost + k.cost + k.step);
+  assert.equal(s.meta.insight, 100 - cost('cmb-6') - k.cost - (k.cost + k.step));
+  assert.equal(S.spentInsight(s), cost('cmb-1', 'cmb-2a', 'cmb-2b', 'cmb-3a', 'cmb-3b', 'cmb-5a', 'cmb-4a', 'cmb-6') + k.cost + k.cost + k.step);
 });
 
 test('planejamento: Insight no saldo; reorganizar devolve 100% do novo e 80% do resto; mapa travado; limpar escolhas', () => {
-  let s = ready({ tree: has('inf-1', 'inf-2a', 'inf-3a'), insight: 5 }); // 4 Insight de antes
+  let s = ready({ tree: has('inf-1', 'inf-2a', 'inf-3a'), insight: 5 }); // Insight de antes
+  const old = cost('inf-1', 'inf-2a', 'inf-3a');
+  const fresh = cost('inf-2b');
   assert.match(run(s, { type: 'treeRespec' }).error, /planejada/);
   const br = S.insightBreakdown(s, T0);
   s = run(s, { type: 'singularityPlan' }).state;
@@ -123,10 +126,10 @@ test('planejamento: Insight no saldo; reorganizar devolve 100% do novo e 80% do 
   const first = Object.values(s.run.map.nodes).find((n) => n.col === 0);
   assert.match(run(s, { type: 'mapFight', node: first.id, squad: { slots: { vanguard: 'byte' }, triggers: {}, items: [] } }).error, /Singularity/);
   s = run(s, { type: 'treeBuy', id: 'inf-2b' }).state; // 1 comprado no planejamento
-  assert.equal(S.respecRefund(s), 1 + Math.floor(4 * 0.8));
+  assert.equal(S.respecRefund(s), fresh + Math.floor(old * 0.8));
   const v = snapshot(s, T0).singularity;
-  assert.equal(v.refund, 4);
-  assert.equal(v.spent, 5);
+  assert.equal(v.refund, fresh + Math.floor(old * 0.8));
+  assert.equal(v.spent, old + fresh);
   // Limpar escolhas: a rede volta como estava e o Insight desta Singularity volta inteiro (o planejamento segue aberto).
   const back = run(s, { type: 'singularityCancel' }).state;
   assert.deepEqual(back.meta.tree, has('inf-1', 'inf-2a', 'inf-3a'));
@@ -135,9 +138,9 @@ test('planejamento: Insight no saldo; reorganizar devolve 100% do novo e 80% do 
   // Reorganizar: perde 20% do antigo; o que se compra depois ainda se desfaz de graça.
   const r = run(s, { type: 'treeRespec' });
   assert.equal(r.error, undefined);
-  assert.equal(r.state.meta.insight, 4 + br.total + 4);
+  assert.equal(r.state.meta.insight, 5 - fresh + br.total + fresh + Math.floor(old * 0.8));
   assert.deepEqual(r.state.meta.tree, {});
-  assert.ok(r.log.some((e) => e.type === 'treeRespec' && e.refunded === 4 && e.lost === 1));
+  assert.ok(r.log.some((e) => e.type === 'treeRespec' && e.refunded === fresh + Math.floor(old * 0.8) && e.lost === old - Math.floor(old * 0.8)));
   let t2 = run(r.state, { type: 'treeBuy', id: 'inf-1' }).state;
   assert.equal(run(t2, { type: 'treeUndo', id: 'inf-1' }).state.meta.insight, r.state.meta.insight);
   // Confirmar: o Insight não entra de novo; as compras ficam e não se desfazem mais.
@@ -200,12 +203,12 @@ test('rede: desfazer devolve 100%, só o comprado no planejamento, e não deixa 
   let s = make({ tree: has('cmb-1'), insight: 20 });
   s.meta.respec = true;
   for (const id of ['cmb-2a', 'cmb-3a']) s = run(s, { type: 'treeBuy', id }).state;
-  assert.equal(s.meta.insight, 17);
+  assert.equal(s.meta.insight, 20 - cost('cmb-2a', 'cmb-3a'));
   assert.match(run(s, { type: 'treeUndo', id: 'cmb-1' }).error, /Comprado antes/);
   assert.match(run(s, { type: 'treeUndo', id: 'cmb-2a' }).error, /dependem deste/);
   const v = snapshot(s, T0).singularity.nodes;
   assert.equal(v.find((n) => n.id === 'cmb-2a').undo, null);
-  assert.equal(v.find((n) => n.id === 'cmb-3a').undo, 2);
+  assert.equal(v.find((n) => n.id === 'cmb-3a').undo, cost('cmb-3a'));
   s = run(s, { type: 'treeUndo', id: 'cmb-3a' }).state;
   s = run(s, { type: 'treeUndo', id: 'cmb-2a' }).state;
   assert.equal(s.meta.insight, 20);
@@ -530,7 +533,7 @@ test('rede: chefes e elites vencidos contam na run; Continuous Deployment e Patc
 test('view: a aba aparece com o mapa; nós com estado, custo e motivo; o que a próxima run traz', () => {
   const s0 = createState(T0);
   assert.equal(snapshot(s0, T0).singularity.visible, false);
-  const v = snapshot(make({ tree: has('arc-1', 'pet-1'), insight: 1 }), T0).singularity;
+  const v = snapshot(make({ tree: has('arc-1', 'pet-1'), insight: cost('arc-2a') }), T0).singularity;
   assert.equal(v.visible, true);
   assert.equal(v.nodes.find((n) => n.id === 'core').status, 'owned');
   assert.equal(v.nodes.find((n) => n.id === 'arc-1').status, 'owned');

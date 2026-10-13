@@ -1,5 +1,6 @@
 import { DS } from '../../lib/ds.js';
 import { formatNum } from '../../devcore/engine/format.js';
+import { sfx } from './audio.js';
 
 const { Button, Icon, Modal } = DS;
 
@@ -86,13 +87,13 @@ function Edges({ nodes, pos, sec, byId }) {
 }
 
 /** Fatias dos setores (fundo) e os nomes na borda. */
-function Sectors({ sectors }) {
+function Sectors({ sectors, flash }) {
   return sectors.map((s, i) => {
     const a0 = ((-90 + i * 60 - 30) * Math.PI) / 180;
     const a1 = ((-90 + i * 60 + 30) * Math.PI) / 180;
     const r = R0 + 6.6 * STEP;
     const d = `M0 0 L${r * Math.cos(a0)} ${r * Math.sin(a0)} A${r} ${r} 0 0 1 ${r * Math.cos(a1)} ${r * Math.sin(a1)} Z`;
-    return <path key={s.id} d={d} className="dc-sg__wedge" style={{ '--hue': s.hue }} />;
+    return <path key={s.id} d={d} className={'dc-sg__wedge' + (flash === s.id ? ' is-flash' : '')} style={{ '--hue': s.hue }} />;
   });
 }
 
@@ -108,21 +109,105 @@ function SectorLabels({ sectors, total }) {
   });
 }
 
-function NodeButton({ n, p, sec, selected, onPick, onHover }) {
+function NodeButton({ n, p, sec, selected, onPick, onHover, onBuy, pop, deny }) {
   const d = SIZE[n.kind];
   const hue = hueOf(n, sec);
   const hue2 = n.kind === 'bridge' ? sec[n.sectors[1]].hue : hue;
   const label = `${n.name} — ${n.kindName}${n.kind === 'repeat' && n.rank ? ' nível ' + n.rank : ''}. ${n.status === 'owned' && n.kind !== 'repeat' ? 'Comprado' : n.cost + ' Insight'}`;
   return (
-    <button type="button" className={'dc-sg__node is-' + n.kind + ' is-' + n.status + (n.affordable ? ' is-affordable' : '') + (selected ? ' is-selected' : '') + (n.fresh ? ' is-fresh' : '')}
+    <button type="button" className={'dc-sg__node is-' + n.kind + ' is-' + n.status + (n.affordable ? ' is-affordable' : '') + (selected ? ' is-selected' : '') + (n.fresh ? ' is-fresh' : '') + (pop ? ' is-pop' : '') + (deny ? ' is-deny' : '')}
       style={{ left: HALF + p.x, top: HALF + p.y, '--d': d + 'px', '--hue': hue, '--hue2': hue2 }}
       aria-label={label} aria-pressed={selected}
-      onClick={() => onPick(n.id)} onMouseEnter={() => onHover(n.id)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(n.id)} onBlur={() => onHover(null)}>
+      onClick={() => onPick(n.id)} onDoubleClick={() => onBuy(n)} onMouseEnter={() => onHover(n.id)} onMouseLeave={() => onHover(null)} onFocus={() => onHover(n.id)} onBlur={() => onHover(null)}>
       <span className="dc-sg__glyph"><Icon name={n.icon} size={Math.round(d * 0.46)} /></span>
       {n.kind === 'repeat' && n.rank > 0 && <span className="dc-sg__rank">{n.rank}</span>}
       {n.affordable && n.status === 'available' && <span className="dc-sg__cost">{n.cost}</span>}
     </button>
   );
+}
+
+/** Saldo que anda até o valor novo (e pisca ao gastar). */
+function AnimatedNumber({ value }) {
+  const [shown, setShown] = React.useState(value);
+  const [spend, setSpend] = React.useState(false);
+  const from = React.useRef(value);
+  React.useEffect(() => {
+    const a = from.current;
+    if (a === value) return undefined;
+    if (value < a) { setSpend(true); setTimeout(() => setSpend(false), 450); }
+    const t0 = performance.now();
+    let raf = 0;
+    const tick = (t) => {
+      const k = Math.min(1, (t - t0) / 450);
+      const v = Math.round(a + (value - a) * (1 - Math.pow(1 - k, 3)));
+      setShown(v);
+      if (k < 1) raf = requestAnimationFrame(tick); else from.current = value;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); from.current = value; };
+  }, [value]);
+  return <b className={spend ? 'is-spend' : ''}>{shown}</b>;
+}
+
+const FX_MS = 1200;
+let fxSeq = 0;
+/**
+ * O "gatilho" da Rede: compara os nós com o snapshot anterior e dispara som e efeito — compra (pop, onda, faíscas,
+ * pulso pela ligação, nota subindo em combo), nós recém-abertos (anel + "ting"), paradigma/maestria (tremor),
+ * setor completo (fanfarra e brilho), desfazer/reorganizar (descendo).
+ */
+function useTreeFx(sg, pos, sec, enabled) {
+  const prev = React.useRef(null);
+  const combo = React.useRef({ n: -1, at: 0 });
+  const [fx, setFx] = React.useState([]);
+  const [pulses, setPulses] = React.useState([]);
+  const [pop, setPop] = React.useState(null);
+  const [shake, setShake] = React.useState(false);
+  const [comboN, setComboN] = React.useState(0);
+  const [spent, setSpent] = React.useState(null);
+  const [sectorFlash, setSectorFlash] = React.useState(null);
+  const later = (ms, f) => setTimeout(f, ms);
+  const add = (list, set) => { set((x) => [...x, ...list]); later(FX_MS, () => set((x) => x.filter((e) => !list.includes(e)))); };
+  React.useEffect(() => {
+    const before = prev.current;
+    prev.current = { nodes: Object.fromEntries(sg.nodes.map((n) => [n.id, { rank: n.rank, status: n.status }])), sectors: Object.fromEntries(sg.sectors.map((s) => [s.id, s.owned])), insight: sg.insight };
+    if (!before || !enabled) return;
+    const was = (id) => before.nodes[id] || { rank: 0, status: 'locked' };
+    const bought = sg.nodes.filter((n) => n.kind !== 'core' && n.rank > was(n.id).rank);
+    const undone = sg.nodes.filter((n) => n.rank < was(n.id).rank);
+    const opened = sg.nodes.filter((n) => n.status === 'available' && !['available', 'owned'].includes(was(n.id).status));
+    if (undone.length > 1) sfx('tree-respec'); else if (undone.length === 1) sfx('tree-undo');
+    if (bought.length === 1) {
+      const n = bought[0];
+      const now = Date.now();
+      const c = combo.current;
+      c.n = now - c.at < 2600 ? c.n + 1 : 0;
+      c.at = now;
+      setComboN(c.n);
+      const big = n.kind === 'keystone' || n.kind === 'mastery';
+      sfx(n.kind === 'mastery' ? 'tree-mastery' : n.kind === 'keystone' ? 'tree-key' : n.kind === 'notable' || n.kind === 'bridge' ? 'tree-notable' : 'tree-buy', c.n);
+      const hue = hueOf(n, sec);
+      const p = pos[n.id];
+      add([{ key: ++fxSeq, kind: big ? 'big' : n.kind === 'notable' || n.kind === 'bridge' ? 'mid' : 'buy', x: p.x, y: p.y, hue, label: n.name }], setFx);
+      // Pulso de energia: do vizinho comprado (o mais perto do centro) até o nó novo.
+      const from = n.links.map((l) => sg.nodes.find((x) => x.id === l)).concat(sg.nodes.filter((x) => x.links.includes(n.id)))
+        .filter((x) => x && (x.kind === 'core' || x.rank > 0) && x.id !== n.id).sort((a, b) => a.ring - b.ring)[0];
+      if (from) add([{ key: ++fxSeq, x1: pos[from.id].x, y1: pos[from.id].y, x2: p.x, y2: p.y, hue }], setPulses);
+      setPop(n.id); later(650, () => setPop((x) => (x === n.id ? null : x)));
+      if (big) { setShake(true); later(450, () => setShake(false)); }
+      setSpent({ key: ++fxSeq, v: before.insight - sg.insight }); later(FX_MS, () => setSpent(null));
+      if (c.n >= 2) later(2600, () => { if (Date.now() - combo.current.at >= 2500) setComboN(0); });
+    }
+    if (opened.length && bought.length) {
+      later(320, () => {
+        sfx('tree-unlock', opened.length);
+        add(opened.map((n) => ({ key: ++fxSeq, kind: 'unlock', x: pos[n.id].x, y: pos[n.id].y, hue: hueOf(n, sec) })), setFx);
+      });
+    }
+    const done = sg.sectors.find((s) => s.owned > (before.sectors[s.id] || 0) && s.owned >= sg.nodes.filter((n) => n.sector === s.id && !['mastery', 'repeat'].includes(n.kind)).length - 1);
+    if (done) later(500, () => { sfx('tree-sector'); setSectorFlash(done.id); later(1600, () => setSectorFlash(null)); });
+  }, [sg.nodes]);
+  return { fx, pulses, pop, shake, comboN, spent, sectorFlash };
 }
 
 /** Detalhes do nó (sob o mouse ou selecionado) com a compra; sem nó, as regras da rede. */
@@ -133,6 +218,7 @@ function Inspector({ n, sg, sec, byId, act }) {
         <div className="dc-sg__title">Como a rede funciona</div>
         <ul>
           <li><Icon name="git-commit-horizontal" size={13} /> <span><b>Caminho:</b> só dá para comprar um nó ligado a outro já comprado. Tudo começa no Núcleo.</span></li>
+          <li><Icon name="mouse-pointer-click" size={13} /> <span><b>Clique duplo</b> num nó compra direto.</span></li>
           <li><Icon name="split" size={13} /> <span><b>Paradigmas:</b> cada setor tem dois nós-chave fortes, com um preço. Escolher um fecha o outro.</span></li>
           <li><Icon name="link" size={13} /> <span><b>Sinapses:</b> pontes entre setores vizinhos. Pedem um nó comprado dos dois lados.</span></li>
           <li><Icon name="crown" size={13} /> <span><b>Maestria:</b> o último nó de cada setor pede 7 nós do setor.</span></li>
@@ -249,6 +335,14 @@ export function SingularityPanel({ snap, act }) {
   const [confirm, setConfirm] = React.useState(false);
   const [phase, setPhase] = React.useState(null); // collapse (a rede cai no Núcleo) → flash (clarão) → null
   const shown = byId[hover] || byId[selected] || null;
+  const juice = useTreeFx(sg, pos, sec, !phase);
+  const [deny, setDeny] = React.useState(null);
+  /** Clique duplo: compra direto (ou balança e avisa, se não dá). */
+  const quickBuy = (n) => {
+    if (n.affordable) { act({ type: 'treeBuy', id: n.id }); return; }
+    if (n.kind === 'core' || (n.status === 'owned' && n.kind !== 'repeat')) return;
+    sfx('tree-deny'); setDeny(n.id); setTimeout(() => setDeny(null), 420);
+  };
   // Confirmar: a constelação colapsa no Núcleo; no auge, o reset acontece; o clarão revela a run nova.
   const doIt = async () => {
     setConfirm(false);
@@ -266,7 +360,10 @@ export function SingularityPanel({ snap, act }) {
     <div className="dc-sg">
       <header className="dc-sg__head">
         <div className="dc-sg__wallet">
-          <span className="dc-sg__insight"><Icon name="sparkles" size={18} /> <b>{sg.insight}</b> Insight</span>
+          <span className="dc-sg__insight"><Icon name="sparkles" size={18} /> <AnimatedNumber value={sg.insight} /> Insight
+            {juice.spent && juice.spent.v > 0 && <span key={juice.spent.key} className="dc-sg__spent">−{juice.spent.v}</span>}
+            {juice.comboN >= 2 && <span key={'c' + juice.comboN} className="dc-sg__combo">COMBO ×{juice.comboN + 1}</span>}
+          </span>
           <small>{sg.count ? `${sg.count} Singularit${sg.count > 1 ? 'ies' : 'y'} · Núcleo +${sg.corePct}% de produção · ${sg.earned} ganho no total` : 'Nenhuma Singularity ainda'}</small>
         </div>
         <div className="dc-sg__goal">
@@ -296,17 +393,26 @@ export function SingularityPanel({ snap, act }) {
       {sg.planning && <div className="dc-sg__respec"><Icon name="atom" size={13} /> Distribua o Insight na Rede e confirme: a run recomeça já com ela. O que você comprar agora se desfaz de graça; reorganizar devolve {sg.refundPct}% do que já estava. Multiplicadores de Insight comprados agora valem a partir da próxima Singularity.</div>}
       {!snap.map.unlocked && sg.count > 0 && <div className="dc-sg__respec is-map"><Icon name="map" size={13} /> Run nova: o mapa volta no {snap.map.requirement}{snap.tier.next && snap.tier.next.id === 2 ? ` (${formatNum(snap.tier.next.at)} de Compute acumulado)` : ""}, numa Floresta nova. Até lá, cresça a produção nas abas Generators e Upgrades.</div>}
       <div className="dc-sg__body">
-        <div className={'dc-sg__stage' + (phase === 'collapse' ? ' is-collapsing' : '')} ref={stage} {...pz.handlers}>
+        <div className={'dc-sg__stage' + (phase === 'collapse' ? ' is-collapsing' : '') + (juice.shake ? ' is-shake' : '')} ref={stage} {...pz.handlers}>
           <div className="dc-sg__collapse">
           {pz.view && (
             <div className="dc-sg__world" style={{ transform: `translate(${pz.view.x}px, ${pz.view.y}px) scale(${pz.view.k})` }}>
               <svg className="dc-sg__lines" width={HALF * 2} height={HALF * 2} viewBox={`${-HALF} ${-HALF} ${HALF * 2} ${HALF * 2}`} aria-hidden="true">
-                <Sectors sectors={sg.sectors} />
+                <Sectors sectors={sg.sectors} flash={juice.sectorFlash} />
                 {[1, 2, 3, 4, 5, 6, 7].map((r) => <circle key={r} r={R0 + (r - 1) * STEP} className="dc-sg__orbit" />)}
                 <Edges nodes={sg.nodes} pos={pos} sec={sec} byId={byId} />
+                {juice.pulses.map((l) => <line key={l.key} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} className="dc-sg__pulse" style={{ '--hue': l.hue, '--len': Math.hypot(l.x2 - l.x1, l.y2 - l.y1) }} />)}
               </svg>
               <SectorLabels sectors={sg.sectors} total={total} />
-              {sg.nodes.map((n) => <NodeButton key={n.id} n={n} p={pos[n.id]} sec={sec} selected={selected === n.id} onPick={(id) => setSelected(selected === id ? null : id)} onHover={setHover} />)}
+              {sg.nodes.map((n) => <NodeButton key={n.id} n={n} p={pos[n.id]} sec={sec} selected={selected === n.id} onPick={(id) => setSelected(selected === id ? null : id)} onHover={setHover}
+                onBuy={quickBuy} pop={juice.pop === n.id} deny={deny === n.id} />)}
+              {juice.fx.map((f) => (
+                <span key={f.key} className={'dc-sg__fx is-' + f.kind} style={{ left: HALF + f.x, top: HALF + f.y, '--hue': f.hue }} aria-hidden="true">
+                  <i className="dc-sg__ring" /><i className="dc-sg__ring is-2" />
+                  {f.kind !== 'unlock' && Array.from({ length: f.kind === 'big' ? 16 : 10 }, (_, i) => <i key={i} className="dc-sg__spark" style={{ '--a': (i * 360) / (f.kind === 'big' ? 16 : 10) + 'deg' }} />)}
+                  {f.label && <b className="dc-sg__float">{f.label}</b>}
+                </span>
+              ))}
             </div>
           )}
           </div>
