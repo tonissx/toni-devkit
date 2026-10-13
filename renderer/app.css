@@ -207,6 +207,14 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 }
 .dfc-fold:hover { color: var(--tk-accent-text); background: var(--tk-surface-2); }
 
+/* Barra de rolagem do DevKit em toda a interface (o mesmo visual do .tk-scroll do DS), sem depender de a classe estar
+   no contêiner: qualquer área rolante nova já nasce com ela. Quem esconde a barra de propósito (.gt-tabs) segue valendo. */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--tk-surface-4); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--tk-text-3); background-clip: padding-box; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
+
 /* ─── Notes ─── */
 .nts-screen { height: 100%; display: flex; flex-direction: column; }
 .nts { flex: 1; min-height: 0; display: flex; gap: 16px; padding: 0 24px 20px; }
