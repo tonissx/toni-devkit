@@ -385,7 +385,7 @@ function abilityCommands(list, formatWait) {
 }
 
 /**
- * Consumíveis em estoque como comandos (dinâmicos). Cache Warmer vai para a habilidade com a recarga mais longa.
+ * Consumíveis em estoque como comandos (dinâmicos). Cache Warmer zera uma habilidade em recarga sorteada.
  */
 function itemCommands(list) {
   return list.map((k) => ({

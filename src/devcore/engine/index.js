@@ -250,8 +250,10 @@ function act(s, action, now, c, log) {
         setPetHp(s, id, petHp(s, id, now, c) + e.value + treeAdd(s, 'healItem', c), now); // Field Medic: cura a vida toda
         log.push({ type: 'healed', pet: id });
       } else if (e.type === 'resetCooldown') {
-        const waiting = Object.entries(s.run.abilities).filter(([, a]) => a.readyAt > now);
-        const pick = action.ability ? waiting.find(([id]) => id === action.ability) : waiting.sort((x, y) => y[1].readyAt - x[1].readyAt)[0];
+        // Sem `ability` indicada, sorteia uma das habilidades em recarga (ordem por id: o sorteio não depende das chaves).
+        const waiting = Object.entries(s.run.abilities).filter(([, a]) => a.readyAt > now).sort(([x], [y]) => (x < y ? -1 : 1));
+        const roll = () => waiting[Math.floor(rng((s.seed ^ Math.floor(now / 1000) ^ 0x5eed) >>> 0)() * waiting.length)];
+        const pick = action.ability ? waiting.find(([id]) => id === action.ability) : roll();
         if (!pick) return 'Nenhuma habilidade em recarga';
         pick[1].readyAt = now;
       }

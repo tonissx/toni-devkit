@@ -607,7 +607,7 @@ tela do DevCore aparece, no máximo, um ponto discreto no item da sidebar quando
   produção de uma categoria por um tempo (piso ×0,8) — **nunca tira progresso** e acaba sozinho. Com o app fechado
   suas defesas agem por você e o resumo de retorno conta o que aconteceu. **Modo tranquilo** desliga tudo
 - **Consumíveis**: Coffee (×1,5 por 10 min), Hotfix (derrota o vilão ativo), Rollback (o próximo incidente já nasce
-  contido) e Cache Warmer (zera uma recarga). Vêm de incidentes contidos, de achados dos pets e de **fabricação**
+  contido) e Cache Warmer (zera a recarga de uma habilidade aleatória). Vêm de incidentes contidos, de achados dos pets e de **fabricação**
   com Compute (custo = minutos da produção atual); estoque com teto, nunca à venda. Aba **Ops**: previsão, incidente
   ativo, inventário, **bestiário** dos vilões e histórico
 - **Marcos por quantidade**: ao chegar em 25/50/100/150/200/250/300 unidades, a produção daquele gerador sobe

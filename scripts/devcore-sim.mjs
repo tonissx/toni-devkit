@@ -49,8 +49,7 @@ for (const strategy of ['passive', 'prepared']) {
 // Singularity: o robô recomeça assim que vence o Pico Production e gasta o Insight na rede (o mais barato primeiro).
 {
   const m = simulate({ ...PROFILES.casual, days: 45, singularity: true });
-  console.log('
-== singularity (casual, 45 dias)');
+  console.log('\n== singularity (casual, 45 dias)');
   for (const [i, r] of m.runs.entries()) {
     const b = r.breakdown;
     console.log(`  run ${i + 1}: ${r.days.toFixed(1)} dias (áreas ${Object.values(r.areaDays).join(' · ')}) · +${r.insight} Insight (chefes ${b.bosses}, elites ${b.elites}, rapidez ${b.speed}, profundidade ${b.depth}, ×${b.mult.toFixed(2)}) · ${r.total} no total`);

@@ -556,6 +556,25 @@ test('consumables: use each, caps, craft cost scales with production, Cache Warm
   assert.deepEqual(itemsList(c, T0).map((x) => x.id), ['coffee']);
 });
 
+test('Cache Warmer sorteia uma das habilidades em recarga (determinístico) e respeita a indicada', () => {
+  let s = make({ tier: 2, pets: ['byte', 'noxi'] });
+  s.run.inventory = { 'cache-warmer': 3 };
+  s = run(s, { type: 'ability', id: 'compile-burst' }).state;
+  s = run(s, { type: 'ability', id: 'parallelize' }).state;
+  const ready = (st, t) => Object.keys(st.run.abilities).filter((id) => st.run.abilities[id].readyAt <= t);
+  const picks = new Set();
+  for (let i = 1; i <= 40; i++) {
+    const t = T0 + i * 1000;
+    const r = run(s, { type: 'use', item: 'cache-warmer' }, t);
+    assert.equal(ready(r.state, t).length, 1); // só uma zera
+    assert.deepEqual(ready(run(s, { type: 'use', item: 'cache-warmer' }, t).state, t), ready(r.state, t)); // mesmo seed e hora, mesma
+    picks.add(ready(r.state, t)[0]);
+  }
+  assert.deepEqual([...picks].sort(), ['compile-burst', 'parallelize']); // as duas saem no sorteio
+  const r = run(s, { type: 'use', item: 'cache-warmer', ability: 'parallelize' }, T0 + 1000);
+  assert.deepEqual(ready(r.state, T0 + 1000), ['parallelize']);
+});
+
 test('pet finds may bring consumables (seeded) and fall back to Compute when full', () => {
   // Vários "retornos" (seeds diferentes): aparecem caches, consumíveis e peças; o mesmo seed repete o resultado.
   const finds = [];
