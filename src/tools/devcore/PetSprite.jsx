@@ -306,7 +306,7 @@ export function PetSprite({ id, color, eye, stage = 0, aura, size = 56, locked =
   const ssj = !locked && fx === 'ssj';
   return (
     <svg className={'pet-svg' + (locked ? ' is-locked' : '') + (ssj ? ' is-ssj' : '') + ' ' + className} viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" overflow="visible">
-      {ssj && <SsjBack gid={gid} />}
+      {ssj && <SkinAura gid={gid} Body={Body} stage={stage} />}
       {showAura && (
         <>
           <defs>
@@ -329,62 +329,39 @@ export function PetSprite({ id, color, eye, stage = 0, aura, size = 56, locked =
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
- * Visual Fundador: aura em forma de chama de energia, leve. Larga embaixo e afinando para cima; faixas de brilho sobem
- * por dentro (o fluxo); três línguas ondulam presas na base — por isso a ponta se mexe muito mais que a base; fiapos se
- * soltam do topo e sobem até sumir. O ritmo de cada pet é sorteado (as auras não andam juntas).
+ * Visual Fundador: a aura sai da própria pele. Usa a silhueta do pet (o mesmo desenho, pintado de dourado por filtro):
+ * um halo largo e suave que pulsa, cópias que se desprendem do corpo e sobem esticando até sumir (o ritmo de cada pet
+ * é sorteado) e, por cima, uma borda brilhante rente à pele.
  */
-// Base arredondada e irregular (sem linha reta embaixo).
-const FLAME = 'M10 58 C8 46 13 36 19 27 C20 33 24 31 25 24 C27 15 30 8 32 1 C34 8 37 15 39 24 C40 31 44 33 45 27 C51 36 56 46 54 58 C52 64 45 62 40 65 C35 67 29 64 24 66 C18 66 12 64 10 58 Z';
-const TONGUES = [
-  'M14 59 C14 46 18 36 22 28 C24 22 25 16 24 9 C29 16 30 26 29 36 C28 46 26 54 24 60 C22 64 16 64 14 59 Z',
-  'M26 60 C24 44 27 30 30 20 C31 13 31 8 33 2 C36 10 37 20 36 30 C35 42 36 52 38 60 C36 65 29 66 26 60 Z',
-  'M40 60 C38 52 36 44 35 36 C34 26 35 16 40 9 C39 16 40 22 42 28 C46 36 50 46 50 59 C48 64 42 65 40 60 Z',
-];
-function SsjBack({ gid }) {
-  const [rnd] = React.useState(() => Array.from({ length: 8 }, () => Math.random()));
-  const flow = !reducedMotion();
+function SkinAura({ gid, Body, stage }) {
+  const [rnd] = React.useState(() => Array.from({ length: 6 }, () => Math.random()));
+  const sil = <Body c="#000" eye="#000" stage={stage} />;
+  const moving = !reducedMotion();
   return (
     <>
       <defs>
-        <linearGradient id={gid + '-fl'} x1="0" y1="64" x2="0" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#FFB000" stopOpacity="0" />
-          <stop offset="12%" stopColor="#FFB000" stopOpacity=".2" />
-          <stop offset="50%" stopColor="#FFC83D" stopOpacity=".12" />
-          <stop offset="100%" stopColor="#FFE066" stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id={gid + '-st'} x1="0" y1="64" x2="0" y2="46" gradientUnits="userSpaceOnUse" spreadMethod="repeat">
-          <stop offset="0%" stopColor="#FFF2B0" stopOpacity="0" />
-          <stop offset="50%" stopColor="#FFE9A0" stopOpacity=".14" />
-          <stop offset="100%" stopColor="#FFF2B0" stopOpacity="0" />
-          {flow && <animateTransform attributeName="gradientTransform" type="translate" from="0 0" to="0 -18" dur={(0.9 + rnd[0] * 0.5).toFixed(2) + 's'} repeatCount="indefinite" />}
-        </linearGradient>
-        <linearGradient id={gid + '-tg'} x1="0" y1="64" x2="0" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#FFB000" stopOpacity="0" />
-          <stop offset="15%" stopColor="#FFC21A" stopOpacity=".14" />
-          <stop offset="70%" stopColor="#FFDA55" stopOpacity=".1" />
-          <stop offset="100%" stopColor="#FFF6C2" stopOpacity="0" />
-        </linearGradient>
-        <filter id={gid + '-blur'} x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.3" /></filter>
-        <filter id={gid + '-glow'} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" /></filter>
+        <filter id={gid + '-halo'} x="-50%" y="-60%" width="200%" height="220%">
+          <feMorphology in="SourceAlpha" operator="dilate" radius="2.2" result="d" />
+          <feFlood floodColor="#FFB800" />
+          <feComposite in2="d" operator="in" />
+          <feGaussianBlur stdDeviation="2.8" />
+        </filter>
+        <filter id={gid + '-rim'} x="-30%" y="-30%" width="160%" height="160%">
+          <feMorphology in="SourceAlpha" operator="dilate" radius="1" result="d" />
+          <feFlood floodColor="#FFD54A" />
+          <feComposite in2="d" operator="in" />
+          <feGaussianBlur stdDeviation="1" />
+        </filter>
       </defs>
-      {/* Glow: a mesma chama, larga e bem desfocada, irradiando dourado em volta */}
-      <path className="pet-ssj-glow" d={FLAME} fill="#FFB800" filter={`url(#${gid}-glow)`} />
-      <g className="pet-ssj" filter={`url(#${gid}-blur)`}>
-        <path className="pet-ssj-body" d={FLAME} fill={`url(#${gid}-fl)`} />
-        <path className="pet-ssj-body" d={FLAME} fill={`url(#${gid}-st)`} />
-        {TONGUES.map((d, i) => (
-          <path key={i} className="pet-ssj-tongue" d={d} fill={`url(#${gid}-tg)`}
-            style={{ '--d': (0.45 + rnd[i + 1] * 0.45).toFixed(2) + 's', '--dl': (-rnd[i + 4] * 1.2).toFixed(2) + 's' }} />
-        ))}
-        {[0, 1, 2, 3].map((i) => (
-          <ellipse key={'w' + i} className="pet-ssj-wisp" cx={22 + i * 6 + rnd[i] * 4} cy={14 + rnd[i + 2] * 8} rx="1.6" ry="3"
-            style={{ '--x': ((rnd[i + 3] - 0.5) * 10).toFixed(1) + 'px', '--d': (0.9 + rnd[i + 1] * 0.9).toFixed(2) + 's', '--dl': (-rnd[i] * 1.8).toFixed(2) + 's' }} />
-        ))}
-      </g>
+      <g className="pet-skin-halo" filter={`url(#${gid}-halo)`}>{sil}</g>
+      {moving && [0, 1, 2].map((i) => (
+        <g key={i} className="pet-skin-rise" filter={`url(#${gid}-halo)`}
+          style={{ '--d': (1.2 + rnd[i] * 0.7).toFixed(2) + 's', '--dl': (-rnd[i + 3] * 1.9).toFixed(2) + 's' }}>{sil}</g>
+      ))}
+      <g className="pet-skin-rim" filter={`url(#${gid}-rim)`}>{sil}</g>
     </>
   );
 }
-
 
 /** Meia-largura da aura (chama) na altura y: estreita no topo (y≈2), larga na base (y≈60). */
 const auraHalf = (y) => 22 * Math.pow(Math.max(0, Math.min(1, (y - 2) / 58)), 0.62);
