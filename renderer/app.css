@@ -2041,3 +2041,22 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc-founder__cols ul { margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.6; color: var(--tk-text-2); }
 @media (max-width: 760px) { .dc-founder__gifts, .dc-founder__cols { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .dc-sg__node.is-founder, .dc-founder__star { animation: none; } }
+/* Visual Fundador ("super saiyajin"): aura dourada subindo e raios curtos piscando em volta do DevPet */
+.pet-svg.is-ssj { overflow: visible; }
+.pet-ssj-aura { transform-origin: 32px 40px; animation: pet-ssj-aura 1.1s ease-in-out infinite; }
+.pet-ssj-flame { transform-origin: 32px 50px; opacity: .8; animation: pet-ssj-flame .45s ease-in-out infinite alternate; }
+@keyframes pet-ssj-aura { 50% { transform: scale(1.06); opacity: .85; } }
+@keyframes pet-ssj-flame { from { transform: scaleY(.92) scaleX(1.02); } to { transform: scaleY(1.06) scaleX(.97); } }
+.pet-bolt { fill: none; stroke: #FFF6C2; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; opacity: 0;
+  filter: drop-shadow(0 0 1.5px #FFD84D) drop-shadow(0 0 3px #FFB000); animation: pet-bolt 1.9s steps(1, end) infinite; }
+.pet-bolt.is-2 { animation-delay: .55s; animation-duration: 2.3s; }
+.pet-bolt.is-3 { animation-delay: 1.1s; animation-duration: 2.7s; }
+.pet-bolt.is-4 { animation-delay: .3s; animation-duration: 2.1s; }
+.pet-bolt.is-front { stroke-width: 1; animation-delay: 1.4s; animation-duration: 3.4s; }
+@keyframes pet-bolt { 0% { opacity: 0; } 4% { opacity: 1; } 8% { opacity: .2; } 11% { opacity: .95; } 15% { opacity: 0; } 100% { opacity: 0; } }
+.dc-skin.is-ssj { box-shadow: 0 0 0 1px #FFD27A, 0 0 8px rgba(255, 210, 122, .8); }
+@media (prefers-reduced-motion: reduce) {
+  .pet-ssj-aura, .pet-ssj-flame { animation: none; }
+  .pet-bolt { animation: none; opacity: .45; }
+  .pet-bolt.is-front { opacity: 0; }
+}

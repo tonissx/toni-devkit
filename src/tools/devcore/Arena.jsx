@@ -65,7 +65,7 @@ function BattleSummary({ battle, snap, itemName }) {
               return (
                 <tr key={r.uid} className={r.mvp ? 'is-mvp' : ''}>
                   <td className="dc-perf__pet">
-                    {p && <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} size={26} className="is-static" />}
+                    {p && <PetSprite id={p.id} color={p.color} eye={p.eye} fx={p.fx} stage={p.stage.id} size={26} className="is-static" />}
                     {r.name}{r.mvp && <span className="dc-chip is-ok">MVP</span>}
                   </td>
                   <td>{fmt(r.dealt)}</td>
@@ -448,7 +448,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
           <ArmoBall c={p ? p.color : '#8C9BB0'} eye={p ? p.eye : undefined} />
         </>}
         {u.side === 'pet'
-          ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} stage={p ? p.stage.id : 0} aura={p ? auraOf(p) : undefined} size={56} className="is-static" />
+          ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} fx={p ? p.fx : undefined} stage={p ? p.stage.id : 0} aura={p ? auraOf(p) : undefined} size={56} className="is-static" />
           : <VillainSprite id={u.sprite} color={u.color} state={alive[u.uid] ? 'active' : 'defeated'} size={u.boss ? 92 : 56} />}
       </div>
     );
@@ -468,7 +468,7 @@ export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) 
         <span className="dc-hud__face" style={{ '--c': (p ? p.color : u.color) || '#888' }}>
           <span className="dc-hud__zoom" style={(() => { const [fx, fy] = FACE[u.side === 'pet' ? 'pet:' + u.id : u.sprite] || [32, 30]; const k = (u.side === 'pet' ? PET_ZOOM : ZOOM) / 64; return { left: PORTRAIT / 2 - fx * k, top: PORTRAIT / 2 - fy * k }; })()}>
             {u.side === 'pet'
-              ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} stage={p ? p.stage.id : 0} size={PET_ZOOM} className="is-static" />
+              ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} fx={p ? p.fx : undefined} stage={p ? p.stage.id : 0} size={PET_ZOOM} className="is-static" />
               : <VillainSprite id={u.sprite} color={u.color} state="active" size={ZOOM} />}
           </span>
           {!alive[u.uid] && <Icon name="skull" size={12} className="dc-hud__dead" />}

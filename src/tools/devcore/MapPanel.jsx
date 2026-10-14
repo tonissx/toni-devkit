@@ -27,7 +27,7 @@ function Pet({ snap, id, size = 40 }) {
   const p = snap.pets.find((x) => x.id === id);
   if (!p) return null;
   if (!p.owned) return <PetSprite id={p.id} size={size} locked className="is-static" />;
-  return <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} aura={auraOf(p)} size={size} className="is-static" />;
+  return <PetSprite id={p.id} color={p.color} eye={p.eye} fx={p.fx} stage={p.stage.id} aura={auraOf(p)} size={size} className="is-static" />;
 }
 
 /** Linha de inimigo: sprite, nome, atributos e traços (com o counter e se o esquadrão salvo anula). */
@@ -171,7 +171,7 @@ function Party({ map, party, hold, place, geom }) {
         <React.Fragment key={p.id}>
         <span className="dc-party__shadow" style={{ left: (i - (party.length - 1) / 2) * 34 }} />
         <span className="dc-party__pet" style={{ '--i': i, left: (i - (party.length - 1) / 2) * 34 }}>
-          <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} aura={auraOf(p)} size={44} className="is-static" />
+          <PetSprite id={p.id} color={p.color} eye={p.eye} fx={p.fx} stage={p.stage.id} aura={auraOf(p)} size={44} className="is-static" />
         </span>
         </React.Fragment>
       ))}

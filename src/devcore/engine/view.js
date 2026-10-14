@@ -41,6 +41,7 @@ function describeCondition(cond, c = CONTENT) {
   if (!cond || cond.always) return '';
   if (cond.all) return cond.all.map((x) => describeCondition(x, c)).filter(Boolean).join(' + ');
   if (cond.any) return cond.any.map((x) => describeCondition(x, c)).filter(Boolean).join(' ou ');
+  if (cond.founder) return 'ser Fundador (jogar antes da grande atualização)';
   if (cond.tier != null) return 'Tier ' + cond.tier;
   if (cond.owned) return cond.owned.n + '× ' + (c.gen[cond.owned.gen] || { name: cond.owned.gen }).name;
   if (cond.discovery) return 'descoberta ' + (c.discovery[cond.discovery] || { title: '???' }).title;
@@ -109,7 +110,7 @@ function snapshot(s, now, c = CONTENT) {
       id: p.id, owned: true, name: p.name, species: p.species, rarity: p.rarity, rarityName: c.RARITY[p.rarity].name,
       specialization: p.specialization, category: p.category, level: st.level, maxLevel,
       // Cor efetiva (visual escolhido) + estágio de evolução.
-      color: skin.colors.body || p.color, eye: skin.colors.eye || null, baseColor: p.color,
+      color: skin.colors.body || p.color, eye: skin.colors.eye || null, baseColor: p.color, fx: skin.fx || null,
       skin: skin.id, stage: { id: stage.id, name: stage.name, next: next && next.minLevel <= maxLevel ? { name: next.name, level: next.minLevel } : null },
       trainCost: st.level < maxLevel ? trainCostOf(s, p, st.level, c) : null,
       bonus: p.bonus.map((e) => describeEffect({ ...e, value: e.value * (1 + p.perLevel * (st.level - 1)) }, c) + (e.perActiveCategory ? ' por categoria ativa' : '')),
@@ -144,7 +145,7 @@ function snapshot(s, now, c = CONTENT) {
     : { id: d.id, found: false }));
 
   const skins = c.SKINS.map((k) => ({
-    id: k.id, name: k.name, colors: k.colors, pet: k.pet || null,
+    id: k.id, name: k.name, colors: k.colors, pet: k.pet || null, fx: k.fx || null,
     unlocked: s.cosmetics.unlocked.includes(k.id), fresh: s.cosmetics.fresh.includes(k.id),
     requirement: s.cosmetics.unlocked.includes(k.id) ? '' : describeCondition(k.unlock, c),
   }));

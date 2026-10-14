@@ -297,14 +297,16 @@ const SPECIES = { byte: Byte, noxi: Noxi, query: Query, memo: Memo, relay: Relay
 /**
  * Sprite de um DevPet.
  * color: corpo · eye: olhos (padrão do tema se ausente) · stage: 0/1/2 · aura: cor da aura (estágio Mestre)
- * locked = silhueta (ainda não descoberto).
+ * fx: efeito do visual ('ssj': aura dourada com raios, do visual Fundador) · locked = silhueta (ainda não descoberto).
  */
-export function PetSprite({ id, color, eye, stage = 0, aura, size = 56, locked = false, className = '' }) {
+export function PetSprite({ id, color, eye, stage = 0, aura, size = 56, locked = false, fx = null, className = '' }) {
   const Body = SPECIES[id] || Byte;
   const gid = 'aura-' + React.useId().replace(/:/g, '');
   const showAura = !locked && stage >= 2;
+  const ssj = !locked && fx === 'ssj';
   return (
-    <svg className={'pet-svg' + (locked ? ' is-locked' : '') + ' ' + className} viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
+    <svg className={'pet-svg' + (locked ? ' is-locked' : '') + (ssj ? ' is-ssj' : '') + ' ' + className} viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" overflow="visible">
+      {ssj && <SsjBack gid={gid} />}
       {showAura && (
         <>
           <defs>
@@ -319,7 +321,32 @@ export function PetSprite({ id, color, eye, stage = 0, aura, size = 56, locked =
       )}
       <ellipse className="pet-shadow" cx="32" cy="58" rx="16" ry="3" fill="#000" opacity=".25" />
       <Body c={locked ? 'var(--tk-surface-4)' : color} eye={locked ? 'var(--tk-surface-3)' : eye || 'var(--dc-eye, #CFFBE3)'} stage={locked ? 0 : stage} />
+      {ssj && <path className="pet-bolt is-front" d="M24 27 L30 32 L27 34 L34 40" />}
     </svg>
+  );
+}
+
+/**
+ * Visual Fundador: aura dourada subindo (como chama) e raios curtos em volta do corpo, cada um piscando num momento
+ * diferente (CSS: .pet-ssj-aura, .pet-bolt). Fica atrás do corpo; um estalo fino passa pela frente de vez em quando.
+ */
+function SsjBack({ gid }) {
+  return (
+    <>
+      <defs>
+        <radialGradient id={gid + '-ssj'} cx="50%" cy="60%" r="55%">
+          <stop offset="0%" stopColor="#FFE680" stopOpacity=".55" />
+          <stop offset="55%" stopColor="#FFC83D" stopOpacity=".22" />
+          <stop offset="100%" stopColor="#FFB000" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <ellipse className="pet-ssj-aura" cx="32" cy="34" rx="27" ry="30" fill={`url(#${gid}-ssj)`} />
+      <path className="pet-ssj-flame" d="M14 50 Q12 30 20 16 Q22 26 26 20 Q30 6 32 2 Q34 6 38 20 Q42 26 44 16 Q52 30 50 50 Z" fill={`url(#${gid}-ssj)`} />
+      <path className="pet-bolt is-1" d="M8 22 L14 28 L10 30 L17 39" />
+      <path className="pet-bolt is-2" d="M56 18 L50 25 L54 27 L47 36" />
+      <path className="pet-bolt is-3" d="M17 6 L21 13 L17 14 L23 21" />
+      <path className="pet-bolt is-4" d="M52 44 L46 48 L50 50 L43 56" />
+    </>
   );
 }
 

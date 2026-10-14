@@ -109,7 +109,7 @@ export function Scene({ snap, reactions, now }) {
             style={{ left: `calc(${centerOf(d.spot)}% + ${offset}px)`, '--bubble-lift': lift + 'px', '--pet': p.color }}>
             {casting && <span className="dc-fx-ring" aria-hidden="true" />}
             <div className="dc-pet__bubble"><b>{p.name}</b> · {moving ? 'on the way...' : d.line}</div>
-            <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} aura={auraOf(p)} size={52} />
+            <PetSprite id={p.id} color={p.color} eye={p.eye} fx={p.fx} stage={p.stage.id} aura={auraOf(p)} size={52} />
           </div>
         );
       })}
