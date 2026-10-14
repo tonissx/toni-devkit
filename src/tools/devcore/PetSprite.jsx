@@ -326,53 +326,89 @@ export function PetSprite({ id, color, eye, stage = 0, aura, size = 56, locked =
   );
 }
 
-/** Visual Fundador: uma aura dourada bem leve atrás do corpo. Os raios ficam com TeslaArcs (aleatórios, por pet). */
+const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Visual Fundador: aura em forma de chama de energia, leve. Larga embaixo e afinando para cima; faixas de brilho sobem
+ * por dentro (o fluxo); três línguas ondulam presas na base — por isso a ponta se mexe muito mais que a base; fiapos se
+ * soltam do topo e sobem até sumir. O ritmo de cada pet é sorteado (as auras não andam juntas).
+ */
+// Base arredondada e irregular (sem linha reta embaixo).
+const FLAME = 'M10 58 C8 46 13 36 19 27 C20 33 24 31 25 24 C27 15 30 8 32 1 C34 8 37 15 39 24 C40 31 44 33 45 27 C51 36 56 46 54 58 C52 64 45 62 40 65 C35 67 29 64 24 66 C18 66 12 64 10 58 Z';
+const TONGUES = [
+  'M14 59 C14 46 18 36 22 28 C24 22 25 16 24 9 C29 16 30 26 29 36 C28 46 26 54 24 60 C22 64 16 64 14 59 Z',
+  'M26 60 C24 44 27 30 30 20 C31 13 31 8 33 2 C36 10 37 20 36 30 C35 42 36 52 38 60 C36 65 29 66 26 60 Z',
+  'M40 60 C38 52 36 44 35 36 C34 26 35 16 40 9 C39 16 40 22 42 28 C46 36 50 46 50 59 C48 64 42 65 40 60 Z',
+];
 function SsjBack({ gid }) {
+  const [rnd] = React.useState(() => Array.from({ length: 8 }, () => Math.random()));
+  const flow = !reducedMotion();
   return (
     <>
       <defs>
-        <radialGradient id={gid + '-ssj'} cx="50%" cy="58%" r="55%">
-          <stop offset="0%" stopColor="#FFE680" stopOpacity=".2" />
-          <stop offset="60%" stopColor="#FFC83D" stopOpacity=".07" />
-          <stop offset="100%" stopColor="#FFB000" stopOpacity="0" />
-        </radialGradient>
+        <linearGradient id={gid + '-fl'} x1="0" y1="64" x2="0" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FFC83D" stopOpacity="0" />
+          <stop offset="12%" stopColor="#FFC83D" stopOpacity=".11" />
+          <stop offset="50%" stopColor="#FFD84D" stopOpacity=".06" />
+          <stop offset="100%" stopColor="#FFE680" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id={gid + '-st'} x1="0" y1="64" x2="0" y2="46" gradientUnits="userSpaceOnUse" spreadMethod="repeat">
+          <stop offset="0%" stopColor="#FFF2B0" stopOpacity="0" />
+          <stop offset="50%" stopColor="#FFF2B0" stopOpacity=".09" />
+          <stop offset="100%" stopColor="#FFF2B0" stopOpacity="0" />
+          {flow && <animateTransform attributeName="gradientTransform" type="translate" from="0 0" to="0 -18" dur={(0.9 + rnd[0] * 0.5).toFixed(2) + 's'} repeatCount="indefinite" />}
+        </linearGradient>
+        <linearGradient id={gid + '-tg'} x1="0" y1="64" x2="0" y2="0" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#FFC83D" stopOpacity="0" />
+          <stop offset="15%" stopColor="#FFC83D" stopOpacity=".08" />
+          <stop offset="70%" stopColor="#FFE680" stopOpacity=".06" />
+          <stop offset="100%" stopColor="#FFF6C2" stopOpacity="0" />
+        </linearGradient>
+        <filter id={gid + '-blur'} x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.3" /></filter>
       </defs>
-      <ellipse className="pet-ssj-aura" cx="32" cy="34" rx="26" ry="29" fill={`url(#${gid}-ssj)`} />
+      <g className="pet-ssj" filter={`url(#${gid}-blur)`}>
+        <path className="pet-ssj-body" d={FLAME} fill={`url(#${gid}-fl)`} />
+        <path className="pet-ssj-body" d={FLAME} fill={`url(#${gid}-st)`} />
+        {TONGUES.map((d, i) => (
+          <path key={i} className="pet-ssj-tongue" d={d} fill={`url(#${gid}-tg)`}
+            style={{ '--d': (0.45 + rnd[i + 1] * 0.45).toFixed(2) + 's', '--dl': (-rnd[i + 4] * 1.2).toFixed(2) + 's' }} />
+        ))}
+        {[0, 1, 2, 3].map((i) => (
+          <ellipse key={'w' + i} className="pet-ssj-wisp" cx={22 + i * 6 + rnd[i] * 4} cy={14 + rnd[i + 2] * 8} rx="1.6" ry="3"
+            style={{ '--x': ((rnd[i + 3] - 0.5) * 10).toFixed(1) + 'px', '--d': (0.9 + rnd[i + 1] * 0.9).toFixed(2) + 's', '--dl': (-rnd[i] * 1.8).toFixed(2) + 's' }} />
+        ))}
+      </g>
     </>
   );
 }
 
-const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** Um arco elétrico: sai da borda do corpo para fora, em zigue-zague irregular, às vezes com uma bifurcação. */
-function teslaArc() {
+/** Meia-largura da aura (chama) na altura y: estreita no topo (y≈2), larga na base (y≈60). */
+const auraHalf = (y) => 22 * Math.pow(Math.max(0, Math.min(1, (y - 2) / 58)), 0.62);
+
+/**
+ * Um raio vertical que acompanha a aura: começa perto do topo da chama e desce pela borda (esquerda ou direita) em
+ * zigue-zague, às vezes com uma bifurcação para fora — como os raios do super saiyajin 2.
+ */
+function teslaArc(side = Math.random() < 0.5 ? -1 : 1) {
   const rnd = Math.random;
-  const a = rnd() * Math.PI * 2;
-  const r0 = 15 + rnd() * 6;
-  let x = 32 + Math.cos(a) * r0;
-  let y = 34 + Math.sin(a) * r0 * 1.08;
-  const dir = a + (rnd() - 0.5) * 1.1;          // sai para fora, meio torto
-  const len = 6 + rnd() * 10;
-  const steps = 5 + Math.floor(rnd() * 4);
-  const pts = [[x, y]];
-  for (let i = 0; i < steps; i++) {
-    const s = len / steps;
-    const j = (rnd() - 0.5) * 4.4;             // tremida perpendicular
-    x += Math.cos(dir) * s + Math.cos(dir + Math.PI / 2) * j;
-    y += Math.sin(dir) * s + Math.sin(dir + Math.PI / 2) * j;
-    pts.push([x, y]);
+  const top = 6 + rnd() * 16;                       // onde começa (perto da ponta)
+  const bottom = Math.min(60, top + 20 + rnd() * 26); // até onde desce
+  const hug = 1.15 + rnd() * 0.3;                   // na borda da aura, por fora do corpo
+  const pts = [];
+  for (let y = top; y <= bottom; y += 3 + rnd() * 2.5) {
+    const jx = (rnd() - 0.5) * 4.6;
+    pts.push([32 + side * (auraHalf(y) * hug + 3) + jx, y + (rnd() - 0.5) * 1.4]);
   }
   const path = (p) => 'M' + p.map(([px, py]) => px.toFixed(1) + ' ' + py.toFixed(1)).join(' L');
   const out = [path(pts)];
-  if (rnd() < 0.55) {                            // bifurcação curta a partir do meio
+  if (pts.length > 3 && rnd() < 0.6) {              // bifurcação curta para fora, descendo
     const k = 1 + Math.floor(rnd() * (pts.length - 2));
     let [bx, by] = pts[k];
-    const bd = dir + (rnd() < 0.5 ? -1 : 1) * (0.6 + rnd() * 0.6);
     const bp = [[bx, by]];
     for (let i = 0; i < 2 + Math.floor(rnd() * 2); i++) {
-      const j = (rnd() - 0.5) * 3;
-      bx += Math.cos(bd) * 2.6 + Math.cos(bd + Math.PI / 2) * j;
-      by += Math.sin(bd) * 2.6 + Math.sin(bd + Math.PI / 2) * j;
+      bx += side * (1.6 + rnd() * 1.6);
+      by += 1.5 + rnd() * 2.2;
       bp.push([bx, by]);
     }
     out.push(path(bp));
@@ -393,8 +429,9 @@ function TeslaArcs() {
     const timers = [];
     const later = (ms, f) => timers.push(setTimeout(() => alive && f(), ms));
     const burst = () => {
-      const n = Math.random() < 0.25 ? 2 : 1;           // às vezes dois arcos juntos
-      const draw = () => setArcs(Array.from({ length: n }, teslaArc));
+      const two = Math.random() < 0.3;                  // às vezes um de cada lado
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const draw = () => setArcs(two ? [teslaArc(-1), teslaArc(1)] : [teslaArc(side)]);
       draw();
       const flicker = Math.random() < 0.5;              // às vezes estala de novo (forma nova)
       later(60 + Math.random() * 50, () => {
@@ -407,7 +444,7 @@ function TeslaArcs() {
   }, []);
   if (!arcs) return null;
   return (
-    <g className="pet-tesla">
+    <g className="pet-tesla" key={arcs.flat().join('').length}>
       {arcs.flat().map((d, i) => <path key={'g' + i} className="pet-tesla__glow" d={d} />)}
       {arcs.flat().map((d, i) => <path key={'c' + i} className="pet-tesla__core" d={d} />)}
     </g>

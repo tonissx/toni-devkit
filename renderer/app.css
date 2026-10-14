@@ -2043,10 +2043,24 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @media (prefers-reduced-motion: reduce) { .dc-sg__node.is-founder, .dc-founder__star { animation: none; } }
 /* Visual Fundador ("super saiyajin"): aura dourada leve e arcos "tesla" aleatórios (PetSprite TeslaArcs) */
 .pet-svg.is-ssj { overflow: visible; }
-.pet-ssj-aura { transform-origin: 32px 40px; animation: pet-ssj-aura 2.2s ease-in-out infinite; }
-@keyframes pet-ssj-aura { 50% { transform: scale(1.04); opacity: .7; } }
+.pet-ssj-body { transform-box: fill-box; transform-origin: 50% 100%; animation: pet-ssj-breathe 1.6s ease-in-out infinite; }
+@keyframes pet-ssj-breathe { 50% { transform: scaleY(1.05) scaleX(.98); } }
+/* Línguas presas na base: a ponta balança mais que a base (skew a partir de baixo) */
+.pet-ssj-tongue { transform-box: fill-box; transform-origin: 50% 100%; animation: pet-ssj-tongue var(--d, .7s) ease-in-out var(--dl, 0s) infinite alternate; }
+@keyframes pet-ssj-tongue {
+  0% { transform: scaleY(.86) skewX(-7deg); opacity: .8; }
+  35% { transform: scaleY(1.12) skewX(5deg); opacity: 1; }
+  70% { transform: scaleY(.96) skewX(-3deg); opacity: .7; }
+  100% { transform: scaleY(1.06) skewX(8deg); opacity: .95; }
+}
+/* Fiapos que se soltam do topo e sobem */
+.pet-ssj-wisp { fill: #FFE680; opacity: 0; transform-box: fill-box; transform-origin: 50% 50%; animation: pet-ssj-wisp var(--d, 1.2s) ease-out var(--dl, 0s) infinite; }
+@keyframes pet-ssj-wisp { 0% { transform: translate(0, 6px) scale(1); opacity: 0; } 20% { opacity: .35; } 100% { transform: translate(var(--x, 0), -20px) scale(.3, .6); opacity: 0; } }
 .pet-tesla path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .pet-tesla__glow { stroke: #FFD84D; stroke-width: 2.4; opacity: .45; filter: blur(.8px); }
 .pet-tesla__core { stroke: #FFFDF0; stroke-width: .8; filter: drop-shadow(0 0 1.2px #FFE680); }
+/* O raio sobe um pouco enquanto estala, junto com o fluxo da aura */
+.pet-tesla { animation: pet-tesla-rise .22s linear forwards; }
+@keyframes pet-tesla-rise { from { transform: translateY(1.5px); } to { transform: translateY(-3px); } }
 .dc-skin.is-ssj { box-shadow: 0 0 0 1px #FFD27A, 0 0 8px rgba(255, 210, 122, .8); }
-@media (prefers-reduced-motion: reduce) { .pet-ssj-aura { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .pet-ssj-body, .pet-ssj-tongue, .pet-tesla { animation: none; } .pet-ssj-wisp { display: none; } }
