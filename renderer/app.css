@@ -2043,6 +2043,8 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @media (prefers-reduced-motion: reduce) { .dc-sg__node.is-founder, .dc-founder__star { animation: none; } }
 /* Visual Fundador ("super saiyajin"): aura dourada leve e arcos "tesla" aleatórios (PetSprite TeslaArcs) */
 .pet-svg.is-ssj { overflow: visible; }
+.pet-ssj-glow { opacity: .22; transform-box: fill-box; transform-origin: 50% 100%; transform: scale(1.12, 1.04); animation: pet-ssj-glow 1.6s ease-in-out infinite; }
+@keyframes pet-ssj-glow { 50% { opacity: .32; transform: scale(1.18, 1.08); } }
 .pet-ssj-body { transform-box: fill-box; transform-origin: 50% 100%; animation: pet-ssj-breathe 1.6s ease-in-out infinite; }
 @keyframes pet-ssj-breathe { 50% { transform: scaleY(1.05) scaleX(.98); } }
 /* Línguas presas na base: a ponta balança mais que a base (skew a partir de baixo) */
@@ -2063,4 +2065,4 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .pet-tesla { animation: pet-tesla-rise .22s linear forwards; }
 @keyframes pet-tesla-rise { from { transform: translateY(1.5px); } to { transform: translateY(-3px); } }
 .dc-skin.is-ssj { box-shadow: 0 0 0 1px #FFD27A, 0 0 8px rgba(255, 210, 122, .8); }
-@media (prefers-reduced-motion: reduce) { .pet-ssj-body, .pet-ssj-tongue, .pet-tesla { animation: none; } .pet-ssj-wisp { display: none; } }
+@media (prefers-reduced-motion: reduce) { .pet-ssj-body, .pet-ssj-tongue, .pet-tesla, .pet-ssj-glow { animation: none; } .pet-ssj-wisp { display: none; } }

@@ -347,25 +347,28 @@ function SsjBack({ gid }) {
     <>
       <defs>
         <linearGradient id={gid + '-fl'} x1="0" y1="64" x2="0" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#FFC83D" stopOpacity="0" />
-          <stop offset="12%" stopColor="#FFC83D" stopOpacity=".11" />
-          <stop offset="50%" stopColor="#FFD84D" stopOpacity=".06" />
-          <stop offset="100%" stopColor="#FFE680" stopOpacity="0" />
+          <stop offset="0%" stopColor="#FFB000" stopOpacity="0" />
+          <stop offset="12%" stopColor="#FFB000" stopOpacity=".2" />
+          <stop offset="50%" stopColor="#FFC83D" stopOpacity=".12" />
+          <stop offset="100%" stopColor="#FFE066" stopOpacity="0" />
         </linearGradient>
         <linearGradient id={gid + '-st'} x1="0" y1="64" x2="0" y2="46" gradientUnits="userSpaceOnUse" spreadMethod="repeat">
           <stop offset="0%" stopColor="#FFF2B0" stopOpacity="0" />
-          <stop offset="50%" stopColor="#FFF2B0" stopOpacity=".09" />
+          <stop offset="50%" stopColor="#FFE9A0" stopOpacity=".14" />
           <stop offset="100%" stopColor="#FFF2B0" stopOpacity="0" />
           {flow && <animateTransform attributeName="gradientTransform" type="translate" from="0 0" to="0 -18" dur={(0.9 + rnd[0] * 0.5).toFixed(2) + 's'} repeatCount="indefinite" />}
         </linearGradient>
         <linearGradient id={gid + '-tg'} x1="0" y1="64" x2="0" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#FFC83D" stopOpacity="0" />
-          <stop offset="15%" stopColor="#FFC83D" stopOpacity=".08" />
-          <stop offset="70%" stopColor="#FFE680" stopOpacity=".06" />
+          <stop offset="0%" stopColor="#FFB000" stopOpacity="0" />
+          <stop offset="15%" stopColor="#FFC21A" stopOpacity=".14" />
+          <stop offset="70%" stopColor="#FFDA55" stopOpacity=".1" />
           <stop offset="100%" stopColor="#FFF6C2" stopOpacity="0" />
         </linearGradient>
         <filter id={gid + '-blur'} x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="1.3" /></filter>
+        <filter id={gid + '-glow'} x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" /></filter>
       </defs>
+      {/* Glow: a mesma chama, larga e bem desfocada, irradiando dourado em volta */}
+      <path className="pet-ssj-glow" d={FLAME} fill="#FFB800" filter={`url(#${gid}-glow)`} />
       <g className="pet-ssj" filter={`url(#${gid}-blur)`}>
         <path className="pet-ssj-body" d={FLAME} fill={`url(#${gid}-fl)`} />
         <path className="pet-ssj-body" d={FLAME} fill={`url(#${gid}-st)`} />
