@@ -2043,12 +2043,15 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @media (prefers-reduced-motion: reduce) { .dc-sg__node.is-founder, .dc-founder__star { animation: none; } }
 /* Visual Fundador ("super saiyajin"): aura dourada leve e arcos "tesla" aleatórios (PetSprite TeslaArcs) */
 .pet-svg.is-ssj { overflow: visible; }
-.pet-skin-halo { opacity: .5; animation: pet-skin-pulse 1.8s ease-in-out infinite; }
-@keyframes pet-skin-pulse { 50% { opacity: .72; } }
-.pet-skin-rim { opacity: .7; }
-/* Energia se desprendendo da pele: sobe e estica a partir da base, sumindo */
-.pet-skin-rise { opacity: 0; transform-box: fill-box; transform-origin: 50% 100%; animation: pet-skin-rise var(--d, 1.4s) ease-out var(--dl, 0s) infinite; }
-@keyframes pet-skin-rise { 0% { transform: translateY(0) scale(1, 1); opacity: .32; } 100% { transform: translateY(-9px) scale(.9, 1.14); opacity: 0; } }
+.pet-skin-halo { opacity: .5; animation: pet-skin-pulse 2s ease-in-out infinite; }
+@keyframes pet-skin-pulse { 50% { opacity: .7; } }
+/* Fumaça se desprendendo da pele: sobe, abre em fiapos e esmaece */
+.pet-skin-rise { opacity: 0; transform-box: fill-box; transform-origin: 50% 100%; animation: pet-skin-rise var(--d, 1.8s) ease-out var(--dl, 0s) infinite; }
+@keyframes pet-skin-rise {
+  0% { transform: translate(0, 1px) scale(1, 1); opacity: 0; }
+  15% { opacity: .38; }
+  100% { transform: translate(var(--x, 0), -13px) scale(.86, 1.28); opacity: 0; }
+}
 .pet-tesla path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .pet-tesla__glow { stroke: #FFD84D; stroke-width: 2.4; opacity: .45; filter: blur(.8px); }
 .pet-tesla__core { stroke: #FFFDF0; stroke-width: .8; filter: drop-shadow(0 0 1.2px #FFE680); }

@@ -329,36 +329,39 @@ export function PetSprite({ id, color, eye, stage = 0, aura, size = 56, locked =
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /**
- * Visual Fundador: a aura sai da própria pele. Usa a silhueta do pet (o mesmo desenho, pintado de dourado por filtro):
- * um halo largo e suave que pulsa, cópias que se desprendem do corpo e sobem esticando até sumir (o ritmo de cada pet
- * é sorteado) e, por cima, uma borda brilhante rente à pele.
+ * Visual Fundador: a aura sai da pele como fumaça dourada. A silhueta do pet (o mesmo desenho, pintado de dourado por
+ * filtro) passa por uma turbulência que desfaz as bordas em fiapos; uma camada fica no corpo, pulsando, e outras se
+ * desprendem, sobem e se esticam esmaecendo — cada uma com um padrão de fumaça e um ritmo sorteados por pet.
  */
+function smokeFilter(id, seed, { dilate, freq, scale, blur, color }) {
+  return (
+    <filter key={id} id={id} x="-60%" y="-80%" width="220%" height="260%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius={dilate} result="d" />
+      <feTurbulence type="fractalNoise" baseFrequency={freq} numOctaves="2" seed={seed} result="n" />
+      <feDisplacementMap in="d" in2="n" scale={scale} xChannelSelector="R" yChannelSelector="G" result="w" />
+      <feFlood floodColor={color} />
+      <feComposite in2="w" operator="in" />
+      <feGaussianBlur stdDeviation={blur} />
+    </filter>
+  );
+}
+
 function SkinAura({ gid, Body, stage }) {
-  const [rnd] = React.useState(() => Array.from({ length: 6 }, () => Math.random()));
+  const [rnd] = React.useState(() => Array.from({ length: 9 }, () => Math.random()));
   const sil = <Body c="#000" eye="#000" stage={stage} />;
   const moving = !reducedMotion();
+  const seed = (i) => 1 + Math.floor(rnd[i] * 900);
   return (
     <>
       <defs>
-        <filter id={gid + '-halo'} x="-50%" y="-60%" width="200%" height="220%">
-          <feMorphology in="SourceAlpha" operator="dilate" radius="2.2" result="d" />
-          <feFlood floodColor="#FFB800" />
-          <feComposite in2="d" operator="in" />
-          <feGaussianBlur stdDeviation="2.8" />
-        </filter>
-        <filter id={gid + '-rim'} x="-30%" y="-30%" width="160%" height="160%">
-          <feMorphology in="SourceAlpha" operator="dilate" radius="1" result="d" />
-          <feFlood floodColor="#FFD54A" />
-          <feComposite in2="d" operator="in" />
-          <feGaussianBlur stdDeviation="1" />
-        </filter>
+        {smokeFilter(gid + '-sm0', seed(0), { dilate: 1.8, freq: '0.07 0.11', scale: 7, blur: 2.2, color: '#FFB800' })}
+        {[1, 2, 3].map((i) => smokeFilter(gid + '-sm' + i, seed(i), { dilate: 1.4, freq: '0.08 0.15', scale: 11, blur: 2.6, color: '#FFC21A' }))}
       </defs>
-      <g className="pet-skin-halo" filter={`url(#${gid}-halo)`}>{sil}</g>
-      {moving && [0, 1, 2].map((i) => (
-        <g key={i} className="pet-skin-rise" filter={`url(#${gid}-halo)`}
-          style={{ '--d': (1.2 + rnd[i] * 0.7).toFixed(2) + 's', '--dl': (-rnd[i + 3] * 1.9).toFixed(2) + 's' }}>{sil}</g>
+      <g className="pet-skin-halo" filter={`url(#${gid}-sm0)`}>{sil}</g>
+      {moving && [1, 2, 3].map((i) => (
+        <g key={i} className="pet-skin-rise" filter={`url(#${gid}-sm${i})`}
+          style={{ '--d': (1.5 + rnd[i + 3] * 0.9).toFixed(2) + 's', '--dl': (-rnd[i + 6] * 2.2).toFixed(2) + 's', '--x': ((rnd[i] - 0.5) * 4).toFixed(1) + 'px' }}>{sil}</g>
       ))}
-      <g className="pet-skin-rim" filter={`url(#${gid}-rim)`}>{sil}</g>
     </>
   );
 }
