@@ -6,10 +6,31 @@ import { Scene } from './Scene.jsx';
 import { GeneratorsPanel, UpgradesPanel, PetsPanel, TechPanel } from './Panels.jsx';
 import { OpsPanel } from './OpsPanel.jsx';
 import { RateWithDetails } from './RateDetails.jsx';
+import { MapPanel } from './MapPanel.jsx';
+import { SingularityPanel } from './SingularityPanel.jsx';
+import { ItemPopups, gainsFrom, mergeGains } from './ItemPopups.jsx';
+import { configureAudio } from './audio.js';
 
 const { Tabs, Modal, Button, ProgressBar, Spinner, Icon } = DS;
 
 const api = () => window.devkit.devcore;
+
+/** Um erro num painel do DevCore não derruba a tela: mostra a mensagem e deixa tentar de novo. */
+class PanelBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error) { console.error('[devcore] erro no painel', error); }
+  componentDidUpdate(prev) { if (prev.resetKey !== this.props.resetKey && this.state.error) this.setState({ error: null }); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="dc-empty">
+        Algo deu errado neste painel: {String(this.state.error.message || this.state.error)}{' '}
+        <Button size="sm" variant="ghost" onClick={() => this.setState({ error: null })}>Tentar de novo</Button>
+      </div>
+    );
+  }
+}
 const petName = (snap, id) => (snap.pets.find((p) => p.id === id) || { name: id }).name;
 
 /**
@@ -103,12 +124,56 @@ function IncidentChip({ ops, now, onOpen }) {
   );
 }
 
+/** Boas-vindas da grande atualização (uma vez): o que chegou, o que recomeçou, o que ficou e o presente de Fundador. */
+function FounderWelcome({ snap, onClose, onTab }) {
+  return (
+    <Modal open title="A GRANDE ATUALIZAÇÃO CHEGOU" icon="star" onClose={onClose} width={700}
+      footer={<><Button variant="ghost" onClick={() => { onClose(); onTab('pets'); }}>Ver o visual Fundador</Button><Button variant="primary" icon="rocket" onClick={onClose}>Começar</Button></>}>
+      <div className="dc-founder">
+        <div className="dc-founder__hero">
+          <span className="dc-founder__star"><Icon name="star" size={30} /></span>
+          <p>O DevCore ganhou um <b>mapa</b> com batalhas, chefes e Patches, e a <b>Singularity</b>: vença o pipeline
+            inteiro (Floresta, Pântano e Pico) e troque a run por Insight numa rede permanente. Para caber tudo isso, o farm
+            recomeçou do zero. Você jogava antes, então isto é para você:</p>
+        </div>
+        <div className="dc-founder__gifts">
+          <div className="dc-founder__gift"><Icon name="palette" size={18} /><span><b>Coleção Fundador</b>Um visual exclusivo para todos os DevPets. Nunca mais sai em lugar nenhum. Escolha na aba DevPets.</span></div>
+          <div className="dc-founder__gift"><Icon name="star" size={18} /><span><b>Estrela do Fundador</b>Já brilha na Rede da Singularity: +10% em toda a produção e +1 Insight em cada Singularity, para sempre.</span></div>
+        </div>
+        <div className="dc-founder__cols">
+          <div><div className="dc-sgm__h is-reset"><Icon name="rotate-ccw" size={13} /> Recomeçou</div>
+            <ul><li>Compute, geradores e upgrades</li><li>Tiers (voltam conforme o Compute)</li><li>Blueprints e consumíveis</li><li>Níveis dos DevPets</li></ul></div>
+          <div><div className="dc-sgm__h is-keep"><Icon name="shield-check" size={13} /> Continua com você</div>
+            <ul><li>{snap.pets.filter((p) => p.owned).length} DevPets encontrados</li><li>Descobertas e visuais</li><li>Bestiário</li><li>Missões</li></ul></div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 export function DevCoreScreen({ toast, request }) {
   const [ui, setUi] = usePersisted('devcore.ui', { tab: 'generators' });
   const [snap, setSnap] = React.useState(null);
   const [receivedAt, setReceivedAt] = React.useState(Date.now());
   const [reactions, setReactions] = React.useState([]);
   const [freshUnseen, setFreshUnseen] = React.useState([]); // descobertas "NOVO" desta visita
+  // Som (música e efeitos das batalhas, popups): ligado em volume baixo por padrão; a preferência fica salva.
+  const [audio, setAudio] = usePersisted('devcore.audio', { on: true, volume: 0.35 });
+  React.useEffect(() => { configureAudio(audio); }, [audio.on, audio.volume]);
+  const [gains, setGains] = React.useState([]);       // itens ganhos/comprados → popups
+  const [arenaOpen, setArenaOpen] = React.useState(false); // recompensas de batalha esperam a arena fechar
+  // Avisos que entregariam o resultado da luta (ex.: área concluída) esperam a arena abrir e fechar: a luta já vem
+  // calculada do engine, mas o jogador só deve saber o fim depois da animação.
+  const [afterBattle, setAfterBattle] = React.useState([]);
+  const arenaSeen = React.useRef(false);
+  React.useEffect(() => {
+    if (arenaOpen) { arenaSeen.current = true; return; }
+    if (arenaSeen.current) {
+      arenaSeen.current = false; // fechou: a próxima luta espera abrir e fechar de novo (mesmo sem aviso na fila)
+      for (const [title, text] of afterBattle) toast(title, text);
+      setAfterBattle([]);
+    }
+  }, [arenaOpen, afterBattle.length]);
   const now = useClock(500);
 
   const take = React.useCallback((s) => { setSnap(s); setReceivedAt(Date.now()); }, []);
@@ -130,13 +195,18 @@ export function DevCoreScreen({ toast, request }) {
         out.push({ at: t, type: 'defeated', villain: e.villain, category: b.category, text: b.defeatedLine || 'derrotado!' });
         out.push({ at: t, type: 'upgrade' }); // metade dos pets comemora
       }
-      else if (e.type === 'ability') out.push({ at: t, type: 'ability', pet: e.pet, text: (s.pets.find((p) => p.ability.id === e.id) || { ability: {} }).ability.name });
+      else if (e.type === 'ability') out.push({ at: t, type: 'ability', pet: e.pet, text: (s.pets.find((p) => p.owned && p.ability.id === e.id) || { ability: {} }).ability.name });
     }
     for (const e of log || []) {
+      if (e.type === 'mapOpen') toast(e.from ? 'Nova área' : 'Mapa liberado', e.from ? `${e.name}: novos inimigos, novos perigos — e um novo chefe no fim` : `${e.name}: batalhas, eventos e Patches na aba Mapa`);
+      if (e.type === 'singularity') toast('Singularity', `Uma run nova começa, já com a Rede montada. Singularity nº ${e.count}.`);
+      if (e.type === 'battle' && e.cleared) setAfterBattle((q) => [...q, [s.map.area.name + ' concluída', (s.map.boss ? s.map.boss.name : 'O chefe') + ' caiu!']]); // só depois da arena
       if (e.type !== 'quest') continue;
       const item = e.item && (s.inventory.find((k) => k.id === e.item) || {}).name;
       toast('Missão concluída', e.title + (item ? ' · +1 ' + item : ''));
     }
+    const got = gainsFrom(log, s);
+    if (got.length) setGains((g) => mergeGains(g, got)); // mesmo item seguido → um popup com a quantidade
     if (out.length) setReactions((r) => [...r.filter((x) => t - x.at < REACTION_MS), ...out]);
     if ((log || []).some((e) => e.type === 'discovery')) setFreshUnseen((f) => [...new Set([...f, ...log.filter((e) => e.type === 'discovery').map((e) => e.id)])]);
   }, []);
@@ -181,7 +251,8 @@ export function DevCoreScreen({ toast, request }) {
   const act = React.useCallback(async (action) => {
     const r = await api().act(action);
     take(r.snapshot);
-    react(r.log, r.snapshot);
+    // O log desta ação chega também pelo aviso do serviço (onChanged, que vai para todas as janelas): reagir aqui
+    // duplicava popups, sons e reações. As reações vêm só de lá.
     if (r.error) toast('DevCore', r.error, 'error');
     return r;
   }, []);
@@ -202,6 +273,8 @@ export function DevCoreScreen({ toast, request }) {
     { value: 'upgrades', label: 'Upgrades', icon: 'arrow-up-circle', count: availableUps || undefined, dot: snap.newUpgrades.length > 0 },
     { value: 'tech', label: 'Tech', icon: 'radar', dot: freshUnseen.length > 0 },
     { value: 'ops', label: 'Ops', icon: 'shield', dot: !!(snap.ops.active && !snap.ops.active.contained) },
+    ...(snap.map.unlocked ? [{ value: 'map', label: 'Mapa', icon: 'map', dot: !!snap.map.pending || (!snap.map.cleared && snap.map.nodes.some((n) => n.status === 'reachable' && n.affordable)) }] : []),
+    ...(snap.singularity.visible ? [{ value: 'singularity', label: 'Singularity', icon: 'atom', count: snap.singularity.insight || undefined, dot: snap.singularity.ready || snap.singularity.planning }] : []),
   ];
 
   return (
@@ -211,6 +284,7 @@ export function DevCoreScreen({ toast, request }) {
           <span className="dc-logo">DEVCORE</span>
           <IncidentChip ops={snap.ops} now={serverNow} onOpen={() => setUi((u) => ({ ...u, tab: 'ops' }))} />
           <span className="dc-tierchip">Tier {snap.tier.id} · {snap.tier.name}</span>
+          {snap.founder && <span className="dc-founder-chip" title="Jogava o DevCore antes da grande atualização"><Icon name="star" size={11} /> Fundador</span>}
         </div>
         <div className="dc-amount">
           <span className="dc-amount__label">Compute</span>
@@ -225,20 +299,26 @@ export function DevCoreScreen({ toast, request }) {
         </div>
       </header>
 
-      <Scene snap={snap} reactions={reactions} now={now} />
+      {ui.tab !== 'map' && ui.tab !== 'singularity' && <Scene snap={snap} reactions={reactions} now={now} />}
 
       <div className="dc-tabs">
         <Tabs items={tabs} value={ui.tab} onChange={(tab) => setUi((u) => ({ ...u, tab }))} />
       </div>
       <div className="dc-panel tk-scroll">
+        <PanelBoundary resetKey={ui.tab}>
         {ui.tab === 'generators' && <GeneratorsPanel snap={snap} amount={liveAmount} act={act} />}
         {ui.tab === 'pets' && <PetsPanel snap={snap} amount={liveAmount} act={act} now={serverNow} />}
         {ui.tab === 'upgrades' && <UpgradesPanel snap={snap} amount={liveAmount} act={act} />}
         {ui.tab === 'tech' && <TechPanel snap={snap} freshUnseen={freshUnseen} />}
         {ui.tab === 'ops' && <OpsPanel snap={snap} amount={liveAmount} act={act} now={serverNow} />}
+        {ui.tab === 'map' && snap.map.unlocked && <MapPanel snap={snap} act={act} audio={audio} setAudio={setAudio} onArena={setArenaOpen} onSingularity={() => setUi((u) => ({ ...u, tab: 'singularity' }))} />}
+        {ui.tab === 'singularity' && snap.singularity.visible && <SingularityPanel snap={snap} act={act} />}
+        </PanelBoundary>
       </div>
 
-      {snap.welcome && <WelcomeBack snap={snap} onClose={() => act({ type: 'ackWelcome' })} />}
+      <ItemPopups queue={gains} held={arenaOpen} onDone={(key) => setGains((g) => g.filter((x) => x.key !== key))} />
+      {snap.founderNews ? <FounderWelcome snap={snap} onClose={() => act({ type: 'ackFounder' })} onTab={(tab) => setUi((u) => ({ ...u, tab }))} />
+        : snap.welcome && <WelcomeBack snap={snap} onClose={() => act({ type: 'ackWelcome' })} />}
     </div>
   );
 }

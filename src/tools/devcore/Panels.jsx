@@ -285,7 +285,7 @@ function SkinPicker({ pet, skins, act }) {
         const body = k.colors.body || pet.baseColor;
         const on = pet.skin === k.id;
         return k.unlocked ? (
-          <button key={k.id} type="button" className={'dc-skin' + (on ? ' is-on' : '') + (k.fresh ? ' is-fresh' : '')}
+          <button key={k.id} type="button" className={'dc-skin' + (on ? ' is-on' : '') + (k.fresh ? ' is-fresh' : '') + (k.fx ? ' is-' + k.fx : '')}
             style={{ '--swatch': body, '--swatch-eye': k.colors.eye || 'var(--dc-eye)' }}
             aria-pressed={on} aria-label={k.name} title={k.name + (k.fresh ? ' (novo)' : '')}
             onClick={() => !on && act({ type: 'skin', pet: pet.id, skin: k.id })} />
@@ -343,9 +343,9 @@ export function PetsPanel({ snap, amount, act, now }) {
     <QuestsCard quests={snap.quests} />
     <div className="dc-grid is-pets">
       {snap.pets.map((p) => (p.owned ? (
-        <div key={p.id} className="dc-pet-card" style={{ '--pet': p.color }}>
+        <div key={p.id} className={'dc-pet-card' + (p.ability.activeUntil > now ? ' is-powered' : '')} style={{ '--pet': p.color }}>
           <div className="dc-pet-card__head">
-            <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} aura={auraOf(p)} size={56} className="is-static" />
+            <PetSprite id={p.id} color={p.color} eye={p.eye} fx={p.fx} stage={p.stage.id} aura={auraOf(p)} size={56} className="is-static" />
             <div>
               <div className="dc-card__title">{p.name} <span className={'dc-rarity is-' + p.rarity}>{p.rarityName}</span></div>
               <div className="dc-card__desc">{p.specialization} · {p.species}</div>

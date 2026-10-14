@@ -275,7 +275,7 @@ test('balance: pacing stays inside the MVP targets', () => {
 /* ─────────────── Event Bus e serviço (processo principal) ─────────────── */
 const { createBus } = require('../electron/events.js');
 const { createDevCoreService } = require('../electron/devcore/service.js');
-const { mkdtempSync, rmSync, readFileSync, writeFileSync } = require('node:fs');
+const { mkdtempSync, rmSync, readFileSync, writeFileSync, readdirSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const pathMod = require('node:path');
 
@@ -293,6 +293,21 @@ test('bus: whitelist, throttle per name+key, payload sanitized', () => {
   assert.deepEqual(got[0], ['tool.used', { tool: 'sql' }]); // conteúdo descartado
   assert.equal(bus.emit('tool.used', { tool: '../../etc' }), true);
   assert.deepEqual(got.at(-1)[1], {});
+});
+
+test('service: toda ação que a UI do DevCore envia está liberada no processo principal', async () => {
+  const dir = mkdtempSync(pathMod.join(tmpdir(), 'devcore-ui-'));
+  try {
+    const svc = createDevCoreService({ file: pathMod.join(dir, 'devcore.json'), now: () => T0 });
+    await svc.init();
+    const ui = pathMod.join(pathMod.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..', 'src', 'tools', 'devcore');
+    const types = new Set();
+    for (const f of readdirSync(ui).filter((x) => x.endsWith('.jsx'))) {
+      for (const m of readFileSync(pathMod.join(ui, f), 'utf8').matchAll(/act\(\{ type: '(\w+)'/g)) types.add(m[1]);
+    }
+    assert.ok(types.has('mapAdvance') && types.has('mapFight'), [...types].join(','));
+    for (const type of types) assert.notEqual((await svc.act({ type })).error, 'Ação não permitida', type);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('service: boot/persist/offline welcome/heartbeat/UI actions/events', async () => {
@@ -539,6 +554,25 @@ test('consumables: use each, caps, craft cost scales with production, Cache Warm
   for (let i = 0; i < k.cap; i++) c = run(c, { type: 'craft', item: 'coffee' }).state;
   assert.equal(run(c, { type: 'craft', item: 'coffee' }).error, 'Estoque cheio');
   assert.deepEqual(itemsList(c, T0).map((x) => x.id), ['coffee']);
+});
+
+test('Cache Warmer sorteia uma das habilidades em recarga (determinístico) e respeita a indicada', () => {
+  let s = make({ tier: 2, pets: ['byte', 'noxi'] });
+  s.run.inventory = { 'cache-warmer': 3 };
+  s = run(s, { type: 'ability', id: 'compile-burst' }).state;
+  s = run(s, { type: 'ability', id: 'parallelize' }).state;
+  const ready = (st, t) => Object.keys(st.run.abilities).filter((id) => st.run.abilities[id].readyAt <= t);
+  const picks = new Set();
+  for (let i = 1; i <= 40; i++) {
+    const t = T0 + i * 1000;
+    const r = run(s, { type: 'use', item: 'cache-warmer' }, t);
+    assert.equal(ready(r.state, t).length, 1); // só uma zera
+    assert.deepEqual(ready(run(s, { type: 'use', item: 'cache-warmer' }, t).state, t), ready(r.state, t)); // mesmo seed e hora, mesma
+    picks.add(ready(r.state, t)[0]);
+  }
+  assert.deepEqual([...picks].sort(), ['compile-burst', 'parallelize']); // as duas saem no sorteio
+  const r = run(s, { type: 'use', item: 'cache-warmer', ability: 'parallelize' }, T0 + 1000);
+  assert.deepEqual(ready(r.state, T0 + 1000), ['parallelize']);
 });
 
 test('pet finds may bring consumables (seeded) and fall back to Compute when full', () => {

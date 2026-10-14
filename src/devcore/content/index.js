@@ -14,12 +14,24 @@ const { INCIDENTS } = require('./incidents.js');
 const { CONSUMABLES } = require('./consumables.js');
 const { BLUEPRINTS } = require('./blueprints.js');
 const { QUESTS } = require('./quests.js');
+const { ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS, BATTLE_TIMEOUT_LORE, SLOTS } = require('./battle.js');
+const { ENEMIES } = require('./enemies.js');
+const { AREAS, NODE_TYPES } = require('./areas.js');
+const { PATCHES, RARITIES } = require('./patches.js');
+const { EVENTS, REST_OPTIONS, SHOP, BATTLE_REWARDS } = require('./events.js');
+const { INSIGHT, SECTORS, KIND, TREE } = require('./singularity.js');
 
 const byId = (list) => Object.fromEntries(list.map((x) => [x.id, x]));
 
 const CONTENT = {
   BALANCE, RESOURCES, CATEGORIES, TIERS, GENERATORS, UPGRADES, PETS, RARITY, ABILITIES, SYNERGIES, DISCOVERIES, STAGES, SKINS,
   INCIDENTS, CONSUMABLES, BLUEPRINTS, QUESTS,
+  // Mapa e batalhas (docs/devcore-mapa-singularity.md)
+  ROLES, PET_ROLES, BATTLE, TRIGGERS, BATTLE_ABILITIES, BATTLE_ITEMS, TRAITS, BATTLE_TIMEOUT_LORE, SLOTS, ENEMIES, AREAS, NODE_TYPES, PATCHES, RARITIES,
+  EVENTS, REST_OPTIONS, SHOP, BATTLE_REWARDS,
+  // Singularity (prestígio): Insight e a Rede (árvore permanente)
+  INSIGHT, SECTORS, KIND, TREE, perk: byId(TREE), sector: byId(SECTORS),
+  enemy: byId(ENEMIES), area: byId(AREAS), patch: byId(PATCHES), event: byId(EVENTS),
   quest: byId(QUESTS),
   gen: byId(GENERATORS), upgrade: byId(UPGRADES), pet: byId(PETS), ability: byId(ABILITIES),
   category: byId(CATEGORIES), discovery: byId(DISCOVERIES), synergy: byId(SYNERGIES), skin: byId(SKINS),
@@ -100,10 +112,58 @@ function validate(c = CONTENT) {
       if (!(l.mult > 1) || !(l.costDiv >= 1)) errors.push(`blueprint ${b.gen} mk${l.mk}: mult > 1 e costDiv ≥ 1`);
     });
   }
+  // Mapa e batalhas
+  for (const p of c.PETS) {
+    if (!c.ROLES[c.PET_ROLES[p.id]]) errors.push(`battle: pet ${p.id} sem papel`);
+    if (!c.BATTLE_ABILITIES[p.ability]) errors.push(`battle: habilidade ${p.ability} sem versão de batalha`);
+  }
+  for (const id of Object.keys(c.BATTLE_ITEMS)) if (!c.consumable[id]) errors.push(`battle: item ${id} inexistente`);
+  if (c.SLOTS.length !== c.BATTLE.squadSize) errors.push('battle: um slot por vaga do esquadrão');
+  for (const sl of c.SLOTS) for (const r of Object.keys(sl.roles || {})) if (!c.ROLES[r]) errors.push(`battle: slot ${sl.id} com papel ${r}`);
+  uniq('enemies', c.ENEMIES); uniq('patches', c.PATCHES); uniq('events', c.EVENTS); uniq('areas', c.AREAS);
+  for (const e of c.ENEMIES) for (const t of e.traits) if (!c.TRAITS[t]) errors.push(`enemy ${e.id}: traço ${t}`);
+  for (const a of c.AREAS) {
+    if (!a.scale || !(a.scale.linear >= 0) || !(a.scale.quad >= 0) || !(a.scale.eliteMult >= 1)) errors.push(`area ${a.id}: scale`);
+    if (a.costs.length !== a.columns + 1) errors.push(`area ${a.id}: costs precisa de ${a.columns + 1} valores (colunas + chefe)`);
+    if (!c.enemy[a.boss] || !c.enemy[a.boss].boss) errors.push(`area ${a.id}: chefe ${a.boss}`);
+    for (const [kind, groups] of Object.entries(a.groups)) for (const g of groups) for (const id of g) if (!c.enemy[id]) errors.push(`area ${a.id}: inimigo ${id} (${kind})`);
+    for (const types of Object.values(a.fixed)) for (const t of types) if (!c.NODE_TYPES[t]) errors.push(`area ${a.id}: tipo ${t}`);
+  }
+  for (const p of c.PATCHES) {
+    if (!c.RARITIES[p.rarity]) errors.push(`patch ${p.id}: raridade ${p.rarity}`);
+    for (const e of p.effects || []) if (e.target) checkTarget('patch ' + p.id, e.target);
+  }
+  for (const ev of c.EVENTS) if (!ev.choices.length) errors.push(`event ${ev.id}: sem escolhas`);
   for (const d of c.DISCOVERIES) {
     for (const r of d.rewards) if (r.pet && !c.pet[r.pet]) errors.push(`discovery ${d.id}: pet ${r.pet}`);
     if (d.finder && !c.pet[d.finder]) errors.push(`discovery ${d.id}: finder ${d.finder}`);
   }
+  // Rede da Singularity
+  uniq('tree', c.TREE);
+  const perk = Object.fromEntries(c.TREE.map((k) => [k.id, k]));
+  const adj = Object.fromEntries(c.TREE.map((k) => [k.id, new Set()]));
+  for (const k of c.TREE) {
+    if (!c.KIND[k.kind]) errors.push(`tree ${k.id}: tipo ${k.kind}`);
+    if (k.sector && !c.SECTORS.some((x) => x.id === k.sector)) errors.push(`tree ${k.id}: setor ${k.sector}`);
+    if (k.kind !== 'core' && k.kind !== 'founder' && !(k.cost > 0)) errors.push(`tree ${k.id}: custo`);
+    if (!k.name || !k.icon || !k.description) errors.push(`tree ${k.id}: nome, ícone e descrição`);
+    for (const l of k.links) {
+      if (!perk[l]) { errors.push(`tree ${k.id}: ligação para ${l} inexistente`); continue; }
+      adj[k.id].add(l); adj[l].add(k.id);
+    }
+    for (const e of k.effects || []) if (e.target) checkTarget('tree ' + k.id, e.target);
+    for (const [g] of Object.entries((k.start || {}).gens || {})) if (!c.gen[g]) errors.push(`tree ${k.id}: gerador ${g}`);
+    for (const [id] of Object.entries((k.start || {}).items || {})) if (!c.consumable[id]) errors.push(`tree ${k.id}: consumível ${id}`);
+    for (const r of Object.keys((k.start || {}).patches || {})) if (!c.RARITIES[r]) errors.push(`tree ${k.id}: raridade ${r}`);
+    if (k.kind === 'bridge' && (!k.sectors || k.sectors.length !== 2)) errors.push(`tree ${k.id}: sinapse liga dois setores`);
+  }
+  for (const k of c.TREE) if (k.excl && c.TREE.filter((x) => x.excl === k.excl).length < 2) errors.push(`tree ${k.id}: grupo excludente com um nó só`);
+  // Tudo alcançável a partir do Núcleo.
+  const seen = new Set(['core']);
+  const queue = ['core'];
+  while (queue.length) for (const n of adj[queue.shift()] || []) if (!seen.has(n)) { seen.add(n); queue.push(n); }
+  for (const k of c.TREE) if (!seen.has(k.id)) errors.push(`tree ${k.id}: inalcançável a partir do Núcleo`);
+  for (const id of Object.keys(c.INSIGHT.boss)) if (!c.area[id]) errors.push(`insight: área ${id}`);
   return errors;
 }
 

@@ -1,0 +1,539 @@
+import { DS } from '../../lib/ds.js';
+import { PetSprite, auraOf } from './PetSprite.jsx';
+import { VillainSprite } from './VillainSprite.jsx';
+import { PartIcon } from './PartArt.jsx';
+import { ForestBackdrop } from './ForestArt.jsx';
+import { SwampBackdrop } from './SwampArt.jsx';
+import { PeakBackdrop } from './PeakArt.jsx';
+import { startMusic, stopMusic, sfx } from './audio.js';
+
+const { Modal, Button, Icon, ProgressBar } = DS;
+const STEP_MS = 700; // ritmo da luta (era 420: 40% mais devagar, dá tempo de ler a fila de eventos)
+const STRIKE_MS = 900; // golpes (ataque ou erro): o tempo da corrida, do impacto e do arco de luz terminarem
+
+/**
+ * Desempenho de cada pet na luta (do log): dano causado e recebido, cura, abates (último golpe), habilidades.
+ * → [{ uid, id, name, dealt, taken, healed, kos, abilities, end, maxHp, mvp }]
+ */
+function petPerformance(battle) {
+  const pets = battle.units.filter((u) => u.side === 'pet');
+  const st = Object.fromEntries(pets.map((u) => [u.uid, { dealt: 0, taken: 0, healed: 0, kos: 0, abilities: 0 }]));
+  const lastHit = {};
+  for (const e of battle.log) {
+    if (e.k === 'atk') { if (st[e.a]) st[e.a].dealt += e.v; if (st[e.t]) st[e.t].taken += e.v; if (e.t) lastHit[e.t] = e.a; }
+    if (e.k === 'heal' && st[e.a]) st[e.a].healed += e.v;
+    if (e.k === 'ab' && st[e.a]) st[e.a].abilities += 1;
+    if (e.k === 'down' && e.t && e.t[0] === 'e' && st[lastHit[e.t]]) st[lastHit[e.t]].kos += 1;
+  }
+  const rows = pets.map((u) => ({ uid: u.uid, id: u.id, name: u.name, end: u.end, maxHp: u.maxHp, ...st[u.uid] }));
+  const best = [...rows].sort((a, b) => b.dealt - a.dealt || b.healed - a.healed)[0];
+  return rows.map((r) => ({ ...r, mvp: !!best && r.uid === best.uid && (best.dealt > 0 || best.healed > 0) }));
+}
+
+/** Ícone de uma recompensa (Patch, consumível, peça, sucata). */
+function RewardIcon({ r, snap }) {
+  if (r.type === 'part' && r.part) return <PartIcon id={r.part} size={18} />;
+  if (r.type === 'patch' || r.type === 'swap') { const p = snap.map.patches.find((x) => x.id === r.id); return <Icon name={p ? p.icon : 'sparkles'} size={16} />; }
+  if (r.type === 'item') { const k = snap.inventory.find((x) => x.id === r.id); return <Icon name={k ? k.icon : 'package'} size={16} />; }
+  return <Icon name="package" size={16} />;
+}
+
+/** Resumo depois da luta: recompensas e o desempenho de cada pet (MVP = quem mais causou dano). */
+function BattleSummary({ battle, snap, itemName }) {
+  const perf = petPerformance(battle);
+  const pet = (id) => snap.pets.find((p) => p.id === id && p.owned);
+  const fmt = (n) => Math.round(n).toLocaleString('pt-BR');
+  return (
+    <div className="dc-arena-summary">
+      {battle.win && (
+        <section>
+          <div className="tk-menu__heading">Recompensas</div>
+          <div className="dc-arena-summary__rewards">
+            {battle.rewards.length
+              ? battle.rewards.map((r, i) => <span key={i} className={'dc-reward is-' + r.type}><RewardIcon r={r} snap={snap} />{r.text}</span>)
+              : <span className="dc-row__desc">Nada desta vez.</span>}
+          </div>
+        </section>
+      )}
+      <section>
+        <div className="tk-menu__heading">Desempenho do esquadrão · {battle.rounds} rodada{battle.rounds === 1 ? '' : 's'}</div>
+        <table className="dc-perf">
+          <thead><tr><th>DevPet</th><th>Dano</th><th>Recebido</th><th>Cura</th><th>Abates</th><th>Habilidade</th><th>Vida final</th></tr></thead>
+          <tbody>
+            {perf.map((r) => {
+              const p = pet(r.id);
+              return (
+                <tr key={r.uid} className={r.mvp ? 'is-mvp' : ''}>
+                  <td className="dc-perf__pet">
+                    {p && <PetSprite id={p.id} color={p.color} eye={p.eye} fx={p.fx} stage={p.stage.id} size={26} className="is-static" />}
+                    {r.name}{r.mvp && <span className="dc-chip is-ok">MVP</span>}
+                  </td>
+                  <td>{fmt(r.dealt)}</td>
+                  <td>{fmt(r.taken)}</td>
+                  <td>{r.healed ? fmt(r.healed) : '—'}</td>
+                  <td>{r.kos || '—'}</td>
+                  <td>{r.abilities ? '✓' : '—'}</td>
+                  <td className={r.end <= 0 ? 'is-down' : r.end < r.maxHp * 0.5 ? 'is-low' : ''}>{r.end <= 0 ? 'caiu' : Math.round((r.end / r.maxHp) * 100) + '%'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+      {battle.usedItems.length > 0 && <div className="dc-arena__used is-summary"><Icon name="package" size={12} /> Consumíveis usados: {battle.usedItems.map(itemName).join(', ')}</div>}
+    </div>
+  );
+}
+
+/** Efeito sonoro de um evento do log. */
+function sound(e) {
+  if (e.k === 'atk') return e.a && e.a[0] === 'e' ? 'enemyHit' : e.c ? 'crit' : e.a === 'item' ? 'hit' : null; // pets: som do próprio ataque (no início do golpe)
+  if (e.k === 'revive' && e.f === 'merge') return 'ability';
+  if (e.k === 'enter') return 'ability';
+  return { miss: 'miss', heal: 'heal', revive: 'heal', ab: 'ability', item: 'item', down: 'down', decoy: 'miss', split: 'down', race: 'miss', blackout: 'crit', warm: 'ability' }[e.k] || null;
+}
+
+/** Botão de som (liga/desliga) — o estado fica nas preferências do DevCore. */
+export function SoundToggle({ sound: on, onSound }) {
+  return (
+    <Button size="sm" variant="ghost" icon={on ? 'volume-2' : 'volume-x'} title={on ? 'Som ligado' : 'Som desligado'} aria-pressed={on} onClick={() => onSound(!on)}>
+      {on ? 'Som' : 'Mudo'}
+    </Button>
+  );
+}
+
+/** Texto curto de um evento do log (balão sobre a unidade). */
+function bubble(e, abilityName, itemName) {
+  if (e.k === 'atk') return (e.c ? 'crítico! ' : '') + (e.f === 'flaky' ? 'em dobro! ' : '') + '−' + e.v;
+  if (e.k === 'miss') return e.f === 'flaky' ? 'falhou!' : 'errou!';
+  if (e.k === 'race') return 'de novo!';
+  if (e.k === 'warm') return 'aqueceu!';
+  if (e.k === 'grow') return '+' + e.v + ' de vida';
+  if (e.k === 'drift') return 'ataque ' + e.v + '%';
+  if (e.k === 'heal') return '+' + e.v;
+  if (e.k === 'ab') return abilityName(e.v) + '!';
+  if (e.k === 'item') return itemName(e.v) + '!';
+  if (e.k === 'decoy') return 'clone!';
+  if (e.k === 'enter') return 'entrei!';
+  if (e.k === 'revive') return e.f === 'merge' ? 'merge!' : 'rollback!';
+  if (e.k === 'split') return e.f === 'flood' ? 'chamou reforço!' : 'dividiu!';
+  if (e.k === 'fortify') return 'fortificou';
+  return '';
+}
+
+/**
+ * Tipo de ataque de cada pet (pela espécie) — o efeito no alvo muda: corte, garras, contusão, chicotada, perfuração,
+ * rajada de vento, choque e arremesso. Os de longe (vento, choque, arremesso) lançam um projétil; os outros correm até
+ * o alvo. Inimigos avançam e mordem/batem.
+ */
+const ATTACK = { byte: 'slash', git: 'claw', armo: 'bash', query: 'whip', memo: 'pierce', relay: 'wind', noxi: 'zap', lint: 'throw' };
+const RANGED = new Set(['wind', 'zap', 'throw']);
+const ATTACK_SET = new Set(Object.values(ATTACK));
+/** Onde fica o rosto em cada sprite (viewBox 64): o retrato do painel faz um close ali. Padrão: (32, 30). */
+const FACE = {
+  'hydra-main': [13, 15], 'hydra-feature': [51, 15], titan: [32, 31], ddos: [32, 22], race: [40, 24], monolith: [32, 20],
+  'pet:byte': [32, 29], 'pet:noxi': [28, 27], 'pet:query': [33, 28], 'pet:memo': [32, 25], 'pet:relay': [22, 22], 'pet:armo': [52, 37], 'pet:git': [34, 27], 'pet:lint': [27, 23],
+  flaky: [31, 32], drift: [44, 40], coldstart: [32, 26], leakgiant: [32, 30], bug: [32, 28], typo: [32, 30], dep: [32, 30], forky: [32, 28], zero: [32, 26],
+};
+const PORTRAIT = 42;   // lado do retrato (px)
+const ZOOM = 120;      // tamanho do sprite dentro do retrato (o close)
+const PET_ZOOM = 96;   // pets: um pouco mais aberto (a cabeça inteira)
+
+/** Inimigos que voam (pairam acima do chão, com a sombra embaixo); o resto pisa no chão. */
+const FLYING = new Set(['flaky', 'race', 'ddos', 'titan', 'flicker', 'swarm']);
+/**
+ * Efeitos de impacto suaves: luz em vez de forma — arcos afilados (finos nas pontas) com degradê e brilho desfocado,
+ * um clarão radial no ponto do golpe e partículas que se espalham e somem. Cor e partículas por tipo de ataque.
+ */
+const HIT_STYLE = {
+  slash: { color: '#FFFFFF', glow: '#9FD8FF', parts: 'spark', arcs: [['M6 52 Q22 22 56 6', 7]] },
+  claw: { color: '#FFF2F2', glow: '#FF8A8A', parts: 'spark', arcs: [['M10 46 Q24 26 40 6', 4.5], ['M18 52 Q32 32 48 12', 5], ['M26 58 Q40 38 56 18', 4.5]] },
+  bash: { color: '#FFF4D6', glow: '#FFC861', parts: 'dust', arcs: [] },
+  whip: { color: '#F2E8FF', glow: '#B98CFF', parts: 'spark', arcs: [['M4 46 Q14 6 30 24 Q42 38 58 14', 5.5]] },
+  pierce: { color: '#FFFFFF', glow: '#8FE3FF', parts: 'spark', arcs: [['M0 42 Q30 30 60 20', 3.4]] },
+  wind: { color: '#E8F7FF', glow: '#9FD8FF', parts: 'feather', arcs: [['M6 26 Q26 6 44 20 Q52 30 40 34', 4], ['M4 44 Q28 32 54 42', 3.4]] },
+  zap: { color: '#FFFBE0', glow: '#FFE27A', parts: 'spark', arcs: [] },
+  throw: { color: '#FFF0D6', glow: '#E8A65A', parts: 'dust', arcs: [] },
+  bite: { color: '#FFFFFF', glow: '#FF6B6B', parts: 'spark', arcs: [['M8 22 Q30 4 52 22', 5], ['M8 38 Q30 56 52 38', 5]] },
+};
+
+/** Faixa afilada ao longo de uma curva (quadráticas encadeadas): grossa no meio, fina nas pontas. */
+function taper(d, w) {
+  // Amostra a curva (M x y Q cx cy x y [Q ...]) e monta um contorno de largura variável.
+  const nums = d.match(/-?\d+(\.\d+)?/g).map(Number);
+  const pts = [];
+  let [x0, y0] = nums;
+  for (let k = 2; k + 3 < nums.length + 1; k += 4) {
+    const [cx, cy, x1, y1] = nums.slice(k, k + 4);
+    if (x1 == null) break;
+    for (let s = 0; s <= 12; s++) {
+      const t = s / 12;
+      pts.push([(1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t * t * x1, (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cy + t * t * y1]);
+    }
+    x0 = x1; y0 = y1;
+  }
+  const L = []; const R = [];
+  pts.forEach(([x, y], i) => {
+    const [px, py] = pts[Math.max(0, i - 1)]; const [nx, ny] = pts[Math.min(pts.length - 1, i + 1)];
+    const dx = nx - px; const dy = ny - py; const len = Math.hypot(dx, dy) || 1;
+    const half = (w / 2) * Math.sin((Math.PI * i) / (pts.length - 1)); // 0 nas pontas, w no meio
+    L.push([x - (dy / len) * half, y + (dx / len) * half]); R.push([x + (dy / len) * half, y - (dx / len) * half]);
+  });
+  return 'M' + [...L, ...R.reverse()].map(([x, y]) => x.toFixed(1) + ' ' + y.toFixed(1)).join(' L') + ' Z';
+}
+
+/** Impacto: clarão suave, os arcos de luz (brilho + núcleo) e as partículas. */
+function HitFx({ type, id }) {
+  const S = HIT_STYLE[type] || HIT_STYLE.slash;
+  const g = 'hg' + id;
+  const parts = Array.from({ length: S.parts === 'dust' ? 9 : 8 }, (_, k) => {
+    const ang = (k / 8) * Math.PI * 2 + (id % 5) * 0.4;
+    const dist = 18 + ((id * 7 + k * 13) % 14);
+    return { x: Math.cos(ang) * dist, y: Math.sin(ang) * dist - (S.parts === 'feather' ? 6 : 0), d: (k % 3) * 0.03 };
+  });
+  return (
+    <>
+      <i className="dc-hit__flash" style={{ '--c': S.glow }} />
+      <svg width="76" height="76" viewBox="-8 -8 76 76">
+        <defs>
+          <linearGradient id={g} x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0" stopColor={S.glow} stopOpacity="0" />
+            <stop offset=".5" stopColor={S.color} stopOpacity="1" />
+            <stop offset="1" stopColor={S.glow} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {S.arcs.map(([d, w], k) => (
+          <g key={k} className="dc-hit__arc" style={{ animationDelay: k * 0.04 + 's' }}>
+            <path d={taper(d, w * 2.6)} fill={S.glow} opacity=".45" className="dc-hit__blur" />
+            <path d={taper(d, w)} fill={`url(#${g})`} />
+          </g>
+        ))}
+        {type === 'zap' && <path className="dc-hit__arc" d="M34 0 Q26 16 34 24 Q22 34 30 60" stroke={S.color} strokeWidth="2.2" fill="none" strokeLinecap="round" />}
+      </svg>
+      {parts.map((pt, k) => <i key={k} className={'dc-hit__p is-' + S.parts} style={{ '--x': pt.x + 'px', '--y': pt.y + 'px', '--c': S.glow, animationDelay: `calc(var(--at) + ${pt.d}s)` }} />)}
+    </>
+  );
+}
+const PROJ_ART = {
+  wind: <i className="dc-trail-orb is-wind" />,
+  throw: <span className="dc-proj__arc"><i className="dc-trail-orb is-throw" /></span>,
+};
+
+/**
+ * Efeito visual de ataque (animação + rastro + som) de cada pet — o rastro fica dentro da unidade, atrás do pet:
+ * Byte: caracteres de terminal · Git: nós de commit · Query: gotas de tinta · Memo: páginas · Relay: ondas de vento e
+ * penas · Noxi: faíscas de carga. (Lint arremessa a noz em arco; o Armo vira bola — ArmoBall.)
+ */
+const TRAIL = {
+  slash: (k) => <i key={k} className="dc-atk-p is-glyph" style={{ animationDelay: 0.03 + k * 0.04 + 's', bottom: 8 + (k % 3) * 12 + 'px' }}>{['>', '_', '1', '0', '$', '>'][k]}</i>,
+  claw: (k) => <i key={k} className="dc-atk-p is-commit" style={{ animationDelay: 0.04 + k * 0.05 + 's', bottom: 14 + (k % 2) * 10 + 'px' }} />,
+  whip: (k) => <i key={k} className="dc-atk-p is-ink" style={{ animationDelay: 0.03 + k * 0.045 + 's', bottom: 10 + (k % 3) * 9 + 'px' }} />,
+  pierce: (k) => <i key={k} className="dc-atk-p is-page" style={{ animationDelay: k * 0.05 + 's', bottom: 22 + (k % 3) * 10 + 'px', '--r': (k % 2 ? 1 : -1) * (120 + k * 40) + 'deg' }} />,
+  wind: (k) => k < 3 ? <i key={k} className="dc-atk-p is-gust" style={{ animationDelay: k * 0.08 + 's' }} /> : <i key={k} className="dc-atk-p is-feather" style={{ animationDelay: 0.05 + (k - 3) * 0.07 + 's', bottom: 30 + (k % 2) * 8 + 'px' }} />,
+  zap: (k) => <i key={k} className="dc-atk-p is-spark" style={{ animationDelay: (k % 3) * 0.07 + 's', bottom: 8 + ((k * 13) % 40) + 'px', left: ((k * 17) % 44) - 22 + 'px', '--r': k * 47 + 'deg' }} />,
+};
+function AtkTrail({ type }) {
+  const make = TRAIL[type];
+  return make ? <span className={'dc-atk-trail is-' + type} aria-hidden="true">{Array.from({ length: 6 }, (_, k) => make(k))}</span> : null;
+}
+
+/** O Armo enrolado em bola (o ataque de contusão): carapaça em faixas, placas e as luzes de servidor. */
+function ArmoBall({ c, eye }) {
+  return (
+    <svg className="dc-armo-ball" width="36" height="36" viewBox="0 0 46 46" aria-hidden="true">
+      <g className="dc-armo-ball__spin">
+        <circle cx="23" cy="23" r="21" fill={c} stroke="#1B2230" strokeWidth="1.6" />
+        <path d="M23 2 A21 21 0 0 1 23 44 A13 21 0 0 0 23 2 Z" fill="#000" opacity=".22" />
+        <path d="M23 2 Q11 23 23 44 M23 2 Q35 23 23 44 M6 12 Q23 20 40 12 M3 24 Q23 30 43 24 M6 35 Q23 40 40 35" stroke="#1B2230" strokeWidth="1.2" fill="none" opacity=".55" />
+        <circle cx="15" cy="16" r="1.6" fill={eye || '#7CF5B0'} />
+        <circle cx="30" cy="29" r="1.6" fill={eye || '#7CF5B0'} />
+        <path d="M14 8 Q20 5 26 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" opacity=".4" fill="none" />
+      </g>
+    </svg>
+  );
+}
+
+/** Uma linha da fila de eventos: ícone, lado (cor) e o texto com os nomes destacados. */
+function FeedLine({ e, unit, abilityName, itemName, age }) {
+  const N = ({ uid }) => {
+    if (uid === 'item') return <b className="is-item">Hotfix</b>;
+    if (uid === 'storm') return <b className="is-enemy">O raio</b>;
+    const u = unit(uid);
+    return u ? <b className={'is-' + u.side}>{u.name}</b> : <b>?</b>;
+  };
+  const side = e.a === 'storm' || e.k === 'blackout' ? 'enemy' : e.a && e.a !== 'item' && unit(e.a) ? unit(e.a).side : 'neutral';
+  let icon = 'dot';
+  let body = null;
+  if (e.k === 'atk') {
+    icon = e.a === 'item' ? 'bug-off' : e.a === 'storm' ? 'cloud-lightning' : e.c ? 'zap' : 'sword';
+    body = <><N uid={e.a} /> {e.a === 'item' ? 'atingiu' : 'atacou'} <N uid={e.t} />{e.c && <em className="is-crit"> crítico</em>}{e.f === 'flaky' && <em className="is-crit"> em dobro</em>} <span className="is-dmg">−{e.v}</span></>;
+  } else if (e.k === 'miss') {
+    icon = 'wind';
+    body = e.f === 'flaky' ? <><N uid={e.a} /> falhou o golpe em <N uid={e.t} /> (instável)</> : <><N uid={e.t} /> esquivou do ataque de <N uid={e.a} /></>;
+  } else if (e.k === 'race') { icon = 'fast-forward'; body = <><N uid={e.a} /> agiu de novo (corrida)</>; }
+  else if (e.k === 'blackout') { icon = 'zap-off'; body = <><b className="is-enemy">Apagão!</b> Um raio derrubou tudo: o esquadrão perde a vez</>; }
+  else if (e.k === 'warm') { icon = 'thermometer'; body = <><N uid={e.t} /> aqueceu: ataque bem mais forte</>; }
+  else if (e.k === 'grow') { icon = 'trending-up'; body = <><N uid={e.t} /> vazou mais memória: <span className="is-dmg">+{e.v}</span> de vida</>; }
+  else if (e.k === 'drift') { icon = 'shuffle'; body = <><N uid={e.t} /> derivou: ataque em <span className={e.v > 100 ? 'is-dmg' : 'is-heal'}>{e.v}%</span></>; }
+  else if (e.k === 'heal') {
+    icon = 'heart-plus';
+    body = e.a && e.a !== e.t && unit(e.a) ? <><N uid={e.a} /> curou <N uid={e.t} /> <span className="is-heal">+{e.v}</span></> : <><N uid={e.t} /> recuperou <span className="is-heal">+{e.v}</span></>;
+  } else if (e.k === 'ab') { icon = 'sparkles'; body = <><N uid={e.a} /> ativou <em className="is-ability">{abilityName(e.v)}</em></>; }
+  else if (e.k === 'item') { icon = 'package-open'; body = <>Consumível usado: <em className="is-itemname">{itemName(e.v)}</em></>; }
+  else if (e.k === 'down') { icon = 'skull'; body = <><N uid={e.t} /> caiu</>; }
+  else if (e.k === 'revive') {
+    icon = e.f === 'merge' ? 'git-merge' : 'rotate-ccw';
+    body = e.f === 'merge' ? <><N uid={e.t} /> fez merge e voltou com <span className="is-dmg">{e.v}</span> de vida</> : <>Rollback: <N uid={e.t} /> voltou com <span className="is-heal">{e.v}</span> de vida</>;
+  }
+  else if (e.k === 'split') { icon = e.f === 'flood' ? 'bird' : 'copy'; body = e.f === 'flood' ? <><N uid={e.a} /> chamou mais um corvo: <N uid={e.t} /> chegou</> : <><N uid={e.a} /> se dividiu: <N uid={e.t} /> apareceu</>; }
+  else if (e.k === 'fortify') { icon = 'shield'; body = <><N uid={e.t} /> se fortificou (defesa {e.v})</>; }
+  else if (e.k === 'enter') { icon = 'user-plus'; body = <><N uid={e.t} /> entrou da reserva no lugar de <N uid={e.a} /></>; }
+  else if (e.k === 'decoy') { icon = 'ghost'; body = <><N uid={e.a} /> acertou um clone em vez de <N uid={e.t} /></>; }
+  else return null;
+  return (
+    <li className={'dc-feed__line is-' + e.k + ' by-' + side + (age === 0 ? ' is-new' : '')} style={{ opacity: Math.max(0.12, 1 - age * 0.13) }}>
+      <Icon name={icon} size={12} />
+      <span>{body}</span>
+      <small className="dc-feed__round">R{e.r}</small>
+    </li>
+  );
+}
+
+/**
+ * Fila de eventos integrada à arena (coluna da esquerda, sobre o cenário): cada evento é um card com degradê; o mais
+ * novo entra no topo e os anteriores descem perdendo opacidade. Acompanha a reprodução (só o que já aconteceu na tela).
+ */
+const FEED_MAX = 9;
+function BattleFeed({ log, upto, unit, abilityName, itemName }) {
+  const shown = log.slice(0, upto).map((e, idx) => ({ e, idx })).filter(({ e }) => e.k !== 'end').slice(-FEED_MAX);
+  return (
+    <aside className="dc-arena__feed" aria-label="Eventos da luta">
+      <ul className="dc-feed__list" role="log">
+        {[...shown].reverse().map(({ e, idx }, age) => <FeedLine key={idx} e={e} age={age} unit={unit} abilityName={abilityName} itemName={itemName} />)}
+      </ul>
+    </aside>
+  );
+}
+
+/**
+ * Arena temática da área: reproduz o log da batalha calculada pelo engine (não decide nada).
+ * Pets à esquerda (frente mais perto do centro), inimigos à direita. Dá para pular.
+ */
+export function Arena({ battle, snap, area, onClose, sound: soundOn, onSound }) {
+  const [i, setI] = React.useState(0);
+  const arenaRef = React.useRef(null);
+  const unitRefs = React.useRef({});
+  const [strike, setStrike] = React.useState(null); // o golpe do passo atual: quem, em quem, tipo e as posições na arena
+  const log = battle.log;
+  const done = i >= log.length;
+  // Música: tema da área (ou do chefe) enquanto a luta passa; fanfarra de vitória/derrota no fim.
+  // Chefe: tema próprio da área (o da Floresta se chama só 'boss').
+  React.useEffect(() => { startMusic(battle.kind === 'boss' ? (area.id === 'localhost' ? 'boss' : area.id + '-boss') : area.id); return () => stopMusic(); }, []);
+  React.useEffect(() => {
+    if (done) { stopMusic(); sfx(battle.win ? 'victory' : 'defeat'); return; }
+    if (i > 0) { const s = sound(log[i - 1]); if (s) sfx(s); }
+  }, [i, done]);
+  React.useEffect(() => {
+    if (done) return undefined;
+    // Habilidades ficam mais tempo na tela (faixa com o nome + efeito); quedas e fortificação passam rápido.
+    const k = log[i] && log[i].k;
+    const t = setTimeout(() => setI((x) => x + 1), k === 'atk' || k === 'miss' ? STRIKE_MS : k === 'ab' ? STEP_MS * 2.2 : k === 'blackout' ? STEP_MS * 1.6 : k === 'fortify' || k === 'down' || k === 'drift' || k === 'race' || k === 'grow' ? STEP_MS / 2 : STEP_MS);
+    return () => clearTimeout(t);
+  }, [i, done]);
+
+  // Estado das unidades até o evento i.
+  const hp = {};
+  const alive = {};
+  const visible = {};
+  for (const u of battle.units) { hp[u.uid] = u.hp != null ? u.hp : u.maxHp; alive[u.uid] = true; visible[u.uid] = !u.child && !u.reserve; }  // começa da vida atual; a reserva só aparece quando entra
+  // Estados ativos das habilidades (para os efeitos visuais): escudo, buff de ataque, aceleração, marcados, carregados, clones.
+  const fx = battle.abilityFx || {};
+  const st = { shieldUntil: 0, buffUntil: 0, hasteUntil: 0, marked: new Set(), charged: new Set(), decoys: 0 };
+  for (const e of log.slice(0, i)) {
+    if (e.k === 'ab') {
+      const f = fx[e.v] || {};
+      if (f.type === 'shield') st.shieldUntil = e.r + f.rounds - 1;
+      if (f.type === 'atkBuff') st.buffUntil = Math.max(st.buffUntil, e.r + f.rounds - 1);
+      if (f.type === 'haste') st.hasteUntil = e.r + f.rounds - 1;
+      if (f.type === 'burst') st.charged.add(e.a);
+      if (f.type === 'decoy') st.decoys += 1;
+      if (f.type === 'mark') { // o engine marca o inimigo de mais vida naquele instante
+        const t = battle.units.filter((u) => u.side === 'enemy' && alive[u.uid] && visible[u.uid]).sort((a, b) => hp[b.uid] - hp[a.uid])[0];
+        if (t) st.marked.add(t.uid);
+      }
+    }
+    if (e.k === 'item' && e.v === 'coffee') st.buffUntil = Math.max(st.buffUntil, e.r + 2);
+    if (e.k === 'atk' && st.charged.has(e.a)) st.charged.delete(e.a);
+    if (e.k === 'decoy') st.decoys = Math.max(0, st.decoys - 1);
+    if (e.k === 'atk' && e.t) hp[e.t] = Math.max(0, hp[e.t] - e.v);
+    if (e.k === 'heal') hp[e.t] = Math.min(battle.units.find((u) => u.uid === e.t).maxHp, hp[e.t] + e.v);
+    if (e.k === 'down') alive[e.t] = false;
+    if (e.k === 'revive') { alive[e.t] = true; hp[e.t] = e.v; }
+    if (e.k === 'split') visible[e.t] = true;
+    if (e.k === 'enter') { visible[e.t] = true; visible[e.a] = false; } // Hot Standby: a reserva toma o lugar de quem caiu
+    if (e.k === 'grow') hp[e.t] += e.v;
+  }
+  const cur = !done ? log[i] : null;
+  const pet = (id) => snap.pets.find((p) => p.id === id);
+  const abilityName = (id) => (snap.pets.find((p) => p.owned && p.ability.id === id) || { ability: { name: id } }).ability.name; // pets não encontrados não têm `ability`
+  const itemName = (id) => (snap.inventory.find((k) => k.id === id) || { name: id }).name;
+  const round = cur ? cur.r : log[log.length - 1].r;
+  const on = { shield: st.shieldUntil >= round, buff: st.buffUntil >= round, haste: st.hasteUntil >= round };
+  // Efeitos do evento atual: faixa da habilidade, golpe carregado (Compile Burst), onda de limpeza.
+  const curFx = cur && cur.k === 'ab' ? (fx[cur.v] || {}) : null;
+  const caster = curFx ? battle.units.find((u) => u.uid === cur.a) : null;
+  const casterPet = caster ? pet(caster.id) : null;
+  const burstHit = cur && cur.k === 'atk' && st.charged.has(cur.a);
+  const max = battle.maxRounds || 30;
+  const timeout = !battle.win && (battle.reason === 'timeout' || (log[log.length - 1].why === 'timeout'));
+  // Inimigos ainda de pé no fim (para explicar o tempo esgotado).
+  const standing = battle.units.filter((u) => u.side === 'enemy' && u.end > 0);
+
+  // Golpe do passo atual (ataque ou golpe que errou): mede atacante e alvo na arena para o avanço, o projétil e o impacto.
+  React.useLayoutEffect(() => {
+    const e = !done ? log[i] : null;
+    if (!e || (e.k !== 'atk' && e.k !== 'miss') || !e.a || e.a === 'item' || e.a === 'storm') { setStrike(null); return; }
+    const a = unitRefs.current[e.a];
+    const t = unitRefs.current[e.t];
+    const box = arenaRef.current;
+    if (!a || !t || !box) { setStrike(null); return; }
+    const B = box.getBoundingClientRect();
+    const ra = a.getBoundingClientRect();
+    const rt = t.getBoundingClientRect();
+    const ax = ra.left + ra.width / 2 - B.left; const ay = ra.top + ra.height * 0.42 - B.top;
+    const tx = rt.left + rt.width / 2 - B.left; const ty = rt.top + rt.height * 0.42 - B.top;
+    const who = battle.units.find((x) => x.uid === e.a);
+    const type = who && who.side === 'pet' ? ATTACK[who.id] || 'slash' : 'bite';
+    const ranged = RANGED.has(type);
+    const dir = tx > ax ? 1 : -1;
+    setStrike({ i, a: e.a, t: e.t, type, ranged, miss: e.k === 'miss', ax, ay, tx, ty,
+      dx: ranged ? dir * 14 : tx - ax - dir * 50, dy: ranged ? -6 : type === 'bash' ? 0 : (ty - ay) * 0.5, // a bola rola pelo chão
+      len: Math.hypot(tx - ax, ty - ay), ang: Math.atan2(ty - ay, tx - ax) });
+  }, [i, done]);
+  const sk = strike && strike.i === i ? strike : null;
+  // Efeito visual de ataque: cada pet tem o seu som, tocado quando o golpe começa (o Armo rolando é o 'roll').
+  React.useEffect(() => { if (sk && ATTACK_SET.has(sk.type)) sfx(sk.type === 'bash' ? 'roll' : 'atk-' + sk.type); }, [sk && sk.i]);
+
+  // Funções de render (não componentes): um componente declarado aqui dentro seria um tipo novo a cada render — o React
+  // remontaria as unidades e reiniciaria as animações no meio do golpe (o relógio da tela re-renderiza a cada 500 ms).
+  const unitView = (u) => {
+    if (!visible[u.uid]) return null;
+    const p = u.side === 'pet' ? pet(u.id) : null;
+    const acting = cur && cur.a === u.uid;
+    const hit = cur && cur.t === u.uid && (cur.k === 'atk' || cur.k === 'miss');
+    const lunge = sk && sk.a === u.uid; // corre até o alvo (ou dá um pulo, se ataca de longe)
+    // O balão vai em quem recebe (dano, cura, revive, fortificação, clone novo) ou, senão, em quem age.
+    const popAt = cur && (['atk', 'miss', 'heal', 'revive', 'fortify', 'split', 'drift', 'warm', 'grow', 'enter'].includes(cur.k) ? cur.t : cur.a);
+    const say = popAt === u.uid ? bubble(cur, abilityName, itemName) : '';
+    return (
+      <div className={'dc-arena__unit is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (acting ? ' is-acting' : '') + (hit ? ' is-hit' : '') + (u.front ? ' is-front' : '') + (u.boss ? ' is-boss' : '')
+        + (st.charged.has(u.uid) ? ' is-charged' : '') + (st.marked.has(u.uid) && alive[u.uid] ? ' is-marked' : '') + (burstHit && cur.t === u.uid ? ' is-burst-hit' : '')
+        + (acting && curFx ? ' is-casting' : '') + (lunge ? ' is-lunge is-' + sk.type + (sk.ranged ? ' is-ranged' : '') : '') + (hit && sk ? (sk.ranged ? ' is-hit-ranged' : ' is-hit-late') : '') + (u.side === 'enemy' && FLYING.has(u.sprite) ? ' is-flying' : '') + (u.sprite === 'hydra-main' ? ' is-hydra-left' : '')}
+        ref={(el) => { if (el) unitRefs.current[u.uid] = el; }}
+        style={{ ...(p ? { '--pet': p.color } : null), ...(lunge ? { '--dx': sk.dx + 'px', '--dy': sk.dy + 'px' } : null) }}>
+        {st.marked.has(u.uid) && alive[u.uid] && <span className="dc-fx-reticle" aria-hidden="true" />}
+        {cur && cur.k === 'heal' && cur.t === u.uid && <span className="dc-fx-sparkles" aria-hidden="true"><i /><i /><i /><i /><i /></span>}
+        {burstHit && cur.t === u.uid && <span className="dc-fx-burst" aria-hidden="true" />}
+        {say && <span className={'dc-arena__pop' + (cur.k === 'heal' || cur.k === 'revive' ? ' is-heal' : '') + (cur.c ? ' is-crit' : '')}>{say}</span>}
+        <i className="dc-arena__shadow" aria-hidden="true" />
+        {lunge && u.side === 'pet' && sk.type !== 'bash' && <AtkTrail type={sk.type} />}
+        {lunge && sk.type === 'bash' && u.side === 'pet' && <>
+          {/* rastro: poeira saindo do chão e riscos de vento atrás da bola (na ida e na volta) */}
+          <span className="dc-armo-trail" aria-hidden="true">
+            {[0, 1, 2, 3, 4].map((k) => <i key={'g' + k} className="dc-dust is-go" style={{ animationDelay: 0.04 + k * 0.045 + 's', bottom: (k % 2) * 4 + 'px' }} />)}
+            {[0, 1, 2, 3].map((k) => <i key={'b' + k} className="dc-dust is-back" style={{ animationDelay: 0.36 + k * 0.05 + 's', bottom: (k % 2) * 4 + 'px' }} />)}
+            {[0, 1, 2].map((k) => <i key={'w' + k} className="dc-wind is-go" style={{ bottom: 10 + k * 8 + 'px', animationDelay: k * 0.03 + 's' }} />)}
+            {[0, 1, 2].map((k) => <i key={'v' + k} className="dc-wind is-back" style={{ bottom: 10 + k * 8 + 'px', animationDelay: k * 0.03 + 's' }} />)}
+          </span>
+          <ArmoBall c={p ? p.color : '#8C9BB0'} eye={p ? p.eye : undefined} />
+        </>}
+        {u.side === 'pet'
+          ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} fx={p ? p.fx : undefined} stage={p ? p.stage.id : 0} aura={p ? auraOf(p) : undefined} size={56} className="is-static" />
+          : <VillainSprite id={u.sprite} color={u.color} state={alive[u.uid] ? 'active' : 'defeated'} size={u.boss ? 92 : 56} />}
+      </div>
+    );
+  };
+
+  const pets = battle.units.filter((u) => u.side === 'pet');
+  const enemies = battle.units.filter((u) => u.side === 'enemy');
+  /** Painel do topo: retrato, nome e vida de cada um (pets à esquerda, inimigos à direita). */
+  const cardView = (u) => {
+    if (!visible[u.uid]) return null;
+    const p = u.side === 'pet' ? pet(u.id) : null;
+    const life = hp[u.uid] / u.maxHp;
+    const on = cur && (cur.a === u.uid ? ' is-acting' : cur.t === u.uid && (cur.k === 'atk' || cur.k === 'miss') ? ' is-hit' : '');
+    return (
+      <div className={'dc-hud__card is-' + u.side + (alive[u.uid] ? '' : ' is-down') + (on || '') + (life < 0.3 ? ' is-low' : '')}>
+        {/* close dramático: o rosto ampliado, inclinado, sobre a luz da cor do personagem e linhas de velocidade */}
+        <span className="dc-hud__face" style={{ '--c': (p ? p.color : u.color) || '#888' }}>
+          <span className="dc-hud__zoom" style={(() => { const [fx, fy] = FACE[u.side === 'pet' ? 'pet:' + u.id : u.sprite] || [32, 30]; const k = (u.side === 'pet' ? PET_ZOOM : ZOOM) / 64; return { left: PORTRAIT / 2 - fx * k, top: PORTRAIT / 2 - fy * k }; })()}>
+            {u.side === 'pet'
+              ? <PetSprite id={u.id} color={p ? p.color : undefined} eye={p ? p.eye : undefined} fx={p ? p.fx : undefined} stage={p ? p.stage.id : 0} size={PET_ZOOM} className="is-static" />
+              : <VillainSprite id={u.sprite} color={u.color} state="active" size={ZOOM} />}
+          </span>
+          {!alive[u.uid] && <Icon name="skull" size={12} className="dc-hud__dead" />}
+        </span>
+        <span className="dc-hud__info">
+          <span className="dc-hud__name">{u.name}</span>
+          <span className="dc-hud__bar"><i style={{ width: Math.max(0, life * 100) + '%' }} /></span>
+          <span className="dc-hud__hp">{Math.max(0, Math.round(hp[u.uid]))}/{u.maxHp}</span>
+        </span>
+      </div>
+    );
+  };
+  return (
+    <Modal open title={'ARENA · ' + area.name.toUpperCase()} icon="swords" onClose={onClose} width={900}
+      description={done
+        ? (battle.win ? 'Vitória!' : timeout ? `Tempo esgotado (${max} rodadas). Nada foi perdido além da entrada.` : 'Derrota — o esquadrão caiu. Nada foi perdido além da entrada.')
+        : `Rodada ${round} de ${max}`}
+      footer={<>
+        {onSound && <SoundToggle sound={soundOn} onSound={onSound} />}
+        {done
+          ? <Button variant="primary" onClick={onClose}>Continuar</Button>
+          : <Button variant="ghost" icon="fast-forward" onClick={() => setI(log.length)}>Pular</Button>}
+      </>}>
+      <div ref={arenaRef} className={'dc-arena dc-arena--' + area.arena + (burstHit || (cur && cur.k === 'blackout') ? ' is-shake' : '') + (done ? ' is-done' : '')} aria-label={'Arena ' + area.name}>
+        {/* golpe: projétil/raio (de longe) e o efeito no alvo, no tipo de ataque de quem bate */}
+        {sk && sk.type === 'zap' && <span key={'beam' + i} className="dc-beam" aria-hidden="true" style={{ left: sk.ax, top: sk.ay, width: sk.len, transform: `rotate(${sk.ang}rad)` }}>
+          <svg width="100%" height="22" viewBox="0 0 100 22" preserveAspectRatio="none"><path d="M0 11 Q8 5 16 12 T32 10 T48 13 T64 9 T80 12 T100 11" stroke="#FFF6C8" strokeWidth="1.6" fill="none" strokeLinecap="round" /></svg>
+        </span>}
+        {sk && PROJ_ART[sk.type] && <span key={'proj' + i} className={'dc-proj is-' + sk.type} aria-hidden="true" style={{ left: sk.ax, top: sk.ay, '--px': sk.tx - sk.ax + 'px', '--py': sk.ty - sk.ay + 'px' }}>{PROJ_ART[sk.type]}</span>}
+        {sk && <span key={'hit' + i} className={'dc-hit is-' + sk.type + (sk.miss ? ' is-miss' : '') + (sk.ranged ? ' is-ranged' : '')} aria-hidden="true" style={{ left: sk.tx, top: sk.ty }}>
+          <HitFx type={sk.type} id={i} />
+        </span>}
+        {cur && cur.k === 'blackout' && <i key={'flash' + i} className="dc-fx-blackout" aria-hidden="true" />}
+        <div className="dc-hud" aria-label="Vida das unidades">
+          <div className="dc-hud__side is-pets">{[...pets].sort((a, b) => (b.rank != null ? b.rank : 0) - (a.rank != null ? a.rank : 0)).map((u) => <React.Fragment key={u.uid}>{cardView(u)}</React.Fragment>)}</div>
+          <div className="dc-hud__side is-enemies">{enemies.map((u) => <React.Fragment key={u.uid}>{cardView(u)}</React.Fragment>)}</div>
+        </div>
+        {area.arena === 'localhost' && <ForestBackdrop />}
+        {area.arena === 'staging' && <SwampBackdrop />}
+        {area.arena === 'production' && <PeakBackdrop />}
+        <BattleFeed log={log} upto={done ? log.length : i + 1} unit={(uid) => battle.units.find((u) => u.uid === uid)} abilityName={abilityName} itemName={itemName} />
+        <div className={'dc-arena__side is-pets' + (on.shield ? ' is-shielded' : '') + (on.buff ? ' is-buffed' : '') + (on.haste ? ' is-hasted' : '')}>
+          {on.shield && <span className="dc-fx-shield" aria-hidden="true" />}
+          {curFx && curFx.type === 'cleanse' && <span className="dc-fx-wave" aria-hidden="true" />}
+          {Array.from({ length: st.decoys }, (_, k) => (
+            <span key={'decoy' + k} className="dc-fx-decoy" aria-hidden="true"><PetSprite id="git" color={(pet('git') || {}).color || '#F05133'} eye={(pet('git') || {}).eye} size={48} className="is-static" /></span>
+          ))}
+          {[...pets].sort((a, b) => (b.rank != null ? b.rank : -b.front) - (a.rank != null ? a.rank : -a.front)).map((u) => <React.Fragment key={u.uid}>{unitView(u)}</React.Fragment>)}
+        </div>
+        {curFx && caster && (
+          <div key={'banner' + i} className={'dc-fx-banner is-' + curFx.type} style={{ '--pet': casterPet ? casterPet.color : '#fff' }} aria-live="polite">
+            <small>{caster.name}</small>{abilityName(cur.v)}
+          </div>
+        )}
+        <div className="dc-arena__vs">VS</div>
+        <div className="dc-arena__side is-enemies">{enemies.map((u) => <React.Fragment key={u.uid}>{unitView(u)}</React.Fragment>)}</div>
+        {done && (
+          <div className={'dc-arena__result' + (battle.win ? ' is-win' : ' is-loss')}>
+            <b>{battle.win ? 'Vitória' : timeout ? 'Tempo esgotado' : 'Derrota'}</b>
+            {timeout && battle.timeoutLore && <span className="dc-arena__lore">{battle.timeoutLore}</span>}
+            {timeout && <span className="dc-arena__hint">{standing.map((u) => `${u.name}: ${u.end} de vida`).join(' · ')} · dica: mais dano — habilidades no início, Coffee e Hotfix, mais atacantes.</span>}
+          </div>
+        )}
+      </div>
+      {done && <BattleSummary battle={battle} snap={snap} itemName={itemName} />}
+    </Modal>
+  );
+}

@@ -12,7 +12,7 @@ const signed = (v) => (v >= 0 ? '+' : '−') + formatNum(Math.abs(v), { rate: tr
 function SourceIcon({ item, snap }) {
   if (item.kind === 'ability') {
     const p = snap.pets.find((x) => x.id === item.pet);
-    return p ? <PetSprite id={p.id} color={p.color} eye={p.eye} stage={p.stage.id} aura={auraOf(p)} size={22} className="is-static" /> : <Icon name="zap" size={14} />;
+    return p ? <PetSprite id={p.id} color={p.color} eye={p.eye} fx={p.fx} stage={p.stage.id} aura={auraOf(p)} size={22} className="is-static" /> : <Icon name="zap" size={14} />;
   }
   if (item.kind === 'boost') return <Icon name={item.icon} size={14} />;
   return <VillainSprite id={item.villain.id} color={item.villain.color} size={22} className="is-static" />;

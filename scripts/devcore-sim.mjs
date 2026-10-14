@@ -34,3 +34,24 @@ for (const strategy of ['passive', 'prepared']) {
   const g = m.state.run.generators['terminal-worker'];
   console.log(`  Tier 3: ${fmt(m.t3)} · Terminal: ${g.owned} un. · Mk ${Object.entries(m.state.run.blueprints).map(([k, v]) => k.split('-')[0] + ' ' + v.mk).join(', ') || '—'} · sucata ${m.state.run.scrap}`);
 }
+
+// Mapa (Área 1 — Localhost): o robô joga o mapa guardando Compute para o próximo ponto.
+{
+  const m = simulate({ ...PROFILES.casual, days: 7 });
+  const t0 = Date.UTC(2026, 0, 5, 9);
+  const at = (t) => (t == null ? '—' : fmt(t - t0));
+  console.log(`\n== mapa (casual, 7 dias)`);
+  console.log(`  Abre: ${at(m.map.opened)} · Área 1 concluída: ${at(m.map.cleared)} · ${m.map.wins} vitórias, ${m.map.losses} derrotas`);
+  console.log(`  Pontos visitados ao fim de cada dia: ${m.map.byDay.join(' · ')}`);
+  console.log(`  Patches: ${m.state.run.patches.join(', ') || '—'}`);
+}
+
+// Singularity: o robô recomeça assim que vence o Pico Production e gasta o Insight na rede (o mais barato primeiro).
+{
+  const m = simulate({ ...PROFILES.casual, days: 45, singularity: true });
+  console.log('\n== singularity (casual, 45 dias)');
+  for (const [i, r] of m.runs.entries()) {
+    const b = r.breakdown;
+    console.log(`  run ${i + 1}: ${r.days.toFixed(1)} dias (áreas ${Object.values(r.areaDays).join(' · ')}) · +${r.insight} Insight (chefes ${b.bosses}, elites ${b.elites}, rapidez ${b.speed}, profundidade ${b.depth}, ×${b.mult.toFixed(2)}) · ${r.total} no total`);
+  }
+}

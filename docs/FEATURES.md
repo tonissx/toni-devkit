@@ -607,7 +607,7 @@ tela do DevCore aparece, no máximo, um ponto discreto no item da sidebar quando
   produção de uma categoria por um tempo (piso ×0,8) — **nunca tira progresso** e acaba sozinho. Com o app fechado
   suas defesas agem por você e o resumo de retorno conta o que aconteceu. **Modo tranquilo** desliga tudo
 - **Consumíveis**: Coffee (×1,5 por 10 min), Hotfix (derrota o vilão ativo), Rollback (o próximo incidente já nasce
-  contido) e Cache Warmer (zera uma recarga). Vêm de incidentes contidos, de achados dos pets e de **fabricação**
+  contido) e Cache Warmer (zera a recarga de uma habilidade aleatória). Vêm de incidentes contidos, de achados dos pets e de **fabricação**
   com Compute (custo = minutos da produção atual); estoque com teto, nunca à venda. Aba **Ops**: previsão, incidente
   ativo, inventário, **bestiário** dos vilões e histórico
 - **Marcos por quantidade**: ao chegar em 25/50/100/150/200/250/300 unidades, a produção daquele gerador sobe
@@ -618,6 +618,23 @@ tela do DevCore aparece, no máximo, um ponto discreto no item da sidebar quando
   quanto isso rende ("Também impulsiona: Script Runner +23% · rende 1,2 K/s (4% do total)") e quem a impulsiona
   (efeito `{ type:'per', gen, per, target, value }` em `content/upgrades.js`). Na aba Upgrades os combos têm uma
   seção própria com todos os já revelados (ativos, disponíveis e o requisito dos próximos)
+- **Mapa e batalhas** (desenho em [`docs/devcore-mapa-singularity.md`](devcore-mapa-singularity.md)): abre no Tier 2.
+  Três áreas em sequência — **Floresta Localhost**, **Pântano Staging** e **Pico Production** —, cada uma com mapa de
+  3 trilhas × 9 colunas gerado pela semente da run (batalhas, elites com atalho, deploy expresso, eventos, loja e
+  descanso) e um chefe (*Legacy Monolith*, *The Merge Conflict*, *Production Outage*). Cada ponto custa Compute a
+  preço fixo: a escolha entre aumentar a produção e avançar. **Batalhas** são auto-battler com preparação: esquadrão
+  de 3 DevPets arrastados para Vanguarda/Centro/Retaguarda, gatilhos das habilidades e consumíveis; inimigos têm
+  traços com counters de pets; a previsão vira um presságio; a arena temática reproduz a luta com ataques animados,
+  música própria por área e chefe. A vida dos pets persiste entre lutas. Recompensas: consumíveis, peças e **Patches**
+- **Singularity e a Rede** (`content/singularity.js`, `engine/singularity.js`, `SingularityPanel.jsx`): vencer o Pico
+  libera a Singularity. O Insight dela (chefes, elites, rapidez e profundidade) entra no saldo, o jogador monta a
+  **Rede da Singularity** — constelação de 79 nós em 6 setores (Infra, Ops, Combate, DevPets, Mapa, Arquivo) com
+  adjacência, paradigmas excludentes, sinapses entre setores, maestrias e infinitos — e confirma: a run recomeça já
+  com a rede (desfazer é grátis no planejamento; reorganizar devolve 80% do que já estava). Comprar tem som em combo
+  e efeitos. `npm run devcore:sim` mede o ritmo (1ª Singularity em ~2 semanas no uso casual; rede completa em ~3 meses)
+- **Pacote Fundador**: saves da versão 1 (antes do mapa) zeram só o farm e ganham o visual exclusivo *Fundador*
+  (aura dourada de fumaça e raios em volta dos DevPets) e a *Estrela do Fundador* na rede (+10% de produção, +1
+  Insight por Singularity)
 - **Ilustrações dos upgrades** (`src/tools/devcore/UpgradeArt.jsx`): todo upgrade tem um desenho SVG próprio; os
   combos são montados com os glifos dos dois geradores (fonte → alvo), então um combo novo já nasce ilustrado.
   Um teste garante que nenhum upgrade fica sem ilustração
@@ -658,32 +675,16 @@ Features (ferramentas, palette, Notes) ── emit ──► Event Bus (electron
   jogador em perfis de uso e imprime a linha do tempo; um teste garante as faixas de ritmo (T2 em 15–60 min de
   sessão ativa, T3 em 1–3 dias de uso casual, 1º Mk II em ~2–4 dias e Mk III em até 2 semanas)
 - **Estado** em `%APPDATA%/Toni Devkit/devcore.json` (escrita atômica, versão + migração), separado em `run`
-  (o que um futuro *Rebuild* zeraria), `meta` (prestige), `usage`, `discoveries` e `pending`
+  (o que a Singularity zera, incluindo o mapa), `meta` (Insight, a rede e o Fundador — nunca zera), `usage`,
+  `discoveries`, `cosmetics`, `bestiary`, `arena`, `quests` e `pending`
 - **Testes**: `npm run test:devcore` (economia, modificadores, integral por trechos, teto offline, descobertas
-  anti-spam, estado, bus, serviço com relógio falso, ritmo)
+  anti-spam, estado, bus, serviço com relógio falso, ritmo, mapa, batalhas, Singularity, rede e migração Fundador)
 
-### Próximos passos: Batalhas (roadmap)
+### Mapa, batalhas e Singularity
 
-Ideia registrada para depois; **ainda não implementada**. Pré-requisito: usar o DevCore alguns dias e ajustar o ritmo
-atual, porque a batalha depende desse balanceamento.
-
-- **Conceito**: inimigos são problemas de infraestrutura (Bugs, Memory Leaks, Race Conditions, Flaky Tests), em ondas
-  cada vez mais fortes, com **chefes** a cada N ondas (*Legacy Monolith*, *Production Outage*, *The Merge Conflict*).
-  Os DevPets formam o esquadrão e o papel vem da especialização: Byte ataca, Query defende/resiste, Noxi dá
-  velocidade e combos, Memo cura e dá suporte
-- **Princípios** (os mesmos do DevCore): combate automático/idle, sem reflexo nem atenção constante; ondas comuns
-  avançam sozinhas (inclusive offline); chefes são tentativas opcionais disparadas pelo jogador; derrota nunca tira
-  progresso; a economia de Compute não depende de batalhas; o uso do DevKit só desbloqueia conteúdo, nunca vira
-  força de combate
-- **Arquitetura prevista (reuso)**:
-  - resultado por fórmula determinística (DPS do esquadrão × vida do inimigo), igual ao cálculo offline por Δt; a
-    cena só anima um resultado já calculado (reaproveitando o `director.js`)
-  - atributos dos pets (ataque, defesa, vida) derivados do sistema de efeitos/modificadores: nível, estágio,
-    especialização; sinergias viram combinações de esquadrão
-  - `content/enemies.js` e `content/bosses.js` como dados; ritmo validado pelo `devcore:sim`
-  - nova seção de estado `battle` (decidir se fica fora de `run` ou é resetada por um futuro *Rebuild*)
-- **Recompensas**: um recurso novo (ex.: *Patches*) pela arquitetura de múltiplos recursos, gasto em melhorias de
-  combate e visuais exclusivos; pode virar a porta de entrada para o *Rebuild* (prestige)
+Feitos: o desenho, as decisões e os números estão em
+[`docs/devcore-mapa-singularity.md`](devcore-mapa-singularity.md). Próximos passos possíveis: áreas extras depois de
+algumas Singularities e mais conteúdo para a rede (ver "Em aberto" no documento).
 
 ## Atualizações
 

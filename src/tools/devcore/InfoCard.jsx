@@ -9,7 +9,8 @@ const GAP = 6;
 const EDGE = 8;
 let seq = 0;
 
-export function InfoCard({ content, children, className = '', label, delay = 250 }) {
+/** focusable=false quando o gatilho já é um botão: o foco fica nele (o evento sobe até aqui e abre o cartão). */
+export function InfoCard({ content, children, className = '', label, delay = 250, focusable = true }) {
   const [open, setOpen] = React.useState(false);
   const [pos, setPos] = React.useState(null);
   const [id] = React.useState(() => 'dc-info-' + ++seq);
@@ -41,7 +42,7 @@ export function InfoCard({ content, children, className = '', label, delay = 250
   }, [open]);
 
   return (
-    <span ref={anchor} className={'dc-info-anchor ' + className} tabIndex={0} aria-label={label} aria-describedby={open ? id : undefined}
+    <span ref={anchor} className={'dc-info-anchor ' + className} tabIndex={focusable ? 0 : undefined} aria-label={label} aria-describedby={open ? id : undefined}
       onMouseEnter={() => show(delay)} onMouseLeave={hide} onFocus={() => show(0)} onBlur={hide}
       onKeyDown={(e) => { if (e.key === 'Escape') hide(); }}>
       {children}

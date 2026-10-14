@@ -297,14 +297,16 @@ const SPECIES = { byte: Byte, noxi: Noxi, query: Query, memo: Memo, relay: Relay
 /**
  * Sprite de um DevPet.
  * color: corpo · eye: olhos (padrão do tema se ausente) · stage: 0/1/2 · aura: cor da aura (estágio Mestre)
- * locked = silhueta (ainda não descoberto).
+ * fx: efeito do visual ('ssj': aura dourada com raios, do visual Fundador) · locked = silhueta (ainda não descoberto).
  */
-export function PetSprite({ id, color, eye, stage = 0, aura, size = 56, locked = false, className = '' }) {
+export function PetSprite({ id, color, eye, stage = 0, aura, size = 56, locked = false, fx = null, className = '' }) {
   const Body = SPECIES[id] || Byte;
   const gid = 'aura-' + React.useId().replace(/:/g, '');
   const showAura = !locked && stage >= 2;
+  const ssj = !locked && fx === 'ssj';
   return (
-    <svg className={'pet-svg' + (locked ? ' is-locked' : '') + ' ' + className} viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
+    <svg className={'pet-svg' + (locked ? ' is-locked' : '') + (ssj ? ' is-ssj' : '') + ' ' + className} viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" overflow="visible">
+      {ssj && <SkinAura gid={gid} Body={Body} stage={stage} />}
       {showAura && (
         <>
           <defs>
@@ -319,7 +321,116 @@ export function PetSprite({ id, color, eye, stage = 0, aura, size = 56, locked =
       )}
       <ellipse className="pet-shadow" cx="32" cy="58" rx="16" ry="3" fill="#000" opacity=".25" />
       <Body c={locked ? 'var(--tk-surface-4)' : color} eye={locked ? 'var(--tk-surface-3)' : eye || 'var(--dc-eye, #CFFBE3)'} stage={locked ? 0 : stage} />
+      {ssj && <TeslaArcs />}
     </svg>
+  );
+}
+
+const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Visual Fundador: a aura sai da pele como fumaça dourada. A silhueta do pet (o mesmo desenho, pintado de dourado por
+ * filtro) passa por uma turbulência que desfaz as bordas em fiapos; uma camada fica no corpo, pulsando, e outras se
+ * desprendem, sobem e se esticam esmaecendo — cada uma com um padrão de fumaça e um ritmo sorteados por pet.
+ */
+function smokeFilter(id, seed, { dilate, freq, scale, blur, color }) {
+  return (
+    <filter key={id} id={id} x="-60%" y="-80%" width="220%" height="260%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius={dilate} result="d" />
+      <feTurbulence type="fractalNoise" baseFrequency={freq} numOctaves="2" seed={seed} result="n" />
+      <feDisplacementMap in="d" in2="n" scale={scale} xChannelSelector="R" yChannelSelector="G" result="w" />
+      <feFlood floodColor={color} />
+      <feComposite in2="w" operator="in" />
+      <feGaussianBlur stdDeviation={blur} />
+    </filter>
+  );
+}
+
+function SkinAura({ gid, Body, stage }) {
+  const [rnd] = React.useState(() => Array.from({ length: 9 }, () => Math.random()));
+  const sil = <Body c="#000" eye="#000" stage={stage} />;
+  const moving = !reducedMotion();
+  const seed = (i) => 1 + Math.floor(rnd[i] * 900);
+  return (
+    <>
+      <defs>
+        {smokeFilter(gid + '-sm0', seed(0), { dilate: 1.8, freq: '0.07 0.11', scale: 7, blur: 2.2, color: '#FFB800' })}
+        {[1, 2, 3].map((i) => smokeFilter(gid + '-sm' + i, seed(i), { dilate: 1.4, freq: '0.08 0.15', scale: 11, blur: 2.6, color: '#FFC21A' }))}
+      </defs>
+      <g className="pet-skin-halo" filter={`url(#${gid}-sm0)`}>{sil}</g>
+      {moving && [1, 2, 3].map((i) => (
+        <g key={i} className="pet-skin-rise" filter={`url(#${gid}-sm${i})`}
+          style={{ '--d': (1.5 + rnd[i + 3] * 0.9).toFixed(2) + 's', '--dl': (-rnd[i + 6] * 2.2).toFixed(2) + 's', '--x': ((rnd[i] - 0.5) * 4).toFixed(1) + 'px' }}>{sil}</g>
+      ))}
+    </>
+  );
+}
+
+/** Meia-largura da aura (chama) na altura y: estreita no topo (y≈2), larga na base (y≈60). */
+const auraHalf = (y) => 22 * Math.pow(Math.max(0, Math.min(1, (y - 2) / 58)), 0.62);
+
+/**
+ * Um raio vertical que acompanha a aura: começa perto do topo da chama e desce pela borda (esquerda ou direita) em
+ * zigue-zague, às vezes com uma bifurcação para fora — como os raios do super saiyajin 2.
+ */
+function teslaArc(side = Math.random() < 0.5 ? -1 : 1) {
+  const rnd = Math.random;
+  const top = 6 + rnd() * 16;                       // onde começa (perto da ponta)
+  const bottom = Math.min(60, top + 20 + rnd() * 26); // até onde desce
+  const hug = 1.15 + rnd() * 0.3;                   // na borda da aura, por fora do corpo
+  const pts = [];
+  for (let y = top; y <= bottom; y += 3 + rnd() * 2.5) {
+    const jx = (rnd() - 0.5) * 4.6;
+    pts.push([32 + side * (auraHalf(y) * hug + 3) + jx, y + (rnd() - 0.5) * 1.4]);
+  }
+  const path = (p) => 'M' + p.map(([px, py]) => px.toFixed(1) + ' ' + py.toFixed(1)).join(' L');
+  const out = [path(pts)];
+  if (pts.length > 3 && rnd() < 0.6) {              // bifurcação curta para fora, descendo
+    const k = 1 + Math.floor(rnd() * (pts.length - 2));
+    let [bx, by] = pts[k];
+    const bp = [[bx, by]];
+    for (let i = 0; i < 2 + Math.floor(rnd() * 2); i++) {
+      bx += side * (1.6 + rnd() * 1.6);
+      by += 1.5 + rnd() * 2.2;
+      bp.push([bx, by]);
+    }
+    out.push(path(bp));
+  }
+  return out;
+}
+
+/**
+ * Raios "tesla" do visual Fundador: cada pet sorteia os próprios arcos e o próprio ritmo (nunca dois iguais) —
+ * um estalo curto (às vezes dois seguidos, redesenhados), depois uma pausa aleatória. Sem animação se o sistema pede
+ * menos movimento.
+ */
+function TeslaArcs() {
+  const [arcs, setArcs] = React.useState(null);
+  React.useEffect(() => {
+    if (reducedMotion()) return undefined;
+    let alive = true;
+    const timers = [];
+    const later = (ms, f) => timers.push(setTimeout(() => alive && f(), ms));
+    const burst = () => {
+      const two = Math.random() < 0.3;                  // às vezes um de cada lado
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const draw = () => setArcs(two ? [teslaArc(-1), teslaArc(1)] : [teslaArc(side)]);
+      draw();
+      const flicker = Math.random() < 0.5;              // às vezes estala de novo (forma nova)
+      later(60 + Math.random() * 50, () => {
+        if (flicker) { draw(); later(50 + Math.random() * 60, () => setArcs(null)); } else setArcs(null);
+      });
+      later(350 + Math.random() * 2400, burst);         // pausa aleatória até o próximo
+    };
+    later(Math.random() * 2000, burst);                 // cada pet começa num momento diferente
+    return () => { alive = false; timers.forEach(clearTimeout); };
+  }, []);
+  if (!arcs) return null;
+  return (
+    <g className="pet-tesla" key={arcs.flat().join('').length}>
+      {arcs.flat().map((d, i) => <path key={'g' + i} className="pet-tesla__glow" d={d} />)}
+      {arcs.flat().map((d, i) => <path key={'c' + i} className="pet-tesla__core" d={d} />)}
+    </g>
   );
 }
 
