@@ -62,3 +62,12 @@ html, body { margin: 0; background: transparent; overflow: hidden; }
 .pl-quick__status { color: var(--tk-text-3); }
 .pl-quick__status.is-saved { color: var(--tk-accent-text); }
 .pl-quick__status.is-error { color: var(--tk-red); font-weight: 500; }
+
+/* Barra de rolagem do DevKit em toda a interface (o mesmo visual do .tk-scroll do DS), sem depender de a classe estar
+   no contêiner: qualquer área rolante nova já nasce com ela. Quem esconde a barra de propósito (.gt-tabs) segue valendo. */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--tk-surface-4); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--tk-text-3); background-clip: padding-box; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
+

@@ -215,7 +215,7 @@ const actionCommands = [
   {
     id: 'links:manage',
     name: 'Links rápidos',
-    description: 'Cadastrar aliases para URLs (ex.: solic → solicitação do Fluig) — ou digite “link: alias url”',
+    description: 'Cadastrar aliases para URLs (ex.: solic → chamado do tracker) — ou digite “link: alias url”',
     icon: 'link',
     keywords: ['links', 'alias', 'atalho', 'url', 'favoritos', 'bookmark', 'quicklink'],
     run: (ctx) => ctx.openApp('settings'),
@@ -498,8 +498,56 @@ function gitRepoCommands(repos) {
   }));
 }
 
-const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands, ...gitCommands];
+/* ─────────────── Logs ─────────────── */
+// Abrem a ferramenta Logs já com o diálogo de arquivo/pasta (ver src/tools/logs/LogsScreen.jsx → request.action).
+const logsCommands = [
+  {
+    id: 'logs:open-file', name: 'Logs: abrir arquivo…', description: 'server.log, JSON por linha, IIS, Nginx… — acompanha ao vivo',
+    category: 'actions', icon: 'file-text', keywords: ['log', 'logs', 'tail', 'server.log', 'fluig', 'jboss', 'erro', 'abrir'],
+    run: (ctx) => ctx.openApp('logs', { action: 'openFile' }),
+  },
+  {
+    id: 'logs:open-folder', name: 'Logs: abrir pasta de logs…', description: 'Junta os arquivos rotacionados (server.log.2026-10-10, app.log.1, .gz)',
+    category: 'actions', icon: 'folder-open', keywords: ['log', 'logs', 'pasta', 'rotacionados', 'iis', 'fluig', 'abrir'],
+    run: (ctx) => ctx.openApp('logs', { action: 'openFolder' }),
+  },
+];
+
+/** Um comando por log recente da ferramenta Logs (lista dinâmica, carregada quando a palette abre). */
+function logsRecentCommands(recents) {
+  return (recents || []).map((r) => ({
+    id: 'logs:recent:' + r.path + '|' + (r.family || ''), name: 'Logs: ' + r.name, category: 'actions', icon: r.kind === 'folder' ? 'folder-open' : 'scroll-text', dynamic: true,
+    description: r.path, keywords: ['log', 'logs', 'abrir', 'tail'],
+    run: (ctx) => ctx.openApp('logs', { action: 'open', spec: { kind: r.kind, path: r.path, family: r.family || undefined } }),
+  }));
+}
+
+/* ─────────────── Banco (monitor de SQL Server) ─────────────── */
+const dbCommands = [
+  {
+    id: 'db:blocking', name: 'Banco: quem está bloqueando?', description: 'Abre o monitor de SQL Server na árvore de bloqueio',
+    category: 'actions', icon: 'octagon-x', keywords: ['banco', 'sql server', 'bloqueio', 'blocking', 'lock', 'travado', 'kill', 'dba'],
+    run: (ctx) => ctx.openApp('db', { tab: 'now' }),
+  },
+  {
+    id: 'db:add', name: 'Banco: adicionar servidor…', description: 'Monitorar um SQL Server (credencial no Vault)',
+    category: 'actions', icon: 'database-zap', keywords: ['banco', 'sql server', 'monitor', 'adicionar', 'servidor'],
+    run: (ctx) => ctx.openApp('db', { action: 'add' }),
+  },
+];
+
+/** Um comando por servidor do Banco (lista dinâmica, carregada quando a palette abre). */
+function dbServerCommands(servers) {
+  return (servers || []).map((s) => ({
+    id: 'db:server:' + s.id, name: 'Banco: ' + (s.name || s.label), category: 'actions', icon: s.blocked ? 'octagon-x' : 'database-zap', dynamic: true,
+    description: s.status === 'ok' ? (s.blocked ? `${s.blocked} sessão(ões) bloqueada(s) agora` : `${s.active || 0} sessão(ões) ativa(s)`) : s.label,
+    keywords: ['banco', 'sql server', 'monitor', s.label],
+    run: (ctx) => ctx.openApp('db', { server: s.id, tab: 'now' }),
+  }));
+}
+
+const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands, ...gitCommands, ...logsCommands, ...dbCommands];
 
 const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : id === 'vault' ? 'Vault' : id === 'links' ? 'Link' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
 
-module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands, gitRepoCommands, detectClipboardKind };
+module.exports = { CATEGORIES, COMMANDS, WEB, categoryName, abilityCommands, itemCommands, vaultCommands, linkCommands, gitRepoCommands, logsRecentCommands, dbServerCommands, detectClipboardKind };

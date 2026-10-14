@@ -168,6 +168,16 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
   // Atalhos do editor: Ctrl/⌘+E alterna o modo · Ctrl/⌘+Shift+C copia o snippet.
   React.useEffect(() => {
     const h = (e) => {
+      // Delete (sem foco em campo de texto, sem diálogo/menu aberto) manda a nota aberta para a Lixeira — como o botão.
+      if (e.key === 'Delete' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.repeat && !e.defaultPrevented) {
+        const t = e.target;
+        const typing = t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
+        if (!typing && !(isNew && status === 'idle') && !document.querySelector('.tk-overlay, .tk-ctx')) {
+          e.preventDefault();
+          flush().then(() => onDelete(note));
+        }
+        return;
+      }
       if (!isMod(e)) return;
       const k = e.key.toLowerCase();
       if (k === 'e' && !e.shiftKey) { e.preventDefault(); setMode(NEXT_MODE[mode] || 'edit'); }
@@ -241,7 +251,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
           <IconButton size="sm" icon="sticky-note" label="Fixar na tela (sticky note)" disabled={isNew && status === 'idle'}
             onClick={async () => { await flush(); window.devkit.stickies.open(note.id).catch((e) => toast('Não foi possível fixar na tela', cleanError(e), 'error')); }} />
           <IconButton size="sm" icon="history" label="Versões anteriores" onClick={() => setShowHistory(true)} disabled={isNew && status === 'idle'} />
-          <IconButton size="sm" icon="trash-2" label="Excluir (vai para a lixeira)" onClick={async () => { await flush(); onDelete(note); }} disabled={isNew && status === 'idle'} />
+          <IconButton size="sm" icon="trash-2" label="Excluir (Delete) — vai para a lixeira" onClick={async () => { await flush(); onDelete(note); }} disabled={isNew && status === 'idle'} />
         </div>
       </div>
       <div className="nts-editor__meta">

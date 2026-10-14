@@ -6,6 +6,7 @@
  * Regra fixa: nada do Vault entra aqui — as telas mandam só o texto que a pessoa vê (referências, nunca segredos).
  */
 const { prepareDiff, commitMessagePrompt, cleanCommitMessage } = require('./prompts.js');
+const { redact } = require('../logs/redact.js');
 
 const PT = 'Responda em português do Brasil.';
 const MD = 'Use markdown simples (títulos curtos, listas, `código`). Seja direto: nada de introdução nem de despedida.';
@@ -354,6 +355,114 @@ const TASKS = {
     },
     clean: tidy,
     parse: (text) => ({ refs: noteRefs(text) }),
+  },
+
+  /* ───────── Logs ───────── */
+  // Os trechos de log passam por redact() aqui: senhas, tokens, e-mails e CPFs saem antes de qualquer envio.
+  logError: {
+    label: 'Explicar o erro', maxTokens: 900,
+    build(i) {
+      const text = redact(i.text || '').text;
+      if (!text.trim()) throw new Error('Entrada de log vazia');
+      const fluig = /fluig|totvs|wcm|ecm|jboss|wildfly/i.test(text + ' ' + (i.logger || '') + ' ' + (i.format || ''));
+      return {
+        system: ['Você ajuda a diagnosticar erros a partir de logs de aplicação (Java, .NET, Node, Python, servidores web).', PT, MD,
+          fluig ? 'O log é de um servidor Fluig (TOTVS) sobre JBoss/WildFly: considere datasets, eventos de formulário/processo, widgets, integrações com o RM e o banco.' : '',
+          'Responda com: **O que aconteceu** (1–2 frases), **Causa provável** (a causa raiz — o último "Caused by" costuma ser ela), **Onde olhar** (classe/método/arquivo do stack que é do sistema, não do framework) e **Como confirmar ou corrigir** (passos curtos). Se o log não bastar, diga o que falta.'].filter(Boolean).join('\n'),
+        user: [
+          `Formato do log: ${i.format || 'desconhecido'}${i.logger ? ` · logger: ${i.logger}` : ''}`,
+          i.group ? `Este problema aparece ${i.group.total} vez(es) no log (de ${i.group.first} a ${i.group.last}).` : '',
+          i.before ? `\nLinhas logo antes:\n${clip(redact(i.before).text, 3000)}` : '',
+          `\nEntrada com o erro:\n${clip(text, 12000)}`,
+        ].filter(Boolean).join('\n'),
+      };
+    },
+    clean: tidy,
+  },
+
+  logIncident: {
+    label: 'Resumir os problemas', maxTokens: 1200,
+    build(i) {
+      const groups = (i.groups || []).slice(0, 25);
+      if (!groups.length) throw new Error('Nenhum problema para resumir');
+      const list = groups.map((g, k) => `${k + 1}. [${g.level}] ${g.count}× — ${redact(g.title).text}${g.exception ? ` (${g.exception}${g.rootCause && g.rootCause !== g.exception ? ` → causa ${g.rootCause}` : ''})` : ''}${g.frame ? ` em ${g.frame}` : ''} · ${g.first} a ${g.last}`).join('\n');
+      return {
+        system: ['Você faz a triagem de incidentes a partir de um resumo de logs (grupos de erros e avisos já agrupados por falha).', PT, MD,
+          'Responda com: **Resumo** (2–3 frases: o que está acontecendo e desde quando), **Prioridades** (lista do mais urgente ao menos; diga quais grupos parecem ter a mesma causa) e **Próximos passos**. Não invente detalhes que não estão no resumo.'].join('\n'),
+        user: [
+          `Log: ${i.name || '(sem nome)'} · formato ${i.format || '?'} · ${i.total} entradas no filtro${i.filter ? ` (filtro: ${redact(i.filter).text})` : ''}`,
+          i.window ? `Período: ${i.window}` : '',
+          i.counts ? `Por nível: ${i.counts}` : '',
+          i.spikes ? `Picos de erro: ${i.spikes}` : '',
+          `\nProblemas (mais frequentes primeiro):\n${clip(list, 12000)}`,
+        ].filter(Boolean).join('\n'),
+      };
+    },
+    clean: tidy,
+  },
+
+  /* ───────── Banco (monitor de SQL Server) ───────── */
+  // Textos de query passam por redact(): literais podem trazer CPF, e-mail, senha em connection string…
+  dbQuery: {
+    label: 'Por que está lenta', maxTokens: 1100,
+    build(i) {
+      const sql = redact(i.sql || '').text;
+      if (!sql.trim()) throw new Error('Query vazia');
+      const s = i.stats || {};
+      const facts = [
+        s.executions != null ? `execuções: ${s.executions}` : '', s.avgDuration ? `duração média: ${s.avgDuration}` : '', s.avgCpu ? `CPU média: ${s.avgCpu}` : '',
+        s.avgReads != null ? `leituras lógicas por execução: ${s.avgReads}` : '', s.elapsed ? `rodando há: ${s.elapsed}` : '', s.wait ? `esperando agora: ${s.wait}` : '',
+        s.blockedBy ? `bloqueada pela sessão ${s.blockedBy}` : '', s.plans > 1 ? `planos diferentes no cache: ${s.plans}` : '', s.database ? `banco: ${s.database}` : '',
+      ].filter(Boolean);
+      return {
+        system: ['Você é um DBA sênior de SQL Server ajudando a entender uma consulta lenta.', PT, MD,
+          'Responda com: **O que a consulta faz** (1–2 frases), **Por que pode estar lenta** (ligue às métricas e à espera informadas — sem inventar o que não foi dado), **O que conferir** (plano de execução, índices, estatísticas, sargabilidade, conversões implícitas, parâmetros) e **Sugestões** concretas (reescrita, índice, hint só se fizer sentido). Se a espera for de bloqueio, diga que o problema é quem segura o lock, não a consulta.'].join('\n'),
+        user: [facts.length ? `Métricas: ${facts.join(' · ')}` : '', `\nConsulta:\n${clip(sql, 12000)}`].filter(Boolean).join('\n'),
+      };
+    },
+    clean: tidy,
+  },
+
+  dbPlan: {
+    label: 'Explicar o plano', maxTokens: 1400,
+    build(i) {
+      const sql = redact(i.sql || '').text;
+      const p = i.plan || {};
+      if (!sql.trim() && !(i.operators || []).length) throw new Error('Plano vazio');
+      const mb = (kb) => (kb == null ? '?' : kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`);
+      const head = [
+        p.cost != null ? `custo estimado: ${Number(p.cost).toFixed(2)}` : '', p.operators ? `${p.operators} operadores` : '', p.estRows != null ? `linhas estimadas: ${Math.round(p.estRows)}` : '',
+        p.dop > 1 ? `paralelo (DOP ${p.dop})` : `serial${p.serialReason ? ` (${p.serialReason})` : ''}`, p.actual ? 'plano REAL (tem linhas e tempos reais)' : 'plano ESTIMADO (sem dados de execução)',
+        p.grant && p.grant.grantedKb != null ? `memory grant ${mb(p.grant.grantedKb)}${p.grant.usedKb != null ? ` (usou ${mb(p.grant.usedKb)})` : ''}` : '',
+        p.elapsedMs != null ? `tempo: ${p.elapsedMs} ms` : '', p.cardinalityModel ? `estimador de cardinalidade ${p.cardinalityModel}` : '',
+      ].filter(Boolean).join(' · ');
+      const ins = (i.insights || []).slice(0, 14).map((x) => `- [${x.severity}] ${x.title} — ${x.detail}`).join('\n');
+      const ops = (i.operators || []).slice(0, 12).map((o) => `- #${o.id} ${o.op}${o.object ? ` em ${o.object}` : ''}: ${o.costPct}% do custo · linhas est. ${o.estRows != null ? Math.round(o.estRows) : '?'}${o.actualRows != null ? ` / reais ${o.actualRows}` : ''}${o.executions > 1 ? ` · ${o.executions} execuções` : ''}${o.predicate && o.predicate.length ? ` · filtro: ${clip(redact(o.predicate.join(' AND ')).text, 200)}` : ''}`).join('\n');
+      const params = (i.params || []).map((x) => `${x.name} ${x.type}: compilado ${redact(String(x.compiled ?? '—')).text}${x.runtime != null ? `, executado ${redact(String(x.runtime)).text}` : ''}`).join('; ');
+      return {
+        system: ['Você é um DBA sênior de SQL Server lendo o plano de execução de uma consulta para quem não é especialista.', PT, MD,
+          'Os achados e números abaixo já foram calculados a partir do plano: use-os como fatos, não os contradiga nem invente operadores, tabelas ou colunas que não estão na lista.',
+          'Responda com: **Resumo** (1–2 frases: o plano está saudável ou tem um problema dominante), **O que está caro e por quê** (ligue o operador, a fatia do custo e as linhas estimadas × reais), **O que fazer, em ordem de ganho** (ações concretas e curtas: índice com as colunas, reescrita de predicado, ajuste de tipo de parâmetro, estatísticas — cada uma dizendo o efeito esperado) e **Cuidados** (o que não mexer ou validar antes, como índice demais pesar nas gravações). Se o plano for estimado, diga que o real pode divergir.'].join('\n'),
+        user: [`Plano: ${head}`, params ? `Parâmetros: ${params}` : '', ins ? `\nAchados:\n${ins}` : '', ops ? `\nOperadores mais caros:\n${ops}` : '', `\nConsulta:\n${clip(sql, 8000)}`].filter(Boolean).join('\n'),
+      };
+    },
+    clean: tidy,
+  },
+
+  dbDeadlock: {
+    label: 'Explicar o deadlock', maxTokens: 1100,
+    build(i) {
+      const procs = (i.processes || []).slice(0, 8);
+      if (!procs.length) throw new Error('Deadlock sem processos');
+      const p = procs.map((x) => `- Sessão ${x.spid}${x.victim ? ' (VÍTIMA)' : ''} · ${x.app || '?'} · ${x.login || '?'} · isolamento ${x.isolation || '?'} · pedia ${x.lockMode || '?'} em ${x.waitResource || '?'}\n  SQL: ${clip(redact(x.sql || '').text, 2500)}`).join('\n');
+      const r = (i.resources || []).slice(0, 10).map((x) => `- ${x.type} em ${x.object || '?'}${x.index ? ` (índice ${x.index})` : ''}: segurado por ${x.holders.join(', ') || '?'}; esperado por ${x.waiters.join(', ') || '?'}`).join('\n');
+      return {
+        system: ['Você é um DBA sênior de SQL Server explicando um deadlock a partir do relatório do system_health.', PT, MD,
+          'Responda com: **O que aconteceu** (o ciclo em linguagem simples: quem segurava o quê e esperava o quê), **Por que acontece** (ordem de acesso, falta de índice levando a varredura, transação longa, escalonamento de lock, isolamento) e **Como evitar** (ações concretas: mesma ordem de acesso, índice que torna a busca pontual, transação mais curta, retry na aplicação, READ_COMMITTED_SNAPSHOT se couber). Não invente tabelas ou colunas que não estão no relatório.'].join('\n'),
+        user: `Processos:\n${p}\n\nRecursos:\n${r || '(sem detalhes)'}`,
+      };
+    },
+    clean: tidy,
   },
 
   /* ───────── Palette ───────── */

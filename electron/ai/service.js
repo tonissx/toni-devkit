@@ -158,10 +158,15 @@ function createAiService({ file, getApiKey = async () => null, fetch: f = global
     return { ok: true };
   }
 
+  // Os maxTokens das tarefas são o tamanho esperado da resposta; o teto real tem folga (com o raciocínio do modelo e
+  // blocos de código, respostas longas batiam no limite e terminavam no meio de uma frase).
+  const TRUNCATED_NOTE = '\n\n_… resposta cortada no limite de tamanho. Peça de novo, de forma mais específica, para ver o resto._';
+  const tokenBudget = (n, cap) => Math.min(cap, Math.max(2048, (n || 1024) * 4));
+
   async function localChat({ system, user, maxTokens }, onChunk, signal) {
     const res = await ollama('/api/chat', {
       method: 'POST', signal,
-      body: JSON.stringify({ model: config.localModel, stream: true, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], options: { temperature: 0.2, num_ctx: 8192, num_predict: maxTokens || 1024 } }),
+      body: JSON.stringify({ model: config.localModel, stream: true, messages: [{ role: 'system', content: system }, { role: 'user', content: user }], options: { temperature: 0.2, num_ctx: 8192, num_predict: tokenBudget(maxTokens, 4096) } }),
     });
     let text = '';
     let error = null;
@@ -170,6 +175,7 @@ function createAiService({ file, getApiKey = async () => null, fetch: f = global
       if (o.error) { error = o.error; return; }
       const piece = o.message && o.message.content;
       if (piece) { text += piece; onChunk(piece); }
+      if (o.done && o.done_reason === 'length') { text += TRUNCATED_NOTE; onChunk(TRUNCATED_NOTE); }
     });
     if (error) throw new Error(`Ollama: ${error}`);
     return text;
@@ -184,7 +190,7 @@ function createAiService({ file, getApiKey = async () => null, fetch: f = global
     const client = new Sdk({ apiKey: key, maxRetries: 1, timeout: 60e3 });
     // Fallback no servidor: se o modelo recusar por política, a própria API refaz com outro modelo adequado.
     const stream = client.beta.messages.stream({
-      model: config.cloudModel, max_tokens: maxTokens || 1024,
+      model: config.cloudModel, max_tokens: tokenBudget(maxTokens, 8192),
       betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default',
       ...(config.cloudModel === 'claude-haiku-4-5' ? {} : { output_config: { effort: 'low' } }),
       system, messages: [{ role: 'user', content: user }],
@@ -193,7 +199,9 @@ function createAiService({ file, getApiKey = async () => null, fetch: f = global
     try {
       const msg = await stream.finalMessage();
       if (msg.stop_reason === 'refusal') throw new Error('O modelo recusou este pedido');
-      return msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+      const text = msg.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+      if (msg.stop_reason === 'max_tokens') { onChunk(TRUNCATED_NOTE); return text + TRUNCATED_NOTE; }
+      return text;
     } catch (e) {
       throw new Error(friendlyCloudError(e, Sdk));
     }

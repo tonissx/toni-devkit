@@ -125,13 +125,53 @@ function repoStatusChip(rows) {
 }
 
 /** Painéis do Início, na ordem em que aparecem. O usuário pode esconder qualquer um (Personalizar). */
+/**
+ * Logs abertos na ferramenta Logs (logs.summaries()), com os que têm erros novos primeiro.
+ * → [{ ...s, level: 'new'|'errors'|'ok', note }]
+ */
+function logsAttention(summaries) {
+  const RANK = { new: 0, errors: 1, ok: 2 };
+  const fmt = (n) => n.toLocaleString('pt-BR');
+  return (summaries || []).map((s) => {
+    const level = s.newErrors > 0 ? 'new' : s.errors > 0 ? 'errors' : 'ok';
+    const parts = [];
+    if (s.newErrors > 0) parts.push(s.newErrors === 1 ? '1 erro novo' : `${fmt(s.newErrors)} erros novos`);
+    else if (s.errors > 0) parts.push(s.errors === 1 ? '1 erro' : `${fmt(s.errors)} erros`);
+    else parts.push('sem erros');
+    if (s.warns > 0) parts.push(s.warns === 1 ? '1 aviso' : `${fmt(s.warns)} avisos`);
+    parts.push(s.live ? 'ao vivo' : 'parado');
+    return { ...s, level, note: parts.join(' · ') };
+  }).sort((a, b) => RANK[a.level] - RANK[b.level] || (b.newErrors - a.newErrors) || String(a.name).localeCompare(String(b.name), 'pt-BR'));
+}
+
+/**
+ * Servidores do Banco (db.summaries()) com o que pede atenção primeiro: bloqueio > sem conexão > ok > parado.
+ * → [{ ...s, level: 'block'|'down'|'ok'|'idle', note }]
+ */
+function dbAttention(summaries) {
+  const RANK = { block: 0, down: 1, ok: 2, idle: 3 };
+  return (summaries || []).map((s) => {
+    const level = s.status === 'ok' && s.blocked > 0 ? 'block' : ['offline', 'error', 'locked'].includes(s.status) ? 'down' : s.status === 'ok' ? 'ok' : 'idle';
+    let note;
+    if (level === 'block') {
+      const h = (s.heads || [])[0];
+      note = `${s.blocked} bloqueada(s)${h ? ` · cabeça ${h.id}${h.program ? ' (' + h.program + ')' : ''}` : ''}`;
+    } else if (level === 'down') note = s.status === 'locked' ? 'Vault trancado' : 'sem conexão';
+    else if (level === 'ok') note = `${s.active || 0} sessão(ões) ativa(s)${s.background ? ' · segundo plano' : ''}`;
+    else note = s.background ? 'segundo plano' : 'parado (abre ao entrar no Banco)';
+    return { ...s, level, note };
+  }).sort((a, b) => RANK[a.level] - RANK[b.level] || String(a.name).localeCompare(String(b.name), 'pt-BR'));
+}
+
 const PANELS = [
   { id: 'tasks', name: 'Tarefas' },
   { id: 'notes', name: 'Notas' },
   { id: 'git', name: 'Repositórios git' },
+  { id: 'logs', name: 'Logs abertos' },
+  { id: 'db', name: 'Banco (SQL Server)' },
   { id: 'links', name: 'Links rápidos' },
   { id: 'devcore', name: 'DevCore' },
   { id: 'tools', name: 'Ferramentas' },
 ];
 
-module.exports = { greeting, longDate, daysBetween, dueLabel, agenda, daySummary, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, PANELS };
+module.exports = { greeting, longDate, daysBetween, dueLabel, agenda, daySummary, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, logsAttention, dbAttention, PANELS };

@@ -1,23 +1,44 @@
 // Git — Histórico: grafo de commits (raias coloridas pela paleta do tema), filtros por texto e autor, e o painel do
 // commit escolhido (mensagem, arquivos, diff) com ações: criar branch aqui e voltar a branch para este ponto.
 import { DS } from '../../lib/ds.js';
+import { load, usePersisted } from '../../lib/store.js';
 import { layoutGraph } from '../../git/graph.js';
+import { sideWidth, SIDE_MIN, SIDE_MAX, SIDE_DEFAULT, SIDE_WIDE } from '../../git/panel.js';
 import { validBranchName } from '../../git/ops.js';
 import { gitApi, useRepoData, ago, fullDate, short, RefBadges, FilePath, laneColor, OpButton } from './shared.jsx';
 import { GitDiff } from './GitDiff.jsx';
 import { useAiMode, useAiTask, aiOn, AiButton, AiPanel } from '../../ai/ui.jsx';
 
 const { Icon, Spinner } = DS;
-const ROW = 30;   // altura de uma linha
-const LANE = 14;  // largura de uma raia
+const AVATAR = 11; // raio do círculo do avatar; com a borda de 2px o avatar mede 24px
+const ROW = 38;   // altura de uma linha (igual ao height de .gt-row em git.css)
+const LANE = AVATAR * 2 + 8;  // largura de uma raia: avatar de 24px + 6px de respiro entre vizinhos
+const PAD = AVATAR + 5;       // margem do grafo: cabe o avatar e o halo do HEAD sem cortar na borda
 const MAX_LANES = 14;
 const PAGE = 300;
 
+/** Iniciais do autor ("Antonio Gonçalves" -> "AG"). */
+function initials(name) {
+  const p = String(name || '?').trim().split(/\s+/).filter(Boolean);
+  return ((p[0] || '?')[0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
+}
+
+/** Matiz estável por e-mail: o mesmo autor tem sempre a mesma cor, sem rede. */
+function hue(key) {
+  let n = 0;
+  for (const ch of String(key || '')) n = (n * 31 + ch.codePointAt(0)) >>> 0;
+  return n % 360;
+}
+
+/** Largura da coluna do grafo: as raias entre duas margens. */
+const graphWidth = (layout) => (Math.min(MAX_LANES, Math.max(1, layout.width)) - 1) * LANE + PAD * 2;
+
+const photoOf =(photos, c) => (photos && c.email ? photos[c.email.trim().toLowerCase()] : null);
+
 /** O grafo inteiro num SVG só, atrás da coluna de raias. */
-function Graph({ layout, commits, headHash }) {
-  const lanes = Math.min(MAX_LANES, layout.width);
-  const w = lanes * LANE + 10;
-  const x = (c) => 8 + Math.min(c, MAX_LANES - 1) * LANE;
+function Graph({ layout, commits, headHash, photos }) {
+  const w = graphWidth(layout);
+  const x = (c) => PAD + Math.min(c, MAX_LANES - 1) * LANE;
   const y = (r) => r * ROW + ROW / 2;
   const paths = [];
   layout.rows.forEach((row, r) => {
@@ -35,8 +56,21 @@ function Graph({ layout, commits, headHash }) {
         const head = commits[r].hash === headHash;
         return (
           <g key={row.hash}>
-            {head && <circle cx={x(row.col)} cy={y(r)} r={7.5} className="gt-graph__halo" stroke={laneColor(row.color)} />}
-            <circle cx={x(row.col)} cy={y(r)} r={merge ? 3.5 : 4.5} fill={merge ? 'var(--tk-surface-1)' : laneColor(row.color)} stroke={laneColor(row.color)} strokeWidth={merge ? 2 : 0} />
+            {head && <circle cx={x(row.col)} cy={y(r)} r={AVATAR + 3.5} className="gt-graph__halo" stroke={laneColor(row.color)} />}
+            {merge
+              ? <circle cx={x(row.col)} cy={y(r)} r={4.5} fill="var(--tk-surface-1)" stroke={laneColor(row.color)} strokeWidth={2} />
+              : (
+                <>
+                  <circle cx={x(row.col)} cy={y(r)} r={AVATAR} fill={`hsl(${hue(commits[r].email || commits[r].author)} 45% 38%)`} stroke={laneColor(row.color)} strokeWidth={2} />
+                  <text x={x(row.col)} y={y(r)} className="gt-graph__avatar-text">{initials(commits[r].author)}</text>
+                  {photoOf(photos, commits[r]) && (
+                    <>
+                      <clipPath id={'gt-av-' + r}><circle cx={x(row.col)} cy={y(r)} r={AVATAR - 1} /></clipPath>
+                      <image href={photoOf(photos, commits[r])} x={x(row.col) - AVATAR} y={y(r) - AVATAR} width={AVATAR * 2} height={AVATAR * 2} clipPath={`url(#gt-av-${r})`} preserveAspectRatio="xMidYMid slice" />
+                    </>
+                  )}
+                </>
+              )}
           </g>
         );
       })}
@@ -150,9 +184,40 @@ export function History({ repo, status, run, focus }) {
   const [sel, setSel] = React.useState(null);
   const { data: commits, error, loading } = useRepoData(repo, (r) => gitApi().log(r, { limit: PAGE * pages, grep: query.grep || undefined, author: query.author || undefined }), [query.grep, query.author, pages]);
   const layout = React.useMemo(() => layoutGraph(commits || []), [commits]);
+  // Fotos do Gravatar (Configurações): lidas ao abrir a aba; quem não tem foto continua com as iniciais.
+  const useGravatar = React.useMemo(() => !!load('prefs', {}).gitAvatars, []);
+  const [photos, setPhotos] = React.useState({});
+  React.useEffect(() => {
+    if (!useGravatar || !commits) return undefined;
+    const todo = [...new Set(commits.map((c) => (c.email || '').trim().toLowerCase()).filter((e) => e && !(e in photos)))];
+    if (!todo.length) return undefined;
+    let alive = true;
+    gitApi().avatars(todo).then((got) => { if (alive) setPhotos((p) => ({ ...p, ...got })); }, () => {});
+    return () => { alive = false; };
+  }, [commits, useGravatar]);
   React.useEffect(() => { if (focus && focus.hash) setSel(focus.hash); }, [focus && focus.nonce]);
   React.useEffect(() => { if (!sel && commits && commits[0]) setSel(commits[0].hash); }, [commits]);
-  const lanesW = Math.min(MAX_LANES, layout.width) * LANE + 10;
+  const lanesW = graphWidth(layout);
+  // Bandeja de detalhes: arrastar a borda esquerda define a largura (só grava ao soltar); duplo clique alterna padrão/expandida.
+  const [prefs, setPrefs] = usePersisted('git.historySide', { w: SIDE_DEFAULT });
+  const rootRef = React.useRef(null);
+  const [live, setLive] = React.useState(null);
+  const maxW = () => (rootRef.current ? rootRef.current.getBoundingClientRect().width * 0.7 : SIDE_MAX);
+  const width = sideWidth(prefs.w, maxW());
+  const w = live ?? width;
+  const setW = (v) => setPrefs((p) => ({ ...p, w: sideWidth(v, maxW()) }));
+  const drag = {
+    onPointerDown: (e) => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); setLive(width); },
+    onPointerMove: (e) => { if (live != null && rootRef.current) setLive(sideWidth(rootRef.current.getBoundingClientRect().right - e.clientX, maxW())); },
+    onPointerUp: () => { if (live != null) { setW(live); setLive(null); } },
+    onLostPointerCapture: () => setLive(null),
+    onDoubleClick: () => setW(width >= SIDE_WIDE - 8 ? SIDE_DEFAULT : SIDE_WIDE),
+    onKeyDown: (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      setW(width + (e.key === 'ArrowLeft' ? 16 : -16)); // a borda está à esquerda: ← alarga, → estreita
+    },
+  };
   const listRef = React.useRef(null);
   React.useEffect(() => {
     // Commit escolhido de fora (pai, Visão geral): rola até ele.
@@ -165,7 +230,7 @@ export function History({ repo, status, run, focus }) {
   const selected = commits && commits.find((c) => c.hash.startsWith(sel || '-'));
 
   return (
-    <div className="gt-history">
+    <div className="gt-history" ref={rootRef}>
       <div className="gt-history__main">
         <form className="gt-toolbar" onSubmit={(e) => { e.preventDefault(); setPages(1); setQuery({ grep: q.trim(), author: author.trim() }); }}>
           <label className="gt-search"><Icon name="search" size={13} /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar na mensagem" /></label>
@@ -180,7 +245,7 @@ export function History({ repo, status, run, focus }) {
         <div className="gt-log tk-scroll" ref={listRef}>
           {commits && (
             <div className="gt-log__inner" style={{ height: commits.length * ROW }}>
-              <Graph layout={layout} commits={commits} headHash={status.branch.oid} />
+              <Graph layout={layout} commits={commits} headHash={status.branch.oid} photos={photos} />
               {commits.map((c, i) => (
                 <div key={c.hash} className={'gt-row' + (selected && selected.hash === c.hash ? ' is-sel' : '') + (c.hash === status.branch.oid ? ' is-head' : '')}
                   style={{ top: i * ROW, paddingLeft: lanesW }} onClick={() => setSel(c.hash)} role="button" tabIndex={0}
@@ -200,8 +265,12 @@ export function History({ repo, status, run, focus }) {
           {commits && !commits.length && <div className="gt-msg">Nenhum commit encontrado com esse filtro.</div>}
         </div>
       </div>
-      <aside className="gt-history__side tk-scroll">
-        {selected ? <CommitDetail repo={repo} hash={selected.hash} run={run} onPick={setSel} /> : <div className="gt-msg">Escolha um commit.</div>}
+      <aside className={'gt-history__side' + (live != null ? ' is-dragging' : '')} style={{ width: w }}>
+        <div className="gt-history__grip" role="separator" aria-orientation="vertical" aria-label="Largura dos detalhes do commit"
+          aria-valuemin={SIDE_MIN} aria-valuemax={SIDE_MAX} aria-valuenow={w} tabIndex={0} {...drag} />
+        <div className="gt-history__scroll tk-scroll">
+          {selected ? <CommitDetail repo={repo} hash={selected.hash} run={run} onPick={setSel} /> : <div className="gt-msg">Escolha um commit.</div>}
+        </div>
       </aside>
     </div>
   );

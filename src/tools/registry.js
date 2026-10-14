@@ -10,8 +10,10 @@ import { NotesScreen } from './notes/NotesScreen.jsx';
 import { DevCoreScreen } from './devcore/DevCoreScreen.jsx';
 import { VaultScreen } from './vault/VaultScreen.jsx';
 import { GitScreen } from './git/GitScreen.jsx';
+import { LogsScreen } from './logs/LogsScreen.jsx';
+import { DbScreen } from './db/DbScreen.jsx';
 
-const COMPONENTS = { sql: SqlFormatter, xml: XmlFormatter, diff: DiffChecker, json: JsonVisualizer, git: GitScreen, notes: NotesScreen, vault: VaultScreen, devcore: DevCoreScreen };
+const COMPONENTS = { sql: SqlFormatter, xml: XmlFormatter, diff: DiffChecker, json: JsonVisualizer, git: GitScreen, logs: LogsScreen, db: DbScreen, notes: NotesScreen, vault: VaultScreen, devcore: DevCoreScreen };
 
 export const TOOLS = TOOL_META.map((t) => ({ ...t, component: COMPONENTS[t.id] }));
 

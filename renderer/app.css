@@ -207,6 +207,14 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 }
 .dfc-fold:hover { color: var(--tk-accent-text); background: var(--tk-surface-2); }
 
+/* Barra de rolagem do DevKit em toda a interface (o mesmo visual do .tk-scroll do DS), sem depender de a classe estar
+   no contêiner: qualquer área rolante nova já nasce com ela. Quem esconde a barra de propósito (.gt-tabs) segue valendo. */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--tk-surface-4); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: var(--tk-text-3); background-clip: padding-box; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
+
 /* ─── Notes ─── */
 .nts-screen { height: 100%; display: flex; flex-direction: column; }
 .nts { flex: 1; min-height: 0; display: flex; gap: 16px; padding: 0 24px 20px; }
@@ -214,6 +222,18 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   width: 300px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0;
   background: var(--tk-bg); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); padding: 10px;
 }
+/* Canto entre as barras vertical e horizontal: sem isto o Chromium pinta um quadrado branco. */
+.tk-scroll::-webkit-scrollbar-corner { background: transparent; }
+.nts__side { position: relative; transition: width .12s ease; }
+.nts__side.is-dragging { transition: none; user-select: none; }
+/* Recolhida: sobra só uma faixa com a seta para reabrir; o conteúdo some (sem espremer). */
+.nts__side.is-collapsed { padding: 0; gap: 0; align-items: stretch; }
+.nts__side.is-collapsed > *:not(.nts__grip):not(.nts__reopen) { display: none; }
+.nts__reopen { flex: 1; display: flex; align-items: flex-start; justify-content: center; padding-top: 10px; border: 0; background: none; color: var(--tk-text-3); cursor: pointer; border-radius: var(--tk-radius-md); }
+.nts__reopen:hover { color: var(--tk-text); background: var(--tk-surface-hover); }
+.nts__grip { position: absolute; top: 0; bottom: 0; right: -12px; width: 12px; z-index: 5; cursor: col-resize; touch-action: none; outline: 0; }
+.nts__grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 5px; width: 2px; background: transparent; transition: background .12s; }
+.nts__grip:hover::after, .nts__grip:focus-visible::after, .nts__side.is-dragging .nts__grip::after { background: var(--tk-accent); }
 .nts__main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 /* Abas de visão (Nota | Tarefas | Grafo): trocam a área principal — diferente dos filtros da lateral. */
 .nts-views { display: flex; align-items: flex-end; gap: 2px; margin-bottom: 8px; border-bottom: 1px solid var(--tk-border); }
@@ -330,18 +350,27 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-task__main { min-width: 0; flex: 1; }
 .nts-task__text { display: block; max-width: 100%; padding: 0; border: 0; background: none; color: var(--tk-text); font: 400 13px/1.4 var(--tk-font-sans); text-align: left; cursor: pointer; }
 .nts-task__text:hover { color: var(--tk-accent-text); }
+.nts-task__text code { font: 400 12px var(--tk-font-mono); padding: 1px 5px; border-radius: 4px; background: var(--tk-surface-3); color: var(--tk-text); }
 .nts-task.is-done .nts-task__text { color: var(--tk-text-3); text-decoration: line-through; }
 .nts-task__meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .nts-task__note { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--tk-text-3); }
 .nts-pill { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 6px; border-radius: 4px; font: 500 10.5px var(--tk-font-mono); background: var(--tk-surface-3); color: var(--tk-text-2); }
 .nts-pill.is-p1 { color: var(--tk-red); background: color-mix(in srgb, var(--tk-red) 12%, transparent); }
 .nts-pill.is-p2 { color: var(--tk-amber); background: color-mix(in srgb, var(--tk-amber) 12%, transparent); }
+.nts-pill.is-p3 { color: var(--tk-blue); background: color-mix(in srgb, var(--tk-blue) 12%, transparent); }
+/* Etiqueta de prioridade: bandeira + rótulo. Alta tem a bandeira cheia (o nível não depende só da cor); "Sem prioridade" é discreta, tracejada. */
+.nts-pill.nts-pri { font: 500 11px var(--tk-font-sans); }
+.nts-pri.is-p1 svg { fill: currentColor; }
+.nts-pri.is-p0 { color: var(--tk-text-3); background: none; box-shadow: inset 0 0 0 1px var(--tk-border); }
+.nts-pri.is-p0 svg { opacity: .7; }
 .nts-pill.is-late { color: var(--tk-red); background: color-mix(in srgb, var(--tk-red) 12%, transparent); }
 .md-preview .md-due, .md-preview .md-pri { display: inline-block; padding: 0 5px; margin: 0 2px; border-radius: 4px; font: 500 11px/18px var(--tk-font-mono); background: var(--tk-surface-3); color: var(--tk-text-2); }
 .md-preview .md-due.is-late, .md-preview .md-pri.is-p1 { color: var(--tk-red); background: color-mix(in srgb, var(--tk-red) 12%, transparent); }
 .md-preview li:has(> .md-task:checked) .md-due.is-late { color: var(--tk-text-2); background: var(--tk-surface-3); }
 .md-preview .md-pri.is-p2 { color: var(--tk-amber); background: color-mix(in srgb, var(--tk-amber) 12%, transparent); }
-.nts-row__tasks { margin-left: 6px; color: var(--tk-accent-text); font: 400 10.5px var(--tk-font-mono); }
+.md-preview .md-pri.is-p3 { color: var(--tk-blue); background: color-mix(in srgb, var(--tk-blue) 12%, transparent); }
+.md-preview .md-pri { font-family: var(--tk-font-sans); }
+.nts-row__tasks { display: inline-flex; align-items: center; gap: 3px; vertical-align: -1px; margin-left: 6px; color: var(--tk-accent-text); font: 400 10.5px var(--tk-font-mono); }
 .nts-error { display: block; margin-bottom: 6px; font: 400 12px var(--tk-font-mono); }
 
 .nts-editor__body { flex: 1; min-height: 0; display: grid; }
@@ -1718,6 +1747,20 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 /* Início: painel de repositórios git — cada linha tingida pelo que pede atenção */
 .home-panel.is-git { --hue: var(--tk-syn-key); }
 .home-chip.is-git { color: var(--tk-amber); border-color: color-mix(in srgb, var(--tk-amber) 30%, transparent); background: color-mix(in srgb, var(--tk-amber) 10%, transparent); }
+.home-panel.is-logs { --hue: var(--tk-red); }
+.home-panel.is-db { --hue: var(--tk-blue); }
+.home-db > svg { color: var(--tk-text-3); }
+.home-db.is-block > svg { color: var(--tk-red); }
+.home-db.is-block .home-row__sub { color: var(--tk-text); }
+.home-db.is-down > svg { color: var(--tk-amber); }
+.home-db.is-ok > svg { color: var(--tk-accent-text); }
+.home-db.is-idle .home-row__title { color: var(--tk-text-2); font-weight: 400; }
+.home-log > svg { color: var(--tk-text-3); }
+.home-log.is-new > svg { color: var(--tk-red); }
+.home-log.is-new .home-row__sub { color: var(--tk-text); }
+.home-log.is-errors > svg { color: var(--tk-amber); }
+.home-log.is-ok > svg { color: var(--tk-accent-text); }
+.home-log.is-ok .home-row__title { color: var(--tk-text-2); font-weight: 400; }
 .home-repo > svg { color: var(--tk-text-3); }
 .home-repo.is-conflict > svg, .home-repo.is-error > svg { color: var(--tk-red); }
 .home-repo.is-conflict .home-row__sub { color: var(--tk-red); }

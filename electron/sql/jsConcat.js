@@ -58,6 +58,14 @@ function tokenize(src) {
     const c = src[i];
     if (c === ' ' || c === '\t' || c === '\r' || c === '\n') { i++; continue; }
     if (c === '+') { sawPlus = true; i++; continue; }
+    if (c === '/' && src[i + 1] === '/') {
+      // Comentário de linha JS entre os pedaços da concatenação -> comentário SQL.
+      let j = i + 2;
+      while (j < n && src[j] !== '\n' && src[j] !== '\r') j++;
+      tokens.push({ type: 'comment', value: src.slice(i + 2, j).trim() });
+      i = j;
+      continue;
+    }
     if (c === '"' || c === "'") {
       const quote = c;
       let j = i + 1;
@@ -145,7 +153,6 @@ function unwrapJsConcat(input) {
 
   const hasString = tokens.some((t) => t.type === 'str');
   if (!hasString) return null;
-
   const declOrder = [];
   const declInfo = new Map(); // nome -> { quoted }
   let sql = '';
@@ -157,6 +164,12 @@ function unwrapJsConcat(input) {
       if (stripLeadingQuote && value.startsWith("'")) value = value.slice(1);
       stripLeadingQuote = false;
       sql += value;
+      continue;
+    }
+    if (t.type === 'comment') {
+      // `--` vai até o fim da linha: garante quebra antes e depois para não engolir o SQL vizinho.
+      if (sql && !sql.endsWith('\n')) sql = sql.trimEnd() + '\n';
+      sql += `-- ${t.value}`.trimEnd() + '\n';
       continue;
     }
     const name = deriveVarName(t.value);

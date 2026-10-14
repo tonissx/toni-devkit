@@ -285,6 +285,15 @@ const OPS = {
       display: 'git worktree remove --force  (depois de guardar as mudanças)',
     };
   },
+  // Worktree travado (git worktree lock — o Claude Code trava o de cada sessão): o git exige --force duas vezes.
+  'worktree.removeLocked': ({ path: p }) => {
+    need(typeof p === 'string' && p.length > 0 && p.length < 1024 && !p.startsWith('-') && !/[\0\r\n]/.test(p), 'Worktree inválido');
+    return {
+      args: ['worktree', 'remove', '--force', '--force', p], risk: 'discard', backup: true, backupWorktree: p, worktreePath: p, title: 'Destravar e remover o worktree',
+      explain: 'O git travou esse worktree para ninguém apagar a pasta enquanto ele está em uso (o Claude Code faz isso durante uma sessão). Isto ignora a trava e apaga a pasta; se a sessão ainda estiver aberta, ela perde a pasta de trabalho. Mudanças não commitadas (inclusive arquivos novos) ficam num stash de segurança — desfazer traz de volta. Os commits e a branch continuam.',
+      display: 'git worktree remove --force --force  (depois de guardar as mudanças)',
+    };
+  },
   'worktree.prune': () => ({
     args: ['worktree', 'prune'], risk: 'safe', title: 'Esquecer worktrees apagados',
     explain: 'Remove do registro do git os worktrees cuja pasta não existe mais.',

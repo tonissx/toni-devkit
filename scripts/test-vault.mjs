@@ -51,7 +51,7 @@ const dbEntry = (over = {}) => ({
   fields: [
     { name: 'Servidor', value: 'sql01.local', secret: false },
     { name: 'Porta', value: '1433', secret: false },
-    { name: 'Banco', value: 'CorporeRM', secret: false },
+    { name: 'Banco', value: 'AppDB', secret: false },
     { name: 'Usuário', value: 'sa', secret: false },
     { name: 'Senha', value: 's3nh@;"forte"', secret: true },
   ],
@@ -107,8 +107,8 @@ test('entry: unchanged secret (value null) keeps the previous value', () => {
 
 test('entry: connection strings quote values with ; and quotes', () => {
   const e = ve.normalizeEntry(dbEntry());
-  assert.equal(ve.connectionString(e), 'Server=sql01.local,1433;Database=CorporeRM;User Id=sa;Password="s3nh@;""forte""";TrustServerCertificate=True;');
-  assert.match(ve.connectionString(e, 'jdbc'), /^jdbc:sqlserver:\/\/sql01\.local:1433;databaseName=CorporeRM;user=sa;password=/);
+  assert.equal(ve.connectionString(e), 'Server=sql01.local,1433;Database=AppDB;User Id=sa;Password="s3nh@;""forte""";TrustServerCertificate=True;');
+  assert.match(ve.connectionString(e, 'jdbc'), /^jdbc:sqlserver:\/\/sql01\.local:1433;databaseName=AppDB;user=sa;password=/);
 });
 
 test('entry: secret blocks in markdown', () => {
@@ -129,7 +129,7 @@ test('service: create → file on disk never contains plaintext', async () => {
     await s.svc.create(PW);
     await s.svc.save(dbEntry());
     const raw = await readFile(s.file, 'utf8');
-    for (const leak of ['s3nh@', 'RM Produção', 'sql01', 'CorporeRM']) assert.ok(!raw.includes(leak), 'vazou ' + leak);
+    for (const leak of ['s3nh@', 'RM Produção', 'sql01', 'AppDB']) assert.ok(!raw.includes(leak), 'vazou ' + leak);
     assert.equal(JSON.parse(raw).format, 'toni-devkit-vault');
     await assert.rejects(s.svc.create(PW), /já existe/);
   } finally { await s.done(); }
@@ -159,7 +159,7 @@ test('service: public index (name/kind/tags only) lets locked search work, never
     await s.svc.create(PW);
     await s.svc.save(dbEntry());
     const raw = await readFile(path.join(s.dir, 'vault-index.json'), 'utf8');
-    for (const leak of ['s3nh@', 'sql01', 'CorporeRM', '"sa"', 'Senha']) assert.ok(!raw.includes(leak), 'vazou ' + leak);
+    for (const leak of ['s3nh@', 'sql01', 'AppDB', '"sa"', 'Senha']) assert.ok(!raw.includes(leak), 'vazou ' + leak);
     s.svc.lock();
     assert.equal(s.svc.list(), null);
     assert.deepEqual(s.svc.index().map(({ id, ...e }) => e), [{ name: 'RM Produção', kind: 'db', tags: ['rm'] }]);

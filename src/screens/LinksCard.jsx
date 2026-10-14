@@ -41,11 +41,11 @@ export function LinksCard({ toast }) {
     <form className="lnk-form" onSubmit={save}>
       <div className="lnk-form__row">
         <Field label="Alias"><Input size="sm" mono value={edit.alias} placeholder="solic" autoFocus onChange={(e) => { setEdit({ ...edit, alias: e.target.value }); setError(null); }} /></Field>
-        <Field label="Nome"><Input size="sm" value={edit.name} placeholder="Solicitação do Fluig" onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
-        <Field label="Rótulo do valor"><Input size="sm" value={edit.param} placeholder="Número da solicitação" onChange={(e) => setEdit({ ...edit, param: e.target.value })} /></Field>
+        <Field label="Nome"><Input size="sm" value={edit.name} placeholder="Chamado do tracker" onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></Field>
+        <Field label="Rótulo do valor"><Input size="sm" value={edit.param} placeholder="Número do chamado" onChange={(e) => setEdit({ ...edit, param: e.target.value })} /></Field>
       </div>
       <Field label="URL" hint="Use {q} onde entra a parte variável — se a URL terminar em “=” ou houver rótulo do valor, o {q} vai para o fim sozinho. Sem nada disso, o link abre direto (favorito).">
-        <Input size="sm" mono value={edit.url} placeholder="https://fluig.navship.com.br/portal/p/001/pageworkflowview?app_ecm_workflowview_detailsProcessInstanceID={q}"
+        <Input size="sm" mono value={edit.url} placeholder="https://tracker.example.com/tickets?id={q}"
           onChange={(e) => { setEdit({ ...edit, url: e.target.value }); setError(null); }} />
       </Field>
       {edit.url.trim() && edit.alias.trim() && (() => {
@@ -71,7 +71,7 @@ export function LinksCard({ toast }) {
       </div>
       <div className="set-row__hint lnk-help">
         Na palette, digite o alias e aperte <b>Tab</b>: ele vira um chip e o que você digitar depois entra no <code>{'{q}'}</code> da URL —
-        Enter abre, Ctrl+Enter copia. Também dá para criar pela palette: <code>link: solic https://…{'{q}'} Solicitação</code>.
+        Enter abre, Ctrl+Enter copia. Também dá para criar pela palette: <code>link: solic https://…{'{q}'} Chamado</code>.
       </div>
       {edit && !edit.id && form}
       {links && links.length === 0 && !edit && <div className="lnk-empty">Nenhum link ainda.</div>}

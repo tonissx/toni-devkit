@@ -5,8 +5,10 @@ import { THEMES, resolveTheme } from '../lib/themes.js';
 import { isoDate } from '../notes/edit.js';
 import { cleanError, shortTime } from '../notes/client.js';
 import { needsValue } from '../links/link.js';
+import { TaskText } from '../tools/notes/TaskText.jsx';
+import { PriorityTag } from '../tools/notes/PriorityTag.jsx';
 import { formatNum } from '../devcore/engine/format.js';
-import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, PANELS } from '../home/dashboard.js';
+import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, logsAttention, dbAttention, PANELS } from '../home/dashboard.js';
 
 const { PageHeader, ToolCard, Button, Card, Icon, Badge, Checkbox, EmptyState, Spinner } = DS;
 
@@ -179,9 +181,9 @@ function TasksPanel({ tasks, today, open, toast }) {
           <div key={t.noteId + ':' + t.index} className="nts-task">
             <input type="checkbox" className="md-task" checked={false} onChange={() => toggle(t)} aria-label="Concluir tarefa" />
             <div className="nts-task__main">
-              <button type="button" className="nts-task__text" onClick={() => open('notes', { id: t.noteId })} title="Abrir a nota">{t.text || '(sem texto)'}</button>
+              <button type="button" className="nts-task__text" onClick={() => open('notes', { id: t.noteId })} title="Abrir a nota"><TaskText text={t.text} /></button>
               <div className="nts-task__meta">
-                {t.priority && <span className={'nts-pill is-p' + t.priority} title={'Prioridade ' + t.priority}>!{t.priority}</span>}
+                <PriorityTag priority={t.priority} />
                 {t.due && <span className={'nts-pill is-due' + (t.bucket === 'late' ? ' is-late' : '')} title={t.due}><Icon name="calendar" size={11} /> {dueLabel(t.due, today)}</span>}
                 <span className="nts-task__note"><Icon name="file-text" size={11} /> {t.noteTitle}</span>
               </div>
@@ -269,6 +271,60 @@ function GitPanel({ repos, open }) {
   );
 }
 
+/* ─────────────── Logs ─────────────── */
+
+const LOG_ICON = { new: 'circle-x', errors: 'triangle-alert', ok: 'circle-check' };
+
+/** Logs abertos na ferramenta Logs (só aparece com algum aberto); clicar volta para a aba do log. */
+function LogsPanel({ logs, open }) {
+  if (!logs || !logs.length) return null;
+  const fresh = logs.filter((l) => l.level === 'new').length;
+  return (
+    <Card className="home-panel is-logs" padding={16} icon="scroll-text" title="Logs"
+      subtitle={fresh ? `${fresh} com erros novos` : `${logs.length} aberto${logs.length === 1 ? '' : 's'}`}
+      actions={<Button size="sm" variant="ghost" onClick={() => open('logs', {})}>Abrir Logs</Button>}>
+      <div className="home-list">
+        {logs.slice(0, 6).map((l) => (
+          <button type="button" key={l.id} className={'home-row home-log is-' + l.level} onClick={() => open('logs', { action: 'show', id: l.id })} title={l.name}>
+            <Icon name={LOG_ICON[l.level]} size={14} />
+            <span className="home-row__main">
+              <span className="home-row__title">{String(l.name).split(/[\\/]/).pop()}</span>
+              <span className="home-row__sub">{l.note}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+/* ─────────────── Banco ─────────────── */
+
+const DB_ICON = { block: 'octagon-x', down: 'unplug', ok: 'activity', idle: 'circle-pause' };
+
+/** Servidores do Banco (só aparece com algum cadastrado); bloqueio primeiro; clicar abre o servidor. */
+function DbPanel({ servers, open }) {
+  if (!servers || !servers.length) return null;
+  const blocked = servers.filter((s) => s.level === 'block').length;
+  return (
+    <Card className="home-panel is-db" padding={16} icon="database-zap" title="Banco"
+      subtitle={blocked ? `${blocked} com bloqueio agora` : `${servers.length} servidor${servers.length === 1 ? '' : 'es'}`}
+      actions={<Button size="sm" variant="ghost" onClick={() => open('db', {})}>Abrir Banco</Button>}>
+      <div className="home-list">
+        {servers.slice(0, 6).map((s) => (
+          <button type="button" key={s.id} className={'home-row home-db is-' + s.level} onClick={() => open('db', { server: s.id, tab: 'now' })} title={s.label}>
+            <Icon name={DB_ICON[s.level]} size={14} />
+            <span className="home-row__main">
+              <span className="home-row__title">{s.name || s.label}</span>
+              <span className="home-row__sub">{s.note}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 /* ─────────────── Links rápidos ─────────────── */
 
 function LinkRow({ link, toast }) {
@@ -306,7 +362,7 @@ function LinksPanel({ links, go, toast }) {
       actions={<Button size="sm" variant="ghost" onClick={() => go('settings')}>Gerenciar</Button>}>
       {!links && <div className="home-msg"><Spinner size={14} /> Carregando…</div>}
       {links && list.length === 0 && (
-        <div className="home-msg">Uma URL atrás de um alias (ex.: <code>solic</code> → solicitação do Fluig pelo número). Cadastre em Configurações → Links rápidos.</div>
+        <div className="home-msg">Uma URL atrás de um alias (ex.: <code>solic</code> → chamado do tracker pelo número). Cadastre em Configurações → Links rápidos.</div>
       )}
       <div className="home-list">{list.map((l) => <LinkRow key={l.id} link={l} toast={toast} />)}</div>
     </Card>
@@ -381,6 +437,28 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
     const id = setInterval(loadRepos, 60e3);
     return () => { window.removeEventListener('focus', loadRepos); clearInterval(id); };
   }, []);
+  // Logs abertos: o tail avisa a cada gravação — recarrega no máximo a cada 1,5 s (throttle, não debounce: com o
+  // arquivo crescendo sem parar, um debounce nunca dispararia).
+  const [logs, setLogs] = React.useState(null);
+  useLive(() => window.devkit.logs.summaries().then((s) => setLogs(logsAttention(s)), () => setLogs([])), (cb) => {
+    let last = 0; let t = null;
+    const off = window.devkit.logs.onChanged((e) => {
+      if (!e || e.type === 'progress') return;
+      const wait = 1500 - (Date.now() - last);
+      if (wait <= 0) { last = Date.now(); cb(); } else if (!t) t = setTimeout(() => { t = null; last = Date.now(); cb(); }, wait);
+    });
+    return () => { off(); clearTimeout(t); };
+  }, 0);
+  // Banco: cada coletor avisa a cada ciclo — recarrega no máximo a cada 3 s.
+  const [dbServers, setDbServers] = React.useState(null);
+  useLive(() => window.devkit.db.summaries().then((s) => setDbServers(dbAttention(s)), () => setDbServers([])), (cb) => {
+    let last = 0; let t = null;
+    const off = window.devkit.db.onChanged(() => {
+      const wait = 3000 - (Date.now() - last);
+      if (wait <= 0) { last = Date.now(); cb(); } else if (!t) t = setTimeout(() => { t = null; last = Date.now(); cb(); }, wait);
+    });
+    return () => { off(); clearTimeout(t); };
+  }, 0);
   useLive(() => window.devkit.vault.status().then(setVault, () => {}), window.devkit.vault.onChanged, 0);
   React.useEffect(() => { window.devkit.palette.status().then(setPalette, () => {}); }, []);
 
@@ -427,6 +505,8 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
         {shows('tasks') && <TasksPanel tasks={tasks} today={today} open={open} toast={toast} />}
         {shows('notes') && <NotesPanel recent={recent} pinned={pinned} open={open} toast={toast} />}
         {shows('git') && <GitPanel repos={repos} open={open} />}
+        {shows('logs') && <LogsPanel logs={logs} open={open} />}
+        {shows('db') && <DbPanel servers={dbServers} open={open} />}
         {shows('links') && <LinksPanel links={links} go={go} toast={toast} />}
         {showDc && <DevCorePanel snap={dc} now={tick} go={go} />}
       </div>

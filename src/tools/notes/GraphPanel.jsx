@@ -12,6 +12,8 @@ const PALETTE = ['--tk-accent', '--tk-blue', '--tk-cyan', '--tk-violet', '--tk-a
 const FALLBACK = ['#7c9cff', '#4ea1ff', '#35c5d6', '#a78bfa', '#f5b544', '#f06a6a'];
 
 const radius = (n) => Math.min(14, 4 + Math.sqrt(n.degree) * 2.2);
+const taskTotal = (n) => (n.tasksOpen || 0) + (n.tasksDone || 0);
+const taskLabel = (n) => `${n.tasksDone}/${taskTotal(n)}`;
 
 /**
  * Painel "Grafo": notas como nós e [[links]] como arestas (estilo Obsidian). Arrastar o fundo move,
@@ -19,7 +21,7 @@ const radius = (n) => Math.min(14, 4 + Math.sqrt(n.degree) * 2.2);
  * os vizinhos. Cores por pasta de 1º nível. "Nota atual" mostra só a vizinhança da nota aberta.
  */
 export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
-  const [opts, setOpts] = usePersisted('notes.graph', { mode: 'global', depth: 1, orphans: true, ghosts: false });
+  const [opts, setOpts] = usePersisted('notes.graph', { mode: 'global', depth: 1, orphans: true, ghosts: false, pending: false });
   const [raw, setRaw] = React.useState(null); // null = carregando
   const [query, setQuery] = React.useState('');
   const [hover, setHover] = React.useState(null); // id do nó sob o ponteiro
@@ -54,6 +56,7 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
     const v = (name, fb) => cs.getPropertyValue(name).trim() || fb;
     colors.current = {
       palette: PALETTE.map((p, i) => v(p, FALLBACK[i])),
+      green: v('--tk-success', '#3DDC84'),
       text: v('--tk-text', '#e6e6e6'), text2: v('--tk-text-2', '#b3b3b3'), text3: v('--tk-text-3', '#808080'),
       border: v('--tk-border-strong', '#3a3a3a'), bg: v('--tk-bg', '#050506'), accent: v('--tk-accent', '#7c9cff'), amber: v('--tk-amber', '#f5b544'),
       font: '500 11px ' + v('--tk-font-sans', 'system-ui, sans-serif'),
@@ -85,7 +88,9 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
     }
     const q = normalize(s.query || '').trim();
     const matches = q ? new Set(ns.filter((n) => normalize(n.title).includes(q)).map((n) => n.id)) : null;
-    const lit = (id) => (focus ? focus.has(id) : matches ? matches.has(id) : true);
+    // Filtro "Pendentes": quem tem tarefa aberta fica em destaque (é o foco), o resto esmaece.
+    const pend = s.pending ? new Set(ns.filter((n) => n.tasksOpen > 0).map((n) => n.id)) : null;
+    const lit = (id) => (focus ? focus.has(id) : matches ? matches.has(id) : pend ? pend.has(id) : true);
 
     // Arestas
     ctx.lineWidth = 1;
@@ -111,7 +116,20 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
       }
       if (n.id === s.current || (matches && matches.has(n.id)) || n.fixed) {
         ctx.lineWidth = 2; ctx.strokeStyle = n.id === s.current ? col.text : matches && matches.has(n.id) ? col.amber : col.text3;
-        ctx.beginPath(); ctx.arc(X(n.x), Y(n.y), rr + 3, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(X(n.x), Y(n.y), rr + (taskTotal(n) > 0 && !n.ghost ? 6 : 3), 0, Math.PI * 2); ctx.stroke(); // afasta do anel de progresso
+      }
+      // Progresso das tarefas: trilho + arco verde (começa às 12h, sentido horário). Só em notas com tarefas.
+      const total = taskTotal(n);
+      if (total > 0 && !n.ghost) {
+        const ar = rr + 2, cx = X(n.x), cy = Y(n.y), frac = n.tasksDone / total;
+        ctx.lineWidth = 2; ctx.lineCap = 'round';
+        ctx.strokeStyle = col.border;
+        ctx.beginPath(); ctx.arc(cx, cy, ar, 0, Math.PI * 2); ctx.stroke();
+        if (frac > 0) {
+          ctx.strokeStyle = col.green;
+          ctx.beginPath(); ctx.arc(cx, cy, ar, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * frac); ctx.stroke();
+        }
+        ctx.lineCap = 'butt';
       }
     }
 
@@ -123,8 +141,9 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
         || (focus && focus.has(n.id)) || (matches && matches.has(n.id));
       if (!show) continue;
       ctx.globalAlpha = lit(n.id) ? 1 : 0.25;
-      const label = n.title.length > 40 ? n.title.slice(0, 39) + '…' : n.title;
-      const tx = X(n.x), ty = Y(n.y) + radius(n) * Math.max(0.6, Math.min(1.6, v.k)) + 4;
+      const base = n.title.length > 40 ? n.title.slice(0, 39) + '…' : n.title;
+      const label = taskTotal(n) > 0 && !n.ghost ? `${base}  ·  ${taskLabel(n)}` : base;
+      const tx = X(n.x), ty = Y(n.y) + radius(n) * Math.max(0.6, Math.min(1.6, v.k)) + (taskTotal(n) > 0 ? 7 : 4);
       ctx.lineWidth = 3; ctx.strokeStyle = col.bg; ctx.strokeText(label, tx, ty);
       ctx.fillStyle = n.id === s.hover ? col.text : n.ghost ? col.text3 : col.text2; ctx.fillText(label, tx, ty);
     }
@@ -165,7 +184,7 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
     kick();
   }, [shown]);
 
-  React.useEffect(() => { stateRef.current = { hover, query, current: currentId }; requestDraw(); }, [hover, query, currentId]);
+  React.useEffect(() => { stateRef.current = { hover, query, current: currentId, pending: opts.pending }; requestDraw(); }, [hover, query, currentId, opts.pending]);
   // Trocar Global ↔ Nota atual (ou a nota) reenquadra.
   React.useEffect(() => { const t = setTimeout(fit, 350); return () => clearTimeout(t); }, [opts.mode, local ? currentId : null, opts.depth]);
 
@@ -282,6 +301,7 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
         </label>
         {!local && <button type="button" className={'nts-chip' + (opts.orphans ? ' is-on' : '')} aria-pressed={opts.orphans} onClick={() => set('orphans')(!opts.orphans)} title="Notas sem nenhum link">Órfãs</button>}
         <button type="button" className={'nts-chip' + (opts.ghosts ? ' is-on' : '')} aria-pressed={opts.ghosts} onClick={() => set('ghosts')(!opts.ghosts)} title="[[Links]] para notas que ainda não existem">Inexistentes</button>
+        <button type="button" className={'nts-chip' + (opts.pending ? ' is-on' : '')} aria-pressed={!!opts.pending} onClick={() => set('pending')(!opts.pending)} title="Destacar notas com tarefas abertas (- [ ])">Pendentes</button>
         <IconButton size="sm" icon="scan" label="Centralizar" onClick={fit} />
       </div>
       <div ref={wrapRef} className="nts-graph__wrap">
@@ -300,6 +320,10 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
           <div className="nts-graph__tip">
             <b>{hoverNode.title}</b>
             <span>{hoverNode.ghost ? 'Não existe ainda — clique para criar' : `${hoverNode.folder || 'Sem pasta'} · ${hoverNode.degree} ${hoverNode.degree === 1 ? 'link' : 'links'}`}</span>
+            {taskTotal(hoverNode) > 0 && !hoverNode.ghost && (
+              <span>{hoverNode.tasksDone} de {taskTotal(hoverNode)} {taskTotal(hoverNode) === 1 ? 'tarefa' : 'tarefas'}
+                {hoverNode.tasksOpen > 0 ? ` · ${hoverNode.tasksOpen} ${hoverNode.tasksOpen === 1 ? 'pendente' : 'pendentes'}` : ' · tudo concluído'}</span>
+            )}
           </div>
         )}
         <div className="nts-graph__help">arrastar move · roda aproxima · clique abre · arrastar um nó o prende (duplo clique solta)</div>

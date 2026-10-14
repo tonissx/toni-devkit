@@ -8,7 +8,8 @@ const palette = require('./palette');
 const binds = require('./binds');
 const { createPaster } = require('./paste');
 const { createWinHelper } = require('./winfocus');
-const { UI_BINDABLE_IDS } = require('../src/commands/binds.js');
+const { UI_BINDABLE_IDS, SELECTION_BIND_IDS } = require('../src/commands/binds.js');
+const { createSelectionCopier } = require('./selection');
 const { createNotesService } = require('./notes/service');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
@@ -17,6 +18,10 @@ const { createLinksService } = require('./links/service');
 const { createVaultService } = require('./vault/service');
 const { createStickiesService } = require('./stickies/service');
 const { createGitService } = require('./git/service');
+const { createAvatarService } = require('./git/avatars');
+const { createLogsService } = require('./logs/service');
+const { createDbService } = require('./db/service');
+const { fromVaultFields } = require('../src/db/connstr.js');
 const { createAiService } = require('./ai/service');
 const { primaryIndex } = require('../src/vault/entry.js');
 
@@ -328,11 +333,19 @@ ipcMain.handle('binds:set', (_e, next) => binds.set(next && typeof next === 'obj
 ipcMain.handle('binds:suspend', (_e, on) => binds.suspend(!!on));
 ipcMain.on('binds:result', (_e, result) => binds.notify(result));
 
-/** Dispara um bind: a maioria roda oculta na palette; os de UI (lista de snippets) mostram a palette. */
-const runBind = (id) => (UI_BINDABLE_IDS.includes(id) ? palette.show('snippets') : palette.run(id));
+/**
+ * Dispara um bind: a maioria roda oculta na palette; os de UI (lista de snippets) mostram a palette.
+ * Os de formatação (SELECTION_BIND_IDS) primeiro copiam o texto selecionado no programa em foco (electron/selection.js).
+ */
+const runBind = (id) => {
+  if (UI_BINDABLE_IDS.includes(id)) return palette.show('snippets');
+  if (!SELECTION_BIND_IDS.includes(id)) return palette.run(id);
+  return copySelection().then(() => palette.run(id), (e) => binds.notify({ ok: false, message: e.message }));
+};
 
 // Colar snippet: a palette esconde, o foco volta ao programa anterior e o Ctrl+V é simulado (ver electron/paste.js).
 const winHelper = createWinHelper();
+const copySelection = createSelectionCopier({ clipboard, win: winHelper });
 const snippetPaster = createPaster({ clipboard, win: winHelper, hide: () => palette.hide(), notify: (r) => binds.notify(r) });
 ipcMain.handle('snippet:paste', (_e, payload) => snippetPaster.paste(payload && typeof payload === 'object' ? payload : {}));
 // Abertura por atalho: guarda a janela ativa (o foco volta para ela ao colar ou no Esc). Outras origens esquecem a antiga.
@@ -463,7 +476,11 @@ ipcMain.handle('app:login-item', (_e, enable) => {
 // %APPDATA%/Toni Devkit/vault.json, criptografado com a senha mestra (ver electron/vault/service.js).
 let vault = null;
 let vaultReady = null;
-const broadcastVault = (evt) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('vault:changed', evt); };
+const broadcastVault = (evt) => {
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send('vault:changed', evt);
+  // Monitor do Banco esperando a credencial: tenta de novo assim que o cofre abre.
+  if (evt && evt.unlocked && dbSvc) dbSvc.vaultUnlocked();
+};
 
 function initVault() {
   vault = createVaultService({
@@ -580,6 +597,9 @@ const GIT_API = ['version', 'list', 'add', 'remove', 'scan', 'open', 'summaries'
 for (const fn of GIT_API) {
   ipcMain.handle('git:' + fn, async (_e, ...args) => { await gitReady; return gitSvc[fn](...args); });
 }
+// Fotos do Gravatar (opcional, ligado em Configurações): a busca é aqui para a CSP da tela continuar fechada.
+const gitAvatars = createAvatarService();
+ipcMain.handle('git:avatars', (_e, emails) => gitAvatars.get(Array.isArray(emails) ? emails : []));
 // Adicionar escolhendo a pasta no diálogo do sistema.
 ipcMain.handle('git:pick', async (e) => {
   await gitReady;
@@ -613,6 +633,136 @@ ipcMain.handle('git:open-in', async (_e, repo, where) => {
     return true;
   }
   return shell.openPath(top);
+});
+
+/* ─────────────── Logs (worker thread com o índice; ver electron/logs) ─────────────── */
+// O worker sobe no primeiro uso. Ele guarda o texto dos logs abertos (≈ tamanho dos arquivos), então ganha um
+// limite de memória maior que o padrão.
+let logsWorker = null;
+let logsWorkerReady = null;
+let logsSeq = 0;
+const logsPending = new Map();
+let logsSvc = null;
+let logsReady = null;
+const broadcastLogs = (evt) => { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('logs:changed', evt); };
+
+function startLogsWorker() {
+  if (logsWorker) return logsWorkerReady;
+  const workerFile = path.join(__dirname, 'logs', 'worker.js').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+  logsWorker = new Worker(workerFile, { resourceLimits: { maxOldGenerationSizeMb: 6144 } });
+  logsWorkerReady = new Promise((resolve, reject) => {
+    logsWorker.on('message', (msg) => {
+      if (msg.type === 'ready') return resolve();
+      if (msg.type === 'event') return broadcastLogs(msg.evt);
+      const p = logsPending.get(msg.id);
+      if (!p) return;
+      logsPending.delete(msg.id);
+      msg.ok ? p.resolve(msg.data) : p.reject(new Error(msg.error));
+    });
+    logsWorker.on('error', reject);
+  });
+  logsWorker.on('exit', () => {
+    for (const p of logsPending.values()) p.reject(new Error('O leitor de logs foi encerrado (memória?) — abra o log de novo'));
+    logsPending.clear();
+    logsWorker = null;
+    logsWorkerReady = null;
+    if (logsSvc) { logsSvc.unwatch(); logsSvc._open.clear(); }
+    broadcastLogs({ type: 'crashed' });
+  });
+  logsWorkerReady.catch(() => {});
+  return logsWorkerReady;
+}
+
+function callLogs(op, args) {
+  return startLogsWorker().then(() => new Promise((resolve, reject) => {
+    const id = ++logsSeq;
+    logsPending.set(id, { resolve, reject });
+    logsWorker.postMessage({ id, op, args });
+  }));
+}
+
+function initLogs() {
+  logsSvc = createLogsService({ file: path.join(app.getPath('userData'), 'logs.json'), callWorker: callLogs, broadcast: broadcastLogs });
+  logsReady = logsSvc.init().catch((e) => { console.error('[logs]', e); });
+}
+
+// Serviço (abrir, ao vivo, recentes, filtros salvos).
+const LOGS_SVC_API = ['open', 'reformat', 'switchFamily', 'setLive', 'close', 'list', 'summaries', 'markSeen', 'recents', 'forgetRecent', 'presets', 'savePresets', 'scanFolder'];
+for (const fn of LOGS_SVC_API) {
+  ipcMain.handle('logs:' + fn, async (_e, ...args) => { await logsReady; return logsSvc[fn](...args); });
+}
+// Consultas: vão direto ao worker (args: { id, qid, ... }).
+const LOGS_WORKER_API = ['query', 'rows', 'entry', 'context', 'locate', 'seekTime', 'next', 'sparks', 'charts', 'textOf', 'info'];
+for (const op of LOGS_WORKER_API) {
+  ipcMain.handle('logs:' + op, (_e, args) => callLogs(op, args && typeof args === 'object' ? args : {}));
+}
+ipcMain.handle('logs:pickFile', async (e) => {
+  const r = await dialog.showOpenDialog(fromEvent(e), {
+    title: 'Abrir log', properties: ['openFile'],
+    filters: [{ name: 'Logs', extensions: ['log', 'txt', 'out', 'json', 'ndjson', 'jsonl', 'gz', '1', '2', '3'] }, { name: 'Todos os arquivos', extensions: ['*'] }],
+  });
+  return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
+});
+ipcMain.handle('logs:pickFolder', async (e) => {
+  const r = await dialog.showOpenDialog(fromEvent(e), { title: 'Pasta de logs (junta os arquivos rotacionados)', properties: ['openDirectory'] });
+  return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
+});
+// Exportar o resultado do filtro: escolhe o arquivo aqui, o worker grava em stream.
+ipcMain.handle('logs:export', async (e, args) => {
+  const a = args && typeof args === 'object' ? args : {};
+  const md = a.kind === 'md';
+  const r = await dialog.showSaveDialog(fromEvent(e), {
+    title: 'Exportar entradas filtradas',
+    defaultPath: (a.name || 'logs').replace(/[\\/:*?"<>|]+/g, '_') + (md ? '.md' : '.log'),
+    filters: md ? [{ name: 'Markdown', extensions: ['md'] }] : [{ name: 'Log', extensions: ['log', 'txt'] }],
+  });
+  if (r.canceled || !r.filePath) return null;
+  const res = await callLogs('exportTo', { id: a.id, qid: a.qid, kind: md ? 'md' : 'log', file: r.filePath });
+  return { ...res, path: r.filePath };
+});
+ipcMain.handle('logs:reveal', (_e, p) => { if (p) shell.showItemInFolder(String(p)); return true; });
+
+/* ─────────────── Banco (monitor de SQL Server; ver electron/db) ─────────────── */
+// Servidores em %APPDATA%/Toni Devkit/db-servers.json (sem senha); histórico em db-monitor/<servidor>/AAAA-MM-DD.ndjson.
+// A senha vem do Vault, lida aqui no processo principal — a tela nunca a recebe.
+let dbSvc = null;
+let dbReady = null;
+const broadcastDb = (evt) => { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('db:changed', evt); };
+
+function initDb() {
+  dbSvc = createDbService({
+    file: path.join(app.getPath('userData'), 'db-servers.json'),
+    dir: path.join(app.getPath('userData'), 'db-monitor'),
+    broadcast: broadcastDb,
+    getCredential: async (entryId) => {
+      await vaultReady;
+      if (!vault || !vault.status().unlocked) throw new Error('O Vault está trancado');
+      const entry = (vault.list() || []).find((e) => e.id === entryId);
+      if (!entry) throw new Error('A credencial escolhida não existe mais no Vault');
+      const fields = entry.fields.map((f, i) => ({ name: f.name, value: f.secret ? vault.reveal(entryId, i) : f.value }));
+      const v = fromVaultFields(fields);
+      if (!v.user) throw new Error(`A entrada "${entry.name}" do Vault não tem usuário`);
+      return { user: v.user, password: v.password };
+    },
+  });
+  dbReady = dbSvc.init().catch((e) => { console.error('[db]', e); });
+}
+
+const DB_API = ['list', 'settings', 'setSettings', 'add', 'update', 'remove', 'test', 'watch', 'now', 'history', 'at', 'incident', 'deadlocks', 'topQueries', 'queryStoreDbs', 'queryStoreTop', 'health', 'plan', 'kill', 'summaries'];
+for (const fn of DB_API) {
+  ipcMain.handle('db:' + fn, async (_e, ...args) => { await dbReady; return dbSvc[fn](...args); });
+}
+// Plano de execução (.sqlplan) e grafo de deadlock (.xdl): os dois abrem no SSMS como desenho.
+const DB_FILE_KINDS = { sqlplan: { title: 'Salvar plano de execução', name: 'Plano do SQL Server' }, xdl: { title: 'Salvar grafo do deadlock', name: 'Deadlock do SQL Server' } };
+ipcMain.handle('db:savePlan', async (e, xml, name, ext = 'sqlplan') => {
+  const kind = DB_FILE_KINDS[ext] ? ext : 'sqlplan';
+  const r = await dialog.showSaveDialog(fromEvent(e), {
+    title: DB_FILE_KINDS[kind].title, defaultPath: String(name || 'plano').replace(/[\\/:*?"<>|]+/g, '_') + '.' + kind,
+    filters: [{ name: DB_FILE_KINDS[kind].name, extensions: [kind] }],
+  });
+  if (r.canceled || !r.filePath) return null;
+  await fs.writeFile(r.filePath, String(xml || ''), 'utf8');
+  return r.filePath;
 });
 
 /* ─────────────── IA (opcional: Ollama local ou API do Claude) ─────────────── */
@@ -698,13 +848,15 @@ if (!app.requestSingleInstanceLock()) {
   // o mesmo ID. Instalado, é o atalho do instalador. Em dev, sem ID explícito o processo fica com o padrão
   // electron.app.Electron e herda o ícone de qualquer atalho "Electron" que exista; com um ID sem atalho, o
   // Windows usa o ícone da janela. O sufixo .dev evita agrupar com o Devkit instalado.
-  if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'br.com.navship.tonidevkit' : 'br.com.navship.tonidevkit.dev');
+  if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? 'io.github.tonissx.tonidevkit' : 'io.github.tonissx.tonidevkit.dev');
 
   app.whenReady().then(() => {
     initNotes();
     initStickies();
     initLinks();
     initGit();
+    initLogs();
+    initDb();
     initAi();
     initVault();
     registerNotesProtocol();
@@ -740,6 +892,8 @@ if (!app.requestSingleInstanceLock()) {
       if (vault) await vault.flush().catch(() => {});
       if (stickies) await stickies.flush().catch(() => {});
       if (gitSvc) { gitSvc.unwatch(); await gitSvc.flush().catch(() => {}); }
+      if (logsSvc) { logsSvc.unwatch(); await logsSvc.flush().catch(() => {}); }
+      if (dbSvc) { dbSvc.stopAll(); await dbSvc.flush().catch(() => {}); }
       notesFlushed = true;
       app.quit();
     }, 300);
@@ -749,5 +903,6 @@ if (!app.requestSingleInstanceLock()) {
   app.on('will-quit', () => {
     globalShortcut.unregisterAll();
     if (sqlWorker) sqlWorker.terminate();
+    if (logsWorker) logsWorker.terminate();
   });
 }

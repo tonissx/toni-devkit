@@ -115,6 +115,37 @@ test('repoStatusChip: conflito tem prioridade; limpo não mostra nada', () => {
   assert.equal(chip([]), null);
 });
 
+test('logsAttention: erros novos primeiro, com resumo legível', () => {
+  const rows = H.logsAttention([
+    { id: 'a', name: 'iis', errors: 0, warns: 0, newErrors: 0, live: false },
+    { id: 'b', name: 'app.log', errors: 12, warns: 1, newErrors: 0, live: true },
+    { id: 'c', name: 'server.log', errors: 1500, warns: 30, newErrors: 3, live: true },
+  ]);
+  assert.deepEqual(rows.map((r) => [r.id, r.level, r.note]), [
+    ['c', 'new', '3 erros novos · 30 avisos · ao vivo'],
+    ['b', 'errors', '12 erros · 1 aviso · ao vivo'],
+    ['a', 'ok', 'sem erros · parado'],
+  ]);
+  assert.deepEqual(H.logsAttention(null), []);
+});
+
+test('dbAttention: bloqueio primeiro, depois sem conexão', () => {
+  const rows = H.dbAttention([
+    { id: 'a', name: 'Homolog', status: 'idle', background: false },
+    { id: 'b', name: 'RM', status: 'offline' },
+    { id: 'c', name: 'Fluig', status: 'ok', blocked: 3, heads: [{ id: 57, program: 'Fluig' }] },
+    { id: 'd', name: 'BI', status: 'ok', blocked: 0, active: 4, background: true },
+    { id: 'e', name: 'Novo', status: 'locked' },
+  ]);
+  assert.deepEqual(rows.map((r) => [r.id, r.level, r.note]), [
+    ['c', 'block', '3 bloqueada(s) · cabeça 57 (Fluig)'],
+    ['e', 'down', 'Vault trancado'],
+    ['b', 'down', 'sem conexão'],
+    ['d', 'ok', '4 sessão(ões) ativa(s) · segundo plano'],
+    ['a', 'idle', 'parado (abre ao entrar no Banco)'],
+  ]);
+});
+
 test('PANELS tem ids únicos', () => {
   const ids = H.PANELS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length);

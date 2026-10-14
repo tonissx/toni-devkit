@@ -1,5 +1,5 @@
 'use strict';
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 /** API mínima e explícita exposta ao renderer (window.devkit). */
 contextBridge.exposeInMainWorld('devkit', {
@@ -254,6 +254,8 @@ contextBridge.exposeInMainWorld('devkit', {
     summaries: () => ipcRenderer.invoke('git:summaries'),
     status: (repo) => ipcRenderer.invoke('git:status', repo),
     log: (repo, opts) => ipcRenderer.invoke('git:log', repo, opts),
+    /** Fotos do Gravatar por e-mail → { [email]: data URL | null }. Só o hash do e-mail sai da máquina. */
+    avatars: (emails) => ipcRenderer.invoke('git:avatars', emails),
     commit: (repo, hash) => ipcRenderer.invoke('git:commit', repo, hash),
     diff: (repo, opts) => ipcRenderer.invoke('git:diff', repo, opts),
     branches: (repo) => ipcRenderer.invoke('git:branches', repo),
@@ -291,6 +293,87 @@ contextBridge.exposeInMainWorld('devkit', {
       const h = (_e, evt) => cb(evt);
       ipcRenderer.on('git:changed', h);
       return () => ipcRenderer.removeListener('git:changed', h);
+    },
+  },
+  /**
+   * Logs (ver electron/logs): o texto fica no worker do processo principal; a tela pede só o que mostra.
+   * Consultas recebem { id, qid, ... } — qid identifica a consulta da tela (respostas de consultas velhas: { stale }).
+   */
+  logs: {
+    /** Caminho de um arquivo/pasta arrastado para a janela. */
+    pathOf: (file) => { try { return webUtils.getPathForFile(file) || null; } catch { return null; } },
+    pickFile: () => ipcRenderer.invoke('logs:pickFile'),
+    pickFolder: () => ipcRenderer.invoke('logs:pickFolder'),
+    /** spec: { kind: 'file'|'folder', path, family?, format?, encoding?, tail? } */
+    open: (spec) => ipcRenderer.invoke('logs:open', spec),
+    reformat: (id, opts) => ipcRenderer.invoke('logs:reformat', id, opts),
+    switchFamily: (id, family) => ipcRenderer.invoke('logs:switchFamily', id, family),
+    setLive: (id, on) => ipcRenderer.invoke('logs:setLive', id, on),
+    close: (id) => ipcRenderer.invoke('logs:close', id),
+    list: () => ipcRenderer.invoke('logs:list'),
+    summaries: () => ipcRenderer.invoke('logs:summaries'),
+    markSeen: (id) => ipcRenderer.invoke('logs:markSeen', id),
+    recents: () => ipcRenderer.invoke('logs:recents'),
+    forgetRecent: (p) => ipcRenderer.invoke('logs:forgetRecent', p),
+    presets: () => ipcRenderer.invoke('logs:presets'),
+    savePresets: (list) => ipcRenderer.invoke('logs:savePresets', list),
+    scanFolder: (dir) => ipcRenderer.invoke('logs:scanFolder', dir),
+    info: (args) => ipcRenderer.invoke('logs:info', args),
+    query: (args) => ipcRenderer.invoke('logs:query', args),
+    rows: (args) => ipcRenderer.invoke('logs:rows', args),
+    entry: (args) => ipcRenderer.invoke('logs:entry', args),
+    context: (args) => ipcRenderer.invoke('logs:context', args),
+    locate: (args) => ipcRenderer.invoke('logs:locate', args),
+    seekTime: (args) => ipcRenderer.invoke('logs:seekTime', args),
+    next: (args) => ipcRenderer.invoke('logs:next', args),
+    sparks: (args) => ipcRenderer.invoke('logs:sparks', args),
+    charts: (args) => ipcRenderer.invoke('logs:charts', args),
+    textOf: (args) => ipcRenderer.invoke('logs:textOf', args),
+    /** Escolhe o arquivo e grava o resultado do filtro. args: { id, qid, kind: 'log'|'md', name } */
+    exportTo: (args) => ipcRenderer.invoke('logs:export', args),
+    reveal: (p) => ipcRenderer.invoke('logs:reveal', p),
+    /** { type: 'progress'|'appended'|'reset'|'opening'|'error'|'crashed', id, ... } */
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('logs:changed', h);
+      return () => ipcRenderer.removeListener('logs:changed', h);
+    },
+  },
+  /**
+   * Banco — monitor de SQL Server (ver electron/db/service.js). A senha fica no Vault e nunca chega aqui:
+   * os servidores guardam só o id da entrada.
+   */
+  db: {
+    list: () => ipcRenderer.invoke('db:list'),
+    settings: () => ipcRenderer.invoke('db:settings'),
+    setSettings: (patch) => ipcRenderer.invoke('db:setSettings', patch),
+    add: (server) => ipcRenderer.invoke('db:add', server),
+    update: (id, patch) => ipcRenderer.invoke('db:update', id, patch),
+    remove: (id) => ipcRenderer.invoke('db:remove', id),
+    /** Testa antes de salvar: { ok, ms, info: { product_version, edition, has_view_server_state, ... } } */
+    test: (draft) => ipcRenderer.invoke('db:test', draft),
+    /** A tela abriu (true) / fechou (false) o servidor: ao vivo no intervalo cheio. */
+    watch: (id, on) => ipcRenderer.invoke('db:watch', id, on),
+    now: (id) => ipcRenderer.invoke('db:now', id),
+    history: (id, range) => ipcRenderer.invoke('db:history', id, range),
+    at: (id, t) => ipcRenderer.invoke('db:at', id, t),
+    incident: (id, incidentId, t) => ipcRenderer.invoke('db:incident', id, incidentId, t),
+    deadlocks: (id, range) => ipcRenderer.invoke('db:deadlocks', id, range),
+    topQueries: (id, opts) => ipcRenderer.invoke('db:topQueries', id, opts),
+    queryStoreDbs: (id) => ipcRenderer.invoke('db:queryStoreDbs', id),
+    queryStoreTop: (id, database, opts) => ipcRenderer.invoke('db:queryStoreTop', id, database, opts),
+    health: (id) => ipcRenderer.invoke('db:health', id),
+    plan: (id, opts) => ipcRenderer.invoke('db:plan', id, opts),
+    /** Salva XML como .sqlplan (ext padrão) ou .xdl (deadlock) — os dois abrem no SSMS. */
+    savePlan: (xml, name, ext) => ipcRenderer.invoke('db:savePlan', xml, name, ext),
+    /** Encerra a sessão; expect = { login_name, program_name } do que a pessoa viu (recusa se a sessão mudou). */
+    kill: (id, sessionId, expect) => ipcRenderer.invoke('db:kill', id, sessionId, expect),
+    summaries: () => ipcRenderer.invoke('db:summaries'),
+    /** { type: 'status'|'sample', id, ... } */
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('db:changed', h);
+      return () => ipcRenderer.removeListener('db:changed', h);
     },
   },
   /**

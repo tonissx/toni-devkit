@@ -297,14 +297,21 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     return P.parseWorktrees((await run(r.top, ['worktree', 'list', '--porcelain'])).stdout);
   }
 
-  /** Worktrees além do principal: pasta, branch, se a pasta ainda existe e quantas mudanças tem. */
+  /** O processo `pid` existe? (sinal 0 só testa; EPERM = existe mas é de outro usuário.) */
+  const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+
+  /**
+   * Worktrees além do principal: pasta, branch, se a pasta ainda existe e quantas mudanças tem. Travado: o motivo
+   * (lockReason), o pid dono da trava e se esse processo ainda existe (lockAlive; null quando o motivo não cita pid).
+   */
   async function worktrees(repo) {
     const r = await repoOf(repo);
     const list = (await worktreeList(r)).filter((w) => !w.main);
     return Promise.all(list.map(async (w) => {
       const exists = fss.existsSync(w.path);
       const dirty = exists ? (await run(w.path, ['status', '--porcelain'], { ok: [0, 128] }).then((x) => x.stdout.split('\n').filter(Boolean).length, () => 0)) : 0;
-      return { ...w, exists, dirty, name: w.path.split(/[\\/]/).pop() };
+      const lockPid = w.locked ? P.lockOwnerPid(w.lockReason) : null;
+      return { ...w, exists, dirty, name: w.path.split(/[\\/]/).pop(), lockPid, lockAlive: lockPid ? pidAlive(lockPid) : null };
     }));
   }
 

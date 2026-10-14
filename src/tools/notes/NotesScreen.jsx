@@ -15,6 +15,7 @@ import { buildTree, flattenTree, joinPath, baseName, isDescendant } from '../../
 import { emit } from '../../lib/events.js';
 import { useAiMode, aiOn } from '../../ai/ui.jsx';
 import { AskNotes } from './AskNotes.jsx';
+import { sideWidth, SIDE_COLLAPSED, SIDE_MAX, SIDE_DEFAULT, SIDE_WIDE } from '../../notes/panel.js';
 
 const { PageHeader, Button, IconButton, EmptyState, Icon, Kbd, Spinner, ContextMenu } = DS;
 
@@ -83,6 +84,29 @@ export function NotesScreen({ toast, request }) {
   const [dropping, setDropping] = React.useState(false); // arrastando arquivo(s) sobre a janela
   const searchRef = React.useRef(null);
   const listRef = React.useRef(null);
+
+  // Bandeja lateral: arrastar a borda direita define a largura (só grava ao soltar); duplo clique alterna padrão/larga.
+  const [sidePrefs, setSidePrefs] = usePersisted('notes.side', { w: SIDE_DEFAULT });
+  const rootRef = React.useRef(null);
+  const [liveW, setLiveW] = React.useState(null);
+  const maxW = () => (rootRef.current ? rootRef.current.getBoundingClientRect().width * 0.6 : SIDE_MAX);
+  const sideW = sideWidth(sidePrefs.w, maxW());
+  const shownW = liveW ?? sideW;
+  const collapsed = shownW <= SIDE_COLLAPSED;
+  const setSideW = (v) => setSidePrefs((p) => ({ ...p, w: sideWidth(v, maxW()) }));
+  const drag = {
+    onPointerDown: (e) => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); setLiveW(sideW); },
+    onPointerMove: (e) => { if (liveW != null && rootRef.current) setLiveW(sideWidth(e.clientX - rootRef.current.getBoundingClientRect().left - 24, maxW())); },
+    onPointerUp: () => { if (liveW != null) { setSideW(liveW); setLiveW(null); } },
+    onLostPointerCapture: () => setLiveW(null),
+    onDoubleClick: () => setSideW(collapsed ? SIDE_DEFAULT : sideW >= SIDE_WIDE - 8 ? SIDE_DEFAULT : SIDE_WIDE),
+    onKeyDown: (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      if (collapsed) { if (e.key === 'ArrowRight') setSideW(SIDE_DEFAULT); return; } // recolhida: → reabre
+      setSideW(sideW + (e.key === 'ArrowRight' ? 16 : -16)); // a borda está à direita: → alarga, ← estreita (até recolher)
+    },
+  };
 
   // Versões antigas guardavam Tarefas/Lixeira/Grafo como "filtro": vira a visão correspondente.
   React.useEffect(() => {
@@ -382,7 +406,7 @@ export function NotesScreen({ toast, request }) {
       {...dnd.dropProps(r.folder || '', 'n:' + key)}>
       <Icon name={rowIcon(r)} size={14} className="nts-row__icon" />
       <div className="nts-row__main">
-        <div className="nts-row__title"><Hl text={r.title} idx={r.titleIdx} />{r.pinned && inTree && <Icon name="pin" size={10} className="nts-row__pin" />}{r.tasksOpen + r.tasksDone > 0 && <span className="nts-row__tasks" title="Tarefas concluídas / total">☑ {r.tasksDone}/{r.tasksOpen + r.tasksDone}</span>}</div>
+        <div className="nts-row__title"><Hl text={r.title} idx={r.titleIdx} />{r.pinned && inTree && <Icon name="pin" size={10} className="nts-row__pin" />}{r.tasksOpen + r.tasksDone > 0 && <span className="nts-row__tasks" title="Tarefas concluídas / total"><Icon name="list-checks" size={11} /> {r.tasksDone}/{r.tasksOpen + r.tasksDone}</span>}</div>
         <div className="nts-row__sub"><Excerpt ex={q ? r.excerpt : null} fallback={r.preview} /></div>
         {(r.tags.length > 0 || (r.folder && !inTree)) && (
           <div className="nts-row__tags">
@@ -434,8 +458,16 @@ export function NotesScreen({ toast, request }) {
           <Button variant="primary" icon="plus" kbd={mod('N')} onClick={() => newNote()}>Nova nota</Button>
         </>}
       />
-      <div className="nts">
-        <aside className="nts__side">
+      <div className="nts" ref={rootRef}>
+        <aside className={'nts__side' + (liveW != null ? ' is-dragging' : '') + (collapsed ? ' is-collapsed' : '')} style={{ width: shownW }}>
+          <div className="nts__grip" role="separator" aria-orientation="vertical" aria-label="Largura da lista de notas"
+            title="Arraste para alargar, estreitar ou recolher · duplo clique alterna"
+            aria-valuemin={SIDE_COLLAPSED} aria-valuemax={SIDE_MAX} aria-valuenow={shownW} tabIndex={0} {...drag} />
+          {collapsed && (
+            <button type="button" className="nts__reopen" aria-label="Mostrar lista de notas" title="Mostrar lista de notas" onClick={() => setSideW(SIDE_DEFAULT)}>
+              <Icon name="chevron-right" size={12} />
+            </button>
+          )}
           <label className="tk-input tk-input--sm nts-search">
             <Icon name="search" size={14} className="tk-input__icon" />
             <input

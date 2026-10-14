@@ -122,6 +122,17 @@ function Gitignore({ repo, run }) {
   );
 }
 
+/** Por que o worktree está travado e quem o travou: sessão ainda viva (cuidado) ou já encerrada (a trava ficou órfã). */
+function LockNote({ w }) {
+  const who = w.lockReason ? `“${w.lockReason}”` : 'sem motivo informado';
+  const state = w.lockAlive == null ? 'não dá para saber se quem travou ainda existe' : w.lockAlive ? `o processo ${w.lockPid} ainda está rodando — provavelmente uma sessão em uso` : `o processo ${w.lockPid} não existe mais — a trava ficou órfã`;
+  return (
+    <small className={'gt-lock' + (w.lockAlive ? ' is-alive' : '')} title="Quem trava o worktree (git worktree lock) impede que ele seja apagado enquanto está em uso">
+      <Icon name="lock" size={11} /> Travado: {who} · {state}
+    </small>
+  );
+}
+
 /** Worktrees: cópias de trabalho extras do repositório (o Claude Code cria em .claude/worktrees). */
 function Worktrees({ repo, run }) {
   const { data: list } = useRepoData(repo, (r) => gitApi().worktrees(r));
@@ -137,11 +148,16 @@ function Worktrees({ repo, run }) {
             <Icon name="folder-git-2" size={14} />
             <span className="gt-mt__main">
               <b>{w.name}{w.branch ? <span className="gt-mono"> · {w.branch}</span> : ' · HEAD solto'}</b>
-              <small>{w.path}{!w.exists ? ' · a pasta não existe mais' : w.dirty ? ` · ${w.dirty} mudança(s) não commitada(s)` : ' · sem mudanças'}{w.locked ? ' · travado' : ''}</small>
+              <small>{w.path}{!w.exists ? ' · a pasta não existe mais' : w.dirty ? ` · ${w.dirty} mudança(s) não commitada(s)` : ' · sem mudanças'}</small>
+              {w.locked && <LockNote w={w} />}
             </span>
-            {w.exists && (w.dirty > 0
-              ? <OpButton op={{ op: 'worktree.removeForce', path: w.path }} run={run} disabled={w.locked} icon="trash-2" variant="danger">Remover mesmo assim</OpButton>
-              : <OpButton op={{ op: 'worktree.remove', path: w.path }} run={run} disabled={w.locked} icon="trash-2" variant="danger">Remover</OpButton>)}
+            {w.exists && (w.locked
+              ? <OpButton op={{ op: 'worktree.removeLocked', path: w.path }} run={run} icon="lock-open" variant="danger">
+                  {w.lockAlive ? 'Remover mesmo assim…' : 'Destravar e remover'}
+                </OpButton>
+              : w.dirty > 0
+                ? <OpButton op={{ op: 'worktree.removeForce', path: w.path }} run={run} icon="trash-2" variant="danger">Remover mesmo assim</OpButton>
+                : <OpButton op={{ op: 'worktree.remove', path: w.path }} run={run} icon="trash-2" variant="danger">Remover</OpButton>)}
           </div>
         ))}
       </div>

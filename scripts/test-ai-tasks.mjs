@@ -16,6 +16,11 @@ test('todas as tarefas montam system + user em texto', () => {
     jsonError: { error: 'x', line: 1, col: 1, excerpt: '1 | {' }, diffSummary: { patch }, noteMeta: { content: 'texto' },
     noteSummary: { content: 'texto' }, noteChecklist: { text: 'fazer a e b' }, notesAsk: { question: 'q', notes: [{ title: 'N', excerpt: 'e' }] },
     paletteAsk: { question: 'q', commands: [{ id: 'go:git', name: 'Git' }] }, clipExplain: { text: 'select 1', kind: 'sql' },
+    logError: { text: 'ERROR x\n\tat a.B.c(B.java:1)', format: 'jboss' },
+    logIncident: { groups: [{ level: 'ERROR', count: 3, title: 'x', first: '10:00', last: '10:05' }], total: 10 },
+    dbQuery: { sql: 'SELECT * FROM t WHERE a = 1', stats: { executions: 10 } },
+    dbPlan: { sql: 'select 1', plan: { cost: 1, operators: 1 }, insights: [], operators: [] },
+    dbDeadlock: { processes: [{ spid: 63, victim: true, sql: 'UPDATE a' }], resources: [{ type: 'keylock', object: 'db.dbo.T', holders: ['58'], waiters: ['63'] }] },
   };
   for (const [id, t] of Object.entries(TASKS)) {
     assert.ok(inputs[id], 'falta entrada de teste para ' + id);
@@ -31,6 +36,46 @@ test('entradas vazias viram erro em português', () => {
   assert.throws(() => TASKS.branchName.build({ description: ' ' }), /Descreva/);
   assert.throws(() => TASKS.notesAsk.build({ question: 'q', notes: [] }), /Nenhuma nota/);
   assert.throws(() => TASKS.clipExplain.build({ text: '' }), /vazia/);
+  assert.throws(() => TASKS.logError.build({ text: ' ' }), /vazia/);
+  assert.throws(() => TASKS.logIncident.build({ groups: [] }), /Nenhum problema/);
+});
+
+test('banco: query e deadlock vão sem segredos e com as métricas', () => {
+  const q = TASKS.dbQuery.build({ sql: "SELECT * FROM Cliente WHERE Email = 'ana@x.com' AND Cpf = '123.456.789-09'", stats: { executions: 120, avgDuration: '2,3 s', wait: 'PAGEIOLATCH_SH', blockedBy: 57 } });
+  assert.doesNotMatch(q.user, /ana@x\.com|123\.456\.789-09/);
+  assert.match(q.user, /execuções: 120 · duração média: 2,3 s · esperando agora: PAGEIOLATCH_SH · bloqueada pela sessão 57/);
+  assert.throws(() => TASKS.dbQuery.build({ sql: ' ' }), /vazia/);
+  const d = TASKS.dbDeadlock.build({ processes: [{ spid: 63, victim: true, app: 'RM', lockMode: 'U', sql: "UPDATE p SET s = 'x' WHERE email = 'b@y.com'" }, { spid: 58, app: 'Fluig', sql: 'UPDATE e' }], resources: [{ type: 'keylock', object: 'db.dbo.Pedido', index: 'PK', holders: ['58'], waiters: ['63'] }] });
+  assert.match(d.user, /Sessão 63 \(VÍTIMA\) · RM/);
+  assert.match(d.user, /keylock em db\.dbo\.Pedido \(índice PK\): segurado por 58; esperado por 63/);
+  assert.doesNotMatch(d.user, /b@y\.com/);
+  assert.throws(() => TASKS.dbDeadlock.build({ processes: [] }), /sem processos/);
+});
+
+test('banco: plano vai resumido, sem segredos, com achados e operadores', () => {
+  const r = TASKS.dbPlan.build({
+    sql: "SELECT * FROM T WHERE Email = 'ana@x.com'", plan: { cost: 12.5, operators: 4, dop: 1, serialReason: 'MaxDOPSetToOne', actual: true, grant: { grantedKb: 20480, usedKb: 512 } },
+    insights: [{ severity: 'error', title: 'Conversão implícita impede o Seek', detail: 'nvarchar × varchar' }],
+    operators: [{ id: 3, op: 'Index Scan', object: 'T (IX)', costPct: 71.2, estRows: 20000, actualRows: 2, executions: 1, predicate: ["[T].[Cpf]='123.456.789-09'"] }],
+    params: [{ name: '@p', type: 'varchar', compiled: "'a@b.com'", runtime: null }],
+  });
+  assert.match(r.user, /custo estimado: 12\.50 · 4 operadores/);
+  assert.match(r.user, /plano REAL/);
+  assert.match(r.user, /\[error\] Conversão implícita impede o Seek/);
+  assert.match(r.user, /#3 Index Scan em T \(IX\): 71\.2% do custo/);
+  assert.doesNotMatch(r.user, /ana@x\.com|123\.456\.789-09|a@b\.com/);
+  assert.throws(() => TASKS.dbPlan.build({ sql: ' ' }), /vazio/);
+});
+
+test('logs: segredos saem antes do envio; contexto Fluig quando o log é do Fluig', () => {
+  const r = TASKS.logError.build({ text: 'ERROR [com.fluig.x] senha=abc123 token: zzz user ana@x.com\n\tat com.fluig.A.b(A.java:1)', format: 'jboss', before: 'Authorization: Bearer xyz' });
+  assert.doesNotMatch(r.user, /abc123|zzz|ana@x\.com|xyz/);
+  assert.match(r.user, /‹oculto›/);
+  assert.match(r.system, /Fluig/);
+  assert.doesNotMatch(TASKS.logError.build({ text: 'Error: boom\n    at f (app.js:1)', format: 'ndjson' }).system, /Fluig/);
+  const inc = TASKS.logIncident.build({ groups: [{ level: 'ERROR', count: 2, title: 'Falha para joao@x.com', exception: 'a.X', rootCause: 'b.Y', frame: 'c.D.e', first: '1', last: '2' }], total: 5, filter: 'password=1' });
+  assert.match(inc.user, /1\. \[ERROR\] 2× — Falha para ‹oculto› \(a\.X → causa b\.Y\) em c\.D\.e/);
+  assert.doesNotMatch(inc.user, /password=1/);
 });
 
 test('clip anota o corte', () => {
@@ -187,4 +232,18 @@ test('palette: aviso de comandos que apagam trabalho', () => {
   assert.equal(riskyCommands('git clean -fd').length, 1);
   assert.equal(riskyCommands('git checkout -- .').length, 1);
   assert.equal(riskyCommands('git checkout main').length, 0);
+});
+
+test('prompt de melhoria: leva o pedido e a resposta, ajusta o papel pela tarefa e recusa resposta vazia', () => {
+  const { buildImprovePrompt } = require('../src/ai/improvePrompt.js');
+  const p = buildImprovePrompt({ label: 'Por que está lenta', task: 'dbQuery', request: 'Consulta:\nSELECT 1', answer: 'Crie um índice em (A, B).' });
+  assert.match(p, /DBA de SQL Server/);
+  assert.match(p, /Consulta:\nSELECT 1/);
+  assert.match(p, /Crie um índice em \(A, B\)\./);
+  assert.match(p, /CREATE INDEX/);
+  assert.match(p, /não invente/i);
+  assert.match(buildImprovePrompt({ task: 'paletteAsk', answer: 'x' }), /desenvolvedor sênior/);
+  assert.match(buildImprovePrompt({ task: 'sqlModify', answer: 'x' }), /engenheiro de dados/);
+  assert.ok(buildImprovePrompt({ task: 'dbPlan', request: 'a'.repeat(20000), answer: 'b'.repeat(20000) }).length < 20000);
+  assert.throws(() => buildImprovePrompt({ answer: '  ' }), /Sem resposta/);
 });
