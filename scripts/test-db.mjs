@@ -296,6 +296,10 @@ test('consultas: preâmbulo leve, métricas e números só de listas fechadas', 
   assert.match(Q.deadlocksSince("x'; DROP.xel", 5), /NULL, NULL/);
   assert.equal(Q.quoteName('a]b'), '[a]]b]');
   assert.match(Q.queryStoreTop("db'x", { fromIso: "2026-10-12T10:00:00Z' OR 1=1" }), /DB_ID\(N'db''x'\)[\s\S]*FROM \[db'x\]\.sys\.query_store_runtime_stats[\s\S]*i\.end_time >= '1900-01-01T00:00:00'/);
+  // Texto: cortado no ciclo do monitor, inteiro na aba Queries (sob demanda).
+  assert.match(Q.NOW, /LEFT\(SUBSTRING\(t\.text[\s\S]*?, 4000\) AS statement_text/);
+  assert.doesNotMatch(Q.topQueries(), /LEFT\(/);
+  assert.doesNotMatch(Q.queryStoreTop('db'), /LEFT\(/);
 });
 
 /* ─────────────── Plano de execução (Showplan) ─────────────── */

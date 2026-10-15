@@ -6,7 +6,7 @@
  * - Toda consulta vai com PREAMBLE: leitura suja (não espera nem segura lock), LOCK_TIMEOUT de 1 s, prioridade baixa
  *   em deadlock (se algo der errado, o monitor é a vítima) e sem contagem de linhas.
  * - Só views de sistema (DMVs). Plano de execução nunca no ciclo — só sob demanda (planFor).
- * - Textos de query cortados (4 mil caracteres o trecho, 8 mil o lote).
+ * - Textos de query cortados no ciclo (4 mil caracteres o trecho, 8 mil o lote); a aba Queries (sob demanda) traz inteiro.
  * - Nada de texto do usuário concatenado: métricas e bancos vêm de listas fechadas; números são validados.
  */
 
@@ -14,9 +14,13 @@
 const MARK = '/* toni-devkit-monitor */';
 const PREAMBLE = `${MARK} SET NOCOUNT ON; SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; SET LOCK_TIMEOUT 1000; SET DEADLOCK_PRIORITY LOW;\n`;
 
-// Trecho do comando que está rodando (offsets em bytes de nvarchar → /2).
-const stmt = (alias, textAlias) => `LEFT(SUBSTRING(${textAlias}.text, ${alias}.statement_start_offset / 2 + 1,
-    (CASE ${alias}.statement_end_offset WHEN -1 THEN DATALENGTH(${textAlias}.text) ELSE ${alias}.statement_end_offset END - ${alias}.statement_start_offset) / 2 + 1), 4000)`;
+// Trecho do comando que está rodando (offsets em bytes de nvarchar → /2). max = null: texto inteiro (só nas consultas
+// sob demanda — no ciclo do monitor o corte segura o tamanho de cada leitura).
+const stmt = (alias, textAlias, max = 4000) => {
+  const s = `SUBSTRING(${textAlias}.text, ${alias}.statement_start_offset / 2 + 1,
+    (CASE ${alias}.statement_end_offset WHEN -1 THEN DATALENGTH(${textAlias}.text) ELSE ${alias}.statement_end_offset END - ${alias}.statement_start_offset) / 2 + 1)`;
+  return max ? `LEFT(${s}, ${max})` : s;
+};
 
 /** Servidor e permissões (Testar conexão e cabeçalho). Funciona sem VIEW SERVER STATE. */
 const SERVER_INFO = `${PREAMBLE}
@@ -161,7 +165,7 @@ SELECT
 FROM ranked
 OUTER APPLY (
     SELECT TOP (1)
-        ${stmt('qs', 'st')} AS statement_text,
+        ${stmt('qs', 'st', null)} AS statement_text,
         DB_NAME(st.dbid) AS database_name,
         OBJECT_NAME(st.objectid, st.dbid) AS object_name,
         CONVERT(varchar(130), qs.plan_handle, 1) AS plan_handle
@@ -215,7 +219,7 @@ SELECT TOP (${n})
     MAX(rs.max_duration)                                       AS max_duration_us,
     COUNT(DISTINCT p.plan_id)                                  AS plans,
     MAX(rs.last_execution_time)                                AS last_execution,
-    LEFT(MAX(qt.query_sql_text), 4000)                         AS statement_text
+    MAX(qt.query_sql_text)                                     AS statement_text
 FROM ${db}.sys.query_store_runtime_stats AS rs
 JOIN ${db}.sys.query_store_runtime_stats_interval AS i ON i.runtime_stats_interval_id = rs.runtime_stats_interval_id
 JOIN ${db}.sys.query_store_plan AS p ON p.plan_id = rs.plan_id
