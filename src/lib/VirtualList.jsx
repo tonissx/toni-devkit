@@ -45,6 +45,19 @@ export function VirtualList({ count, rowHeight, renderRow, onRange, onAtBottom, 
     return () => el.removeEventListener('wheel', onWheel);
   }, [scale, rowHeight]);
 
+  // Em escala, o total entra na conta do scrollTop → posição virtual. Linhas novas (log ao vivo) mudam a escala e
+  // empurrariam o que está na tela com o scrollTop parado; aqui o scrollTop é refeito para manter a mesma posição virtual.
+  const keep = React.useRef({ scale, virt: virtTop, count });
+  React.useLayoutEffect(() => {
+    const k = keep.current;
+    const el = ref.current;
+    if (el && scale !== k.scale && count > k.count) {
+      const want = k.virt / scale;
+      if (Math.abs(el.scrollTop - want) > 0.5) { el.scrollTop = want; sync(); }
+      keep.current = { scale, virt: k.virt, count };
+    } else keep.current = { scale, virt: virtTop, count };
+  });
+
   const first = Math.max(0, Math.floor(virtTop / rowHeight) - OVERSCAN);
   const last = Math.min(count, Math.ceil((virtTop + view.h) / rowHeight) + OVERSCAN);
 
