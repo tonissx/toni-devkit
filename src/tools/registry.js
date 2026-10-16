@@ -18,4 +18,7 @@ const COMPONENTS = { sql: SqlFormatter, xml: XmlFormatter, diff: DiffChecker, js
 
 export const TOOLS = TOOL_META.map((t) => ({ ...t, component: COMPONENTS[t.id] }));
 
+/** Ferramentas na ordem em que aparecem na sidebar (agrupadas por `group`) — base do Ctrl+Tab. */
+export const SIDEBAR_ORDER = [...new Set(TOOLS.map((t) => t.group))].flatMap((g) => TOOLS.filter((t) => t.group === g));
+
 export const findTool = (id) => TOOLS.find((t) => t.id === id);

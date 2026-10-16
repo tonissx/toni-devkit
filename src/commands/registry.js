@@ -76,7 +76,6 @@ const toolCommands = TOOL_META.map((t) => ({
   description: t.desc,
   category: 'tools',
   icon: t.icon,
-  shortcut: t.shortcutKey ? 'Ctrl+' + t.shortcutKey : undefined,
   keywords: ['abrir', 'ferramenta', ...(t.keywords || [])],
   run: (ctx) => ctx.openApp(t.id),
 }));

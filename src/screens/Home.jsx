@@ -517,7 +517,6 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
           <div className="home-grid">
             {sorted.map((t) => (
               <ToolCard key={t.id} className={'home-tool is-' + (GROUP_HUE[t.group] || 'code')} icon={t.icon} name={t.name} description={t.desc} category={t.group}
-                shortcut={t.shortcutKey ? mod(t.shortcutKey) : undefined}
                 favorite={fav.ids.includes(t.id)} onToggleFavorite={() => toggleFav(t.id)} onClick={() => go(t.id)} />
             ))}
           </div>

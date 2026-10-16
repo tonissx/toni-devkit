@@ -9,7 +9,6 @@ const TOOL_META = [
     icon: 'database',
     group: 'Texto & código',
     desc: 'Formata e indenta SQL no padrão do sqlformat.org',
-    shortcutKey: '1',
     keywords: ['query', 'consulta', 'sqlformat', 'sqlparse', 'indentar', 'beautify'],
   },
   {
@@ -18,7 +17,6 @@ const TOOL_META = [
     icon: 'code-xml',
     group: 'Texto & código',
     desc: 'Formata e indenta XML nos moldes do vscode-xml (LemMinX)',
-    shortcutKey: '2',
     keywords: ['lemminx', 'soap', 'wsdl', 'xsd', 'indentar', 'beautify', 'pretty'],
   },
   {
@@ -27,7 +25,6 @@ const TOOL_META = [
     icon: 'git-compare',
     group: 'Texto & código',
     desc: 'Compara dois textos lado a lado, com destaque por caractere e merge',
-    shortcutKey: '3',
     keywords: ['comparar', 'compare', 'diferença', 'diffchecker', 'merge', 'mesclar'],
   },
   {
@@ -36,7 +33,6 @@ const TOOL_META = [
     icon: 'braces',
     group: 'Texto & código',
     desc: 'Edita, formata e explora JSON como grafo, árvore, YAML ou CSV (estilo JSON Crack)',
-    shortcutKey: '6',
     keywords: ['jsoncrack', 'json crack', 'grafo', 'graph', 'árvore', 'tree', 'jsonpath', 'yaml', 'csv', 'minificar', 'beautify', 'formatar'],
   },
   {
@@ -45,7 +41,6 @@ const TOOL_META = [
     icon: 'git-branch',
     group: 'Texto & código',
     desc: 'Repositórios locais: grafo do histórico, mudanças por trecho, branches, stash e desfazer qualquer coisa',
-    shortcutKey: '8',
     keywords: ['git', 'commit', 'branch', 'stash', 'merge', 'rebase', 'reflog', 'historico', 'repositório', 'versionamento', 'desfazer', 'diff'],
   },
   {
@@ -54,7 +49,6 @@ const TOOL_META = [
     icon: 'scroll-text',
     group: 'Texto & código',
     desc: 'Erros e avisos de logs grandes em segundos: filtros, problemas agrupados, gráficos e acompanhamento ao vivo',
-    shortcutKey: '9',
     keywords: ['log', 'logs', 'tail', 'server.log', 'fluig', 'jboss', 'wildfly', 'iis', 'nginx', 'apache', 'erro', 'exception', 'stack trace', 'ndjson', 'monitorar'],
   },
   {
@@ -63,7 +57,6 @@ const TOOL_META = [
     icon: 'database-zap',
     group: 'Texto & código',
     desc: 'Monitor de SQL Server: quem bloqueia quem, queries lentas, deadlocks e saúde — ao vivo e no histórico',
-    shortcutKey: '0',
     keywords: ['banco', 'sql server', 'mssql', 'monitor', 'bloqueio', 'blocking', 'lock', 'deadlock', 'kill', 'sessão', 'dmv', 'query lenta', 'dba', 'backup', 'log de transação'],
   },
   {
@@ -80,7 +73,6 @@ const TOOL_META = [
     icon: 'notebook-pen',
     group: 'Conhecimento',
     desc: 'Memória técnica: notas em Markdown, snippets e busca',
-    shortcutKey: '4',
     keywords: ['anotações', 'notas', 'snippets', 'conhecimento', 'markdown', 'wiki'],
   },
   {
@@ -89,7 +81,6 @@ const TOOL_META = [
     icon: 'vault',
     group: 'Conhecimento',
     desc: 'Cofre de senhas e tokens: criptografado com senha mestra, cópia que se apaga sozinha',
-    shortcutKey: '7',
     keywords: ['cofre', 'senha', 'senhas', 'password', 'credenciais', 'segredo', 'secret', 'token', 'banco', 'connection string', 'login'],
   },
   {
@@ -98,7 +89,6 @@ const TOOL_META = [
     icon: 'cpu',
     group: 'DevCore',
     desc: 'Infraestrutura idle com DevPets — cresce sozinha enquanto você trabalha',
-    shortcutKey: '5',
     keywords: ['idle', 'devpets', 'pets', 'jogo', 'incremental', 'compute', 'infraestrutura'],
   },
 ];
