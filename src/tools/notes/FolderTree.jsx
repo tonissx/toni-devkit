@@ -7,8 +7,8 @@ const { Icon } = DS;
 export const NOTE_DRAG = 'application/x-devkit-note';
 export const FOLDER_DRAG = 'application/x-devkit-folder';
 
-/** Props de preenchimento do ícone da pasta: preenchido (duotone) por padrão, só contorno com `meta.outline`. */
-const iconFill = (meta) => (meta.outline ? {} : { fill: 'currentColor', fillOpacity: 0.3 });
+/** Props de preenchimento do ícone da pasta: preenchido (quase sólido) por padrão, só contorno com `meta.outline`. */
+const iconFill = (meta) => (meta.outline ? {} : { fill: 'currentColor', fillOpacity: 0.75 });
 
 const hasType =(e, t) => Array.from(e.dataTransfer.types || []).includes(t);
 
