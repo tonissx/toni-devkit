@@ -23,6 +23,8 @@ function fakeServer(world) {
       async query(sql) {
         log.push(sql);
         if (!conn.alive) throw new Error('Sem conexão com o servidor');
+        if (/SELECT name FROM sys\.databases WHERE .* ORDER BY name/.test(sql)) return [{ rows: (world.dbs || ['Vendas', 'RM']).map((name) => ({ name })) }];
+        if (/sp_executesql/.test(sql)) { world.schemaSql = sql; const j = world.schemaJson || ''; const parts = j.match(/[\s\S]{1,40}/g) || []; return [{ rows: parts.map((p) => ({ 'JSON_F52E2B61': p })) }]; }
         if (/KILL \d+/.test(sql)) { world.killed = Number(/KILL (\d+)/.exec(sql)[1]); return []; }
         if (/SERVERPROPERTY/.test(sql)) return [{ rows: [{ product_version: '16.0.1000', edition: 'Express', has_view_server_state: 1, own_spid: 51, login_name: 'mon' }] }];
         if (/dm_os_sys_info/.test(sql)) return [{ rows: [{ sqlserver_start_time: 0, cpu_count: 4 }] }];
@@ -239,4 +241,24 @@ test('KILL confere a sessão: recusa se mudou de dono, encerra e registra se é 
   await svc.flush();
   const h = await svc.history(s.id, { from: clock.now() - 3600e3, to: clock.now() + 1 });
   assert.match(h.incidents.find((i) => i.kind === 'kill').title, /^Sessão 77 encerrada \(dba · SSMS\)$/);
+});
+
+test('schema do servidor: lista bancos, roda a query dentro do banco escolhido e junta o JSON em pedaços', async () => {
+  const world = { dbs: ['Vendas', 'RM'], schemaJson: JSON.stringify({ tables: [{ schema: 'dbo', name: 'A', columns: [{ name: 'Id', type: 'int', pk: 1 }] }], fks: [] }) };
+  const { svc, srv } = setup(world);
+  await svc.init();
+  const s = await svc.add({ host: 'srv', vaultEntryId: 'v1', intervalSec: 60 });
+  assert.deepEqual(await svc.schemaDbs(s.id), ['Vendas', 'RM']);
+  const r = await svc.schema(s.id, 'Vendas');
+  assert.equal(r.database, 'Vendas');
+  assert.equal(r.json, world.schemaJson); // pedaços de 40 caracteres reunidos
+  assert.match(world.schemaSql, /EXEC \[Vendas\]\.sys\.sp_executesql/);
+  assert.doesNotMatch(world.schemaSql, /\bUSE\b/); // não troca o banco da conexão do monitor
+  // banco fora da lista (ou nome malicioso) é recusado antes de qualquer EXEC
+  const count = () => srv.log.filter((x) => typeof x === 'string' && /sp_executesql/.test(x)).length;
+  const before = count();
+  await assert.rejects(svc.schema(s.id, 'x]; DROP DATABASE RM;--'), /não encontrado/);
+  assert.equal(count(), before);
+  world.schemaJson = '';
+  await assert.rejects(svc.schema(s.id, 'RM'), /VIEW DEFINITION/);
 });

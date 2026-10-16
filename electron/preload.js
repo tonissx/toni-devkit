@@ -362,6 +362,10 @@ contextBridge.exposeInMainWorld('devkit', {
     topQueries: (id, opts) => ipcRenderer.invoke('db:topQueries', id, opts),
     queryStoreDbs: (id) => ipcRenderer.invoke('db:queryStoreDbs', id),
     queryStoreTop: (id, database, opts) => ipcRenderer.invoke('db:queryStoreTop', id, database, opts),
+    /** Bancos de usuário acessíveis (SQL Visualizer). */
+    schemaDbs: (id) => ipcRenderer.invoke('db:schemaDbs', id),
+    /** Metadados do banco como JSON { database, json } — só catálogo (SQL Visualizer). */
+    schema: (id, database) => ipcRenderer.invoke('db:schema', id, database),
     health: (id) => ipcRenderer.invoke('db:health', id),
     plan: (id, opts) => ipcRenderer.invoke('db:plan', id, opts),
     /** Salva XML como .sqlplan (ext padrão) ou .xdl (deadlock) — os dois abrem no SSMS. */

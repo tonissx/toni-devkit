@@ -67,6 +67,14 @@ const TOOL_META = [
     keywords: ['banco', 'sql server', 'mssql', 'monitor', 'bloqueio', 'blocking', 'lock', 'deadlock', 'kill', 'sessão', 'dmv', 'query lenta', 'dba', 'backup', 'log de transação'],
   },
   {
+    id: 'sqlviz',
+    name: 'SQL Visualizer',
+    icon: 'network',
+    group: 'Texto & código',
+    desc: 'Transforma SQL em grafos: diagrama ER a partir de DDL ou metadados — local, nada é executado',
+    keywords: ['er', 'diagrama', 'schema', 'ddl', 'dbml', 'chave estrangeira', 'fk', 'tabelas', 'grafo', 'lineage', 'plano de execução', 'sqlplan', 'showplan', 'visualizar'],
+  },
+  {
     id: 'notes',
     name: 'Notes',
     icon: 'notebook-pen',

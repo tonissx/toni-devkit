@@ -9,6 +9,7 @@ com a sua própria licença.
 | [React](https://react.dev) e React DOM | Interface | MIT |
 | [Pyodide](https://pyodide.org) | CPython em WebAssembly (SQL Formatter) | MPL-2.0 |
 | [sqlparse](https://github.com/andialbrecht/sqlparse) | Motor de formatação do SQL Formatter (`vendor/python`) | BSD-3-Clause |
+| [node-sql-parser](https://github.com/taozhi8833998/node-sql-parser) | Leitura de T-SQL no SQL Visualizer (lineage), empacotado no app | Apache-2.0 |
 | [Lucide](https://lucide.dev) | Ícones (`renderer/vendor/lucide.min.js`) | ISC |
 | [Geist e Geist Mono](https://vercel.com/font) | Fontes (`renderer/ds/fonts`) | SIL OFL 1.1 |
 | [marked](https://github.com/markedjs/marked) | Markdown das notas | MIT |

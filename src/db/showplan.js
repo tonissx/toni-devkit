@@ -303,4 +303,17 @@ function aiSummary(stmt, an) {
   };
 }
 
-module.exports = { parseXml, parsePlan, analyze, aiSummary, layout, opInfo };
+/**
+ * Bytes de um arquivo .sqlplan → texto. O SSMS salva em UTF-16 LE (com BOM) e outras ferramentas em UTF-8; detecta pelo BOM
+ * (ou por zeros alternados, para UTF-16 sem BOM) e remove o BOM. Nunca interpreta o conteúdo — só decodifica.
+ */
+function decodePlan(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let enc = 'utf-8';
+  if (b.length >= 2 && b[0] === 0xff && b[1] === 0xfe) enc = 'utf-16le';
+  else if (b.length >= 2 && b[0] === 0xfe && b[1] === 0xff) enc = 'utf-16be';
+  else if (b.length >= 4 && b[0] === 0x3c && b[1] === 0) enc = 'utf-16le'; // sem BOM: '<' seguido de zero
+  return new TextDecoder(enc).decode(b).replace(/^﻿/, '');
+}
+
+module.exports = { decodePlan, parseXml, parsePlan, analyze, aiSummary, layout, opInfo };
