@@ -255,8 +255,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-list.is-drop-root { box-shadow: inset 0 0 0 1px var(--tk-accent); border-radius: var(--tk-radius-sm); background: color-mix(in srgb, var(--tk-accent) 6%, transparent); }
 /* Cascata: o ramo de uma pasta aberta fica recuado, com uma linha-guia leve à esquerda */
 .nts-branch { margin-left: 13px; padding-left: 4px; border-left: 1px solid color-mix(in srgb, var(--tk-border-strong) 55%, transparent); }
-.nts-branch.has-color { position: relative; border-left-color: transparent; } /* a linha colorida e arredondada é o ::before */
-.nts-branch.has-color::before { content: ''; position: absolute; left: -1px; top: 2px; bottom: 2px; width: 2px; border-radius: 2px; background: color-mix(in srgb, var(--fc) 70%, transparent); pointer-events: none; }
+.nts-branch.has-color { border-left-color: color-mix(in srgb, var(--fc) 70%, transparent); }
 .nts-branch.has-color > .nts-row.is-sel { box-shadow: inset 2px 0 0 var(--fc); }
 .nts-branch__empty { padding: 5px 8px; font-size: 11.5px; font-style: italic; color: var(--tk-text-3); }
 .nts-row.is-cascade { animation: nts-cascade 140ms ease-out both; animation-delay: calc(var(--i, 0) * 16ms); }
