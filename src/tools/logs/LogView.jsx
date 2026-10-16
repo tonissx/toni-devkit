@@ -144,9 +144,10 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   // Filtro mudou: mantém a entrada selecionada se ela ainda está no resultado.
   React.useEffect(() => {
     if (!sum || !sel) return;
+    // Atualização ao vivo (viaAppend) não rola de volta para a seleção; só mudança de filtro recentraliza.
     api.locate({ id, qid: sum.qid, i: sel.i }).then((r) => {
       if (!r || r.stale) return;
-      if (r.exact) { setSel((s) => (s && s.i === sel.i ? { ...s, pos: r.pos } : s)); if (!appended.current) goTo(r.pos); } else setSel((s) => (s && s.i === sel.i ? { ...s, pos: null } : s));
+      if (r.exact) { setSel((s) => (s && s.i === sel.i ? { ...s, pos: r.pos } : s)); if (!sum.viaAppend) goTo(r.pos); } else setSel((s) => (s && s.i === sel.i ? { ...s, pos: null } : s));
     }, () => {});
   }, [sum && sum.qid]);
 
