@@ -11,7 +11,7 @@ export const FOLDER_DRAG = 'application/x-devkit-folder';
  * Props de preenchimento do ícone da pasta: preenchido (quase sólido) por padrão, só contorno com `meta.outline`.
  * O traço (100%) é mais opaco que o miolo (50%) para os detalhes internos do ícone aparecerem.
  */
-const iconFill = (meta, color) => (meta.outline ? {} : {
+export const iconFill = (meta, color) => (meta.outline ? {} : {
   fill: color || 'currentColor', fillOpacity: 0.5,
 });
 

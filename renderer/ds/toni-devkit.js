@@ -1998,6 +1998,7 @@ function SegmentedControl({
       onChange && onChange(o.value);
     }
   }, o.icon && /*#__PURE__*/React.createElement(__ds_scope.Icon, {
+    ...o.iconProps,
     name: o.icon,
     size: 14
   }), o.label)));
@@ -2069,6 +2070,7 @@ function Select({
     "aria-haspopup": "listbox",
     "aria-expanded": open
   }, cur && cur.icon && /*#__PURE__*/React.createElement(__ds_scope.Icon, {
+    ...cur.iconProps,
     name: cur.icon,
     size: 14,
     className: "tk-input__icon"

@@ -9,7 +9,7 @@ import { TasksPanel } from './TasksPanel.jsx';
 import { TrashPanel } from './TrashPanel.jsx';
 import { TemplateModal } from './TemplateModal.jsx';
 import { GraphPanel } from './GraphPanel.jsx';
-import { FolderRow, PinnedFolderRow, useFolderDnD, NOTE_DRAG } from './FolderTree.jsx';
+import { FolderRow, PinnedFolderRow, useFolderDnD, iconFill, NOTE_DRAG } from './FolderTree.jsx';
 import { NameModal, DeleteFolderModal, MoveNoteModal, MoveFolderModal, ConfirmModal } from './FolderDialogs.jsx';
 import { FolderSettingsModal } from './FolderSettings.jsx';
 import { NotesSettingsModal, DEFAULT_PREFS } from './NotesSettings.jsx';
@@ -436,7 +436,14 @@ export function NotesScreen({ toast, request }) {
   };
 
   const folderOptions = React.useMemo(
-    () => flattenTree(buildTree(folders)).map((f) => ({ value: f.path, label: '  '.repeat(f.depth) + f.name, icon: 'folder' })),
+    () => flattenTree(buildTree(folders)).map((f) => {
+      const meta = folders.find((x) => x.path === f.path) || {};
+      const color = meta.color ? FOLDER_COLORS[meta.color] : undefined;
+      return {
+        value: f.path, label: '  '.repeat(f.depth) + f.name, icon: meta.icon || 'folder',
+        iconProps: { style: color ? { color } : undefined, ...iconFill(meta, color) },
+      };
+    }),
     [folders]);
 
   const dnd = useFolderDnD({
