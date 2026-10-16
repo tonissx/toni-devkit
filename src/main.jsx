@@ -1,6 +1,6 @@
 import { DS, mod, isMod, isMac } from './lib/ds.js';
 import { usePersisted } from './lib/store.js';
-import { TOOLS, findTool } from './tools/registry.js';
+import { SIDEBAR_ORDER, findTool } from './tools/registry.js';
 import { resolveTheme } from './lib/themes.js';
 import { AppSidebar } from './shell/AppSidebar.jsx';
 import { Home } from './screens/Home.jsx';
@@ -53,7 +53,16 @@ function App() {
       if (k === 'k') { e.preventDefault(); openPalette(); }
       else if (k === '\\') { e.preventDefault(); toggleSidebar(); }
       else if (k === ',') { e.preventDefault(); go('settings'); }
-      else { const t = TOOLS.find((x) => x.shortcutKey === e.key); if (t) { e.preventDefault(); go(t.id); } }
+      else if (e.key === 'Tab') {
+        // Ctrl+Tab / Ctrl+Shift+Tab: próxima / anterior na sidebar (Início → ferramentas → Início). Configurações fica de fora.
+        e.preventDefault();
+        const ids = ['home', ...SIDEBAR_ORDER.map((t) => t.id)];
+        setPrefs((p) => {
+          const at = ids.indexOf(p.route);
+          const next = at < 0 ? 0 : (at + (e.shiftKey ? -1 : 1) + ids.length) % ids.length;
+          return { ...p, route: ids[next] };
+        });
+      }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);

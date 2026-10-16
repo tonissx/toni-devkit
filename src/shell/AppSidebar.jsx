@@ -46,7 +46,7 @@ export function AppSidebar({ route, go, collapsed, onCollapse, dots = {} }) {
         <SidebarGroup key={g.name} label={collapsed ? null : g.name}>
           {g.items.map((t) => (
             <SidebarItem key={t.id} icon={t.icon} label={t.name} active={route === t.id} dot={!!dots[t.id] && route !== t.id}
-              shortcut={collapsed || !t.shortcutKey ? undefined : mod(t.shortcutKey)} onClick={() => go(t.id)} />
+              onClick={() => go(t.id)} />
           ))}
         </SidebarGroup>
       ))}

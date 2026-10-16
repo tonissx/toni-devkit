@@ -181,6 +181,8 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater, toast }) 
     ['Salvar saída', mod('S')],
     ['Recolher sidebar', mod('\\')],
     ['Configurações', mod(',')],
+    ['Próxima ferramenta', 'Ctrl+Tab'],
+    ['Ferramenta anterior', 'Ctrl+Shift+Tab'],
   ];
   return (
     <div>

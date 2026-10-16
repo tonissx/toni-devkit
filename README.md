@@ -151,7 +151,7 @@ npm start
 | --- | --- |
 | `Ctrl+Alt+Space` | Abre a palette de qualquer lugar |
 | `Ctrl+K` | Palette dentro do app |
-| `Ctrl+1` … `Ctrl+9`, `Ctrl+0` | Vai direto para a ferramenta |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Próxima / ferramenta anterior |
 | `Ctrl+Enter` | Formatar / comparar |
 | `Ctrl+,` | Configurações |
 

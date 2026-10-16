@@ -60,7 +60,7 @@ Opções (persistidas localmente):
 - Botão **Padrão sqlformat.org** restaura os padrões do site
 
 Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar saída · `Ctrl+O` abrir .sql · `Ctrl+S` salvar saída ·
-`Ctrl+K` command palette · `Ctrl+\` recolher sidebar · `Ctrl+,` configurações · `Ctrl+1` SQL Formatter.
+`Ctrl+K` command palette · `Ctrl+\` recolher sidebar · `Ctrl+,` configurações.
 
 ### XML Formatter
 
@@ -81,7 +81,7 @@ Opções (persistidas localmente, padrões = padrões do LemMinX):
 - Elementos com `xml:space="preserve"` e conteúdo misto (texto + tags juntos) não são reindentados por dentro
 - Botão **Padrão VS Code XML** restaura os padrões do LemMinX
 
-Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar saída · `Ctrl+O` abrir .xml · `Ctrl+S` salvar saída · `Ctrl+2` XML Formatter.
+Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar saída · `Ctrl+O` abrir .xml · `Ctrl+S` salvar saída.
 
 ### Diff Checker
 
@@ -97,7 +97,7 @@ Comparador de textos inspirado no [diffchecker.com](https://www.diffchecker.com/
 - **Recolher editores** deixa a tela toda para o resultado
 
 Atalhos: `Ctrl+Enter` comparar · `Alt+↓` / `Alt+↑` próxima/anterior mudança · `Ctrl+O` abrir no Original ·
-`Ctrl+Shift+O` abrir no Alterado · `Ctrl+Shift+S` trocar lados · `Ctrl+3` Diff Checker.
+`Ctrl+Shift+O` abrir no Alterado · `Ctrl+Shift+S` trocar lados.
 
 ### JSON Visualizer
 
@@ -117,12 +117,11 @@ o documento como **grafo de nós** (esquerda → direita). Tudo em JS puro e sem
 - **Erros de sintaxe** apontam linha e coluna no editor; o grafo mantém o último JSON válido enquanto você corrige.
 - **Exportar** o grafo como **PNG** ou **SVG** (segue o tema atual); **Abrir**/**Salvar** arquivos `.json` (até 20 MB).
 
-Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar a visão atual · `Ctrl+O` abrir .json · `Ctrl+S` salvar a visão atual ·
-`Ctrl+6` JSON Visualizer.
+Atalhos: `Ctrl+Enter` formatar · `Ctrl+Shift+C` copiar a visão atual · `Ctrl+O` abrir .json · `Ctrl+S` salvar a visão atual.
 
 ### Git
 
-Uma interface visual para os repositórios do computador (`Ctrl+8`), pensada para quem usa o básico do git e trava nas
+Uma interface visual para os repositórios do computador, pensada para quem usa o básico do git e trava nas
 operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nada de fetch/pull/push por enquanto).
 
 - **Repositórios**: **Adicionar pasta** (se a pasta não for um repositório, procura os que estão dentro dela) ou **Procurar
@@ -197,7 +196,7 @@ operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nad
 
 ### Logs
 
-Para achar rápido o que deu errado num log (`Ctrl+9`). Abre arquivos de centenas de MB em segundos, acompanha o arquivo
+Para achar rápido o que deu errado num log. Abre arquivos de centenas de MB em segundos, acompanha o arquivo
 **ao vivo** (como o `tail -f`) e junta pastas de **logs rotacionados**. Tudo é lido nesta máquina; nada sai do PC.
 
 - **Abrir**: arquivo, pasta ou **arrastar e soltar** — também por caminho de rede (`\\servidor\fluig\logs`), desde que o
@@ -250,7 +249,7 @@ Recentes, filtros salvos e formato escolhido à mão ficam em `%APPDATA%\Toni De
 
 ### Banco
 
-Monitor de SQL Server (2016 ou mais novo) para acompanhar ao vivo e investigar depois (`Ctrl+0`). Pensado para DBA de
+Monitor de SQL Server (2016 ou mais novo) para acompanhar ao vivo e investigar depois. Pensado para DBA de
 ambiente Fluig/RM: o que mais custa achar no SSMS — **quem está segurando quem** — aparece em destaque.
 
 - **Servidores**: **Adicionar servidor** com a credencial de uma entrada do **Vault** (login SQL; a senha nunca fica na
@@ -481,7 +480,7 @@ Inclua um objeto em `src/commands/registry.js`:
   description: 'Formata o JSON copiado e copia o resultado',
   category: 'actions',            // 'search' | 'tools' | 'actions'
   icon: 'braces',                 // ícone Lucide
-  shortcut: undefined,            // só exibição (ex.: 'Ctrl+1')
+  shortcut: undefined,            // só exibição (ex.: 'Ctrl+K')
   keywords: ['clipboard', 'pretty'],
   run: async (ctx, query) => {    // ctx: openApp, appCommand, openUrl, clipboard, sql, storage, quit
     const text = await ctx.clipboard.read();
@@ -506,7 +505,7 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   `Alt+P` Pinned · `Alt+R` Recentes · `Alt+S` Nova sticky note
 - **Snippets**: na palette, `Enter` **copia** o código e `Ctrl+Enter` abre. No editor, cartão com [Copiar] e
   `Ctrl+Shift+C`
-- **Editor** (ferramenta Notes, `Ctrl+4`): Markdown com modos Editar / Lado a lado / Visualizar (`Ctrl+E`),
+- **Editor** (ferramenta Notes): Markdown com modos Editar / Lado a lado / Visualizar (`Ctrl+E`),
   headings, listas, tabelas, citações, código com realce, checklists clicáveis e links internos `[[Título]]`
   (clicar abre a nota; se ela não existe, cria). Tags, aliases, pinned e favoritas; filtros da lista (chips na
   lateral) Quick · Pinned · Snippets · Favoritas · Recentes (editadas e vistas). A área principal tem abas de visão
@@ -623,7 +622,7 @@ window.devkit.notes.open({ id: hits[0].id }); // abre no editor
 ## Vault
 
 Cofre local para dados sensíveis — senha do banco, tokens, logins — protegido por uma **senha mestra**
-(`Ctrl+7`). As notas continuam sendo o lugar do conhecimento; o segredo fica no cofre e a nota só o referencia.
+As notas continuam sendo o lugar do conhecimento; o segredo fica no cofre e a nota só o referencia.
 
 - **Criptografia**: o arquivo inteiro (nomes inclusive) é AES-256-GCM com chave derivada da senha mestra por scrypt
   (N=2¹⁷, ~0,25 s e 128 MB por tentativa). Fica em `%APPDATA%\Toni Devkit\vault.json` — **fora** de
