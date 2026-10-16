@@ -3,8 +3,10 @@ import { usePersisted } from '../../lib/store.js';
 import { notesApi, cleanError } from '../../notes/client.js';
 import { filterGraph, neighborhood, createLayout, step, reheat, bounds } from '../../notes/graph.js';
 import { normalize } from '../../commands/search.js';
+import { buildTree, flattenTree, parentOf } from '../../notes/folders.js';
+import { FOLDER_COLORS } from '../../notes/foldermeta.js';
 
-const { SegmentedControl, IconButton, Icon, Spinner } = DS;
+const { SegmentedControl, IconButton, Icon, Spinner, Select } = DS;
 
 const MODES = [{ value: 'global', label: 'Global' }, { value: 'local', label: 'Nota atual' }];
 const DEPTHS = [{ value: 1, label: '1' }, { value: 2, label: '2' }];
@@ -23,6 +25,7 @@ const taskLabel = (n) => `${n.tasksDone}/${taskTotal(n)}`;
 export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
   const [opts, setOpts] = usePersisted('notes.graph', { mode: 'global', depth: 1, orphans: true, ghosts: false, pending: false });
   const [raw, setRaw] = React.useState(null); // null = carregando
+  const [folders, setFolders] = React.useState([]); // pastas (com cor/ícone configurados) — filtro e cores do grafo
   const [query, setQuery] = React.useState('');
   const [hover, setHover] = React.useState(null); // id do nó sob o ponteiro
   const wrapRef = React.useRef(null);
@@ -37,18 +40,22 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
   /* ─────────────── Dados ─────────────── */
   React.useEffect(() => {
     let t = null, alive = true;
-    const load = () => notesApi().graph().then((g) => alive && setRaw(g)).catch((e) => { if (alive) { setRaw({ nodes: [], links: [] }); toast('Não foi possível montar o grafo', cleanError(e), 'error'); } });
+    const load = () => Promise.all([notesApi().graph(), notesApi().folders().catch(() => [])]).then(([g, f]) => { if (alive) { setFolders(f); setRaw(g); } }).catch((e) => { if (alive) { setRaw({ nodes: [], links: [] }); toast('Não foi possível montar o grafo', cleanError(e), 'error'); } });
     load();
     const off = notesApi().onChanged(() => { clearTimeout(t); t = setTimeout(load, 200); });
     return () => { alive = false; off(); clearTimeout(t); };
   }, []);
 
   const local = opts.mode === 'local';
+  // Filtro de pasta (só no grafo global): a escolhida precisa ainda existir.
+  const folder = !local && opts.folder && folders.some((f) => f.path === opts.folder) ? opts.folder : null;
+  const folderChoices = React.useMemo(() => [{ value: '', label: 'Todas as pastas', icon: 'folders' },
+    ...flattenTree(buildTree(folders)).map((f) => ({ value: f.path, label: '  '.repeat(f.depth) + f.name, icon: 'folder' }))], [folders]);
   const shown = React.useMemo(() => {
     if (!raw) return null;
     if (local) return currentId ? neighborhood(filterGraph(raw, { ghosts: opts.ghosts }), currentId, opts.depth) : { nodes: [], links: [] };
-    return filterGraph(raw, { orphans: opts.orphans, ghosts: opts.ghosts });
-  }, [raw, local, currentId, opts.depth, opts.orphans, opts.ghosts]);
+    return filterGraph(raw, { orphans: opts.orphans, ghosts: opts.ghosts, folder });
+  }, [raw, local, currentId, opts.depth, opts.orphans, opts.ghosts, folder]);
 
   /* ─────────────── Desenho ─────────────── */
   const readColors = () => {
@@ -62,6 +69,15 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
       font: '500 11px ' + v('--tk-font-sans', 'system-ui, sans-serif'),
     };
   };
+
+  // Cor escolhida na configuração da pasta (a da própria pasta ou a da ancestral mais próxima que tiver uma).
+  const customColor = React.useMemo(() => {
+    const m = new Map(folders.filter((f) => f.color && FOLDER_COLORS[f.color]).map((f) => [f.path, FOLDER_COLORS[f.color]]));
+    return (folderPath) => { for (let p = folderPath || ''; p; p = parentOf(p)) if (m.has(p)) return m.get(p); return null; };
+  }, [folders]);
+  const customColorRef = React.useRef(customColor);
+  customColorRef.current = customColor;
+  React.useEffect(() => { requestDraw(); }, [customColor]);
 
   const folderColor = React.useMemo(() => {
     const tops = [...new Set((raw ? raw.nodes : []).map((n) => (n.folder || '').split('/')[0]).filter(Boolean))].sort();
@@ -112,7 +128,7 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
         ctx.fillStyle = col.bg; ctx.fill();
         ctx.setLineDash([3, 3]); ctx.strokeStyle = col.text3; ctx.lineWidth = 1.2; ctx.stroke(); ctx.setLineDash([]);
       } else {
-        ctx.fillStyle = col.palette[folderColor(n) % col.palette.length]; ctx.fill();
+        ctx.fillStyle = customColorRef.current(n.folder) || col.palette[folderColor(n) % col.palette.length]; ctx.fill();
       }
       if (n.id === s.current || (matches && matches.has(n.id)) || n.fixed) {
         ctx.lineWidth = 2; ctx.strokeStyle = n.id === s.current ? col.text : matches && matches.has(n.id) ? col.amber : col.text3;
@@ -294,6 +310,9 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
         <span className="nts-editor__spacer" />
         <SegmentedControl size="sm" options={MODES} value={opts.mode} onChange={set('mode')} />
         {local && <SegmentedControl size="sm" options={DEPTHS} value={opts.depth} onChange={set('depth')} />}
+        {!local && folders.length > 0 && (
+          <Select size="sm" className="nts-graph__folder" options={folderChoices} value={folder || ''} onChange={(v) => set('folder')(v || null)} />
+        )}
         <label className="tk-input tk-input--sm nts-graph__search">
           <Icon name="search" size={13} className="tk-input__icon" />
           <input value={query} placeholder="Destacar…" aria-label="Destacar notas no grafo" onChange={(e) => setQuery(e.target.value)}

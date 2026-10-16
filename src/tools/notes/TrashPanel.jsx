@@ -15,11 +15,13 @@ export function TrashPanel({ onOpen, toast }) {
   const [sel, setSel] = React.useState(null);     // file
   const [confirm, setConfirm] = React.useState(null); // { kind: 'one', item } | { kind: 'all' }
   const [error, setError] = React.useState(null);
+  const [folders, setFolders] = React.useState([]);   // pastas excluídas com notas aqui: [{ path, notes }]
 
   const refresh = React.useCallback(async () => {
     try {
-      const list = await notesApi().trashList();
+      const [list, fg] = await Promise.all([notesApi().trashList(), notesApi().trashFolders().catch(() => [])]);
       setItems(list);
+      setFolders(fg);
       setSel((s) => (list.some((i) => i.file === s) ? s : list[0] ? list[0].file : null));
       setError(null);
     } catch (e) { setError(cleanError(e)); setItems([]); }
@@ -42,6 +44,13 @@ export function TrashPanel({ onOpen, toast }) {
       onOpen(n.id);
     } catch (e) { toast('Não foi possível restaurar', cleanError(e), 'error'); }
   };
+  // Volta a pasta inteira: subpastas, configuração (cor, template…) e todas as notas que estavam nela.
+  const restoreFolder = async (f) => {
+    try {
+      const r = await notesApi().restoreFolderFromTrash(f.path);
+      toast('Pasta restaurada', `“${f.path}” com ${r.notes} ${r.notes === 1 ? 'nota' : 'notas'}`);
+    } catch (e) { toast('Não foi possível restaurar a pasta', cleanError(e), 'error'); }
+  };
   const destroy = async (item) => {
     try { await notesApi().deleteFromTrash(item.file); toast('Excluída de vez', item.title); }
     catch (e) { toast('Não foi possível excluir', cleanError(e), 'error'); }
@@ -62,6 +71,17 @@ export function TrashPanel({ onOpen, toast }) {
         <Button size="sm" variant="secondary" icon="trash" disabled={!items || !items.length} onClick={() => setConfirm({ kind: 'all' })}>Esvaziar lixeira</Button>
       </div>
       {error && <div className="nts-list__msg is-error">Erro ao ler a lixeira: {error}</div>}
+      {items && items.length > 0 && folders.length > 0 && (
+        <div className="nts-trash__folders" role="group" aria-label="Pastas excluídas">
+          <span className="nts-trash__folders-label"><Icon name="folder-x" size={12} /> Pastas excluídas</span>
+          {folders.map((f) => (
+            <span key={f.path} className="nts-trash__folder">
+              <Icon name="folder" size={11} /> {f.path} <small>{f.notes} {f.notes === 1 ? 'nota' : 'notas'}</small>
+              <Button size="sm" variant="ghost" icon="rotate-ccw" onClick={() => restoreFolder(f)}>Restaurar pasta</Button>
+            </span>
+          ))}
+        </div>
+      )}
       {items === null ? (
         <div className="nts-list__msg"><Spinner size={14} /> Carregando…</div>
       ) : !items.length ? (

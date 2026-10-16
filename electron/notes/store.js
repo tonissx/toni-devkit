@@ -9,6 +9,8 @@
  * - Excluir move para .trash\ (mantendo a subpasta; nada é apagado de verdade).
  * - Arquivo ilegível é pulado e reportado, sem derrubar os demais.
  * - Nomes que começam com "." (.trash, .devkit, .git…) e links simbólicos são ignorados ao carregar.
+ * - Configurações de uma pasta (cor, ícone, template padrão…) ficam em <pasta>\.folder.json (ver foldermeta.js);
+ *   o diretório leva o arquivo junto ao renomear/mover.
  * - Estado do app (recentes vistos) fica em .devkit\state.json.
  * - Imagens coladas nas notas ficam em .assets\ (referenciadas como "![](.assets/nome.png)").
  * - Versões anteriores de cada nota ficam em .devkit\history\<id>\<AAAAMMDD-HHmmss-SSS>.md (as HISTORY_MAX
@@ -18,6 +20,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { serialize, parse } = require('../../src/notes/format.js');
 const { normFolder, folderOf, baseName } = require('../../src/notes/folders.js');
+const { META_FILE, sanitizeMeta } = require('../../src/notes/foldermeta.js');
 const { atomicWrite, renameRetry, createQueue } = require('../lib/fsx.js');
 
 const exists = (p) => fs.access(p).then(() => true, () => false);
@@ -31,8 +34,9 @@ const dateOfStamp = (s) => new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice
 /** Id → nome de diretório seguro (ids derivados de nome de arquivo podem ter espaço/acento). */
 const idDir = (id) => String(id || '').replace(/[^\w.-]/g, '_').replace(/^\.+/, '_') || '_';
 
-function createStore(dir) {
+function createStore(dir, { historyMax = HISTORY_MAX } = {}) {
   const root = path.resolve(dir);
+  const limits = { historyMax };
   const queue = createQueue(); // gravações por arquivo, em ordem
   const trashDir = path.join(root, '.trash');
   const stateFile = path.join(root, '.devkit', 'state.json');
@@ -62,6 +66,10 @@ function createStore(dir) {
   }
 
   const fileOf = (note) => resolveIn(note.file || note.id + '.md');
+  /** Configuração de uma pasta a partir do diretório absoluto ({} se não existe ou está ilegível). */
+  const readMetaAbs = async (abs) => {
+    try { return sanitizeMeta(JSON.parse(await fs.readFile(path.join(abs, META_FILE), 'utf8'))); } catch { return {}; }
+  };
   const enqueue = (file, job) => queue.run(file, job);
 
   /** Já existe um item com esse nome (sem diferenciar maiúsculas) dentro de `parentAbs`? Devolve o nome existente. */
@@ -76,10 +84,13 @@ function createStore(dir) {
     dir,
     resolveIn,
 
-    /** Lê todas as notas, recursivamente. { notes, errors: [{ file, error }], folders: ['a', 'a/b', …] } */
+    /**
+     * Lê todas as notas, recursivamente.
+     * { notes, errors: [{ file, error }], folders: ['a', 'a/b', …], meta: { 'a/b': { color, … } } }
+     */
     async loadAll() {
       await fs.mkdir(root, { recursive: true });
-      const notes = [], errors = [], folders = [];
+      const notes = [], errors = [], folders = [], meta = {};
       const walk = async (rel) => {
         const abs = rel ? path.join(root, rel) : root;
         let entries;
@@ -87,6 +98,10 @@ function createStore(dir) {
           if (!rel) throw err; // a raiz ilegível é erro de verdade
           errors.push({ file: rel, error: String(err.message || err) });
           return;
+        }
+        if (rel && entries.some((e) => e.name === META_FILE && e.isFile())) {
+          const m = await readMetaAbs(abs);
+          if (Object.keys(m).length) meta[rel] = m;
         }
         await Promise.all(entries.map(async (e) => {
           if (e.name.startsWith('.') || e.isSymbolicLink()) return;
@@ -107,7 +122,7 @@ function createStore(dir) {
       };
       await walk('');
       folders.sort();
-      return { notes, errors, folders };
+      return { notes, errors, folders, meta };
     },
 
     /** Grava a nota (atômico, enfileirado por arquivo; cria a subpasta se preciso). */
@@ -212,7 +227,12 @@ function createStore(dir) {
       const abs = trashPath(rel);
       await fs.rm(abs, { force: true });
       for (let d = path.dirname(abs); d !== trashDir && d.startsWith(trashDir + path.sep); d = path.dirname(d)) {
-        try { await fs.rmdir(d); } catch { break; }
+        try {
+          // Só sobrou a configuração da pasta excluída? Sai junto — não há mais nota nenhuma dela na lixeira.
+          const left = await fs.readdir(d);
+          if (left.length && left.every((n) => n === META_FILE)) await fs.rm(path.join(d, META_FILE), { force: true });
+          await fs.rmdir(d);
+        } catch { break; }
       }
     },
 
@@ -228,7 +248,12 @@ function createStore(dir) {
       const dirAbs = path.join(historyDir, idDir(note.id));
       await atomicWrite(path.join(dirAbs, stampOf(at) + '.md'), serialize(note));
       const names = (await fs.readdir(dirAbs)).filter((n) => STAMP_RE.test(n.slice(0, -3)) && n.endsWith('.md')).sort();
-      for (const n of names.slice(0, Math.max(0, names.length - HISTORY_MAX))) await fs.rm(path.join(dirAbs, n), { force: true });
+      for (const n of names.slice(0, Math.max(0, names.length - limits.historyMax))) await fs.rm(path.join(dirAbs, n), { force: true });
+    },
+
+    /** Ajusta limites em uso (ex.: quantas versões guardar por nota). */
+    configure({ historyMax: max } = {}) {
+      if (Number.isFinite(max) && max >= 1) limits.historyMax = Math.floor(max);
     },
 
     /** Versões da nota, mais recentes primeiro: [{ stamp, at }]. */
@@ -271,13 +296,68 @@ function createStore(dir) {
       }
     },
 
-    /** Remove o diretório se estiver vazio; devolve false se ainda tem algo dentro. */
+    /** Configuração da pasta (`{}` se não tem). */
+    readMeta: (rel) => readMetaAbs(resolveIn(rel)),
+
+    /** Grava a configuração da pasta; vazia apaga o `.folder.json`. */
+    async writeMeta(rel, meta) {
+      const abs = resolveIn(rel);
+      const clean = sanitizeMeta(meta);
+      const file = path.join(abs, META_FILE);
+      if (!Object.keys(clean).length) { await fs.rm(file, { force: true }); return; }
+      await atomicWrite(file, JSON.stringify(clean, null, 2));
+    },
+
+    /** Remove o diretório se estiver vazio (o `.folder.json` não conta); devolve false se ainda tem algo dentro. */
     async rmdir(rel) {
-      try { await fs.rmdir(resolveIn(rel)); return true; } catch (e) {
+      const abs = resolveIn(rel);
+      try {
+        const left = (await fs.readdir(abs)).filter((n) => n !== META_FILE);
+        if (left.length) return false;
+        await fs.rm(path.join(abs, META_FILE), { force: true });
+        await fs.rmdir(abs);
+        return true;
+      } catch (e) {
         if (e.code === 'ENOTEMPTY' || e.code === 'EEXIST') return false;
         if (e.code === 'ENOENT') return true;
         throw e;
       }
+    },
+
+    /** Guarda na lixeira a configuração de uma pasta excluída (volta junto com "Restaurar pasta"). */
+    async trashMeta(rel, meta) {
+      const clean = sanitizeMeta(meta);
+      if (!Object.keys(clean).length) return;
+      await atomicWrite(path.join(trashDir, ...normFolder(rel).split('/'), META_FILE), JSON.stringify(clean, null, 2));
+    },
+    /** Configuração guardada na lixeira para a pasta `rel` ({} se não tem). */
+    readTrashMeta: (rel) => readMetaAbs(path.join(trashDir, ...normFolder(rel).split('/'))),
+
+    /** Apaga a configuração guardada na lixeira para `rel` (e os diretórios que ficarem vazios). */
+    async dropTrashMeta(rel) {
+      const abs = path.join(trashDir, ...normFolder(rel).split('/'));
+      if (!abs.startsWith(trashDir + path.sep)) return;
+      await fs.rm(path.join(abs, META_FILE), { force: true });
+      for (let d = abs; d !== trashDir && d.startsWith(trashDir + path.sep); d = path.dirname(d)) {
+        try { await fs.rmdir(d); } catch { break; }
+      }
+    },
+
+    /** Diretórios que existem dentro da lixeira, como caminhos relativos ('a', 'a/b'). */
+    async listTrashDirs() {
+      const out = [];
+      const walk = async (rel) => {
+        let entries;
+        try { entries = await fs.readdir(rel ? path.join(trashDir, rel) : trashDir, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+          if (!e.isDirectory() || e.isSymbolicLink()) continue;
+          const childRel = rel ? rel + '/' + e.name : e.name;
+          out.push(childRel);
+          await walk(childRel);
+        }
+      };
+      await walk('');
+      return out;
     },
 
     /** Caminho absoluto de uma imagem de .assets\ (só o nome do arquivo, sem subpastas). */
@@ -306,4 +386,4 @@ function createStore(dir) {
   };
 }
 
-module.exports = { createStore };
+module.exports = { createStore, HISTORY_MAX };

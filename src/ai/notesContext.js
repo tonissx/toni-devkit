@@ -4,6 +4,7 @@
 // ```secret``` têm só o NOME da entrada do Vault — o segredo nunca é resolvido aqui.
 
 const { keywords } = require('./related.js');
+const { isTemplateFolder } = require('../notes/templates.js');
 
 /** Trecho de até `max` caracteres em volta da 1ª palavra-chave encontrada (ou o começo da nota). */
 function excerptAround(content, words, max = 1500) {
@@ -16,15 +17,18 @@ function excerptAround(content, words, max = 1500) {
   return (start > 0 ? '…' : '') + text.slice(start, start + max) + (start + max < text.length ? '…' : '');
 }
 
-/** → { question, notes: [{ id, title, excerpt }] } com até `limit` notas. */
-async function gatherNotes(question, limit = 6) {
-  const api = window.devkit.notes;
+/**
+ * → { question, notes: [{ id, title, excerpt }] } com até `limit` notas. Notas da pasta Templates (modelos, não
+ * conhecimento) nunca entram; com `folder` só as dessa pasta e das subpastas. `api` é a API de Notes (testes).
+ */
+async function gatherNotes(question, limit = 6, { folder = null, api = window.devkit.notes } = {}) {
   const words = keywords(question);
+  const opts = (n) => ({ limit: n, ...(folder ? { filter: { folder, recursive: true } } : {}) });
   const score = new Map(); // id → { hit, score }
   const add = (hits) => { for (const h of hits) { const cur = score.get(h.id); if (!cur || h.score > cur.score) score.set(h.id, h); } };
-  add(await api.search(question, { limit: 12 }).catch(() => []));
-  if (score.size < limit) for (const w of words) add(await api.search(w, { limit: 6 }).catch(() => []));
-  const best = [...score.values()].filter((h) => !(h.tags || []).includes('privado')).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, limit);
+  add(await api.search(question, opts(12)).catch(() => []));
+  if (score.size < limit) for (const w of words) add(await api.search(w, opts(6)).catch(() => []));
+  const best = [...score.values()].filter((h) => !(h.tags || []).includes('privado') && !isTemplateFolder(h.folder)).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, limit);
   const notes = [];
   for (const h of best) {
     const full = await api.get(h.id).catch(() => null);

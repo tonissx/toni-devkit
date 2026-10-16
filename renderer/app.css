@@ -277,6 +277,50 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-move__item:hover { background: var(--tk-surface-3); color: var(--tk-text); }
 .nts-move__item.is-on { color: var(--tk-accent-text); }
 .nts-move__check { margin-left: auto; }
+.nts-move__item.is-hi { background: var(--tk-surface-3); color: var(--tk-text); }
+/* Explorador por teclado: o item focado precisa aparecer (a lista é uma árvore com roving tabindex). */
+.nts-folder:focus-visible, .nts-row:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: -2px; }
+.nts-folder:focus-visible, .nts-row:focus-visible { background: color-mix(in srgb, var(--tk-accent) 8%, transparent); }
+.nts-folder__pin { flex-shrink: 0; color: var(--tk-text-3); transform: rotate(35deg); }
+.nts-folder.is-shortcut { padding-left: 22px; } /* alinha o ícone com o das pastas da árvore (que têm a setinha antes) */
+.nts-folder.is-shortcut .nts-folder__name { flex: 0 1 auto; }
+.nts-listbar { flex-wrap: wrap; row-gap: 4px; }
+.nts-listbar__dest { min-width: 0; }
+.nts-folder__where { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-size: 10.5px; color: var(--tk-text-3); }
+.nts-listbar__scope { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border: 1px solid var(--tk-border-strong); border-radius: 4px; background: none; color: var(--tk-text-3); font: 500 10.5px var(--tk-font-sans); letter-spacing: 0; text-transform: none; cursor: pointer; white-space: nowrap; }
+.nts-listbar__scope:hover { color: var(--tk-text); }
+.nts-listbar__scope.is-on { color: var(--tk-accent-text); border-color: var(--tk-accent); background: color-mix(in srgb, var(--tk-accent) 10%, transparent); }
+.nts-dialog__warn { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 8px; padding: 8px 10px; border-radius: var(--tk-radius-sm); font-size: 12px; line-height: 1.45; color: var(--tk-amber); background: color-mix(in srgb, var(--tk-amber) 10%, transparent); }
+.nts-crumbs { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; font-size: 11.5px; color: var(--tk-text-3); }
+.nts-crumbs__sep { opacity: .6; }
+.nts-crumbs__seg { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 5px; border: 0; border-radius: 4px; background: none; color: var(--tk-text-2); font: inherit; cursor: pointer; }
+.nts-crumbs__seg:hover { background: var(--tk-surface-3); color: var(--tk-accent-text); }
+.nts-crumbs__seg:focus-visible { outline: 2px solid var(--tk-accent); }
+/* Configurações (pasta e Notes) */
+.nts-fset { display: flex; flex-direction: column; gap: 12px; }
+.nts-fset__sec { display: flex; flex-direction: column; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--tk-border); }
+.nts-fset__sec:last-of-type { border-bottom: 0; padding-bottom: 0; }
+.nts-fset__sec h3 { margin: 0; font: 600 12px var(--tk-font-sans); letter-spacing: .04em; text-transform: uppercase; color: var(--tk-text-3); }
+.nts-fset small { display: block; margin-top: 4px; font-size: 11.5px; line-height: 1.4; color: var(--tk-text-3); }
+.nts-fset small code, .nts-fset__path code { font: 400 11.5px var(--tk-font-mono); color: var(--tk-text-2); word-break: break-all; }
+.nts-fset__row { display: grid; grid-template-columns: 130px 1fr; align-items: start; gap: 10px; }
+.nts-fset__label { padding-top: 5px; font-size: 12.5px; color: var(--tk-text-2); }
+.nts-fset__field { min-width: 0; }
+.nts-fset__path { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: var(--tk-radius-sm); background: var(--tk-surface-2); color: var(--tk-text-3); }
+.nts-fset__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.nts-fset__swatches, .nts-fset__icons { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 3px; }
+.nts-swatch { width: 22px; height: 22px; padding: 0; border: 2px solid transparent; border-radius: 50%; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.nts-swatch.is-none { background: var(--tk-surface-2); color: var(--tk-text-3); border-color: var(--tk-border-strong); }
+.nts-swatch.is-on { border-color: var(--tk-text); box-shadow: 0 0 0 2px var(--tk-bg) inset; }
+.nts-swatch:focus-visible, .nts-iconpick:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; }
+.nts-iconpick { width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: var(--tk-radius-sm); background: var(--tk-surface-2); color: var(--tk-text-2); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.nts-iconpick:hover { color: var(--tk-text); border-color: var(--tk-border-strong); }
+.nts-iconpick.is-on { border-color: var(--tk-accent); background: color-mix(in srgb, var(--tk-accent) 12%, transparent); }
+.nts-trash__folders { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; padding: 6px 12px; border-bottom: 1px solid var(--tk-border); background: var(--tk-surface-1); font-size: 12px; color: var(--tk-text-2); }
+.nts-trash__folders-label { display: inline-flex; align-items: center; gap: 5px; font: 600 10.5px var(--tk-font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--tk-text-3); }
+.nts-trash__folder { display: inline-flex; align-items: center; gap: 5px; }
+.nts-trash__folder small { color: var(--tk-text-3); }
+.nts-graph__folder { width: 150px; }
 .nts-chip {
   height: 22px; padding: 0 8px; border: 1px solid var(--tk-border); border-radius: 999px; cursor: pointer;
   background: transparent; color: var(--tk-text-3); font: 500 11.5px/1 var(--tk-font-sans);

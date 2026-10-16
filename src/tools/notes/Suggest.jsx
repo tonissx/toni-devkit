@@ -21,8 +21,11 @@ export const linkSource = (noteId) => ({
   detect: linkQueryAt,
   load: async (q) => {
     const rows = await notesApi().search(q.query, { limit: 9 });
+    // Notas de mesmo título em pastas diferentes: o link leva a pasta ([[Pasta/Título]]) para não cair na errada.
+    const seen = new Map();
+    for (const r of rows) seen.set(normalize(r.title), (seen.get(normalize(r.title)) || 0) + 1);
     const items = rows.filter((r) => r.id !== noteId).slice(0, 8)
-      .map((r) => ({ key: r.id, icon: r.type === 'snippet' ? 'braces' : 'file-text', title: r.title, aside: r.folder, value: r.title }));
+      .map((r) => ({ key: r.id, icon: r.type === 'snippet' ? 'braces' : 'file-text', title: r.title, aside: r.folder, value: r.folder && seen.get(normalize(r.title)) > 1 ? r.folder + '/' + r.title : r.title }));
     const query = q.query.trim();
     if (query && !items.some((i) => normalize(i.title) === normalize(query))) {
       items.push({ key: 'new', icon: 'file-plus', title: <>Nova nota: <b>{query}</b></>, value: query });

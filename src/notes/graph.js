@@ -48,13 +48,16 @@ function buildGraph(notes, index, exclude = () => false) {
 }
 
 /** Subgrafo sem órfãs (grau 0) e/ou sem fantasmas. Graus recalculados para o que sobrou. */
-function filterGraph(graph, { orphans = true, ghosts = true } = {}) {
+function filterGraph(graph, { orphans = true, ghosts = true, folder = null } = {}) {
   let nodes = graph.nodes.filter((n) => (ghosts || !n.ghost));
+  // Só uma pasta (e subpastas): as notas de fora saem; "fantasmas" ficam só se algum link da pasta aponta para eles.
+  if (folder) nodes = nodes.filter((n) => n.ghost || n.folder === folder || String(n.folder).startsWith(folder + '/'));
   const ids = new Set(nodes.map((n) => n.id));
   const links = graph.links.filter((l) => ids.has(l.source) && ids.has(l.target));
   const degree = new Map();
   for (const l of links) { degree.set(l.source, (degree.get(l.source) || 0) + 1); degree.set(l.target, (degree.get(l.target) || 0) + 1); }
   nodes = nodes.map((n) => ({ ...n, degree: degree.get(n.id) || 0 }));
+  if (folder) nodes = nodes.filter((n) => !n.ghost || n.degree > 0);
   if (!orphans) nodes = nodes.filter((n) => n.degree > 0);
   return { nodes, links };
 }

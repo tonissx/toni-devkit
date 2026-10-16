@@ -11,6 +11,7 @@ const { createWinHelper } = require('./winfocus');
 const { UI_BINDABLE_IDS, SELECTION_BIND_IDS } = require('../src/commands/binds.js');
 const { createSelectionCopier } = require('./selection');
 const { createNotesService } = require('./notes/service');
+const { createNotesSettings } = require('./notes/settings');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
 const { createUpdaterService } = require('./updater/service');
@@ -394,18 +395,42 @@ const broadcastNotes = (evt) => {
   if (evt && evt.type === 'removed' && stickies) stickies.noteRemoved(evt.id); // nota excluída sai da tela
 };
 
-const notesDir = () => process.env.DEVKIT_NOTES_DIR || path.join(app.getPath('documents'), 'Devkit Notes');
+// Pasta das notas: DEVKIT_NOTES_DIR > escolhida em Configurações (vale após reiniciar) > Documentos\Devkit Notes.
+let notesSettings = null;
+const getNotesSettings = () => notesSettings || (notesSettings = createNotesSettings(path.join(app.getPath('userData'), 'notes-settings.json')));
+const defaultNotesDir = () => path.join(app.getPath('documents'), 'Devkit Notes');
+const notesDir = () => process.env.DEVKIT_NOTES_DIR || getNotesSettings().raw().dir || defaultNotesDir();
 
 function initNotes() {
-  notes = createNotesService({ dir: notesDir(), broadcast: broadcastNotes, events: bus });
+  const cfg = getNotesSettings().get();
+  notes = createNotesService({ dir: notesDir(), broadcast: broadcastNotes, events: bus, historyGapMs: cfg.historyGapMin * 60 * 1000, historyMax: cfg.historyMax });
   notesReady = notes.init().catch((e) => { console.error('[notes]', e); throw e; });
 }
 
-const NOTES_API = ['info', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage', 'backlinks', 'linkRefs', 'renameLinks', 'history', 'version', 'restoreVersion', 'trashList', 'restoreFromTrash', 'deleteFromTrash', 'emptyTrash', 'templates', 'fromTemplate', 'ensureRootFolder', 'graph', 'trashCount'];
+const NOTES_API = ['info', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage', 'backlinks', 'linkRefs', 'renameLinks', 'history', 'version', 'restoreVersion', 'trashList', 'restoreFromTrash', 'deleteFromTrash', 'emptyTrash', 'templates', 'fromTemplate', 'ensureRootFolder', 'graph', 'trashCount',
+  'setFolderMeta', 'moveFolderOrder', 'folderClash', 'duplicateFolder', 'trashFolders', 'restoreFolderFromTrash', 'folderAbs'];
 for (const fn of NOTES_API) {
   ipcMain.handle('notes:' + fn, async (_e, ...args) => { await notesReady; return notes[fn](...args); });
 }
-ipcMain.handle('notes:open-folder', async () => { await notesReady; return shell.openPath(notes.dir); });
+// Sem argumento abre a pasta das notas; com um caminho de pasta, abre aquela pasta no Explorer.
+ipcMain.handle('notes:open-folder', async (_e, folder) => { await notesReady; return shell.openPath(folder ? notes.folderAbs(folder) : notes.dir); });
+
+// Configurações de Notes (Configurações… na tela). Histórico vale na hora; a pasta das notas, após reiniciar.
+ipcMain.handle('notes:settings', async () => {
+  const s = getNotesSettings();
+  return { ...s.get(), dir: notes ? notes.dir : notesDir(), defaultDir: defaultNotesDir(), envLocked: !!process.env.DEVKIT_NOTES_DIR, customDir: s.raw().dir || null };
+});
+ipcMain.handle('notes:set-settings', async (_e, patch) => {
+  await notesReady;
+  const cfg = getNotesSettings().set(patch);
+  notes.configure({ historyGapMs: cfg.historyGapMin * 60 * 1000, historyMax: cfg.historyMax });
+  return { restart: notesDir() !== notes.dir }; // a pasta nova só vale na próxima abertura
+});
+ipcMain.handle('notes:pick-dir', async (e) => {
+  const r = await dialog.showOpenDialog(fromEvent(e), { title: 'Pasta das notas', properties: ['openDirectory', 'createDirectory'], defaultPath: notes ? notes.dir : undefined });
+  return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
+});
+ipcMain.handle('notes:relaunch', () => { app.relaunch(); app.quit(); });
 // Clique numa imagem do preview: abre no visualizador do sistema.
 ipcMain.handle('notes:open-asset', async (_e, ref) => { await notesReady; return shell.openPath(notes.assetFile(ref)); });
 
