@@ -162,6 +162,8 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 /* ─── Diff Checker ─── */
 .dfc-editors { flex: 0 0 38%; min-height: 160px; }
 .dfc-drop { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tk-code__scroll { align-items: flex-start; }
+.tk-code__area, .tk-code__gutter { min-height: 100%; } /* o textarea acompanha o conteúdo, não só a altura inicial da janela (#12) */
 .dfc-drop > .tk-code { flex: 1; min-height: 0; }
 .dfc-drop.is-over > .tk-code { border-color: var(--tk-accent); }
 .dfc-drop__hint {
