@@ -613,6 +613,10 @@ export function NotesScreen({ toast, request }) {
     );
   };
 
+  // Cor da pasta selecionada: a etiqueta de destino e o "Só aqui" a seguem (sem cor = destaque do app).
+  const selColor = folderSel && FOLDER_COLORS[metaOf(folderSel).color];
+  const selVars = selColor ? { '--fc': selColor } : undefined;
+
   const noNotesAtAll = info && info.count === 0 && !current;
 
   return (
@@ -673,7 +677,7 @@ export function NotesScreen({ toast, request }) {
           <div className="nts-listbar">
             <span className="nts-listbar__title">{useTree ? 'Explorador' : 'Notas'}</span>
             {folderSel && (
-              <button type="button" className="nts-listbar__dest" title="Novas notas nascem nesta pasta — clique para limpar" onClick={() => selectFolder(null)}>
+              <button type="button" className="nts-listbar__dest" style={selVars} title="Novas notas nascem nesta pasta — clique para limpar" onClick={() => selectFolder(null)}>
                 <Icon name="folder" size={11} /> {baseName(folderSel)} <Icon name="x" size={10} />
               </button>
             )}

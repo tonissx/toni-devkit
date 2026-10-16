@@ -62,6 +62,7 @@ export function FolderRow({ path, name, total, level = 1, meta = {}, isOpen, has
       data-nav={'f:' + path}
       tabIndex={-1}
       className={'nts-folder' + (active ? ' is-on' : '') + (isOver ? ' is-drop' : '')}
+      style={color ? { '--fc': color } : undefined}
       draggable
       onDragStart={(e) => { e.dataTransfer.setData(FOLDER_DRAG, path); e.dataTransfer.effectAllowed = 'move'; }}
       onClick={onClick}
