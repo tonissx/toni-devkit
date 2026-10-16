@@ -1998,7 +1998,6 @@ function SegmentedControl({
       onChange && onChange(o.value);
     }
   }, o.icon && /*#__PURE__*/React.createElement(__ds_scope.Icon, {
-    ...o.iconProps,
     name: o.icon,
     size: 14
   }), o.label)));
@@ -2094,6 +2093,7 @@ function Select({
       pick(o);
     }
   }, o.icon && /*#__PURE__*/React.createElement(__ds_scope.Icon, {
+    ...o.iconProps,
     name: o.icon,
     size: 14
   }), /*#__PURE__*/React.createElement("span", {
