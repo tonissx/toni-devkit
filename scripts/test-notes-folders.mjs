@@ -27,6 +27,10 @@ test('foldermeta: sanitize descarta o inválido, merge aplica patch e null remov
   assert.deepEqual(M.sanitizeMeta({ color: 'neon', icon: 'nao-existe', sort: 'updated', pinned: false, order: -1, template: '  ' }), {});
   assert.deepEqual(M.mergeMeta({ color: 'red', pinned: true }, { pinned: null, icon: 'bug' }), { color: 'red', icon: 'bug' });
   assert.deepEqual(M.mergeMeta({ tags: ['a'] }, { tags: [] }), {});
+  assert.deepEqual(M.sanitizeMeta({ outline: true }), { outline: true });                       // vazado é opt-in; padrão = preenchido
+  assert.deepEqual(M.sanitizeMeta({ outline: false }), {});
+  assert.deepEqual(M.sanitizeMeta({ outline: 'sim' }), {});
+  assert.deepEqual(M.mergeMeta({ color: 'red', outline: true }, { outline: null }), { color: 'red' });
   const list = [{ title: 'b', created: '2026-01-01' }, { title: 'A', created: '2026-03-01' }, { title: 'c', created: '2026-02-01' }];
   assert.deepEqual(M.sortNotes(list, 'title').map((n) => n.title), ['A', 'b', 'c']);
   assert.deepEqual(M.sortNotes(list, 'created').map((n) => n.title), ['A', 'c', 'b']);

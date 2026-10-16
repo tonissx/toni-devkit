@@ -250,11 +250,14 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-tagcloud { max-height: 56px; overflow: hidden; }
 /* Pastas (diretórios reais): árvore na sidebar, alvo de soltar notas/pastas, seletor no editor */
 .nts-listbar { flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 2px 0 6px; font: 600 10.5px var(--tk-font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--tk-text-3); }
-.nts-listbar__dest { display: inline-flex; align-items: center; gap: 4px; max-width: 150px; height: 20px; padding: 0 6px; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--tk-accent) 12%, transparent); color: var(--tk-accent-text); font: 500 10.5px var(--tk-font-sans); letter-spacing: 0; text-transform: none; cursor: pointer; overflow: hidden; white-space: nowrap; }
-.nts-listbar__dest:hover { background: color-mix(in srgb, var(--tk-accent) 20%, transparent); }
+.nts-listbar__dest { display: inline-flex; align-items: center; gap: 4px; max-width: 150px; height: 20px; padding: 0 6px; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--fc, var(--tk-accent)) 12%, transparent); color: var(--fc, var(--tk-accent-text)); font: 500 10.5px var(--tk-font-sans); letter-spacing: 0; text-transform: none; cursor: pointer; overflow: hidden; white-space: nowrap; }
+.nts-listbar__dest:hover { background: color-mix(in srgb, var(--fc, var(--tk-accent)) 20%, transparent); }
 .nts-list.is-drop-root { box-shadow: inset 0 0 0 1px var(--tk-accent); border-radius: var(--tk-radius-sm); background: color-mix(in srgb, var(--tk-accent) 6%, transparent); }
 /* Cascata: o ramo de uma pasta aberta fica recuado, com uma linha-guia leve à esquerda */
 .nts-branch { margin-left: 13px; padding-left: 4px; border-left: 1px solid color-mix(in srgb, var(--tk-border-strong) 55%, transparent); }
+.nts-branch.has-color { border-left-color: color-mix(in srgb, var(--fc) 70%, transparent); }
+.nts-branch.has-color > .nts-row .nts-row__icon { color: var(--fc); }
+.nts-branch.has-color > .nts-row.is-sel { box-shadow: inset 2px 0 0 var(--fc); }
 .nts-branch__empty { padding: 5px 8px; font-size: 11.5px; font-style: italic; color: var(--tk-text-3); }
 .nts-row.is-cascade { animation: nts-cascade 140ms ease-out both; animation-delay: calc(var(--i, 0) * 16ms); }
 @keyframes nts-cascade { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
@@ -262,7 +265,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-row__pin { margin-left: 4px; color: var(--tk-red); vertical-align: -1px; }
 .nts-folder { display: flex; align-items: center; gap: 4px; height: 26px; padding-left: 4px; padding-right: 8px; border-radius: var(--tk-radius-sm); border: 1px solid transparent; color: var(--tk-text-2); font-size: 12.5px; cursor: pointer; user-select: none; }
 .nts-folder:hover { background: var(--tk-surface-2); color: var(--tk-text); }
-.nts-folder.is-on { color: var(--tk-accent-text); background: color-mix(in srgb, var(--tk-accent) 10%, transparent); }
+.nts-folder.is-on { color: var(--fc, var(--tk-accent-text)); background: color-mix(in srgb, var(--fc, var(--tk-accent)) 10%, transparent); }
 .nts-folder.is-drop { border-color: var(--tk-accent); background: color-mix(in srgb, var(--tk-accent) 18%, transparent); color: var(--tk-text); }
 .nts-folder__chev { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; padding: 0; border: 0; background: none; color: var(--tk-text-3); cursor: pointer; flex-shrink: 0; }
 .nts-folder__chev.is-empty { visibility: hidden; cursor: default; }
@@ -289,7 +292,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-folder__where { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; font-size: 10.5px; color: var(--tk-text-3); }
 .nts-listbar__scope { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px; border: 1px solid var(--tk-border-strong); border-radius: 4px; background: none; color: var(--tk-text-3); font: 500 10.5px var(--tk-font-sans); letter-spacing: 0; text-transform: none; cursor: pointer; white-space: nowrap; }
 .nts-listbar__scope:hover { color: var(--tk-text); }
-.nts-listbar__scope.is-on { color: var(--tk-accent-text); border-color: var(--tk-accent); background: color-mix(in srgb, var(--tk-accent) 10%, transparent); }
+.nts-listbar__scope.is-on { color: var(--fc, var(--tk-accent-text)); border-color: var(--fc, var(--tk-accent)); background: color-mix(in srgb, var(--fc, var(--tk-accent)) 10%, transparent); }
 .nts-dialog__warn { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin-top: 8px; padding: 8px 10px; border-radius: var(--tk-radius-sm); font-size: 12px; line-height: 1.45; color: var(--tk-amber); background: color-mix(in srgb, var(--tk-amber) 10%, transparent); }
 .nts-crumbs { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; font-size: 11.5px; color: var(--tk-text-3); }
 .nts-crumbs__sep { opacity: .6; }

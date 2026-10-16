@@ -7,7 +7,15 @@ const { Icon } = DS;
 export const NOTE_DRAG = 'application/x-devkit-note';
 export const FOLDER_DRAG = 'application/x-devkit-folder';
 
-const hasType = (e, t) => Array.from(e.dataTransfer.types || []).includes(t);
+/**
+ * Props de preenchimento do ícone da pasta: preenchido (quase sólido) por padrão, só contorno com `meta.outline`.
+ * O traço (100%) é mais opaco que o miolo (50%) para os detalhes internos do ícone aparecerem.
+ */
+export const iconFill = (meta, color) => (meta.outline ? {} : {
+  fill: color || 'currentColor', fillOpacity: 0.5,
+});
+
+const hasType =(e, t) => Array.from(e.dataTransfer.types || []).includes(t);
 
 /**
  * Arrastar e soltar de notas e pastas. `dropProps(path, key)` vai em qualquer elemento que aceite soltar
@@ -38,7 +46,7 @@ export function useFolderDnD({ onDropNote, onDropFolder }) {
 
 /**
  * Linha de uma pasta na lista de notas. Clicar seleciona a pasta (destino das notas novas) e a abre se estava
- * fechada, mas nunca a recolhe; recolher é pela setinha ou ←. Arrastável e alvo de soltar;
+ * fechada; clicar de novo na já selecionada alterna aberta/fechada (também pela setinha ou ←/→). Arrastável e alvo de soltar;
  * botão direito (ou Shift+F10) abre o menu. Navegação por teclado: ver `onTreeKeyDown` em NotesScreen.
  * `meta` traz a configuração da pasta (cor, ícone, fixada).
  */
@@ -54,6 +62,7 @@ export function FolderRow({ path, name, total, level = 1, meta = {}, isOpen, has
       data-nav={'f:' + path}
       tabIndex={-1}
       className={'nts-folder' + (active ? ' is-on' : '') + (isOver ? ' is-drop' : '')}
+      style={color ? { '--fc': color } : undefined}
       draggable
       onDragStart={(e) => { e.dataTransfer.setData(FOLDER_DRAG, path); e.dataTransfer.effectAllowed = 'move'; }}
       onClick={onClick}
@@ -65,7 +74,7 @@ export function FolderRow({ path, name, total, level = 1, meta = {}, isOpen, has
         onClick={(e) => { e.stopPropagation(); onToggle(path); }}>
         <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={12} />
       </button>
-      <Icon name={icon} size={14} className="nts-folder__icon" style={color ? { color } : undefined} />
+      <Icon name={icon} size={14} className="nts-folder__icon" style={color ? { color } : undefined} {...iconFill(meta, color)} />
       <span className="nts-folder__name" title={path}>{name}</span>
       {meta.pinned && <Icon name="pin" size={10} className="nts-folder__pin" />}
       <span className="nts-folder__count" title="Notas nesta pasta e nas subpastas">{total || ''}</span>
@@ -81,7 +90,7 @@ export function PinnedFolderRow({ path, meta = {}, role = 'treeitem', onReveal, 
     <div role={role} aria-level={role === 'treeitem' ? 1 : undefined} data-nav={'pf:' + path} tabIndex={-1} className="nts-folder is-shortcut"
       onClick={() => onReveal(path)}
       onContextMenu={(e) => { e.preventDefault(); onContext(path, e.clientX, e.clientY); }}>
-      <Icon name={meta.icon || 'folder'} size={14} className="nts-folder__icon" style={color ? { color } : undefined} />
+      <Icon name={meta.icon || 'folder'} size={14} className="nts-folder__icon" style={color ? { color } : undefined} {...iconFill(meta, color)} />
       <span className="nts-folder__name" title={path}>{baseName(path)}</span>
       {parent && <span className="nts-folder__where" title={parent}>{parent}</span>}
     </div>

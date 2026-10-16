@@ -9,12 +9,12 @@ import { TasksPanel } from './TasksPanel.jsx';
 import { TrashPanel } from './TrashPanel.jsx';
 import { TemplateModal } from './TemplateModal.jsx';
 import { GraphPanel } from './GraphPanel.jsx';
-import { FolderRow, PinnedFolderRow, useFolderDnD, NOTE_DRAG } from './FolderTree.jsx';
+import { FolderRow, PinnedFolderRow, useFolderDnD, iconFill, NOTE_DRAG } from './FolderTree.jsx';
 import { NameModal, DeleteFolderModal, MoveNoteModal, MoveFolderModal, ConfirmModal } from './FolderDialogs.jsx';
 import { FolderSettingsModal } from './FolderSettings.jsx';
 import { NotesSettingsModal, DEFAULT_PREFS } from './NotesSettings.jsx';
 import { buildTree, flattenTree, joinPath, baseName, parentOf, isDescendant, siblingsOf, matchFolders } from '../../notes/folders.js';
-import { sortNotes } from '../../notes/foldermeta.js';
+import { sortNotes, FOLDER_COLORS } from '../../notes/foldermeta.js';
 import { emit } from '../../lib/events.js';
 import { useAiMode, aiOn } from '../../ai/ui.jsx';
 import { AskNotes } from './AskNotes.jsx';
@@ -319,9 +319,13 @@ export function NotesScreen({ toast, request }) {
   const selectFolder = (path) => setUi((u) => ({ ...u, folder: path })); // ação da lista: não troca a visão
   const expand = (path) => path && setFoldersUi((f) => ({ ...f, open: { ...f.open, [path]: true } }));
   const toggleOpen = (path) => setFoldersUi((f) => ({ ...f, open: { ...f.open, [path]: !(f.open || {})[path] } }));
-  // Clicar na pasta a marca como destino das notas novas e a abre se estava fechada — nunca a recolhe
-  // (recolher é pela setinha, duplo clique ou ←; assim recolher não muda o destino das notas novas).
-  const clickFolder = (path) => { selectFolder(path); expand(path); };
+  // Clicar numa pasta ainda não selecionada a marca como destino das notas novas e a abre (nunca a recolhe, para
+  // não fechar a pasta só por escolhê-la como destino). Clicar de novo na já selecionada alterna aberta/fechada;
+  // a setinha e ←/→ também alternam.
+  const clickFolder = (path) => {
+    if (folderSel === path) toggleOpen(path);
+    else { selectFolder(path); expand(path); }
+  };
   const expandAll = () => setFoldersUi((f) => ({ ...f, open: Object.fromEntries(folders.map((x) => [x.path, true])) }));
   const collapseAll = () => setFoldersUi((f) => ({ ...f, open: {} }));
   const metaOf = (path) => folders.find((f) => f.path === path) || {};
@@ -432,7 +436,14 @@ export function NotesScreen({ toast, request }) {
   };
 
   const folderOptions = React.useMemo(
-    () => flattenTree(buildTree(folders)).map((f) => ({ value: f.path, label: '  '.repeat(f.depth) + f.name, icon: 'folder' })),
+    () => flattenTree(buildTree(folders)).map((f) => {
+      const meta = folders.find((x) => x.path === f.path) || {};
+      const color = meta.color ? FOLDER_COLORS[meta.color] : undefined;
+      return {
+        value: f.path, label: '  '.repeat(f.depth) + f.name, icon: meta.icon || 'folder',
+        iconProps: { style: color ? { color } : undefined, ...iconFill(meta, color) },
+      };
+    }),
     [folders]);
 
   const dnd = useFolderDnD({
@@ -598,7 +609,8 @@ export function NotesScreen({ toast, request }) {
           onContext={(path, x, y) => setCtxMenu({ x, y, kind: 'folder', path })}
         />
         {isOpen && (
-          <div className="nts-branch" role="group">
+          <div className={'nts-branch' + (node.meta && node.meta.color ? ' has-color' : '')} role="group"
+            style={node.meta && node.meta.color ? { '--fc': FOLDER_COLORS[node.meta.color] } : undefined}>
             {node.children.map((c) => renderFolder(c, level + 1))}
             {own.map((r, i) => noteRow(r, 'in:' + node.path + ':' + r.id, { inTree: true, i, level: level + 1 }))}
             {!node.children.length && !own.length && <div className="nts-branch__empty">Pasta vazia</div>}
@@ -607,6 +619,10 @@ export function NotesScreen({ toast, request }) {
       </div>
     );
   };
+
+  // Cor da pasta selecionada: a etiqueta de destino e o "Só aqui" a seguem (sem cor = destaque do app).
+  const selColor = folderSel && FOLDER_COLORS[metaOf(folderSel).color];
+  const selVars = selColor ? { '--fc': selColor } : undefined;
 
   const noNotesAtAll = info && info.count === 0 && !current;
 
@@ -668,7 +684,7 @@ export function NotesScreen({ toast, request }) {
           <div className="nts-listbar">
             <span className="nts-listbar__title">{useTree ? 'Explorador' : 'Notas'}</span>
             {folderSel && (
-              <button type="button" className="nts-listbar__dest" title="Novas notas nascem nesta pasta — clique para limpar" onClick={() => selectFolder(null)}>
+              <button type="button" className="nts-listbar__dest" style={selVars} title="Novas notas nascem nesta pasta — clique para limpar" onClick={() => selectFolder(null)}>
                 <Icon name="folder" size={11} /> {baseName(folderSel)} <Icon name="x" size={10} />
               </button>
             )}

@@ -12,6 +12,7 @@ const { Modal, Input, Button, Icon, Select, Toggle } = DS;
 export function FolderSettingsModal({ path, meta = {}, onSaved, onClose }) {
   const [color, setColor] = React.useState(meta.color || '');
   const [icon, setIcon] = React.useState(meta.icon || 'folder');
+  const [filled, setFilled] = React.useState(!meta.outline);
   const [template, setTemplate] = React.useState(meta.template || '');
   const [tags, setTags] = React.useState((meta.tags || []).join(', '));
   const [sort, setSort] = React.useState(meta.sort || 'updated');
@@ -34,7 +35,7 @@ export function FolderSettingsModal({ path, meta = {}, onSaved, onClose }) {
     setBusy(true);
     try {
       const saved = await notesApi().setFolderMeta(path, {
-        color: color || null, icon: icon === 'folder' ? null : icon, template: template || null,
+        color: color || null, icon: icon === 'folder' ? null : icon, outline: filled ? null : true, template: template || null,
         tags: parsedTags, sort: sort === 'updated' ? null : sort, pinned: pinned || null,
       });
       if (onSaved) onSaved(saved);
@@ -65,10 +66,15 @@ export function FolderSettingsModal({ path, meta = {}, onSaved, onClose }) {
             {FOLDER_ICONS.map((name) => (
               <button key={name} type="button" role="radio" aria-checked={icon === name} title={name} aria-label={name}
                 className={'nts-iconpick' + (icon === name ? ' is-on' : '')} onClick={() => setIcon(name)}>
-                <Icon name={name} size={15} style={color ? { color: FOLDER_COLORS[color] } : undefined} />
+                <Icon name={name} size={15} style={color ? { color: FOLDER_COLORS[color] } : undefined}
+                  {...(filled ? { fill: color ? FOLDER_COLORS[color] : 'currentColor', fillOpacity: 0.5 } : {})} />
               </button>
             ))}
           </div>
+        </div>
+        <div className="nts-fset__row">
+          <span className="nts-fset__label">Estilo</span>
+          <div className="nts-fset__field"><Toggle checked={filled} onChange={setFilled} label="Ícone preenchido" /></div>
         </div>
         <div className="nts-fset__row">
           <span className="nts-fset__label">Template padrão</span>
