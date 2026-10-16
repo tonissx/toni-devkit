@@ -319,9 +319,13 @@ export function NotesScreen({ toast, request }) {
   const selectFolder = (path) => setUi((u) => ({ ...u, folder: path })); // ação da lista: não troca a visão
   const expand = (path) => path && setFoldersUi((f) => ({ ...f, open: { ...f.open, [path]: true } }));
   const toggleOpen = (path) => setFoldersUi((f) => ({ ...f, open: { ...f.open, [path]: !(f.open || {})[path] } }));
-  // Clicar na pasta a marca como destino das notas novas e a abre se estava fechada — nunca a recolhe
-  // (recolher é pela setinha, duplo clique ou ←; assim recolher não muda o destino das notas novas).
-  const clickFolder = (path) => { selectFolder(path); expand(path); };
+  // Clicar numa pasta ainda não selecionada a marca como destino das notas novas e a abre (nunca a recolhe, para
+  // não fechar a pasta só por escolhê-la como destino). Clicar de novo na já selecionada alterna aberta/fechada;
+  // a setinha e ←/→ também alternam.
+  const clickFolder = (path) => {
+    if (folderSel === path) toggleOpen(path);
+    else { selectFolder(path); expand(path); }
+  };
   const expandAll = () => setFoldersUi((f) => ({ ...f, open: Object.fromEntries(folders.map((x) => [x.path, true])) }));
   const collapseAll = () => setFoldersUi((f) => ({ ...f, open: {} }));
   const metaOf = (path) => folders.find((f) => f.path === path) || {};

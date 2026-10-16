@@ -41,7 +41,7 @@ export function useFolderDnD({ onDropNote, onDropFolder }) {
 
 /**
  * Linha de uma pasta na lista de notas. Clicar seleciona a pasta (destino das notas novas) e a abre se estava
- * fechada, mas nunca a recolhe; recolher é pela setinha ou ←. Arrastável e alvo de soltar;
+ * fechada; clicar de novo na já selecionada alterna aberta/fechada (também pela setinha ou ←/→). Arrastável e alvo de soltar;
  * botão direito (ou Shift+F10) abre o menu. Navegação por teclado: ver `onTreeKeyDown` em NotesScreen.
  * `meta` traz a configuração da pasta (cor, ícone, fixada).
  */
