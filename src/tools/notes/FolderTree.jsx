@@ -7,7 +7,10 @@ const { Icon } = DS;
 export const NOTE_DRAG = 'application/x-devkit-note';
 export const FOLDER_DRAG = 'application/x-devkit-folder';
 
-const hasType = (e, t) => Array.from(e.dataTransfer.types || []).includes(t);
+/** Props de preenchimento do ícone da pasta: preenchido (duotone) por padrão, só contorno com `meta.outline`. */
+const iconFill = (meta) => (meta.outline ? {} : { fill: 'currentColor', fillOpacity: 0.3 });
+
+const hasType =(e, t) => Array.from(e.dataTransfer.types || []).includes(t);
 
 /**
  * Arrastar e soltar de notas e pastas. `dropProps(path, key)` vai em qualquer elemento que aceite soltar
@@ -65,7 +68,7 @@ export function FolderRow({ path, name, total, level = 1, meta = {}, isOpen, has
         onClick={(e) => { e.stopPropagation(); onToggle(path); }}>
         <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={12} />
       </button>
-      <Icon name={icon} size={14} className="nts-folder__icon" style={color ? { color } : undefined} />
+      <Icon name={icon} size={14} className="nts-folder__icon" style={color ? { color } : undefined} {...iconFill(meta)} />
       <span className="nts-folder__name" title={path}>{name}</span>
       {meta.pinned && <Icon name="pin" size={10} className="nts-folder__pin" />}
       <span className="nts-folder__count" title="Notas nesta pasta e nas subpastas">{total || ''}</span>
@@ -81,7 +84,7 @@ export function PinnedFolderRow({ path, meta = {}, role = 'treeitem', onReveal, 
     <div role={role} aria-level={role === 'treeitem' ? 1 : undefined} data-nav={'pf:' + path} tabIndex={-1} className="nts-folder is-shortcut"
       onClick={() => onReveal(path)}
       onContextMenu={(e) => { e.preventDefault(); onContext(path, e.clientX, e.clientY); }}>
-      <Icon name={meta.icon || 'folder'} size={14} className="nts-folder__icon" style={color ? { color } : undefined} />
+      <Icon name={meta.icon || 'folder'} size={14} className="nts-folder__icon" style={color ? { color } : undefined} {...iconFill(meta)} />
       <span className="nts-folder__name" title={path}>{baseName(path)}</span>
       {parent && <span className="nts-folder__where" title={parent}>{parent}</span>}
     </div>

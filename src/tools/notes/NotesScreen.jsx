@@ -14,7 +14,7 @@ import { NameModal, DeleteFolderModal, MoveNoteModal, MoveFolderModal, ConfirmMo
 import { FolderSettingsModal } from './FolderSettings.jsx';
 import { NotesSettingsModal, DEFAULT_PREFS } from './NotesSettings.jsx';
 import { buildTree, flattenTree, joinPath, baseName, parentOf, isDescendant, siblingsOf, matchFolders } from '../../notes/folders.js';
-import { sortNotes } from '../../notes/foldermeta.js';
+import { sortNotes, FOLDER_COLORS } from '../../notes/foldermeta.js';
 import { emit } from '../../lib/events.js';
 import { useAiMode, aiOn } from '../../ai/ui.jsx';
 import { AskNotes } from './AskNotes.jsx';
@@ -598,7 +598,8 @@ export function NotesScreen({ toast, request }) {
           onContext={(path, x, y) => setCtxMenu({ x, y, kind: 'folder', path })}
         />
         {isOpen && (
-          <div className="nts-branch" role="group">
+          <div className={'nts-branch' + (node.meta && node.meta.color ? ' has-color' : '')} role="group"
+            style={node.meta && node.meta.color ? { '--fc': FOLDER_COLORS[node.meta.color] } : undefined}>
             {node.children.map((c) => renderFolder(c, level + 1))}
             {own.map((r, i) => noteRow(r, 'in:' + node.path + ':' + r.id, { inTree: true, i, level: level + 1 }))}
             {!node.children.length && !own.length && <div className="nts-branch__empty">Pasta vazia</div>}

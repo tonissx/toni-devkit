@@ -5,6 +5,7 @@
  *
  *   color    — chave de FOLDER_COLORS (também colore a pasta no Grafo)
  *   icon     — nome de um ícone de FOLDER_ICONS
+ *   outline  — true = ícone só de contorno; ausente = ícone preenchido (padrão)
  *   template — id de uma nota da pasta Templates (nota nova nasce dela)
  *   tags     — tags aplicadas a toda nota nova da pasta
  *   sort     — ordem das notas da pasta: 'updated' (padrão) | 'created' | 'title'
@@ -39,6 +40,7 @@ function sanitizeMeta(raw) {
   const out = {};
   if (typeof m.color === 'string' && FOLDER_COLORS[m.color]) out.color = m.color;
   if (typeof m.icon === 'string' && FOLDER_ICONS.includes(m.icon)) out.icon = m.icon;
+  if (m.outline === true) out.outline = true;
   if (typeof m.template === 'string' && m.template.trim()) out.template = m.template.trim();
   if (Array.isArray(m.tags)) {
     const tags = [...new Set(m.tags.map(cleanTag).filter((t) => t && TAG_RE.test(t)))].slice(0, 20);
