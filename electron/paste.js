@@ -36,7 +36,7 @@ function sendKeysWindows(keys) {
 }
 
 /**
- * clipboard: { readText, writeText, availableFormats?, readImage?, write? } (o do Electron)
+ * clipboard: { readText, writeText, availableFormats?, readImage?, readHTML?, readRTF?, write? } (o do Electron)
  * hide(): esconde a palette · notify({ ok, message }) · sleep(ms) · now()
  * win: { foreground(), focus(hwnd), paste(back), keys(keys) } (electron/winfocus.js) — opcional; sem ele só há o
  *      `sendKeys` avulso. `paste(back)` rejeita com code 'BLOCKED' quando o Windows recusa as teclas.
@@ -64,10 +64,13 @@ function createPaster({ clipboard, hide, notify, win = null, sendKeys = sendKeys
 
   /** Cola `code` (com as {{variáveis}}) no programa em foco. Devolve { pasted: boolean }. */
   async function paste({ code, title } = {}) {
-    const prevText = clipboard.readText();
-    // Clipboard só com imagem (print): guarda a imagem para devolvê-la depois.
-    const prevImage = !prevText && clipboard.availableFormats && clipboard.availableFormats().some((f) => f.startsWith('image/'))
-      ? clipboard.readImage() : null;
+    // `await` em toda leitura: conforme a versão do Electron o clipboard devolve valor direto ou Promise (ver selection.js).
+    const prevText = String((await clipboard.readText()) ?? '');
+    // Formatação (HTML/RTF) acompanha o texto; clipboard só com imagem (print) guarda a imagem.
+    const prevHtml = prevText && clipboard.readHTML ? String((await clipboard.readHTML()) ?? '') : '';
+    const prevRtf = prevText && clipboard.readRTF ? String((await clipboard.readRTF()) ?? '') : '';
+    const prevImage = !prevText && clipboard.availableFormats && (await clipboard.availableFormats()).some((f) => f.startsWith('image/'))
+      ? await clipboard.readImage() : null;
     const { text, back } = expandSnippet(code, templateVars(now(), { titulo: title || '', clipboard: prevText }));
     if (!text) throw new Error('O snippet está vazio');
     clipboard.writeText(text);
@@ -95,7 +98,9 @@ function createPaster({ clipboard, hide, notify, win = null, sendKeys = sendKeys
       notify({ ok: true, message: 'Snippet copiado — cole com Ctrl+V' });
       return { pasted: false, error: String((e && e.message) || e) };
     }
+    // O snippet não fica no clipboard: quem já tinha um valor copiado continua com ele.
     if (prevImage && clipboard.write) clipboard.write({ image: prevImage });
+    else if ((prevHtml || prevRtf) && clipboard.write) clipboard.write({ text: prevText, ...(prevHtml && { html: prevHtml }), ...(prevRtf && { rtf: prevRtf }) });
     else clipboard.writeText(prevText);
     return { pasted: true };
   }
