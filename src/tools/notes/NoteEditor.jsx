@@ -14,7 +14,7 @@ import { normalize } from '../../commands/search.js';
 import { useAiMode, aiOn } from '../../ai/ui.jsx';
 import { useNoteAi } from './NoteAi.jsx';
 
-const { SegmentedControl, IconButton, Button, Alert, Kbd, Select } = DS;
+const { SegmentedControl, IconButton, Button, Alert, Kbd, Select, Icon } = DS;
 
 const TYPE_OPTIONS = [
   { value: 'note', label: 'Nota' },
@@ -61,8 +61,8 @@ function TagsField({ tags, content, onChange }) {
 /**
  * Editor de uma nota. Monte com key={id}: trocar de nota desmonta e o auto-save grava o pendente.
  */
-export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resolve, onOpenLink, onOpenNote, onDelete, onNoteChange, folderOptions = [], toast }) {
-  const { note, update, status, error, flush } = useAutosave(initial, { isNew });
+export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resolve, onOpenLink, onOpenNote, onDelete, onNoteChange, folderOptions = [], autosaveMs = 400, onRevealFolder, toast }) {
+  const { note, update, status, error, flush } = useAutosave(initial, { isNew, delay: autosaveMs });
 
   // Mantém o snapshot do pai (`current.note`) em dia: trocar de aba desmonta o editor e o remonte usa esse snapshot.
   const firstNote = React.useRef(true);
@@ -256,6 +256,19 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
       </div>
       <div className="nts-editor__meta">
         <SegmentedControl size="sm" options={TYPE_OPTIONS} value={note.type} onChange={(type) => update({ type })} />
+        {note.folder && onRevealFolder && (
+          <nav className="nts-crumbs" aria-label="Pasta da nota">
+            {note.folder.split('/').map((seg, i, all) => {
+              const path = all.slice(0, i + 1).join('/');
+              return (
+                <React.Fragment key={path}>
+                  {i > 0 && <Icon name="chevron-right" size={10} className="nts-crumbs__sep" />}
+                  <button type="button" className="nts-crumbs__seg" title={'Mostrar “' + path + '” no explorador'} onClick={() => onRevealFolder(path)}>{seg}</button>
+                </React.Fragment>
+              );
+            })}
+          </nav>
+        )}
         {folderOptions.length > 0 && (
           <Select
             size="sm"

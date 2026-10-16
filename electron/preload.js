@@ -147,16 +147,36 @@ contextBridge.exposeInMainWorld('devkit', {
     toggleTask: (id, index) => ipcRenderer.invoke('notes:toggleTask', id, index),
     /** Captura rápida: acrescenta "- [ ] texto" à nota Inbox. */
     appendTask: (text) => ipcRenderer.invoke('notes:appendTask', text),
-    /** Pastas (diretórios reais): [{ path, count }] e operações. path usa "/" ('' = raiz). */
+    /** Pastas (diretórios reais): [{ path, count, ...configuração }] e operações. path usa "/" ('' = raiz). */
     folders: () => ipcRenderer.invoke('notes:folders'),
     createFolder: (path) => ipcRenderer.invoke('notes:createFolder', path),
-    renameFolder: (path, newName) => ipcRenderer.invoke('notes:renameFolder', path, newName),
-    moveFolder: (path, newParent) => ipcRenderer.invoke('notes:moveFolder', path, newParent),
+    /** opts.merge: se já existe uma pasta com esse nome, junta as duas (ver folderClash). */
+    renameFolder: (path, newName, opts) => ipcRenderer.invoke('notes:renameFolder', path, newName, opts),
+    moveFolder: (path, newParent, opts) => ipcRenderer.invoke('notes:moveFolder', path, newParent, opts),
+    /** Pasta já existente que seria mesclada ao renomear ({ newName }) ou mover ({ newParent }) `path`; null se nenhuma. */
+    folderClash: (path, opts) => ipcRenderer.invoke('notes:folderClash', path, opts),
+    duplicateFolder: (path) => ipcRenderer.invoke('notes:duplicateFolder', path),
+    /** Configuração da pasta: patch { color, icon, template, tags, sort, pinned } (null remove um campo). */
+    setFolderMeta: (path, patch) => ipcRenderer.invoke('notes:setFolderMeta', path, patch),
+    /** Sobe (-1) ou desce (+1) a pasta entre as irmãs. */
+    moveFolderOrder: (path, delta) => ipcRenderer.invoke('notes:moveFolderOrder', path, delta),
     moveNote: (id, folder) => ipcRenderer.invoke('notes:moveNote', id, folder),
-    /** Exclui a pasta (notas vão para .trash) → { notes, folders } para restoreFolder. */
+    /** Exclui a pasta (notas vão para .trash) → { notes, folders, meta, kept } para restoreFolder. */
     removeFolder: (path) => ipcRenderer.invoke('notes:removeFolder', path),
     restoreFolder: (snapshot) => ipcRenderer.invoke('notes:restoreFolder', snapshot),
-    openFolder: () => ipcRenderer.invoke('notes:open-folder'),
+    /** Pastas excluídas com notas na lixeira: [{ path, notes }]; restoreFolderFromTrash volta a pasta inteira. */
+    trashFolders: () => ipcRenderer.invoke('notes:trashFolders'),
+    restoreFolderFromTrash: (path) => ipcRenderer.invoke('notes:restoreFolderFromTrash', path),
+    /** Sem argumento abre a pasta das notas; com um caminho de pasta, abre aquela. */
+    openFolder: (folder) => ipcRenderer.invoke('notes:open-folder', folder),
+    /** Caminho absoluto de uma pasta (para copiar). */
+    folderAbs: (path) => ipcRenderer.invoke('notes:folderAbs', path),
+    /** Configurações de Notes: { historyMax, historyGapMin, dir, defaultDir, envLocked, customDir }. */
+    settings: () => ipcRenderer.invoke('notes:settings'),
+    /** Patch { historyMax, historyGapMin, dir } (null volta ao padrão) → { restart } (a pasta nova só vale após reiniciar). */
+    setSettings: (patch) => ipcRenderer.invoke('notes:set-settings', patch),
+    pickDir: () => ipcRenderer.invoke('notes:pick-dir'),
+    relaunch: () => ipcRenderer.invoke('notes:relaunch'),
     /** Imagem colada/arrastada ({ bytes: Uint8Array, mime }) → grava em .assets\ → { path: '.assets/<nome>' }. */
     saveImage: (data) => ipcRenderer.invoke('notes:saveImage', data),
     /** Abre uma imagem de .assets\ no visualizador do sistema. */

@@ -543,13 +543,37 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   - `Ctrl+B` negrito · `Ctrl+I` itálico · `Ctrl+K` com texto selecionado vira link (sem seleção, abre a palette) ·
     `Ctrl+Shift+K` vira `` `código` `` (trecho de uma linha) ou bloco ```` ``` ```` (sem seleção / várias linhas). Tudo
     alterna e pode ser desfeito com `Ctrl+Z`
-- **Pastas** (subpastas ilimitadas): árvore **Pastas** na lateral, com `+` para criar. Cada pasta é um diretório
-  de verdade dentro de `Documentos\Devkit Notes`. A lista vira um explorador em cascata: clicar numa pasta abre as
-  subpastas e as notas dela, recuadas e com uma linha-guia leve (as notas soltas ficam no fim, em "Sem pasta"). A
-  última pasta clicada — ou a da nota aberta — é onde nascem as notas novas (aparece na barra acima da lista).
-  Com busca, filtro ou tag ativos a lista volta a ser plana. Mover: campo **Pasta** no editor, arrastar a nota (ou uma
-  pasta) até a pasta de destino, ou botão direito → **Mover para…**. Botão direito na pasta: Nova subpasta ·
-  Renomear · Excluir (as notas vão para `.trash\` e dá para desfazer)
+- **Pastas** (subpastas ilimitadas): o **Explorador** na lateral, com `+` para criar. Cada pasta é um diretório
+  de verdade dentro de `Documentos\Devkit Notes`. A lista vira um explorador em cascata: clicar numa pasta a marca e
+  abre as subpastas e as notas dela, recuadas e com uma linha-guia leve (as notas soltas ficam no fim, em "Sem pasta").
+  Clicar **nunca recolhe**: recolher é pela setinha ou `←` — assim recolher não muda o destino das
+  notas novas. A última pasta clicada — ou a da nota aberta — é onde nascem as notas novas (aparece na barra acima da
+  lista). Os botões ao lado de "Explorador" **expandem ou recolhem tudo**.
+  - **Teclado** (a árvore é uma só parada do `Tab`; as setas andam por ela): `↑` `↓` `Home` `End` navegam ·
+    `→` abre a pasta (já aberta, entra nela) · `←` recolhe (ou vai para a pasta de cima) · `Enter` abre a nota
+    ou alterna a pasta · `F2` renomeia · `Del` exclui · `Alt+↑` / `Alt+↓` sobem e descem a pasta entre as irmãs ·
+    `Shift+F10` (ou a tecla de menu) abre o menu de contexto
+  - **Botão direito na pasta**: Nova nota aqui · Nova subpasta · Renomear · **Mover para…** (com busca) ·
+    **Duplicar** (cópia com ids novos) · **Fixar no topo** · **Configurações da pasta…** · Subir/Descer · Abrir no
+    Explorer · Copiar caminho · Excluir. Mover pasta também é arrastando; se já existe uma pasta de mesmo nome no destino
+    (ou ao renomear para um nome existente), o Devkit pergunta e **mescla** as duas (nome de nota repetido ganha
+    " (2)"; a configuração do destino vence)
+  - **Configurações da pasta** (`.folder.json` dentro dela, então acompanham a pasta ao renomear/mover): **cor** e
+    **ícone** (a cor também pinta a pasta no Grafo) · **template padrão** (nota nova na pasta nasce dele) · **tags
+    padrão** (entram em toda nota nova da pasta) · **ordem das notas** (editadas / criadas recentemente / título) ·
+    **fixar no topo** (atalho no início do explorador). A ordem manual das pastas vem de Subir/Descer
+  - **Só aqui** (chip ao lado da pasta ativa): a lista — e a busca — mostram só as notas da pasta e das subpastas.
+    Buscar também acha **pastas** pelo nome/caminho, e o caminho da pasta entra na busca das notas
+  - No editor, o **caminho da pasta** vira breadcrumb: clicar num trecho revela a pasta no explorador. Mover: campo
+    **Pasta** no editor, arrastar a nota (ou uma pasta) até o destino, ou botão direito → **Mover para…**
+  - **Excluir**: as notas vão para a Lixeira (com a configuração da pasta) e dá para desfazer logo depois; depois
+    disso, **Restaurar pasta** na Lixeira volta a pasta inteira. Se sobrar na pasta algum arquivo que não é nota,
+    ela continua no disco e o Devkit avisa
+  - **`[[Pasta/Título]]`** desambigua notas de mesmo título em pastas diferentes (a sugestão de `[[` já escreve assim
+    quando há homônimas). **Grafo**: filtro por pasta. **Perguntar às notas** (IA): opção de limitar à pasta; notas da
+    pasta Templates nunca entram no contexto
+- **Configurações de Notes** (engrenagem no topo): pasta das notas (vale depois de reiniciar; as notas atuais não são
+  movidas) · quantas versões guardar e o intervalo entre elas · tempo do auto-save · tempo do "Desfazer" após excluir
 - **Tarefas** (`- [ ] texto`), sem digitar a sintaxe à mão:
   - No editor, `Enter` numa tarefa continua a lista (em tarefa vazia, sai dela) · `Ctrl+L` alterna a linha (ou as
     linhas selecionadas) entre texto → `- [ ]` → `- [x]` → texto · `[]` ou `todo` + espaço no começo da linha vira `- [ ] `

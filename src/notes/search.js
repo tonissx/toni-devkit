@@ -27,6 +27,7 @@ function fieldsOf(note) {
       aliases: aliases.join(' '),
       type: note.type,
       content: normalize(note.content),
+      folderWords: normalize(folderOf(note.file)).split(/[^\p{L}\p{N}_]+/u).filter(Boolean), // "Trabalho/Fluig" acha as notas de lá
     };
     cache.set(note, f);
   }
@@ -67,6 +68,7 @@ function scoreTerm(f, t) {
   else if (f.aliases.includes(t)) k = 10;
   else if (typo(t, f.keyWords)) k = 8;
   const ty = f.type === t ? 6 : 0;
+  const fo = f.folderWords.some((w) => w.startsWith(t)) ? 6.5 : 0;
   let c = 0;
   const at = f.content.indexOf(t);
   if (at !== -1) {
@@ -75,13 +77,19 @@ function scoreTerm(f, t) {
     for (let i = f.content.indexOf(t, at + t.length); i !== -1 && n < 4; i = f.content.indexOf(t, i + t.length)) n++;
     c += n * 0.5;
   } else if (!s && !k && typo(t, contentWords(f))) c = 3;
-  return Math.max(s, k, ty, c) + (s && c ? 1 : 0);
+  return Math.max(s, k, ty, fo, c) + (s && c ? 1 : 0);
 }
 
-/** Filtros: { quick, pinned, favorite, type, tag, folder } — folder: '' = raiz, 'a/b' = notas diretas dessa pasta. */
+/**
+ * Filtros: { quick, pinned, favorite, type, tag, folder, recursive } — folder: '' = raiz, 'a/b' = notas diretas
+ * dessa pasta; com `recursive` inclui também as subpastas ('' + recursive = tudo).
+ */
 function matchesFilter(note, flt) {
   if (!flt) return true;
-  if (flt.folder != null && folderOf(note.file) !== flt.folder) return false;
+  if (flt.folder != null) {
+    const nf = folderOf(note.file);
+    if (!(nf === flt.folder || (flt.recursive && (flt.folder === '' || nf.startsWith(flt.folder + '/'))))) return false;
+  }
   if (flt.quick && !note.quick) return false;
   if (flt.pinned && !note.pinned) return false;
   if (flt.favorite && !note.favorite) return false;
