@@ -393,6 +393,22 @@ function createDbService({ file, dir, getCredential, broadcast = () => {}, conne
         return rows.map((r) => ({ ...r, risks: r.statement_text ? sqlRisks(r.statement_text).map((x) => x.text).slice(0, 3) : [] }));
       });
     },
+    /** Bancos de usuário em que a conta consegue entrar (para o SQL Visualizer carregar o schema). */
+    async schemaDbs(id) { return withConn(id, async (conn) => rowsOf(await conn.query(Q.SCHEMA_DBS)).map((r) => r.name)); },
+    /**
+     * Metadados (tabelas, colunas, PK, FK) de um banco como JSON — só catálogo, nenhum dado de tabela. Devolve o texto JSON
+     * (o renderer converte com src/db/schema.js). O banco precisa estar na lista de schemaDbs.
+     */
+    async schema(id, database) {
+      return withConn(id, async (conn) => {
+        const dbs = rowsOf(await conn.query(Q.SCHEMA_DBS)).map((r) => r.name);
+        if (!dbs.includes(database)) throw new Error('Banco não encontrado ou sem acesso para essa conta');
+        const rows = rowsOf(await conn.query(Q.schemaQueryIn(database)));
+        const json = rows.map((r) => Object.values(r)[0]).filter((v) => typeof v === 'string').join('');
+        if (!json) throw new Error('A conta não enxergou nenhuma tabela. Confira a permissão VIEW DEFINITION nesse banco.');
+        return { database, json };
+      });
+    },
     async queryStoreDbs(id) { return withConn(id, async (conn) => rowsOf(await conn.query(Q.QUERY_STORE_DBS))); },
     async queryStoreTop(id, database, opts = {}) {
       return withConn(id, async (conn) => {

@@ -39,6 +39,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **Git**: repositórios locais com grafo do histórico, stage por trecho, merge com prévia, conflitos, rebase visual, blame, bisect e desfazer qualquer coisa | ✅ |
 | **Logs**: logs grandes (Fluig/JBoss, JSON por linha, IIS, Nginx/Apache, texto) com filtros, erros agrupados, gráficos e acompanhamento ao vivo | ✅ |
 | **Banco**: monitor de SQL Server — bloqueios, sessões, queries caras, deadlocks e saúde, ao vivo e com histórico | ✅ |
+| **SQL Visualizer**: SQL como grafo — diagrama ER, explorador de schemas grandes, lineage de query e plano de execução | ✅ |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
 | **Vault**: cofre de senhas, tokens e credenciais de banco, com senha mestra e cópia que se apaga | ✅ |
 | **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
@@ -302,6 +303,67 @@ ambiente Fluig/RM: o que mais custa achar no SSMS — **quem está segurando que
 - Datas na hora certa mesmo com o servidor em outro fuso (o monitor lê o fuso do servidor ao conectar)
 
 Testes: `npm run test:db`. **IA**: por que a query está lenta e explicar o deadlock — ver [IA (opcional)](#ia-opcional)
+
+### SQL Visualizer
+
+Transforma SQL em grafos interativos, inspirado em JSON Crack, ChartDB, Azimutt, SQLFlow e Paste The Plan. **O SQL colado
+nunca é executado**: só é lido. Tudo é processado no próprio app; o único acesso ao servidor é o opcional "Carregar", que lê
+o **catálogo** (tabelas, colunas e chaves, via `sys.*`), nunca dados de tabela. Nomes de tabela e coluna entram na tela como
+texto (React/SVG), nunca como HTML. As abas ficam montadas, então o que foi colado ou carregado sobrevive à troca de aba.
+
+**Diagrama ER**
+- Entrada: **DDL** (`CREATE TABLE`, `ALTER TABLE … FOREIGN KEY`, PK simples ou composta) ou o **JSON de metadados**. O botão
+  *Query de metadados* copia a query T-SQL que gera esse JSON (uma célula só) para rodar no banco. Ou **Carregar do servidor**:
+  escolhe um servidor salvo na aba Banco e um banco (a senha vem do Vault no processo principal; a query roda por
+  `sp_executesql` no banco escolhido, sem trocar o banco da conexão do monitor)
+- Tabelas com colunas, tipo e marcas PK/FK; relacionamentos com cardinalidade 1:N (ou 1:1). Cada FK liga **a coluna
+  filha à coluna referenciada** e tem uma cor própria: aresta, pontas e faixas das colunas usam a mesma cor. Ao selecionar
+  uma tabela, as ligações mostram `colunaFK → colunaPK`
+- Zoom e pan, arrastar tabelas, layout hierárquico automático, **busca** de tabela ou coluna com destaque e centralização
+  (Enter vai para a próxima), clique numa tabela destaca só as relacionadas
+- Teclado: Tab entre tabelas, setas para a vizinha mais próxima, Enter/Espaço seleciona, Esc limpa
+- Exporta **PNG**, **SVG** e **DBML**
+
+**Explorador** (schemas grandes)
+- O canvas **começa vazio**: busque uma tabela (por nome ou coluna), filtre por schema e prefixo e clique para adicioná-la.
+  A lista é virtualizada (testada com 5.000 tabelas) e só as tabelas adicionadas são desenhadas
+- **Expandir vizinhas** por FK, 1 ou 2 níveis, a partir da tabela selecionada ou de todas; *Adicionar todas* as filtradas.
+  As duas ações têm teto de 150 tabelas por vez
+- **Agrupar por módulo** (por schema, por prefixo antes do `_` ou pelas primeiras letras), com uma caixa colorida por
+  módulo e reorganização por grupo
+- **Layouts nomeados**: salvar, carregar e apagar, por servidor e banco (no `localStorage`). Tabelas que não existem mais
+  são ignoradas, com aviso
+
+**Lineage** (estilo SQLFlow)
+- Cole um `SELECT`, CTE (inclusive recursiva), `UNION`, subconsultas, `CROSS`/`OUTER APPLY`, `INSERT … SELECT` ou um script
+  (`GO` separa lotes; `SELECT … INTO #temp` é reaproveitada nas instruções seguintes)
+- Grafo: tabelas de origem → CTEs e subconsultas → colunas do resultado. Os **JOINs** são rotulados com tipo e condição;
+  **filtros** (`WHERE`/`HAVING`) e **agregações** ganham destaque; as colunas das tabelas levam marcas J (join), F (filtro),
+  G (group by), O (order by), Σ (agregação) e ƒ (expressão)
+- **Clique numa coluna de saída** para destacar de quais colunas de origem ela deriva (e esmaecer o resto)
+- Se um schema estiver carregado no Explorador, *usar schema* resolve `SELECT *` e colunas sem alias com precisão; sem ele,
+  essas colunas ficam marcadas como ambíguas, com aviso
+- **Parser**: [`node-sql-parser`](https://github.com/taozhi8833998/node-sql-parser) no dialeto `transactsql`, empacotado
+  no app (Apache-2.0; ver `THIRD-PARTY-NOTICES.md`). Escolhido por rodar no cliente e dar AST de CTE/JOIN/subconsulta; o
+  `sqlglot` exigiria um backend Python. Antes de ler, o app ajusta o que o parser não entende: remove `OPTION (…)`,
+  `WITHIN GROUP (…)`, `AT TIME ZONE` e `WITH TIES`, lê `TRY_CAST` como `CAST` e `EXCEPT`/`INTERSECT` como `UNION` (a
+  linhagem é a mesma) e avisa o que mudou. Texto dentro de strings e `[identificadores]` não é tocado
+- **Limitações do dialeto**: `MERGE` dá erro claro; `UPDATE`, `DELETE`, procedures e SQL dinâmico são ignorados com aviso;
+  `PIVOT`/`UNPIVOT` e funções com valor de tabela aparecem como uma caixa só, sem as colunas internas; sem o schema,
+  `SELECT *` sobre tabela não é expandido. O botão *Limitações* na própria aba lista tudo
+
+**Plano de execução**
+- Cole o XML do showplan ou **abra/arraste um `.sqlplan`** (UTF-16 do SSMS, UTF-16 sem BOM e UTF-8 são lidos). Usa o
+  mesmo visualizador do plano da aba Banco: grafo de operadores com custo relativo (%), linhas estimadas × reais, espessura
+  da seta proporcional às linhas, operadores, XML e instruções múltiplas
+- **Gargalos** com explicação e o que fazer: operador mais caro, scan em tabela grande, Key Lookup, Sort/Hash com spill
+  para o tempdb, estimativa muito diferente do real, conversão implícita, memory grant, parameter sniffing e **índices
+  sugeridos** (`MissingIndexes`, com o `CREATE INDEX` para copiar e revisar — nunca aplicado)
+- Painel lateral com as propriedades do operador selecionado e o resumo dos avisos
+
+Testes: `node --test scripts/test-sqlviz-*.mjs` (DDL, metadados, layout, DBML, explorador, lineage com consultas reais, plano com
+`.sqlplan`). **Limitações gerais**: o canvas do Explorador não é salvo sozinho (use *Salvar* num layout); o schema carregado do
+servidor não persiste entre sessões; o Lineage não exporta imagem; a aba Plano mostra um plano por vez.
 
 ## IA (opcional)
 
@@ -741,6 +803,9 @@ src/                 código do app (JSX → renderer/dist/app.js via esbuild)
   tools/logs/        tela Logs: LogsScreen, LogView, LogList + VirtualList, FilterBar, Timeline, Detail, Problems, Charts
   db/                queries.js (T-SQL das coletas), blocking.js (árvore), waits.js, deadlock.js, history.js, connstr.js, health.js
   tools/db/          tela Banco: DbScreen, ServerForm, Now, History, Queries, Deadlocks, Health
+  db/ (SQL Visualizer) ddl.js (parser de DDL), schema.js (modelo comum), erlayout.js (layout ER e DBML), explorer.js (filtros,
+                     módulos, layouts), lineage.js (T-SQL → grafo de colunas), showplan.js (plano; também usado pela aba Plano)
+  tools/sqlviz/      tela SQL Visualizer: SqlViz, ErDiagram, ErCanvas, Explorer, LineageTab, LineageCanvas, PlanTab, ServerLoader
   lib/               charts.jsx, TimeSeries.jsx, VirtualList.jsx e fmt.jsx — peças de gráfico e formatação compartilhadas
   screens/Home.jsx, screens/Settings.jsx
 vendor/python/       wheel do sqlparse (offline)

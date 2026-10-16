@@ -201,8 +201,8 @@ function NodeDetail({ n, stmt }) {
   );
 }
 
-export function PlanView({ xml, title, onClose, onSave, toast }) {
-  const parsed = React.useMemo(() => parsePlan(xml), [xml]);
+/** Conteúdo do plano (resumo, gráfico, operadores, XML, insights). Usado no modal do Banco e na aba Plano do SQL Visualizer. */
+export function PlanPanel({ xml, parsed, toast }) {
   const [si, setSi] = React.useState(() => {
     // Abre na instrução mais cara.
     if (!parsed.statements) return 0;
@@ -224,21 +224,10 @@ export function PlanView({ xml, title, onClose, onSave, toast }) {
       requestAnimationFrame(() => { const el = graphRef.current && graphRef.current.querySelector(`[data-node="${id}"]`); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); });
     }
   };
-  const footer = (
-    <>
-      <Button variant="ghost" icon="copy" onClick={() => copyText(xml, toast, 'XML do plano copiado')}>Copiar XML</Button>
-      <Button variant="ghost" icon="download" onClick={onSave}>Salvar .sqlplan</Button>
-      <Button variant="primary" onClick={onClose}>Fechar</Button>
-    </>
-  );
-  if (!stmt) {
-    return <Modal title={title || 'Plano de execução'} icon="list-tree" onClose={onClose} width={560} footer={footer} description={parsed.error || 'Plano indisponível'} />;
-  }
+  if (!stmt) return <div className="lg-muted lg-pad">{parsed.error || 'Plano indisponível'}</div>;
   const g = stmt.grant;
   const counts = an.insights.reduce((c, i) => { c[i.severity] = (c[i.severity] || 0) + 1; return c; }, {});
   return (
-    <Modal title={title || 'Plano de execução'} icon="list-tree" onClose={onClose} width="min(1380px, 96vw)" className="db-planmodal" footer={footer}
-      description={`${stmt.isActual ? 'Plano real (com o que foi executado)' : 'Plano estimado (do cache)'}${parsed.version ? ` · Showplan ${parsed.version}` : ''}`}>
       <div className="db-plan">
         <div className="db-plan__sum">
           <div className="db-plan__stat"><span>Custo</span><b>{stmt.cost.toFixed(2).replace('.', ',')}</b></div>
@@ -331,6 +320,30 @@ export function PlanView({ xml, title, onClose, onSave, toast }) {
           </aside>
         </div>
       </div>
+  );
+}
+
+export const planKind = (parsed) => {
+  const st = parsed.statements;
+  const s = st && st.reduce((best, x) => (x.cost > best.cost ? x : best), st[0]);
+  return `${s && s.isActual ? 'Plano real (com o que foi executado)' : 'Plano estimado (do cache)'}${parsed.version ? ` · Showplan ${parsed.version}` : ''}`;
+};
+
+export function PlanView({ xml, title, onClose, onSave, toast }) {
+  const parsed = React.useMemo(() => parsePlan(xml), [xml]);
+  const footer = (
+    <>
+      <Button variant="ghost" icon="copy" onClick={() => copyText(xml, toast, 'XML do plano copiado')}>Copiar XML</Button>
+      <Button variant="ghost" icon="download" onClick={onSave}>Salvar .sqlplan</Button>
+      <Button variant="primary" onClick={onClose}>Fechar</Button>
+    </>
+  );
+  if (!parsed.statements) {
+    return <Modal title={title || 'Plano de execução'} icon="list-tree" onClose={onClose} width={560} footer={footer} description={parsed.error || 'Plano indisponível'} />;
+  }
+  return (
+    <Modal title={title || 'Plano de execução'} icon="list-tree" onClose={onClose} width="min(1380px, 96vw)" className="db-planmodal" footer={footer} description={planKind(parsed)}>
+      <PlanPanel xml={xml} parsed={parsed} toast={toast} />
     </Modal>
   );
 }

@@ -748,7 +748,7 @@ function initDb() {
   dbReady = dbSvc.init().catch((e) => { console.error('[db]', e); });
 }
 
-const DB_API = ['list', 'settings', 'setSettings', 'add', 'update', 'remove', 'test', 'watch', 'now', 'history', 'at', 'incident', 'deadlocks', 'topQueries', 'queryStoreDbs', 'queryStoreTop', 'health', 'plan', 'kill', 'summaries'];
+const DB_API = ['list', 'settings', 'setSettings', 'add', 'update', 'remove', 'test', 'watch', 'now', 'history', 'at', 'incident', 'deadlocks', 'topQueries', 'queryStoreDbs', 'queryStoreTop', 'schemaDbs', 'schema', 'health', 'plan', 'kill', 'summaries'];
 for (const fn of DB_API) {
   ipcMain.handle('db:' + fn, async (_e, ...args) => { await dbReady; return dbSvc[fn](...args); });
 }

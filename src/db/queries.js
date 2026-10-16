@@ -354,8 +354,62 @@ function killSql(sessionId, ownSpid) {
   return `KILL ${sid};`;
 }
 
+/**
+ * Metadados de schema para o SQL Visualizer: UM valor JSON { tables:[…], fks:[…] }, para rodar no banco desejado e colar
+ * no app (ou lido pelo próprio app). Só catálogo (sys.*), nenhum dado de tabela. O JSON vem num SELECT externo, para
+ * ser UMA célula (sem o corte em pedaços de ~2 mil caracteres do FOR JSON no topo). Texto fixo, sem nada do usuário.
+ */
+const SCHEMA_QUERY = `SET NOCOUNT ON;
+SELECT (
+SELECT
+(
+  SELECT
+    SCHEMA_NAME(t.schema_id) AS [schema],
+    t.name AS [name],
+    (SELECT c.name AS [name],
+            CASE WHEN ty.name IN ('varchar','nvarchar','char','nchar','varbinary','binary')
+                 THEN ty.name + '(' + CASE WHEN c.max_length = -1 THEN 'max'
+                      ELSE CAST(CASE WHEN ty.name LIKE 'n%' THEN c.max_length / 2 ELSE c.max_length END AS varchar(10)) END + ')'
+                 WHEN ty.name IN ('decimal','numeric') THEN ty.name + '(' + CAST(c.precision AS varchar(5)) + ',' + CAST(c.scale AS varchar(5)) + ')'
+                 ELSE ty.name END AS [type],
+            c.is_nullable AS nullable,
+            c.is_identity AS [identity],
+            CASE WHEN EXISTS (SELECT 1 FROM sys.index_columns ic JOIN sys.indexes i ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+                              WHERE ic.object_id = c.object_id AND ic.column_id = c.column_id AND i.is_primary_key = 1) THEN 1 ELSE 0 END AS pk
+     FROM sys.columns c JOIN sys.types ty ON ty.user_type_id = c.user_type_id
+     WHERE c.object_id = t.object_id ORDER BY c.column_id FOR JSON PATH) AS columns
+  FROM sys.tables t WHERE t.is_ms_shipped = 0 ORDER BY 1, 2 FOR JSON PATH
+) AS tables,
+(
+  SELECT fk.name AS [name],
+         SCHEMA_NAME(pt.schema_id) AS fromSchema, pt.name AS fromTable,
+         SCHEMA_NAME(rt.schema_id) AS toSchema, rt.name AS toTable,
+         JSON_QUERY('[' + STUFF((SELECT ',"' + STRING_ESCAPE(pc.name, 'json') + '"' FROM sys.foreign_key_columns fkc
+              JOIN sys.columns pc ON pc.object_id = fkc.parent_object_id AND pc.column_id = fkc.parent_column_id
+              WHERE fkc.constraint_object_id = fk.object_id ORDER BY fkc.constraint_column_id FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 1, '') + ']') AS fromCols,
+         JSON_QUERY('[' + STUFF((SELECT ',"' + STRING_ESCAPE(rc.name, 'json') + '"' FROM sys.foreign_key_columns fkc
+              JOIN sys.columns rc ON rc.object_id = fkc.referenced_object_id AND rc.column_id = fkc.referenced_column_id
+              WHERE fkc.constraint_object_id = fk.object_id ORDER BY fkc.constraint_column_id FOR XML PATH(''), TYPE).value('.', 'nvarchar(max)'), 1, 1, '') + ']') AS toCols
+  FROM sys.foreign_keys fk
+  JOIN sys.tables pt ON pt.object_id = fk.parent_object_id
+  JOIN sys.tables rt ON rt.object_id = fk.referenced_object_id
+  FOR JSON PATH
+) AS fks
+FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+) AS [json];`;
+
+/** Bancos de usuário do servidor onde a conta consegue entrar (para escolher qual carregar). */
+const SCHEMA_DBS = `${PREAMBLE}
+SELECT name FROM sys.databases WHERE state = 0 AND database_id > 4 AND HAS_DBACCESS(name) = 1 ORDER BY name;`;
+
+/**
+ * SCHEMA_QUERY dentro de um banco, SEM trocar o banco da conexão (que o monitor reaproveita): roda via
+ * `[banco].sys.sp_executesql`. O nome do banco só entra por quoteName (colchetes escapados) e o texto interno é fixo.
+ */
+const schemaQueryIn = (database) => `${PREAMBLE}EXEC ${quoteName(database)}.sys.sp_executesql N'${SCHEMA_QUERY.replace(/'/g, "''")}';`;
+
 module.exports = {
-  MARK, PREAMBLE, SERVER_INFO, SERVER_TZ, SYS_INFO, NOW, COUNTERS, COUNTER_NAMES, CPU, WAITS, TOP_METRICS, topQueries, QUERY_STORE_DBS,
+  SCHEMA_QUERY, SCHEMA_DBS, schemaQueryIn, MARK, PREAMBLE, SERVER_INFO, SERVER_TZ, SYS_INFO, NOW, COUNTERS, COUNTER_NAMES, CPU, WAITS, TOP_METRICS, topQueries, QUERY_STORE_DBS,
   queryStoreTop, planFor, livePlanFor, deadlocksSince, FILES, LOG_USAGE, BACKUPS, FAILED_JOBS, CONNECTIONS, MISSING_INDEXES,
   killSql, quoteName,
 };

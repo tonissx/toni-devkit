@@ -1,0 +1,130 @@
+/* SQL Visualizer — diagrama ER. Só variáveis --tk-* (tema claro/escuro vem do DS). */
+.sqv__er { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.sqv__er > .tk-splitview, .sqv__er > :last-child { flex: 1; min-height: 0; }
+.sqv__stage { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.sqv__bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--tk-border); }
+.sqv__bar .tk-input { flex: 1; max-width: 360px; }
+
+.sqv__graph { position: relative; flex: 1; min-height: 0; overflow: hidden; cursor: grab; touch-action: none;
+  background-image: radial-gradient(var(--tk-border) 1px, transparent 1px); background-size: 20px 20px; }
+.sqv__graph:active { cursor: grabbing; }
+.sqv__svg { display: block; font: 12px var(--tk-font-mono); user-select: none; }
+
+.sqv__edge { fill: none; stroke: var(--tk-border-strong); stroke-width: 1.5; }
+.sqv__fk.is-hot .sqv__edge { stroke: var(--tk-accent); stroke-width: 2; }
+.sqv__fk.is-dim { opacity: .15; }
+.sqv__card { font-size: 10px; fill: var(--tk-text-3); }
+.sqv__fk.is-hot .sqv__card { fill: var(--tk-accent); font-weight: 700; }
+
+.sqv__node { cursor: pointer; outline: none; }
+.sqv__node.is-dim { opacity: .25; }
+.sqv__box { fill: var(--tk-surface-2); stroke: var(--tk-border-strong); }
+.sqv__head { fill: var(--tk-surface-3); }
+.sqv__node:hover .sqv__box { stroke: var(--tk-text-3); }
+.sqv__node:focus-visible .sqv__box { stroke: var(--tk-accent); stroke-width: 2; stroke-dasharray: 5 3; }
+.sqv__node.is-selected .sqv__box { stroke: var(--tk-accent); stroke-width: 2; }
+.sqv__node.is-match .sqv__box { stroke: var(--tk-amber); stroke-width: 2; }
+.sqv__title { font-weight: 700; fill: var(--tk-text); }
+.sqv__col { fill: var(--tk-text); }
+.sqv__type { fill: var(--tk-text-3); }
+.sqv__pk, .sqv__fkm { font-size: 10px; font-weight: 700; }
+.sqv__pk { fill: var(--tk-amber); }
+.sqv__fkm { fill: var(--tk-accent); }
+
+.sqv__tools { position: absolute; top: 10px; right: 10px; display: flex; align-items: center; gap: 2px; padding: 3px;
+  background: var(--tk-surface-2); border: 1px solid var(--tk-border); border-radius: 8px; }
+.sqv__zoom { min-width: 40px; text-align: center; font: 500 11px var(--tk-font-mono); color: var(--tk-text-3); }
+
+/* Aba Plano de execução */
+.sqv__plan { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.sqv__plan.is-over::after { content: 'Solte o .sqlplan aqui'; position: absolute; inset: 8px; display: grid; place-items: center;
+  border: 2px dashed var(--tk-accent); border-radius: var(--tk-radius-md); background: color-mix(in srgb, var(--tk-surface-1) 85%, transparent);
+  color: var(--tk-text); font-weight: 600; z-index: 10; pointer-events: none; }
+.sqv__planbar { display: flex; align-items: center; gap: 8px; padding: 6px 4px; }
+.sqv__grow { flex: 1; }
+.sqv__muted { color: var(--tk-text-3); font-size: 12px; }
+.sqv__planbody { flex: 1; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); overflow: hidden; }
+.sqv__planbody > .db-plan { margin-top: 0; border-top: 0; }
+.sqv__planin { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.sqv__planhint { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px dashed var(--tk-border-strong); border-radius: var(--tk-radius-md); color: var(--tk-text-2); font-size: 12.5px; }
+.sqv__planbtns { display: flex; gap: 6px; margin-top: 2px; }
+.sqv__planedit { flex: 1; min-height: 0; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); overflow: hidden; }
+
+/* Carregar do servidor */
+.sqv__srv { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 2px 4px; }
+
+/* Abas montadas e escondidas */
+.sqv__pane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.sqv__pane[hidden] { display: none; }
+.sqv__grow { flex: 1; }
+.sqv__muted { color: var(--tk-text-3); font-size: 12px; }
+
+/* Explorador */
+.sqv__exp { flex: 1; min-height: 0; display: flex; gap: 10px; }
+.sqv__side { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 8px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-1); }
+.sqv__side .sqv__srv { flex-direction: column; align-items: stretch; }
+.sqv__side .sqv__srv > * { width: 100% !important; }
+.sqv__listbar { display: flex; align-items: center; justify-content: space-between; }
+.sqv__list { flex: 1; min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); overflow: hidden; }
+.sqv__list > * { flex: 1; min-height: 0; overflow: auto; position: relative; }
+.sqv__row { position: absolute; left: 0; right: 0; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 0; background: transparent; color: var(--tk-text); font: 12px var(--tk-font-mono); text-align: left; cursor: pointer; }
+.sqv__row:hover, .sqv__row:focus-visible { background: var(--tk-surface-3); outline: none; }
+.sqv__row.is-on { color: var(--tk-text-3); }
+.sqv__row.is-on svg { color: var(--tk-accent); }
+.sqv__rname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sqv__rmeta { color: var(--tk-text-3); font-size: 11px; white-space: nowrap; }
+.sqv__hint { padding: 10px; color: var(--tk-text-3); font-size: 12px; }
+.sqv__main { flex: 1; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); overflow: hidden; }
+.sqv__toolbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 8px; border-bottom: 1px solid var(--tk-border); background: var(--tk-surface-1); }
+.sqv__sep { width: 1px; align-self: stretch; background: var(--tk-border); margin: 2px 2px; }
+.sqv__main .sqv__stage { flex: 1; min-height: 0; position: relative; }
+.sqv__empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; text-align: center; color: var(--tk-text-3); font-size: 12.5px; }
+.sqv__empty b { color: var(--tk-text-2); font-size: 14px; }
+.sqv__paste { display: flex; flex-direction: column; gap: 8px; }
+
+/* Grupos (módulos) no canvas */
+.sqv__group rect { fill: var(--g); fill-opacity: .07; stroke: var(--g); stroke-opacity: .55; stroke-dasharray: 6 4; }
+.sqv__group text { fill: var(--g); font: 700 11px var(--tk-font-sans); pointer-events: none; }
+
+/* Qual coluna liga com qual: aresta, pontas e faixas das colunas usam a cor da FK */
+.sqv__link { fill-opacity: .16; }
+.sqv__fklabel { font: 700 10px var(--tk-font-mono); paint-order: stroke; stroke: var(--tk-surface-1); stroke-width: 4px; }
+
+/* Lineage */
+.sqv__sel { font-size: 12px; color: var(--tk-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sqv__sel code { font: 11.5px var(--tk-font-mono); color: var(--tk-text-3); }
+.sqv__check { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--tk-text-2); cursor: pointer; }
+.sqv__limits { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--tk-text-2); }
+.sqv__tedge path { fill: none; stroke: var(--tk-border-strong); stroke-width: 1.2; stroke-dasharray: 5 4; }
+.sqv__tedge.is-dim { opacity: .15; }
+.sqv__tlabel { font: 700 10px var(--tk-font-mono); fill: var(--tk-text-3); paint-order: stroke; stroke: var(--tk-surface-1); stroke-width: 4px; }
+.sqv__tlabel.is-join { fill: var(--tk-accent); }
+.sqv__cedge { fill: none; stroke: var(--tk-text-3); stroke-width: 1; opacity: .45; }
+.sqv__cedge.is-agg { stroke: #b58cf0; }
+.sqv__cedge.is-expr { stroke: var(--tk-amber); }
+.sqv__cedge.is-amb { stroke-dasharray: 3 3; }
+.sqv__cedge.is-on { stroke: var(--tk-accent); stroke-width: 2; opacity: 1; }
+.sqv__cedge.is-dim { opacity: .08; }
+.sqv__lnode.is-dim { opacity: .22; }
+.sqv__lhead { fill: var(--tk-surface-3); }
+.sqv__lnode.is-result .sqv__lhead, .sqv__lnode.is-target .sqv__lhead { fill: color-mix(in srgb, var(--tk-accent) 28%, var(--tk-surface-3)); }
+.sqv__lnode.is-cte .sqv__lhead, .sqv__lnode.is-subquery .sqv__lhead, .sqv__lnode.is-branch .sqv__lhead { fill: color-mix(in srgb, #7aa2f7 22%, var(--tk-surface-3)); }
+.sqv__ltitle { font-weight: 700; fill: var(--tk-text); }
+.sqv__lkind { font-weight: 500; fill: var(--tk-text-3); font-size: 10px; text-transform: uppercase; }
+.sqv__lrow { cursor: pointer; outline: none; }
+.sqv__lrowbg { fill: transparent; }
+.sqv__lrow:hover .sqv__lrowbg, .sqv__lrow:focus-visible .sqv__lrowbg { fill: var(--tk-surface-3); }
+.sqv__lrow.is-up .sqv__lrowbg { fill: color-mix(in srgb, var(--tk-accent) 22%, transparent); }
+.sqv__lrow.is-selected .sqv__lrowbg { fill: color-mix(in srgb, var(--tk-accent) 40%, transparent); }
+.sqv__lbadge { font: 700 10px var(--tk-font-mono); fill: var(--tk-text-3); }
+.sqv__lbadge.is-filter { fill: var(--tk-amber); }
+.sqv__lbadge.is-join { fill: #7aa2f7; }
+.sqv__lbadge.is-group, .sqv__lbadge.is-order { fill: var(--tk-text-2); }
+.sqv__lbadge.is-agg { fill: #b58cf0; }
+.sqv__lbadge.is-expr { fill: var(--tk-amber); }
+.sqv__lsep { stroke: var(--tk-border); }
+.sqv__ltag { font: 700 10px var(--tk-font-mono); fill: var(--tk-text-3); }
+.sqv__ltext { font: 11px var(--tk-font-mono); fill: var(--tk-text-2); }
+.sqv__linfo.is-filter .sqv__ltag, .sqv__linfo.is-filter .sqv__ltext { fill: var(--tk-amber); }
+.sqv__linfo.is-join .sqv__ltag { fill: #7aa2f7; }
+.sqv__linfo.is-agg .sqv__ltag, .sqv__linfo.is-agg .sqv__ltext { fill: #b58cf0; }
