@@ -7,8 +7,14 @@ const { Icon } = DS;
 export const NOTE_DRAG = 'application/x-devkit-note';
 export const FOLDER_DRAG = 'application/x-devkit-folder';
 
-/** Props de preenchimento do ícone da pasta: preenchido (quase sólido) por padrão, só contorno com `meta.outline`. */
-const iconFill = (meta) => (meta.outline ? {} : { fill: 'currentColor', fillOpacity: 0.75 });
+/**
+ * Props de preenchimento do ícone da pasta: preenchido (quase sólido) por padrão, só contorno com `meta.outline`.
+ * O traço fica mais escuro que o miolo para os detalhes internos do ícone aparecerem.
+ */
+const iconFill = (meta, color) => (meta.outline ? {} : {
+  fill: color || 'currentColor', fillOpacity: 0.75,
+  color: `color-mix(in srgb, ${color || 'currentColor'} 55%, black)`,
+});
 
 const hasType =(e, t) => Array.from(e.dataTransfer.types || []).includes(t);
 
@@ -68,7 +74,7 @@ export function FolderRow({ path, name, total, level = 1, meta = {}, isOpen, has
         onClick={(e) => { e.stopPropagation(); onToggle(path); }}>
         <Icon name={isOpen ? 'chevron-down' : 'chevron-right'} size={12} />
       </button>
-      <Icon name={icon} size={14} className="nts-folder__icon" style={color ? { color } : undefined} {...iconFill(meta)} />
+      <Icon name={icon} size={14} className="nts-folder__icon" style={color ? { color } : undefined} {...iconFill(meta, color)} />
       <span className="nts-folder__name" title={path}>{name}</span>
       {meta.pinned && <Icon name="pin" size={10} className="nts-folder__pin" />}
       <span className="nts-folder__count" title="Notas nesta pasta e nas subpastas">{total || ''}</span>
@@ -84,7 +90,7 @@ export function PinnedFolderRow({ path, meta = {}, role = 'treeitem', onReveal, 
     <div role={role} aria-level={role === 'treeitem' ? 1 : undefined} data-nav={'pf:' + path} tabIndex={-1} className="nts-folder is-shortcut"
       onClick={() => onReveal(path)}
       onContextMenu={(e) => { e.preventDefault(); onContext(path, e.clientX, e.clientY); }}>
-      <Icon name={meta.icon || 'folder'} size={14} className="nts-folder__icon" style={color ? { color } : undefined} {...iconFill(meta)} />
+      <Icon name={meta.icon || 'folder'} size={14} className="nts-folder__icon" style={color ? { color } : undefined} {...iconFill(meta, color)} />
       <span className="nts-folder__name" title={path}>{baseName(path)}</span>
       {parent && <span className="nts-folder__where" title={parent}>{parent}</span>}
     </div>

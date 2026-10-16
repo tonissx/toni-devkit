@@ -67,7 +67,7 @@ export function FolderSettingsModal({ path, meta = {}, onSaved, onClose }) {
               <button key={name} type="button" role="radio" aria-checked={icon === name} title={name} aria-label={name}
                 className={'nts-iconpick' + (icon === name ? ' is-on' : '')} onClick={() => setIcon(name)}>
                 <Icon name={name} size={15} style={color ? { color: FOLDER_COLORS[color] } : undefined}
-                  {...(filled ? { fill: 'currentColor', fillOpacity: 0.75 } : {})} />
+                  {...(filled ? { fill: color ? FOLDER_COLORS[color] : 'currentColor', fillOpacity: 0.75, color: `color-mix(in srgb, ${color ? FOLDER_COLORS[color] : 'currentColor'} 55%, black)` } : {})} />
               </button>
             ))}
           </div>
