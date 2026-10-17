@@ -11,18 +11,31 @@ let ctx = null;
 let master = null;
 let musicBus = null;
 let noiseBuf = null;
-const settings = { on: true, volume: 0.35 };
+const settings = { on: true, volume: 0.35, perf: false };
+let paused = false;
 
-/** Liga/desliga e volume (0–1). Vale na hora, inclusive para a música tocando. */
-export function configureAudio({ on, volume }) {
+/**
+ * Liga/desliga, volume (0–1) e modo performance (agendador menos frequente, sem sobreamostragem).
+ * Vale na hora, inclusive para a música tocando (o modo performance vale a partir da próxima música/golpe).
+ */
+export function configureAudio({ on, volume, perf }) {
   if (on != null) settings.on = !!on;
   if (volume != null) settings.volume = Math.max(0, Math.min(1, volume));
+  if (perf != null) settings.perf = !!perf;
   if (master) master.gain.setTargetAtTime(settings.on ? settings.volume : 0, ctx.currentTime, 0.05);
   if (!settings.on) stopMusic();
 }
 
+/** Congela o áudio com a janela oculta/sem foco (o relógio do contexto para, então o agendador não produz nada). */
+export function pauseAudio(flag) {
+  paused = !!flag;
+  if (!ctx) return;
+  if (paused) { if (ctx.state === 'running') ctx.suspend(); }
+  else if (settings.on && ctx.state === 'suspended') ctx.resume();
+}
+
 function ac() {
-  if (!settings.on) return null;
+  if (!settings.on || paused) return null;
   if (!ctx) {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
@@ -506,7 +519,7 @@ export function startMusic(theme) {
   let amp = null;
   if (T.rock) {
     const shaper = ctx.createWaveShaper();
-    shaper.curve = distCurve(55); shaper.oversample = '4x';
+    shaper.curve = distCurve(55); shaper.oversample = settings.perf ? '2x' : '4x';
     const cab = ctx.createBiquadFilter(); cab.type = 'lowpass'; cab.frequency.value = 3800;
     amp = ctx.createGain(); amp.gain.value = 0.9;
     const post = ctx.createGain(); post.gain.value = 0.22; // a saturação devolve o sinal quase no talo: volta ao nível da mixagem
@@ -528,8 +541,10 @@ export function startMusic(theme) {
   const loop = form.flatMap(barsOf);
   const total = loop.length * 16;
   const barAt = (k) => (k < intro.length * 16 ? intro[Math.floor(k / 16)] : loop[Math.floor(((k - intro.length * 16) % total) / 16)]);
+  // Modo performance: acorda 10×/s em vez de 40×/s e agenda mais à frente (0,45 s) para não faltar nota.
+  const ahead = settings.perf ? 0.45 : 0.15;
   const schedule = () => {
-    while (next < ctx.currentTime + 0.15) {
+    while (next < ctx.currentTime + ahead) {
       const at = barAt(n);
       const sec = at.sec;
       const bar = at.b;
@@ -613,7 +628,7 @@ export function startMusic(theme) {
     }
   };
   schedule();
-  const timer = setInterval(schedule, 25);
+  const timer = setInterval(schedule, settings.perf ? 100 : 25);
   music = { timer, out, drums, amp };
 }
 
@@ -635,7 +650,7 @@ function punchBus() {
   const drive = ctx.createWaveShaper();
   const n = 1024; const curve = new Float32Array(n);
   for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; curve[i] = Math.tanh(x * 2.6); }
-  drive.curve = curve; drive.oversample = '2x';
+  drive.curve = curve; drive.oversample = settings.perf ? 'none' : '2x';
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -20; comp.knee.value = 4; comp.ratio.value = 6; comp.attack.value = 0.001; comp.release.value = 0.12;
   punch = ctx.createGain(); punch.gain.value = 0.9;
