@@ -2158,3 +2158,14 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 @keyframes pet-tesla-rise { from { transform: translateY(1.5px); } to { transform: translateY(-3px); } }
 .dc-skin.is-ssj { box-shadow: 0 0 0 1px #FFD27A, 0 0 8px rgba(255, 210, 122, .8); }
 @media (prefers-reduced-motion: reduce) { .pet-skin-halo, .pet-tesla { animation: none; } }
+
+/* DevCore · Modo performance: corta as animações ambientes contínuas e os filtros caros (em telas Retina tudo é
+   re-rasterizado a cada frame). Golpes e reações pontuais da arena ficam; o pulso do .dc-online é barato e também. */
+.dc.is-perf .dc-pet *, .dc.is-perf .pet-svg *, .dc.is-perf .villain-svg, .dc.is-perf .villain-svg *,
+.dc.is-perf .dc-snow i, .dc.is-perf .dc-arena__lightning, .dc.is-perf .dc-arena__fog, .dc.is-perf .dc-wisps i,
+.dc.is-perf .dc-tease__head, .dc.is-perf .dc-tease__flash, .dc.is-perf .dc-tease__fog, .dc.is-perf .dc-board__tease::after,
+.dc.is-perf .dc-station__leds i, .dc.is-perf .dc-station.is-alert .dc-station__box, .dc.is-perf .dc-bp-toggle.is-ready { animation: none !important; }
+.dc.is-perf .v-crack, .dc.is-perf .v-glow, .dc.is-perf .dc-hud__zoom svg, .dc.is-perf .dc-board__tease::after { filter: none !important; }
+.dc.is-perf .dc-hud__card { backdrop-filter: none !important; }
+/* Janela oculta ou sem foco: congela o que sobrou (vale com ou sem o modo performance). */
+.dc.is-idle *, .dc.is-idle *::before, .dc.is-idle *::after { animation-play-state: paused !important; }
