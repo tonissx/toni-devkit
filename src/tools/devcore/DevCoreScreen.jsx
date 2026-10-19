@@ -1,4 +1,4 @@
-import { DS } from '../../lib/ds.js';
+import { DS, isMac } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { formatNum, formatDuration } from '../../devcore/engine/format.js';
 import { REACTION_MS } from '../../devcore/director.js';
@@ -9,7 +9,7 @@ import { RateWithDetails } from './RateDetails.jsx';
 import { MapPanel } from './MapPanel.jsx';
 import { SingularityPanel } from './SingularityPanel.jsx';
 import { ItemPopups, gainsFrom, mergeGains } from './ItemPopups.jsx';
-import { configureAudio } from './audio.js';
+import { configureAudio, pauseAudio } from './audio.js';
 
 const { Tabs, Modal, Button, ProgressBar, Spinner, Icon } = DS;
 
@@ -37,25 +37,54 @@ const petName = (snap, id) => (snap.pets.find((p) => p.id === id) || { name: id 
  * Relógio da tela: um único timer para contador, cooldowns e cena (nada de setInterval espalhado).
  * O contador interpola localmente: amount + rate × (agora − recebidoEm) — sem IPC por frame.
  */
-function useClock(ms) {
+function useClock(ms, active = true) {
   const [now, setNow] = React.useState(Date.now());
-  React.useEffect(() => { const t = setInterval(() => setNow(Date.now()), ms); return () => clearInterval(t); }, [ms]);
+  React.useEffect(() => {
+    if (!active) return undefined;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [ms, active]);
   return now;
 }
 
-/** Número principal animado a 60 fps sem re-renderizar a tela (escreve direto no nó). */
-function LiveCompute({ snap, receivedAt }) {
+/** Janela visível e com foco? Oculta/sem foco, a tela congela relógio, número, animações e música. */
+function usePageActive() {
+  const read = () => !document.hidden && document.hasFocus();
+  const [active, setActive] = React.useState(read);
+  React.useEffect(() => {
+    const update = () => setActive(read());
+    window.addEventListener('focus', update);
+    window.addEventListener('blur', update);
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      window.removeEventListener('focus', update);
+      window.removeEventListener('blur', update);
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, []);
+  return active;
+}
+
+/**
+ * Número principal sem re-renderizar a tela (escreve direto no nó): 60 fps normalmente; no modo performance ~8 Hz.
+ * Parado (janela inativa) não gasta nada.
+ */
+function LiveCompute({ snap, receivedAt, perf = false, active = true }) {
   const ref = React.useRef(null);
   React.useEffect(() => {
-    let raf = 0;
-    const frame = () => {
+    const paint = () => {
       const v = snap.amount + snap.rate * (Date.now() - receivedAt) / 1000;
       if (ref.current) ref.current.textContent = formatNum(v);
-      raf = requestAnimationFrame(frame);
     };
-    frame();
+    paint();
+    if (!active) return undefined;
+    if (perf) { const t = setInterval(paint, 125); return () => clearInterval(t); }
+    let raf = 0;
+    const frame = () => { paint(); raf = requestAnimationFrame(frame); };
+    raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [snap, receivedAt]);
+  }, [snap, receivedAt, perf, active]);
   return <span ref={ref} className="dc-amount__value" />;
 }
 
@@ -159,7 +188,13 @@ export function DevCoreScreen({ toast, request }) {
   const [freshUnseen, setFreshUnseen] = React.useState([]); // descobertas "NOVO" desta visita
   // Som (música e efeitos das batalhas, popups): ligado em volume baixo por padrão; a preferência fica salva.
   const [audio, setAudio] = usePersisted('devcore.audio', { on: true, volume: 0.35 });
-  React.useEffect(() => { configureAudio(audio); }, [audio.on, audio.volume]);
+  // Modo performance: corta animações/filtros contínuos e alivia relógio, número e música. Ligado por padrão no macOS
+  // (Retina re-rasteriza tudo a cada frame); a escolha fica salva.
+  const [perfPref, setPerfPref] = usePersisted('devcore.perf', { on: isMac });
+  const perf = !!perfPref.on;
+  const active = usePageActive();
+  React.useEffect(() => { configureAudio({ ...audio, perf }); }, [audio.on, audio.volume, perf]);
+  React.useEffect(() => { pauseAudio(!active); return () => pauseAudio(false); }, [active]);
   const [gains, setGains] = React.useState([]);       // itens ganhos/comprados → popups
   const [arenaOpen, setArenaOpen] = React.useState(false); // recompensas de batalha esperam a arena fechar
   // Avisos que entregariam o resultado da luta (ex.: área concluída) esperam a arena abrir e fechar: a luta já vem
@@ -174,7 +209,7 @@ export function DevCoreScreen({ toast, request }) {
       setAfterBattle([]);
     }
   }, [arenaOpen, afterBattle.length]);
-  const now = useClock(500);
+  const now = useClock(perf ? 1000 : 500, active);
 
   const take = React.useCallback((s) => { setSnap(s); setReceivedAt(Date.now()); }, []);
 
@@ -278,17 +313,21 @@ export function DevCoreScreen({ toast, request }) {
   ];
 
   return (
-    <div className="dc">
+    <div className={'dc' + (perf ? ' is-perf' : '') + (active ? '' : ' is-idle')}>
       <header className="dc-head">
         <div className="dc-head__brand">
           <span className="dc-logo">DEVCORE</span>
           <IncidentChip ops={snap.ops} now={serverNow} onOpen={() => setUi((u) => ({ ...u, tab: 'ops' }))} />
           <span className="dc-tierchip">Tier {snap.tier.id} · {snap.tier.name}</span>
           {snap.founder && <span className="dc-founder-chip" title="Jogava o DevCore antes da grande atualização"><Icon name="star" size={11} /> Fundador</span>}
+          <Button size="sm" variant="ghost" icon="zap" aria-pressed={perf} onClick={() => setPerfPref((p) => ({ ...p, on: !p.on }))}
+            title="Modo performance: menos animações e filtros, música mais leve. Reduz o uso de CPU/bateria.">
+            Performance {perf ? 'ligado' : 'desligado'}
+          </Button>
         </div>
         <div className="dc-amount">
           <span className="dc-amount__label">Compute</span>
-          <LiveCompute snap={snap} receivedAt={receivedAt} />
+          <LiveCompute snap={snap} receivedAt={receivedAt} perf={perf} active={active} />
           <RateWithDetails snap={snap} now={serverNow} />
         </div>
         <div className="dc-head__next">
