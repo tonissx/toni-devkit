@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, globalShortcut, Tray, Menu, nativeImage, protocol, net, powerMonitor, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, globalShortcut, Tray, Menu, nativeImage, protocol, net, powerMonitor, screen, Notification } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const fs = require('node:fs/promises');
@@ -24,6 +24,7 @@ const { createLogsService } = require('./logs/service');
 const { createAimonService } = require('./aimon/service');
 const { createPlansArchive } = require('./aimon/plans');
 const { createPrefs: createAimonPrefs } = require('./aimon/prefs');
+const { createUsageStore } = require('./aimon/usage');
 const { createDbService } = require('./db/service');
 const { fromVaultFields } = require('../src/db/connstr.js');
 const { createAiService } = require('./ai/service');
@@ -717,22 +718,82 @@ function initLogs() {
 /* ─────────────── Monitor de IA (sessões do Claude Code, Codex…; ver electron/aimon) ─────────────── */
 // Somente leitura. O acompanhamento roda com a tela aberta (aimon:setActive) ou, se o usuário ligar, em segundo plano.
 let aimonSvc = null;
+// Métricas diárias (só números) em %APPDATA%Toni Devkitaimon-usage.json — ver electron/aimon/usage.js.
+let aimonUsage = null;
+const aimonUsageStore = () => aimonUsage || (aimonUsage = createUsageStore({ file: path.join(app.getPath('userData'), 'aimon-usage.json') }));
+let aimonUsageReady = null;
 const aimon = () => aimonSvc || (aimonSvc = createAimonService({
   providers: [require('./aimon/providers/claude'), require('./aimon/providers/codex')],
   broadcast: (evt) => { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('aimon:changed', evt); },
+  usage: aimonUsageStore(),
+  getPrices: () => (aimonPrefs ? aimonPrefs.get().prices : {}),
+  onAttention: (ev) => aimonNotify(ev),
 }));
 // Segundo plano (desligado por padrão): mantém o acompanhamento mesmo com a tela fechada — é o que alimenta o selo na
 // tela do Git. Quem só usa o Git não liga nada. Preferência em %APPDATA%Toni Devkitaimon.json.
+// Os avisos do sistema também precisam do acompanhamento ligado, então quem os liga mantém o segundo plano implícito.
 let aimonPrefs = null;
 let aimonScreenOpen = false;
-const syncAimon = () => aimon().setActive(aimonScreenOpen || !!(aimonPrefs && aimonPrefs.get().background));
+const syncAimon = () => {
+  const p = aimonPrefs ? aimonPrefs.get() : { background: false, notify: false };
+  return aimon().setActive(aimonScreenOpen || p.background || p.notify);
+};
 function initAimon() {
   aimonPrefs = createAimonPrefs({ file: path.join(app.getPath('userData'), 'aimon.json') });
-  aimonPrefs.init().then((p) => { if (p.background) syncAimon(); }).catch((e) => console.error('[aimon]', e));
+  aimonUsageReady = aimonUsageStore().init().catch((e) => console.error('[aimon-usage]', e));
+  aimonPrefs.init().then(() => aimonUsageReady).then(() => { const p = aimonPrefs.get(); if (p.background || p.notify) syncAimon(); }).catch((e) => console.error('[aimon]', e));
+}
+// Aviso do sistema quando uma sessão passa a esperar por você ou dá erro. Clicar leva à sessão no Monitor de IA.
+const aimonToasts = new Set(); // referência até o clique/fechamento: sem ela o coletor de lixo pode descartar o aviso
+function aimonNotify(ev) {
+  if (!aimonPrefs || !aimonPrefs.get().notify || !Notification.isSupported()) return;
+  const looking = mainWin && !mainWin.isDestroyed() && mainWin.isVisible() && mainWin.isFocused() && aimonScreenOpen;
+  if (looking) return; // já está na tela do monitor, com a janela em foco
+  const cut = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+  const waiting = ev.kind === 'waiting';
+  const n = new Notification({
+    title: waiting ? 'Esperando você' : 'Sessão de IA com erro',
+    body: [cut([ev.project, ev.title].filter(Boolean).join(' — '), 110), cut(ev.detail || (waiting ? 'Aguardando a sua resposta ou permissão' : ''), 110)].filter(Boolean).join('\n'),
+    icon: nativeImage.createFromPath(path.join(__dirname, '..', 'renderer', 'assets', 'icon.png')),
+  });
+  aimonToasts.add(n);
+  const done = () => aimonToasts.delete(n);
+  n.on('click', () => { done(); showMain('aimon', { sel: ev.key }); });
+  n.on('close', done);
+  n.on('failed', done);
+  n.show();
 }
 ipcMain.handle('aimon:setActive', (_e, on) => { aimonScreenOpen = !!on; return syncAimon(); });
-ipcMain.handle('aimon:prefs', () => (aimonPrefs ? aimonPrefs.get() : { background: false }));
+ipcMain.handle('aimon:prefs', () => (aimonPrefs ? aimonPrefs.get() : { background: false, notify: false, prices: {} }));
 ipcMain.handle('aimon:setBackground', async (_e, on) => { if (!aimonPrefs) return false; await aimonPrefs.setBackground(!!on); syncAimon(); return aimonPrefs.get().background; });
+ipcMain.handle('aimon:setNotify', async (_e, on) => { if (!aimonPrefs) return false; await aimonPrefs.setNotify(!!on); syncAimon(); return aimonPrefs.get().notify; });
+ipcMain.handle('aimon:setPrices', async (_e, prices) => (aimonPrefs ? aimonPrefs.setPrices(prices) : {}));
+// Métricas de uso (painel "Uso"): o custo é uma estimativa a partir dos tokens e dos preços (padrão ou personalizados).
+ipcMain.handle('aimon:usage', async (_e, days) => {
+  if (aimonUsageReady) await aimonUsageReady;
+  const a = await plans().catch(() => null);
+  const rows = a ? a.list({}).map((p) => ({ ts: p.ts, status: p.status })) : [];
+  return aimon().usage(Number(days) || 7, rows);
+});
+ipcMain.handle('aimon:usageClear', async () => aimon().usageClear());
+ipcMain.handle('aimon:search', async (_e, q, opts) => {
+  const o = opts && typeof opts === 'object' ? opts : {};
+  const r = await aimon().search(String(q || ''), { days: Number(o.days) || 14, limit: Number(o.limit) || 60 });
+  // Planos (guardados à parte): entram na frente, com o mesmo formato de recorte.
+  const needle = String(q || '').trim();
+  if (needle.length >= 2) {
+    const a = await plans().catch(() => null);
+    if (a) r.plans = a.list({ q: needle }).slice(0, 15).map((p) => ({ id: p.id, ts: p.ts, status: p.status, title: p.title, project: p.project, sessionId: p.sessionId, snippet: p.snippet || null }));
+  }
+  return r;
+});
+ipcMain.handle('aimon:dayDigest', () => aimon().dayDigest());
+// Abre um terminal na pasta da sessão rodando `claude --resume <id>` (ou `codex resume <id>`, ou a ferramenta pura).
+ipcMain.handle('aimon:resume', async (_e, req) => {
+  const r = req && typeof req === 'object' ? req : {};
+  const known = typeof r.key === 'string' ? aimon().sessionInfo(r.key) : null; // sessão acompanhada: usa o que o monitor leu, não o que a tela mandou
+  return require('./aimon/resume').open({ provider: known ? known.provider : r.provider, sessionId: known ? known.sessionId : r.sessionId, cwd: known ? known.cwd : r.cwd, mode: r.mode });
+});
 // Só consulta o que o acompanhamento já leu; nunca o liga (sem segundo plano nem tela aberta, volta vazio).
 ipcMain.handle('aimon:repoActivity', () => (aimonSvc ? aimonSvc.repoActivity() : {}));
 // Planos aprovados/recusados das sessões, guardados em %APPDATA%Toni Devkitaimon-plans.json (ver electron/aimon/plans.js).
@@ -972,6 +1033,7 @@ if (!app.requestSingleInstanceLock()) {
       if (dbSvc) { dbSvc.stopAll(); await dbSvc.flush().catch(() => {}); }
       if (aimonSvc) aimonSvc.stop();
       if (aimonPrefs) await aimonPrefs.flush().catch(() => {});
+      if (aimonUsage) await aimonUsage.flush().catch(() => {});
       if (plansArchive) await plansArchive.flush().catch(() => {});
       notesFlushed = true;
       app.quit();

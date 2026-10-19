@@ -325,6 +325,19 @@ contextBridge.exposeInMainWorld('devkit', {
     /** Preferências do monitor: { background } — manter o acompanhamento ligado com a tela fechada (desligado por padrão). */
     prefs: () => ipcRenderer.invoke('aimon:prefs'),
     setBackground: (on) => ipcRenderer.invoke('aimon:setBackground', on),
+    /** Avisos do sistema quando uma sessão passa a esperar por você ou dá erro (desligado por padrão; liga o acompanhamento em segundo plano). */
+    setNotify: (on) => ipcRenderer.invoke('aimon:setNotify', on),
+    /** Preços personalizados por modelo ({ [modelo]: { input, output } }, US$ por 1 milhão de tokens) para a estimativa de custo. */
+    setPrices: (prices) => ipcRenderer.invoke('aimon:setPrices', prices),
+    /** Métricas dos últimos `days` dias: custo estimado, tokens, tempo trabalhando e esperando por você, por modelo e projeto. */
+    usage: (days) => ipcRenderer.invoke('aimon:usage', days),
+    usageClear: () => ipcRenderer.invoke('aimon:usageClear'),
+    /** Busca nos prompts e respostas das sessões em disco (últimos `days` dias) e nos planos guardados. */
+    search: (q, opts) => ipcRenderer.invoke('aimon:search', q, opts),
+    /** O que as sessões fizeram hoje, enxuto, para o diário de bordo (IA). */
+    dayDigest: () => ipcRenderer.invoke('aimon:dayDigest'),
+    /** Abre um terminal na pasta da sessão e retoma ({ key } ou { provider, sessionId, cwd }, mode: 'resume' | 'new'). */
+    resume: (req) => ipcRenderer.invoke('aimon:resume', req),
     /** Atividade de IA por repositório principal ({} se o acompanhamento não está ligado). Só consulta; nunca liga nada. */
     repoActivity: () => ipcRenderer.invoke('aimon:repoActivity'),
     /** Git (só leitura) da pasta de uma sessão: alterações não comitadas e o diff de um arquivo delas. */

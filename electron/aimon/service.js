@@ -11,6 +11,9 @@
 const fs = require('node:fs/promises');
 const state = require('./state');
 const { segments, overlayWaiting, stats: lanesStats } = require('./lanes');
+const { splitByDay, dayKey, dayStart } = require('./usage');
+const { zero, sumTokens } = require('./pricing');
+const { searchSessions } = require('./search');
 const { createGitInfo } = require('./gitinfo');
 const { redact } = require('../../src/logs/redact.js');
 const { sessionDigest } = require('../../src/tools/aimon/aiInput.js');
@@ -18,8 +21,13 @@ const { sessionDigest } = require('../../src/tools/aimon/aiInput.js');
 const WINDOW_MS = 24 * 3600e3;
 const MAX_EVENTS = 3000;     // por sessão, na memória
 const FIRST_READ_MAX = 6 * 1024 * 1024; // arquivo maior que isso: lê só o final (a contagem de turnos/tokens fica parcial)
+const USAGE_FLUSH_MS = 30_000;         // de quanto em quanto tempo as métricas diárias vão para o disco
+const CONFLICT_MS = 30 * 60_000;       // dois agentes no mesmo arquivo: só conta edição dessa janela
+const IDLE_DIRTY_MS = 6 * 3600e3;      // sessão parada há mais que isso não tem o git consultado
+const base = (p) => String(p || '').split('\\').join('/').split('/').filter(Boolean).pop() || '';
 
-function createAimonService({ providers, broadcast = () => {}, now = () => Date.now(), pollMs = 1500, rescanMs = 6000, windowMs = WINDOW_MS, gitinfo = null }) {
+function createAimonService({ providers, broadcast = () => {}, now = () => Date.now(), pollMs = 1500, rescanMs = 6000, windowMs = WINDOW_MS, gitinfo = null,
+  usage = null, getPrices = () => ({}), onAttention = () => {} }) {
   const byId = new Map(providers.map((p) => [p.id, p]));
   const tracked = new Map(); // "provider:sessionId" → { meta, ctx, st, events, offset, tail, busy, partial, version }
   let timer = null;
@@ -34,6 +42,11 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
   const waits = new Map();   // "provedor:sessão" → [{ from, to|null }]: quando o agente informou "esperando você"
   let gi = gitinfo;
   let gen = 0; // sobe quando o acompanhamento para: um tick já em andamento não avisa mais a tela
+  const lastStatus = new Map();  // "provedor:sessão" → último status visto (para avisar só na mudança)
+  const notified = new Map();    // "provedor:sessão:tipo" → quando avisou (evita repetir em poucos segundos)
+  const conflictMap = new Map(); // "provedor:sessão" → [{ path, with: [rótulos] }]: outro agente editou o mesmo arquivo há pouco
+  const ownerOfCwd = new Map();  // pasta → sessão principal mais recente dela (só ela mostra "parada com alterações")
+  let lastUsageFlush = 0;
 
   const keyOf = (m) => m.provider + ':' + m.sessionId;
 
@@ -75,6 +88,7 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
         try { evs = prov.parseLine(line, t.ctx); } catch { evs = []; } // um adaptador nunca derruba o monitor
         for (const ev of evs) {
           state.apply(t.st, ev);
+          if (ev.kind === 'usage') addDaily(t, ev);
           if (ev.kind !== 'usage' && ev.kind !== 'title') { t.events.push(ev); changed = true; }
           else changed = true;
         }
@@ -88,7 +102,96 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
   }
 
   function reset(t) {
-    t.st = state.createSessionState(); t.ctx = {}; t.events = []; t.offset = 0; t.partial = false; t.skipFirst = false;
+    t.st = state.createSessionState(); t.ctx = {}; t.events = []; t.offset = 0; t.partial = false; t.skipFirst = false; t.daily = {};
+  }
+
+  /** Tokens do evento de uso, no dia dele (as métricas diárias; ver usage.js). */
+  function addDaily(t, ev) {
+    if (!ev.ts) return;
+    const day = dayKey(ev.ts);
+    const d = t.daily[day] || (t.daily[day] = { tokens: zero(), byModel: {} });
+    d.tokens = sumTokens(d.tokens, ev.tokens || {});
+    if (ev.model) d.byModel[ev.model] = sumTokens(d.byModel[ev.model] || zero(), ev.tokens || {});
+  }
+
+  const projectOf = (t) => { const r = repoOf(t); return (r && r.name) || base(t.st.cwd) || t.meta.project || ''; };
+
+  /** O que cada sessão acumulou, por dia: tokens (sessões e subagentes) e tempo trabalhando/esperando (só sessões principais). */
+  function usageContribution() {
+    const out = {};
+    const at = now();
+    for (const t of tracked.values()) {
+      const key = keyOf(t.meta);
+      const agent = !!t.meta.parentId;
+      const split = agent ? {} : splitByDay(overlayWaiting(segments(t.events, at, { from: 0 }), waits.get(key), 0, at));
+      const project = projectOf(t);
+      for (const day of new Set([...Object.keys(t.daily), ...Object.keys(split)])) {
+        const d = t.daily[day] || { tokens: zero(), byModel: {} };
+        const sp = split[day] || { workMs: 0, waitMs: 0, waitCount: 0 };
+        const tok = d.tokens.input + d.tokens.output + d.tokens.cacheRead + d.tokens.cacheWrite;
+        if (!tok && !sp.workMs && !sp.waitMs) continue;
+        (out[day] || (out[day] = {}))[key] = { project, agent, tokens: d.tokens, byModel: d.byModel, workMs: sp.workMs, waitMs: sp.waitMs, waitCount: sp.waitCount };
+      }
+    }
+    return out;
+  }
+
+  function flushUsage(force) {
+    if (!usage) return;
+    if (!force && now() - lastUsageFlush < USAGE_FLUSH_MS) return;
+    lastUsageFlush = now();
+    try { usage.merge(usageContribution()); usage.persist().catch(() => {}); } catch { /* métrica nunca derruba o monitor */ }
+  }
+
+  /** Avisa (onAttention) quando uma sessão principal passa a esperar por você (informado pelo próprio agente) ou dá erro. */
+  function checkAttention() {
+    const at = now();
+    for (const t of tracked.values()) {
+      if (t.meta.parentId) continue;
+      const key = keyOf(t.meta);
+      const live = liveBy.get(key) || null;
+      const status = state.statusOf(t.st, at, live);
+      const prev = lastStatus.get(key);
+      lastStatus.set(key, status);
+      if (prev === undefined || prev === status) continue; // 1ª vez que vê a sessão só anota: não avisa do que já estava assim
+      // "Esperando" só vale quando o agente informa: a estimativa pelo transcript confunde com ferramenta demorada.
+      const kind = status === 'error' ? 'error' : status === 'waiting' && live && live.status === 'waiting' ? 'waiting' : null;
+      if (!kind) continue;
+      const nk = key + ':' + kind;
+      if (at - (notified.get(nk) || 0) < 20_000) continue;
+      notified.set(nk, at);
+      try {
+        onAttention({ kind, key, project: projectOf(t), title: t.meta.label || t.st.title || t.st.lastText || 'Sessão sem título',
+          detail: kind === 'waiting' ? live.waitingFor || null : (t.st.error && t.st.error.message) || null, ts: at });
+      } catch { /* aviso nunca derruba o monitor */ }
+    }
+    for (const k of [...lastStatus.keys()]) if (!tracked.has(k)) lastStatus.delete(k);
+  }
+
+  /** Dois agentes ao mesmo tempo no mesmo arquivo (editado nos últimos 30 min): nas mesmas pastas isso vira conflito. */
+  function computeConflicts() {
+    conflictMap.clear();
+    const at = now();
+    const byPath = new Map();
+    for (const t of tracked.values()) {
+      const key = keyOf(t.meta);
+      const status = state.statusOf(t.st, at, t.meta.parentId ? null : liveBy.get(key) || null);
+      if (status !== 'working' && status !== 'waiting') continue;
+      for (const [norm, e] of t.st.edits) if (at - e.ts <= CONFLICT_MS) (byPath.get(norm) || byPath.set(norm, []).get(norm)).push({ t, path: e.path });
+    }
+    const label = (t) => t.meta.label || t.st.title || (t.meta.parentId ? 'Subagente' : 'Outra sessão');
+    for (const list of byPath.values()) {
+      if (list.length < 2) continue;
+      for (const a of list) {
+        // Pai e subagente no mesmo arquivo é rotina: não conta.
+        const others = list.filter((b) => b !== a && b.t.meta.parentId !== a.t.meta.sessionId && a.t.meta.parentId !== b.t.meta.sessionId);
+        if (!others.length) continue;
+        const k = keyOf(a.t.meta);
+        const cur = conflictMap.get(k) || [];
+        if (cur.length < 3) cur.push({ path: a.path, with: [...new Set(others.map((o) => label(o.t)))].slice(0, 3) });
+        conflictMap.set(k, cur);
+      }
+    }
   }
 
   async function scan() {
@@ -104,7 +207,7 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
           const k = keyOf(m);
           seen.add(k);
           let t = tracked.get(k);
-          if (!t) { t = { meta: m, ctx: {}, st: state.createSessionState(), events: [], offset: 0, partial: false, skipFirst: false, busy: false, version: 0 }; tracked.set(k, t); }
+          if (!t) { t = { meta: m, ctx: {}, st: state.createSessionState(), events: [], offset: 0, partial: false, skipFirst: false, busy: false, version: 0, daily: {} }; tracked.set(k, t); }
           else t.meta = m;
         }
       }
@@ -131,11 +234,20 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
 
   /** Quantos arquivos estão alterados na pasta das sessões em andamento (um `status` leve, no máximo a cada 5 s). */
   function refreshDirty() {
+    ownerOfCwd.clear();
+    for (const t of tracked.values()) { // a sessão principal mais recente de cada pasta
+      if (t.meta.parentId || !t.st.cwd) continue;
+      const ts = t.st.lastTs || t.meta.mtime;
+      const cur = ownerOfCwd.get(t.st.cwd);
+      if (!cur || ts > cur.ts) ownerOfCwd.set(t.st.cwd, { key: keyOf(t.meta), ts });
+    }
     for (const t of tracked.values()) {
       const cwd = t.st.cwd;
-      if (!cwd || !t.st.turnOpen || dirtyBusy.has(cwd) || !repoOf(t)) continue;
+      // Em andamento: a cada 5 s. Parada há pouco (e dona da pasta): a cada 30 s, para avisar de alteração sem commit.
+      const parked = !t.st.turnOpen && !t.meta.parentId && now() - (t.st.lastTs || t.meta.mtime) < IDLE_DIRTY_MS && (ownerOfCwd.get(cwd) || {}).key === keyOf(t.meta);
+      if (!cwd || (!t.st.turnOpen && !parked) || dirtyBusy.has(cwd) || !repoOf(t)) continue;
       const hit = dirtyBy.get(cwd);
-      if (hit && now() - hit.at < 5000) continue;
+      if (hit && now() - hit.at < (t.st.turnOpen ? 5000 : 30_000)) continue;
       dirtyBusy.add(cwd);
       (gi || (gi = createGitInfo())).dirtyCount(cwd).then((n) => {
         if (!hit || hit.n !== n) dirty = true;
@@ -182,6 +294,9 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
     await refreshLive();
     resolveRepos();
     refreshDirty();
+    computeConflicts();
+    checkAttention();
+    flushUsage(false);
     // O status depende do relógio (trabalhando → esperando): reavisa a tela mesmo sem linha nova se algo está em andamento.
     const live = [...tracked.values()].some((t) => t.st.turnOpen);
     if (g === gen && (any || dirty || live)) { dirty = false; broadcast({ type: 'changed' }); }
@@ -199,8 +314,18 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
     label: t.meta.label || null, project: t.meta.project || null, file: t.meta.file, mtime: t.meta.mtime, partial: t.partial,
     ...state.summary(t.st, now(), t.meta.parentId ? null : liveBy.get(keyOf(t.meta)) || null),
     repo: repoOf(t),
-    dirty: t.st.turnOpen && dirtyBy.has(t.st.cwd) ? dirtyBy.get(t.st.cwd).n : null,
+    dirty: dirtyOf(t),
+    conflicts: conflictMap.get(keyOf(t.meta)) || [],
   });
+
+  /** Arquivos alterados na pasta: das sessões em andamento e da sessão principal mais recente de cada pasta (parada com alterações). */
+  function dirtyOf(t) {
+    const hit = t.st.cwd && dirtyBy.get(t.st.cwd);
+    if (!hit || now() - hit.at > 120_000) return null; // sem consulta recente (acompanhamento parou, ou a sessão não é a dona da pasta)
+    if (t.st.turnOpen) return hit.n;
+    const owner = ownerOfCwd.get(t.st.cwd);
+    return !t.meta.parentId && owner && owner.key === keyOf(t.meta) ? hit.n : null;
+  }
 
   return {
     /** Provedores conhecidos e se a ferramenta está instalada (a pasta existe). */
@@ -216,11 +341,13 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
     setActive(on) {
       if (on && !timer) {
         dirty = true;
+        lastStatus.clear(); // recomeça: o que já estava esperando ao ligar não gera aviso
+        lastUsageFlush = 0;
         const run = () => tick().catch(() => {});
         run();
         timer = setInterval(run, pollMs);
         if (timer.unref) timer.unref();
-      } else if (!on && timer) { clearInterval(timer); timer = null; gen++; }
+      } else if (!on && timer) { clearInterval(timer); timer = null; gen++; flushUsage(true); }
       return !!timer;
     },
     /** Sessões da janela, mais recentes primeiro; subagentes trazem parentId. */
@@ -275,6 +402,33 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
       }
       return { now: at, since, lanes: out, stats: lanesStats(out, at) };
     },
+    /** Métricas de uso dos últimos `days` dias (custo estimado, tokens, tempo trabalhando e esperando). `plans`: [{ ts, status }]. */
+    async usage(days, plans) {
+      if (!usage) return null;
+      flushUsage(true);
+      return usage.range(days, { prices: getPrices(), plans });
+    },
+    /** Esquece as métricas guardadas. */
+    async usageClear() { if (usage) await usage.clear(); return true; },
+    /** Busca em prompts e respostas das sessões gravadas em disco (últimos `days` dias), sem índice: lê os arquivos na hora. */
+    search(q, opts = {}) { return searchSessions({ providers, q, days: opts.days, limit: opts.limit, now: now() }); },
+    /** Base do diário do dia: o que cada sessão principal fez desde a meia-noite (já enxuto; o texto ainda passa por `redact` na tarefa). */
+    dayDigest() {
+      const since = dayStart(dayKey(now()));
+      const sessions = [];
+      for (const t of tracked.values()) {
+        if (t.meta.parentId) continue;
+        const evs = t.events.filter((e) => e.ts >= since);
+        if (!evs.length) continue;
+        const d = sessionDigest(row(t), evs);
+        const daily = t.daily[dayKey(now())];
+        sessions.push({ ...d, lastTs: t.st.lastTs, tokens: daily ? daily.tokens.input + daily.tokens.output + daily.tokens.cacheRead + daily.tokens.cacheWrite : 0 });
+      }
+      sessions.sort((a, b) => a.lastTs - b.lastTs);
+      return { date: dayKey(now()), sessions: sessions.slice(-12) };
+    },
+    /** Dados de uma sessão acompanhada, para abrir um terminal nela. */
+    sessionInfo(key) { const t = tracked.get(key); return t ? { provider: t.meta.provider, sessionId: t.meta.sessionId, cwd: t.st.cwd } : null; },
     /**
      * Atividade por repositório principal, para a tela do Git: só olha o que o acompanhamento já leu (nunca liga o
      * acompanhamento). Sem o monitor aberto, devolve {}.
@@ -293,7 +447,7 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
       }
       return out;
     },
-    stop() { if (timer) { clearInterval(timer); timer = null; gen++; } },
+    stop() { if (timer) { clearInterval(timer); timer = null; gen++; flushUsage(true); } },
     _tick: tick,
     _tracked: tracked,
   };

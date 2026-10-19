@@ -64,6 +64,26 @@ module.exports = function aimonTasks({ clip, tidy, PT, MD, redact }) {
       clean: tidy,
     },
 
+    aimonDiary: {
+      label: 'Diário de bordo do dia', maxTokens: 900,
+      build(i) {
+        const sessions = arr(i.sessions);
+        if (!sessions.length) throw new Error('Não há sessões com atividade hoje');
+        const h = (ms) => (Number.isFinite(ms) ? `${Math.floor(ms / 3600e3)} h ${String(Math.round((ms % 3600e3) / 60e3)).padStart(2, '0')} min` : null);
+        const t = i.totals || {};
+        const facts = [h(t.workMs) && `trabalhando: ${h(t.workMs)}`, h(t.waitMs) && `esperando a pessoa: ${h(t.waitMs)}`, Number.isFinite(t.tokens) && `tokens: ${Math.round(t.tokens)}`, Number.isFinite(t.cost) && `custo estimado: US$ ${t.cost.toFixed(2)}`].filter(Boolean);
+        const parts = [`Data: ${safe(i.date, 12)}`, facts.length ? `Totais do dia — ${facts.join(' · ')}` : ''];
+        sessions.slice(-12).forEach((s, n) => parts.push('', `=== Sessão ${n + 1} ===`, digest(s)));
+        return {
+          system: ['Você escreve o diário de bordo de um dia de trabalho de uma pessoa desenvolvedora, a partir das sessões que ela teve com agentes de IA de programação (como o Claude Code ou o Codex).', PT, MD,
+            'Estrutura curta: "## Hoje" (o que foi feito, agrupado por projeto, em tópicos), "## Entregas" (commits relevantes, se houver), "## Pendências" (o que ficou aberto) e, se os totais constarem, "## Uso" (uma linha com tempo e custo).',
+            'Use SOMENTE os dados fornecidos: não invente trabalho, arquivos nem resultados. O que não consta nos dados fica de fora. Escreva em primeira pessoa, em tom de nota pessoal.'].join('\n'),
+          user: parts.filter((x, n) => x !== '' || n > 1).join('\n'),
+        };
+      },
+      clean: tidy,
+    },
+
     aimonBrief: {
       label: 'Briefing para retomar', maxTokens: 700,
       build(i) {
