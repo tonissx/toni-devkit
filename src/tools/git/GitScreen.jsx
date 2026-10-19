@@ -49,7 +49,10 @@ const repoInitials = (name) => {
 const RAIL_COMPACT = 52, RAIL_MIN = 170, RAIL_MAX = 420, RAIL_SNAP = 120, RAIL_DEFAULT = 236;
 const railWidth = (raw) => (raw < RAIL_SNAP ? RAIL_COMPACT : Math.min(RAIL_MAX, Math.max(RAIL_MIN, Math.round(raw))));
 
-function RepoRail({ repos, current, width, onResize, onOpen, onAddDone, onRemove, toast }) {
+/** Chave de caminho para casar o repositório do Git com o do Monitor de IA (barras, maiúsculas, barra final). */
+const pathKey = (p) => String(p || '').split('\\').join('/').replace(/\/+$/, '').toLowerCase();
+
+function RepoRail({ repos, current, width, onResize, onOpen, onAddDone, onRemove, toast, ai }) {
   const railRef = React.useRef(null);
   const [live, setLive] = React.useState(null); // largura durante o arrasto (só grava ao soltar)
   const w = live ?? width;
@@ -124,6 +127,7 @@ function RepoRail({ repos, current, width, onResize, onOpen, onAddDone, onRemove
               </span>
               {r.conflicts > 0 ? <span className="gt-repo__badge is-conf" title="Arquivos em conflito">{r.conflicts}</span>
                 : r.changes > 0 ? <span className="gt-repo__badge" title="Mudanças pendentes">{r.changes}</span> : null}
+              {ai && ai[pathKey(r.path)] && ai[pathKey(r.path)].active > 0 && <span className="gt-repo__ai" title={`${ai[pathKey(r.path)].active} sessão(ões) de IA trabalhando aqui (Monitor de IA)`}><Icon name="bot" size={11} />{ai[pathKey(r.path)].active}</span>}
             </button>
             <button type="button" className="gt-repo__rm" title="Remover da lista (não apaga nada do disco)" aria-label={`Remover ${r.name} da lista`} onClick={() => onRemove(r)}><Icon name="x" size={13} /></button>
           </div>
@@ -210,6 +214,24 @@ export function GitScreen({ toast, request }) {
   const railW = ui.railW ?? (ui.rail === 'collapsed' || window.innerWidth < 1100 ? RAIL_COMPACT : RAIL_DEFAULT);
 
   const loadRepos = React.useCallback(() => api.summaries().then(setRepos, () => setRepos([])), []);
+  // Selo "sessões de IA ativas": só aparece se o Monitor de IA estiver acompanhando (segundo plano ligado). Aqui é apenas
+  // uma consulta — esta tela nunca liga o acompanhamento, e qualquer falha deixa o Git exatamente como sempre foi.
+  const [ai, setAi] = React.useState(null);
+  React.useEffect(() => {
+    const m = window.devkit && window.devkit.aimon;
+    if (!m || !m.repoActivity || !m.onChanged) return undefined;
+    let alive = true; let t = null;
+    const load = () => m.repoActivity().then((map) => {
+      if (!alive) return;
+      const by = {};
+      for (const [k, v] of Object.entries(map || {})) by[pathKey(k)] = v;
+      setAi((prev) => (JSON.stringify(prev) === JSON.stringify(by) ? prev : by));
+    }, () => {});
+    load();
+    let off = () => {};
+    try { off = m.onChanged(() => { clearTimeout(t); t = setTimeout(load, 800); }); } catch { /* sem selo */ }
+    return () => { alive = false; clearTimeout(t); off(); };
+  }, []);
   const removeRepo = async (r) => {
     try {
       await api.remove(r.path);
@@ -231,6 +253,7 @@ export function GitScreen({ toast, request }) {
     if (!request) return;
     setUi((u) => ({ ...u, ...(request.tab ? { tab: request.tab } : {}), ...(request.repo ? { repo: request.repo } : {}) }));
     if (request.recipe) setFocus({ recipe: request.recipe, nonce: Date.now() });
+    if (request.hash) setFocus({ hash: request.hash, nonce: Date.now() }); // vindo do Monitor de IA: abre o commit no histórico
   }, [request && request.nonce]);
 
   const status = useRepoData(repo, (r) => api.status(r));
@@ -305,7 +328,7 @@ export function GitScreen({ toast, request }) {
 
   return (
     <div className="gt">
-      <RepoRail repos={repos} current={repo} width={railW} onResize={(railW) => setUi((u) => ({ ...u, railW }))} onOpen={(p) => setUi((u) => ({ ...u, repo: p }))} onAddDone={(p) => { setUi((u) => ({ ...u, repo: p, tab: 'overview' })); loadRepos(); }} onRemove={removeRepo} toast={toast} />
+      <RepoRail ai={ai} repos={repos} current={repo} width={railW} onResize={(railW) => setUi((u) => ({ ...u, railW }))} onOpen={(p) => setUi((u) => ({ ...u, repo: p }))} onAddDone={(p) => { setUi((u) => ({ ...u, repo: p, tab: 'overview' })); loadRepos(); }} onRemove={removeRepo} toast={toast} />
       <div className="gt-main">
         {!repos ? <div className="gt-msg"><Spinner size={14} /> Carregando…</div>
           : !repo ? (

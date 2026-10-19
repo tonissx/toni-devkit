@@ -84,6 +84,14 @@ const TOOL_META = [
     keywords: ['cofre', 'senha', 'senhas', 'password', 'credenciais', 'segredo', 'secret', 'token', 'banco', 'connection string', 'login'],
   },
   {
+    id: 'aimon',
+    name: 'Monitor de IA',
+    icon: 'radar',
+    group: 'Texto & código',
+    desc: 'O que cada sessão de IA (Claude Code, Codex…) está fazendo agora: status, subagentes, tokens e timeline — só leitura, local',
+    keywords: ['ia', 'ai', 'claude', 'codex', 'agente', 'agentes', 'subagente', 'sessão', 'sessões', 'monitor', 'timeline', 'tokens', 'transcript'],
+  },
+  {
     id: 'devcore',
     name: 'DevCore',
     icon: 'cpu',

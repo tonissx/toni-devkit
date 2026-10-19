@@ -133,6 +133,28 @@ function LockNote({ w }) {
   );
 }
 
+/**
+ * Sessão de IA ativa neste worktree. Só aparece se o Monitor de IA estiver acompanhando (segundo plano ligado): é uma
+ * consulta, não liga nada, e qualquer falha deixa a tela exatamente como sempre foi.
+ */
+const pk = (p) => String(p || '').split(String.fromCharCode(92)).join('/').replace(/\/+$/, '').toLowerCase();
+function AiNote({ path }) {
+  const [t, setT] = React.useState(null);
+  React.useEffect(() => {
+    const m = window.devkit && window.devkit.aimon;
+    if (!m || !m.repoActivity) return undefined;
+    let alive = true;
+    m.repoActivity().then((map) => {
+      if (!alive) return;
+      const k = pk(path);
+      for (const e of Object.values(map || {})) for (const [p, v] of Object.entries(e.worktrees || {})) if (pk(p) === k) { setT(v); return; }
+    }, () => {});
+    return () => { alive = false; };
+  }, [path]);
+  if (!t) return null;
+  return <small className="gt-lock is-alive" title="Sessão encontrada pelo Monitor de IA. Remover o worktree agora interrompe o trabalho dela."><Icon name="bot" size={11} /> Sessão de IA ativa aqui{t.title ? `: ${t.title}` : ''} (Monitor de IA)</small>;
+}
+
 /** Worktrees: cópias de trabalho extras do repositório (o Claude Code cria em .claude/worktrees). */
 function Worktrees({ repo, run }) {
   const { data: list } = useRepoData(repo, (r) => gitApi().worktrees(r));
@@ -150,6 +172,7 @@ function Worktrees({ repo, run }) {
               <b>{w.name}{w.branch ? <span className="gt-mono"> · {w.branch}</span> : ' · HEAD solto'}</b>
               <small>{w.path}{!w.exists ? ' · a pasta não existe mais' : w.dirty ? ` · ${w.dirty} mudança(s) não commitada(s)` : ' · sem mudanças'}</small>
               {w.locked && <LockNote w={w} />}
+              <AiNote path={w.path} />
             </span>
             {w.exists && (w.locked
               ? <OpButton op={{ op: 'worktree.removeLocked', path: w.path }} run={run} icon="lock-open" variant="danger">
