@@ -8,7 +8,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
-const { clip, describeInput, textOf, isRejection, isRealApiError, describeError } = require('../util');
+const { clip, describeInput, textOf, isRejection, isRealApiError, describeError, describeWaiting } = require('../util');
 const { createCommitTracker } = require('../commits');
 
 const id = 'claude';
@@ -99,7 +99,7 @@ async function listSessions(since, base = root()) {
 
 const sessionsDir = () => path.join(os.homedir(), '.claude', 'sessions');
 const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return !!e && e.code === 'EPERM'; } };
-const waitingText = (w) => (w == null || w === '' ? null : clip(typeof w === 'string' ? w : JSON.stringify(w), 80));
+const waitingText = describeWaiting;
 
 /**
  * Estado ao vivo das sessões, do arquivo que o próprio Claude Code mantém em ~/.claude/sessions/<pid>.json

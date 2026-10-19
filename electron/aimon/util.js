@@ -51,4 +51,16 @@ function describeError(code, text) {
   return clip(text || code || 'Erro da API', 160);
 }
 
-module.exports = { clip, describeInput, textOf, isRejection, isRealApiError, describeError };
+/**
+ * O que o agente informa em `waitingFor` ("input needed" ao esperar uma resposta, algo de permissão/aprovação ao esperar um OK)
+ * → texto curto em português. Texto que não conhece passa como veio, cortado; objeto vira texto.
+ */
+function describeWaiting(w) {
+  if (w == null || w === '') return null;
+  const text = typeof w === 'string' ? w : JSON.stringify(w);
+  if (/input needed|needs? input|waiting for input/i.test(text)) return 'Aguardando a sua resposta';
+  if (/permission|approval|approve/i.test(text) && !/[áãç]/i.test(text)) return 'Aguardando a sua permissão';
+  return clip(text, 80);
+}
+
+module.exports = { clip, describeInput, textOf, isRejection, isRealApiError, describeError, describeWaiting };

@@ -34,7 +34,7 @@ test('live: lê só processo vivo, ignora lixo e arquivos .key, e vale o mais re
   assert.deepEqual([...m.keys()].sort(), ['s-dup', 's-obj', 's-vivo']);
   assert.deepEqual([m.get('s-vivo').status, m.get('s-vivo').waitingFor, m.get('s-vivo').statusUpdatedAt], ['waiting', 'permissão: Bash', 5000]);
   assert.equal(m.get('s-dup').status, 'waiting'); // o mais recente
-  assert.match(m.get('s-obj').waitingFor, /permission/); // objeto vira texto curto
+  assert.equal(m.get('s-obj').waitingFor, 'Aguardando a sua permissão'); // objeto vira texto e é traduzido
   assert.ok(![...m.values()].some((v) => JSON.stringify(v).includes('SEGREDO')));
   assert.equal((await claude.live(path.join(dir, 'nao-existe'), alive)).size, 0);
 });
@@ -148,4 +148,18 @@ test('serviço: um provedor sem estado ao vivo (ou que falha) não atrapalha', a
   await svc2._tick();
   assert.equal(svc2.list().length, 1);
   await sleep(1);
+});
+
+test('waitingFor: "input needed" (o valor real do Claude Code) e pedidos de permissão viram português; o resto passa como veio', () => {
+  const util = require('../electron/aimon/util.js');
+  assert.equal(util.describeWaiting('input needed'), 'Aguardando a sua resposta');
+  assert.equal(util.describeWaiting('Input Needed'), 'Aguardando a sua resposta');
+  assert.equal(util.describeWaiting('permission needed'), 'Aguardando a sua permissão');
+  assert.equal(util.describeWaiting('approval required for Bash'), 'Aguardando a sua permissão');
+  assert.equal(util.describeWaiting('permissão: Bash'), 'permissão: Bash'); // já em português
+  assert.equal(util.describeWaiting('algo novo'), 'algo novo');
+  assert.equal(util.describeWaiting(''), null);
+  assert.equal(util.describeWaiting(null), null);
+  assert.match(util.describeWaiting({ kind: 'x' }), /kind/);
+  assert.ok(util.describeWaiting('x'.repeat(300)).length <= 80);
 });
