@@ -510,6 +510,9 @@ const TASKS = {
   },
 };
 
+// Tarefas do Monitor de IA (src/tools/aimon): num arquivo à parte, com os mesmos auxiliares.
+Object.assign(TASKS, require('./tasks-aimon.js')({ clip, tidy, PT, MD, redact }));
+
 /** O que o texto da área de transferência parece ser. */
 function sniffKind(text) {
   const t = String(text || '').trim();

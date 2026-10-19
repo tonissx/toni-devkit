@@ -315,6 +315,41 @@ contextBridge.exposeInMainWorld('devkit', {
       return () => ipcRenderer.removeListener('git:changed', h);
     },
   },
+  /** Monitor de IA (ver electron/aimon): sessões recentes de Claude Code, Codex… — somente leitura. */
+  aimon: {
+    providers: () => ipcRenderer.invoke('aimon:providers'),
+    /** Liga/desliga o acompanhamento (a tela abriu/fechou). */
+    setActive: (on) => ipcRenderer.invoke('aimon:setActive', on),
+    list: (opts) => ipcRenderer.invoke('aimon:list', opts),
+    timeline: (key, opts) => ipcRenderer.invoke('aimon:timeline', key, opts),
+    /** Preferências do monitor: { background } — manter o acompanhamento ligado com a tela fechada (desligado por padrão). */
+    prefs: () => ipcRenderer.invoke('aimon:prefs'),
+    setBackground: (on) => ipcRenderer.invoke('aimon:setBackground', on),
+    /** Atividade de IA por repositório principal ({} se o acompanhamento não está ligado). Só consulta; nunca liga nada. */
+    repoActivity: () => ipcRenderer.invoke('aimon:repoActivity'),
+    /** Git (só leitura) da pasta de uma sessão: alterações não comitadas e o diff de um arquivo delas. */
+    gitChanges: (key) => ipcRenderer.invoke('aimon:gitChanges', key),
+    gitDiff: (key, path, area) => ipcRenderer.invoke('aimon:gitDiff', key, path, area),
+    resolveRepo: (cwd) => ipcRenderer.invoke('aimon:resolveRepo', cwd),
+    /** Entrada do Git para a IA ({ diff, recent, branch, files, omitted }), já mascarada. Só leitura. */
+    /** Resumo estruturado da sessão para a IA (já limitado em tamanho; o texto ainda é mascarado pelas tarefas). */
+    digest: (key) => ipcRenderer.invoke('aimon:digest', key),
+    gitAiInput: (key) => ipcRenderer.invoke('aimon:gitAiInput', key),
+    /** { provider?, since } → { now, since, lanes: [{ key, parentId, segments: [{ from, to, state }] }], stats } */
+    lanes: (opts) => ipcRenderer.invoke('aimon:lanes', opts),
+    /** Planos das sessões, guardados localmente. plansScan procura planos novos nos transcripts. */
+    plansScan: () => ipcRenderer.invoke('aimon:plansScan'),
+    /** { status?: 'approved'|'rejected'|'pending', q?, project? } → { rows, projects } */
+    plans: (opts) => ipcRenderer.invoke('aimon:plans', opts),
+    plan: (id) => ipcRenderer.invoke('aimon:plan', id),
+    planForget: (id) => ipcRenderer.invoke('aimon:planForget', id),
+    plansClear: () => ipcRenderer.invoke('aimon:plansClear'),
+    onChanged: (cb) => {
+      const h = (_e, evt) => cb(evt);
+      ipcRenderer.on('aimon:changed', h);
+      return () => ipcRenderer.removeListener('aimon:changed', h);
+    },
+  },
   /**
    * Logs (ver electron/logs): o texto fica no worker do processo principal; a tela pede só o que mostra.
    * Consultas recebem { id, qid, ... } — qid identifica a consulta da tela (respostas de consultas velhas: { stale }).

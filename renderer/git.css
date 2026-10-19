@@ -644,3 +644,7 @@ body.gt-resizing { cursor: col-resize; user-select: none; }
 .gt-compare .ai-btn { margin: 4px 0 2px; }
 .gt-compare__ai { margin: 6px 0; }
 .gt-pr__title { font-weight: 600; font-size: 13.5px; color: var(--tk-text); margin-bottom: 6px; }
+
+/* selo do Monitor de IA na lista de repositórios (só aparece com o acompanhamento ligado) */
+.gt-repo__ai { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 6px; border-radius: var(--tk-radius-pill); background: color-mix(in srgb, var(--tk-accent) 16%, transparent); color: var(--tk-accent-text); font: 600 10.5px var(--tk-font-sans); flex: none; }
+.gt-rail.is-collapsed .gt-repo__ai { position: absolute; bottom: 0; right: 0; height: 16px; padding: 0 4px; font-size: 9.5px; pointer-events: none; }

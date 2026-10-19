@@ -21,6 +21,9 @@ const { createStickiesService } = require('./stickies/service');
 const { createGitService } = require('./git/service');
 const { createAvatarService } = require('./git/avatars');
 const { createLogsService } = require('./logs/service');
+const { createAimonService } = require('./aimon/service');
+const { createPlansArchive } = require('./aimon/plans');
+const { createPrefs: createAimonPrefs } = require('./aimon/prefs');
 const { createDbService } = require('./db/service');
 const { fromVaultFields } = require('../src/db/connstr.js');
 const { createAiService } = require('./ai/service');
@@ -711,6 +714,53 @@ function initLogs() {
   logsReady = logsSvc.init().catch((e) => { console.error('[logs]', e); });
 }
 
+/* ─────────────── Monitor de IA (sessões do Claude Code, Codex…; ver electron/aimon) ─────────────── */
+// Somente leitura. O acompanhamento roda com a tela aberta (aimon:setActive) ou, se o usuário ligar, em segundo plano.
+let aimonSvc = null;
+const aimon = () => aimonSvc || (aimonSvc = createAimonService({
+  providers: [require('./aimon/providers/claude'), require('./aimon/providers/codex')],
+  broadcast: (evt) => { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('aimon:changed', evt); },
+}));
+// Segundo plano (desligado por padrão): mantém o acompanhamento mesmo com a tela fechada — é o que alimenta o selo na
+// tela do Git. Quem só usa o Git não liga nada. Preferência em %APPDATA%Toni Devkitaimon.json.
+let aimonPrefs = null;
+let aimonScreenOpen = false;
+const syncAimon = () => aimon().setActive(aimonScreenOpen || !!(aimonPrefs && aimonPrefs.get().background));
+function initAimon() {
+  aimonPrefs = createAimonPrefs({ file: path.join(app.getPath('userData'), 'aimon.json') });
+  aimonPrefs.init().then((p) => { if (p.background) syncAimon(); }).catch((e) => console.error('[aimon]', e));
+}
+ipcMain.handle('aimon:setActive', (_e, on) => { aimonScreenOpen = !!on; return syncAimon(); });
+ipcMain.handle('aimon:prefs', () => (aimonPrefs ? aimonPrefs.get() : { background: false }));
+ipcMain.handle('aimon:setBackground', async (_e, on) => { if (!aimonPrefs) return false; await aimonPrefs.setBackground(!!on); syncAimon(); return aimonPrefs.get().background; });
+// Só consulta o que o acompanhamento já leu; nunca o liga (sem segundo plano nem tela aberta, volta vazio).
+ipcMain.handle('aimon:repoActivity', () => (aimonSvc ? aimonSvc.repoActivity() : {}));
+// Planos aprovados/recusados das sessões, guardados em %APPDATA%Toni Devkitaimon-plans.json (ver electron/aimon/plans.js).
+let plansArchive = null;
+let plansReady = null;
+const plans = () => {
+  if (!plansArchive) {
+    const claude = require('./aimon/providers/claude');
+    plansArchive = createPlansArchive({ file: path.join(app.getPath('userData'), 'aimon-plans.json'), listFiles: () => claude.listSessions(0) });
+    plansReady = plansArchive.init().catch((e) => console.error('[aimon-plans]', e));
+  }
+  return plansReady.then(() => plansArchive);
+};
+ipcMain.handle('aimon:plansScan', async () => (await plans()).scan());
+ipcMain.handle('aimon:plans', async (_e, opts) => { const a = await plans(); return { rows: a.list(opts && typeof opts === 'object' ? opts : {}), projects: a.projects() }; });
+ipcMain.handle('aimon:plan', async (_e, id) => (await plans()).get(String(id || '')));
+ipcMain.handle('aimon:planForget', async (_e, id) => (await plans()).forget(String(id || '')));
+ipcMain.handle('aimon:plansClear', async () => (await plans()).clear());
+ipcMain.handle('aimon:providers', () => aimon().providers());
+ipcMain.handle('aimon:list', (_e, opts) => aimon().list(opts && typeof opts === 'object' ? opts : {}));
+ipcMain.handle('aimon:gitChanges', (_e, key) => aimon().gitChanges(String(key || '')));
+ipcMain.handle('aimon:gitDiff', (_e, key, p, area) => aimon().gitDiff(String(key || ''), p, area));
+ipcMain.handle('aimon:digest', (_e, key) => aimon().digest(String(key || '')));
+ipcMain.handle('aimon:gitAiInput', (_e, key) => aimon().gitAiInput(String(key || '')));
+ipcMain.handle('aimon:resolveRepo', (_e, cwd) => aimon().resolveRepo(cwd));
+ipcMain.handle('aimon:lanes', (_e, opts) => aimon().lanes(opts && typeof opts === 'object' ? opts : {}));
+ipcMain.handle('aimon:timeline', (_e, key, opts) => aimon().timeline(String(key || ''), opts && typeof opts === 'object' ? opts : {}));
+
 // Serviço (abrir, ao vivo, recentes, filtros salvos).
 const LOGS_SVC_API = ['open', 'reformat', 'switchFamily', 'setLive', 'close', 'list', 'summaries', 'markSeen', 'recents', 'forgetRecent', 'presets', 'savePresets', 'scanFolder'];
 for (const fn of LOGS_SVC_API) {
@@ -881,6 +931,7 @@ if (!app.requestSingleInstanceLock()) {
     initLinks();
     initGit();
     initLogs();
+    initAimon();
     initDb();
     initAi();
     initVault();
@@ -919,6 +970,9 @@ if (!app.requestSingleInstanceLock()) {
       if (gitSvc) { gitSvc.unwatch(); await gitSvc.flush().catch(() => {}); }
       if (logsSvc) { logsSvc.unwatch(); await logsSvc.flush().catch(() => {}); }
       if (dbSvc) { dbSvc.stopAll(); await dbSvc.flush().catch(() => {}); }
+      if (aimonSvc) aimonSvc.stop();
+      if (aimonPrefs) await aimonPrefs.flush().catch(() => {});
+      if (plansArchive) await plansArchive.flush().catch(() => {});
       notesFlushed = true;
       app.quit();
     }, 300);
