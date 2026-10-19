@@ -6,7 +6,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
-const { clip, describeInput } = require('../util');
+const { clip, describeInput, describeError } = require('../util');
 
 const id = 'codex';
 const root = () => path.join(os.homedir(), '.codex', 'sessions');
@@ -30,6 +30,7 @@ function parseLine(line, ctx = {}) {
     else if (p.type === 'user_message') ev.push({ ts: t, kind: 'prompt', summary: clip(p.message, 400) });
     else if (p.type === 'agent_message') ev.push({ ts: t, kind: 'text', summary: clip(p.message, 600) });
     else if (p.type === 'task_complete' || p.type === 'turn_aborted') ev.push({ ts: t, kind: 'turn_end' });
+    else if (/error/i.test(String(p.type))) ev.push({ ts: t, kind: 'error', code: String(p.type), summary: describeError(p.type, p.message || p.error || '') });
     else if (p.type === 'token_count' && p.info && p.info.last_token_usage) {
       const u = p.info.last_token_usage;
       // Codex conta o cache dentro de input_tokens: separa para não somar duas vezes.

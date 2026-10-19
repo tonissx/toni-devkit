@@ -4,12 +4,13 @@
  * da lista de sessões (electron/aimon/service.js → list) dos subagentes e devolve os totais.
  */
 function summarizeAgents(kids) {
-  const sum = { n: 0, working: 0, waiting: 0, idle: 0, tools: 0, tokens: 0, lastTs: 0 };
+  const sum = { n: 0, working: 0, waiting: 0, error: 0, idle: 0, tools: 0, tokens: 0, lastTs: 0 };
   for (const k of kids || []) {
     if (!k) continue;
     sum.n++;
     if (k.status === 'working') sum.working++;
     else if (k.status === 'waiting') sum.waiting++;
+    else if (k.status === 'error') sum.error++;
     else sum.idle++; // ocioso e "sem sinal": não estão fazendo nada
     sum.tools += k.tools || 0;
     const t = k.tokens || {};
@@ -25,7 +26,8 @@ function agentParts(sum) {
   const parts = [`${sum.n} ${sum.n === 1 ? 'agente' : 'agentes'}`];
   if (sum.working) parts.push(`${sum.working} trabalhando`);
   if (sum.waiting) parts.push(`${sum.waiting} esperando`);
-  if (!sum.working && !sum.waiting) parts.push(sum.n === 1 ? 'concluído' : 'todos concluídos');
+  if (sum.error) parts.push(`${sum.error} com erro`);
+  if (!sum.working && !sum.waiting && !sum.error) parts.push(sum.n === 1 ? 'concluído' : 'todos concluídos');
   return parts;
 }
 
@@ -37,7 +39,7 @@ function isCollapsed(sum, map, key) {
   if (!sum || !sum.n) return false;
   const v = map && Object.prototype.hasOwnProperty.call(map, key) ? map[key] : undefined;
   if (typeof v === 'boolean') return v;
-  return !sum.working && !sum.waiting;
+  return !sum.working && !sum.waiting && !sum.error; // algo ativo ou com erro fica aberto
 }
 
 module.exports = { summarizeAgents, agentParts, isCollapsed };

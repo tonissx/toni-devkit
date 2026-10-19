@@ -22,4 +22,33 @@ function describeInput(input) {
   try { return clip(JSON.stringify(input), 160); } catch { return ''; }
 }
 
-module.exports = { clip, describeInput };
+/** Texto de um conteúdo (string ou lista de blocos). */
+const textOf = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((x) => x && x.text).filter(Boolean).join('\n') : '');
+
+/** A resposta de uma ferramenta é a recusa da própria pessoa a um pedido de permissão (não é falha). */
+const isRejection = (content) => /doesn't want to proceed|tool use was rejected|user (rejected|denied)/i.test(textOf(content));
+
+const API_ERR_TEXT = /^(API Error|Login expired|Please run \/login|Credit balance|Usage limit|You've hit|Request timed out|Prompt is too long|Overloaded)/i;
+
+/**
+ * Linha do transcript do Claude Code que é um erro de verdade da API (login expirado, limite, servidor). O Claude Code marca
+ * também mensagens que não são erro (ex.: "No response requested.") com isApiErrorMessage: essas ficam de fora.
+ */
+function isRealApiError(o) {
+  if (!o || !o.isApiErrorMessage) return false;
+  if (o.error) return true;
+  return API_ERR_TEXT.test(textOf(o.message && o.message.content).trim());
+}
+
+/** Mensagem curta, em português, para um erro da API. Código ou texto desconhecido: o próprio texto, cortado. */
+function describeError(code, text) {
+  const both = `${code || ''} ${text || ''}`;
+  if (/authentication_failed|login expired|\/login/i.test(both)) return 'Login expirado — rode /login';
+  if (/rate_limit|usage limit|limit reached|you've hit/i.test(both)) return 'Limite de uso atingido';
+  if (/credit balance|billing/i.test(both)) return 'Saldo de créditos insuficiente';
+  if (/overloaded|unavailable|\b(502|503|529)\b/i.test(both)) return 'Servidor indisponível ou sobrecarregado';
+  if (/prompt is too long|context/i.test(both)) return 'Contexto grande demais para continuar';
+  return clip(text || code || 'Erro da API', 160);
+}
+
+module.exports = { clip, describeInput, textOf, isRejection, isRealApiError, describeError };

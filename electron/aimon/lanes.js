@@ -32,7 +32,7 @@ function segments(events, now, { from = 0 } = {}) {
   for (const ev of evs) {
     if (open) settle(ev.ts);
     switch (ev.kind) {
-      case 'turn_end':
+      case 'turn_end': case 'error':
         if (open) emit(segStart, ev.ts, 'working');
         open = false; pending.clear();
         break;
@@ -57,6 +57,33 @@ function segments(events, now, { from = 0 } = {}) {
   return out;
 }
 
+/**
+ * Aplica por cima dos blocos os intervalos em que o próprio agente informou "esperando você" (service.js guarda quando viu
+ * a mudança). `waits`: [{ from, to|null }] (to nulo = ainda esperando). Recorta os blocos de trabalho e acrescenta o que faltar.
+ */
+function overlayWaiting(segs, waits, from, now) {
+  let out = segs.map((x) => ({ ...x }));
+  for (const w of waits || []) {
+    const a = Math.max(w.from, from);
+    const b = Math.min(w.to == null ? now : w.to, now);
+    if (!(b > a)) continue;
+    const next = [];
+    for (const x of out) {
+      if (x.to <= a || x.from >= b) { next.push(x); continue; }
+      if (x.from < a) next.push({ ...x, to: a });
+      if (x.to > b) next.push({ ...x, from: b });
+    }
+    next.push({ from: a, to: b, state: 'waiting', tool: null });
+    out = next.sort((p, q) => p.from - q.from);
+  }
+  const merged = [];
+  for (const x of out) {
+    const prev = merged[merged.length - 1];
+    if (prev && prev.state === x.state && prev.to === x.from) { prev.to = x.to; prev.tool = x.tool || prev.tool; } else merged.push(x);
+  }
+  return merged;
+}
+
 /** Indicadores de um conjunto de raias [{ segments }]: tempo esperando (somado), pico de sessões ao mesmo tempo e quantas agora. */
 function stats(lanes, now) {
   let waitingMs = 0;
@@ -76,4 +103,4 @@ function stats(lanes, now) {
   return { waitingMs, peak, active };
 }
 
-module.exports = { segments, stats };
+module.exports = { segments, overlayWaiting, stats };

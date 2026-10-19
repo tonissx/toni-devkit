@@ -31,7 +31,8 @@ export function dur(ms) {
 
 /** Raízes (a atividade mais recente primeiro), cada uma seguida dos seus subagentes. Subagente sem pai na lista vira raiz. */
 export function arrange(lanes) {
-  const last = (l) => l.segments[l.segments.length - 1].to;
+  const first = (l) => (l.segments.length ? l.segments[0].from : ((l.errors || [])[0] || { ts: 0 }).ts);
+  const last = (l) => Math.max(0, ...l.segments.map((x) => x.to), ...(l.errors || []).map((e) => e.ts));
   const has = new Set(lanes.map((l) => l.provider + ':' + l.sessionId));
   const kids = new Map();
   const roots = [];
@@ -39,7 +40,7 @@ export function arrange(lanes) {
     if (l.parentId && has.has(l.provider + ':' + l.parentId)) { const k = l.provider + ':' + l.parentId; (kids.get(k) || kids.set(k, []).get(k)).push(l); } else roots.push(l);
   }
   roots.sort((a, b) => last(b) - last(a));
-  return roots.flatMap((r) => [{ lane: r, depth: 0 }, ...(kids.get(r.provider + ':' + r.sessionId) || []).sort((a, b) => a.segments[0].from - b.segments[0].from).map((k) => ({ lane: k, depth: 1 }))]);
+  return roots.flatMap((r) => [{ lane: r, depth: 0 }, ...(kids.get(r.provider + ':' + r.sessionId) || []).sort((a, b) => first(a) - first(b)).map((k) => ({ lane: k, depth: 1 }))]);
 }
 
 export function Lanes({ provider, scale, onScale, sel, onPick, onCommit, rev, toast }) {
@@ -67,6 +68,10 @@ export function Lanes({ provider, scale, onScale, sel, onPick, onCommit, rev, to
     const r = e.currentTarget.ownerSVGElement.getBoundingClientRect();
     setTip({ lane, commit, left: Math.min(Math.max(4, e.clientX - r.left - 70), plotW - 190) });
   };
+  const showError = (e, lane, error) => {
+    const r = e.currentTarget.ownerSVGElement.getBoundingClientRect();
+    setTip({ lane, error, left: Math.min(Math.max(4, e.clientX - r.left - 70), plotW - 190) });
+  };
   const showTip = (e, lane, seg) => {
     const r = e.currentTarget.ownerSVGElement.getBoundingClientRect();
     setTip({ lane, seg, left: Math.min(Math.max(4, e.clientX - r.left - 70), plotW - 190) });
@@ -83,6 +88,7 @@ export function Lanes({ provider, scale, onScale, sel, onPick, onCommit, rev, to
         <div className="am-lanes__ctl">
           <span className="am-legend"><span className="am-key is-working" /><Icon name="loader" size={12} />Trabalhando</span>
           <span className="am-legend"><span className="am-key is-waiting" /><Icon name="hand" size={12} />Esperando você (heurística)</span>
+          <span className="am-legend"><span className="am-key is-error" /><Icon name="circle-alert" size={12} />Erro</span>
           <SegmentedControl size="sm" options={SCALES.map(({ value, label }) => ({ value, label }))} value={scale} onChange={onScale} />
         </div>
       </div>
@@ -103,7 +109,7 @@ export function Lanes({ provider, scale, onScale, sel, onPick, onCommit, rev, to
             // Subagente: liga o início do bloco dele à raia da sessão que o criou (as raias dos irmãos ficam no meio do caminho).
             let up = 0;
             if (depth) { let p = idx - 1; while (p >= 0 && rows[p].depth) p--; up = p >= 0 ? idx - p : 0; }
-            const born = lane.segments[0].from;
+            const born = lane.segments.length ? lane.segments[0].from : ((lane.errors || [])[0] || { ts: data.since }).ts;
             const title = lane.label || lane.title || (depth ? 'Subagente' : 'Sessão sem título');
             return (
               <div key={lane.key} className={'am-lane' + (sel === lane.key ? ' is-sel' : '') + (depth ? ' is-sub' : '')}>
@@ -130,15 +136,28 @@ export function Lanes({ provider, scale, onScale, sel, onPick, onCommit, rev, to
                     )}
                     {lane.segments.map((s, i) => (
                       <rect key={i} x={x(s.from)} y={4} width={Math.max(2, x(s.to) - x(s.from))} height={ROW_H - 8} rx={3}
-                        className={'am-seg is-' + s.state} fill={s.state === 'waiting' ? 'url(#am-stripe)' : undefined}
+                        className={'am-seg is-' + s.state + (s.state === 'working' && s.to >= data.now - 1 ? ' is-live' : '')} fill={s.state === 'waiting' ? 'url(#am-stripe)' : undefined}
                         onPointerMove={(e) => showTip(e, lane, s)} onClick={() => onPick(lane.key)} />
                     ))}
                     <line x1={plotW - 0.5} x2={plotW - 0.5} y1={0} y2={ROW_H} className="am-nowline" />
+                    {(lane.errors || []).map((er) => (
+                      <g key={'e' + er.ts} className="am-emark" onPointerMove={(e) => showError(e, lane, er)} onClick={() => onPick(lane.key)}>
+                        <rect x={x(er.ts) - 8} y={ROW_H / 2 - 8} width={16} height={16} />
+                        <line x1={x(er.ts) - 4.5} y1={ROW_H / 2 - 4.5} x2={x(er.ts) + 4.5} y2={ROW_H / 2 + 4.5} />
+                        <line x1={x(er.ts) + 4.5} y1={ROW_H / 2 - 4.5} x2={x(er.ts) - 4.5} y2={ROW_H / 2 + 4.5} />
+                      </g>
+                    ))}
                     {(lane.commits || []).map((c) => (
                       <polygon key={c.hash + c.ts} className="am-cmark" points={`${x(c.ts)},${ROW_H / 2 - 6} ${x(c.ts) + 6},${ROW_H / 2} ${x(c.ts)},${ROW_H / 2 + 6} ${x(c.ts) - 6},${ROW_H / 2}`}
                         onPointerMove={(e) => showCommit(e, lane, c)} onClick={() => (lane.repo ? onCommit(lane, c) : onPick(lane.key))} />
                     ))}
                   </svg>
+                  {tip && tip.lane === lane && tip.error && (
+                    <div className="lg-tip am-tip" style={{ left: tip.left, top: ROW_H }}>
+                      <div className="lg-tip__when"><Icon name="circle-alert" size={11} /> Erro · {fmtTime(tip.error.ts, { millis: false })}</div>
+                      <div className="lg-tip__row"><span className="am-priv">{tip.error.message}</span></div>
+                    </div>
+                  )}
                   {tip && tip.lane === lane && tip.commit && (
                     <div className="lg-tip am-tip" style={{ left: tip.left, top: ROW_H }}>
                       <div className="lg-tip__when"><Icon name="git-commit-horizontal" size={11} /> Commit da sessão · {fmtTime(tip.commit.ts, { millis: false })}</div>

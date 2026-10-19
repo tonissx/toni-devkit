@@ -10,7 +10,7 @@
  */
 const fs = require('node:fs/promises');
 const state = require('./state');
-const { segments, stats: lanesStats } = require('./lanes');
+const { segments, overlayWaiting, stats: lanesStats } = require('./lanes');
 const { createGitInfo } = require('./gitinfo');
 const { redact } = require('../../src/logs/redact.js');
 const { sessionDigest } = require('../../src/tools/aimon/aiInput.js');
@@ -30,6 +30,8 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
   const resolving = new Set();
   const dirtyBy = new Map(); // cwd → { n, at }: arquivos alterados, só das sessões em andamento (alerta no card)
   const dirtyBusy = new Set();
+  const liveBy = new Map();  // "provedor:sessão" → estado ao vivo informado pelo agente (só sessões principais)
+  const waits = new Map();   // "provedor:sessão" → [{ from, to|null }]: quando o agente informou "esperando você"
   let gi = gitinfo;
   let gen = 0; // sobe quando o acompanhamento para: um tick já em andamento não avisa mais a tela
 
@@ -142,11 +144,42 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
     }
   }
 
+  /** Estado ao vivo informado pelos agentes (ex.: ~/.claude/sessions) e o histórico de quando ficaram esperando. */
+  async function refreshLive() {
+    for (const p of providers) {
+      if (typeof p.live !== 'function') continue;
+      let map;
+      try { map = await p.live(); } catch { continue; }
+      const seen = new Set();
+      for (const [sid, info] of map) {
+        const key = p.id + ':' + sid;
+        seen.add(key);
+        const prev = liveBy.get(key);
+        liveBy.set(key, info);
+        const list = waits.get(key) || [];
+        const open = list.length && list[list.length - 1].to == null ? list[list.length - 1] : null;
+        if (info.status === 'waiting' && !open) list.push({ from: info.statusUpdatedAt || now(), to: null });
+        else if (info.status !== 'waiting' && open) open.to = info.statusUpdatedAt || now();
+        if (list.length > 50) list.splice(0, list.length - 50);
+        waits.set(key, list);
+        if (!prev || prev.status !== info.status || prev.waitingFor !== info.waitingFor) dirty = true;
+      }
+      for (const key of [...liveBy.keys()]) {
+        if (!key.startsWith(p.id + ':') || seen.has(key)) continue;
+        liveBy.delete(key); // o processo acabou: fecha o que estava aberto
+        const list = waits.get(key);
+        if (list && list.length && list[list.length - 1].to == null) list[list.length - 1].to = now();
+        dirty = true;
+      }
+    }
+  }
+
   async function tick() {
     const g = gen;
     if (now() - lastScan >= rescanMs) await scan();
     let any = false;
     await Promise.all([...tracked.values()].map(async (t) => { if (await pull(t)) any = true; }));
+    await refreshLive();
     resolveRepos();
     refreshDirty();
     // O status depende do relógio (trabalhando → esperando): reavisa a tela mesmo sem linha nova se algo está em andamento.
@@ -164,7 +197,7 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
   const row = (t) => ({
     key: keyOf(t.meta), provider: t.meta.provider, sessionId: t.meta.sessionId, parentId: t.meta.parentId || null,
     label: t.meta.label || null, project: t.meta.project || null, file: t.meta.file, mtime: t.meta.mtime, partial: t.partial,
-    ...state.summary(t.st, now()),
+    ...state.summary(t.st, now(), t.meta.parentId ? null : liveBy.get(keyOf(t.meta)) || null),
     repo: repoOf(t),
     dirty: t.st.turnOpen && dirtyBy.has(t.st.cwd) ? dirtyBy.get(t.st.cwd).n : null,
   });
@@ -233,11 +266,12 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
       const out = [];
       for (const t of tracked.values()) {
         if (provider && provider !== 'all' && t.meta.provider !== provider) continue;
-        const segs = segments(t.events, at, { from: since });
-        if (!segs.length) continue;
+        const segs = overlayWaiting(segments(t.events, at, { from: since }), waits.get(keyOf(t.meta)), since, at);
+        const errors = t.events.filter((e) => e.kind === 'error' && e.ts >= since).map((e) => ({ ts: e.ts, code: e.code || null, message: e.summary || '' }));
+        if (!segs.length && !errors.length) continue;
         const r = row(t);
         const commits = t.events.filter((e) => e.kind === 'commit' && e.ts >= since).map((e) => ({ ts: e.ts, hash: e.hash, branch: e.branch, subject: e.summary }));
-        out.push({ key: r.key, provider: r.provider, sessionId: r.sessionId, parentId: r.parentId, label: r.label, title: r.title, project: r.project, cwd: r.cwd, status: r.status, partial: r.partial, repo: r.repo, commits, segments: segs });
+        out.push({ key: r.key, provider: r.provider, sessionId: r.sessionId, parentId: r.parentId, label: r.label, title: r.title, project: r.project, cwd: r.cwd, status: r.status, partial: r.partial, repo: r.repo, commits, errors, segments: segs });
       }
       return { now: at, since, lanes: out, stats: lanesStats(out, at) };
     },

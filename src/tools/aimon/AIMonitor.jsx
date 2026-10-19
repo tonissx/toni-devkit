@@ -20,6 +20,7 @@ const STATUS = {
   waiting: { label: 'Esperando', icon: 'hand', tone: 'wait', hint: 'Há uma ferramenta sem resultado e sem atividade — costuma ser aprovação pendente (heurística)' },
   idle: { label: 'Ocioso', icon: 'circle-check', tone: 'idle', hint: 'Turno terminado' },
   stale: { label: 'Sem sinal', icon: 'moon', tone: 'idle', hint: 'Turno aberto, mas sem atividade há mais de 10 min — a sessão provavelmente foi fechada' },
+  error: { label: 'Erro', icon: 'circle-alert', tone: 'err', hint: 'A sessão parou por um erro (login expirado, limite de uso, servidor). Some quando houver nova atividade.' },
 };
 const TABS = [{ value: 'sessions', label: 'Sessões' }, { value: 'lanes', label: 'Raias' }, { value: 'plans', label: 'Planos' }];
 const KINDS = [
@@ -28,17 +29,21 @@ const KINDS = [
   { v: 'tool_use', label: 'Ferramentas', icon: 'wrench' },
   { v: 'thinking', label: 'Raciocínio', icon: 'brain' },
 ];
-const KIND_ICON = { commit: 'git-commit-horizontal', prompt: 'message-square', text: 'bot', thinking: 'brain', tool_use: 'wrench', tool_result: 'corner-down-right', turn_start: 'play', turn_end: 'flag' };
-const KIND_LABEL = { commit: 'Commit', prompt: 'Prompt', text: 'Resposta', thinking: 'Raciocínio', tool_use: 'Ferramenta', tool_result: 'Resultado', turn_start: 'Início do turno', turn_end: 'Fim do turno' };
+const KIND_ICON = { error: 'circle-alert', commit: 'git-commit-horizontal', prompt: 'message-square', text: 'bot', thinking: 'brain', tool_use: 'wrench', tool_result: 'corner-down-right', turn_start: 'play', turn_end: 'flag' };
+const KIND_LABEL = { error: 'Erro', commit: 'Commit', prompt: 'Prompt', text: 'Resposta', thinking: 'Raciocínio', tool_use: 'Ferramenta', tool_result: 'Resultado', turn_start: 'Início do turno', turn_end: 'Fim do turno' };
 
 const base = (p) => String(p || '').split(/[\\/]/).filter(Boolean).pop() || '';
 const projectOf = (s) => base(s.cwd) || s.project || 'Sem projeto';
 const totalTokens = (t) => (t.input || 0) + (t.output || 0) + (t.cacheRead || 0) + (t.cacheWrite || 0);
 const clock = (ms) => (ms ? new Date(ms).toLocaleTimeString('pt-BR') : '');
 
+/** Ponto com anel que se expande: o "ao vivo" do Trabalhando (CSS puro; parado com movimento reduzido). */
+function LiveDot() { return <span className="am-live" aria-hidden="true"><i /></span>; }
+
 function StatusBadge({ s }) {
   const st = STATUS[s.status] || STATUS.idle;
-  return <span className={'am-status is-' + st.tone} title={st.hint}><Icon name={st.icon} size={12} />{st.label}</span>;
+  const hint = s.status === 'waiting' && s.statusSource === 'live' ? 'O próprio Claude Code informa que está esperando por você (permissão ou resposta).' : st.hint;
+  return <span className={'am-status is-' + st.tone} title={hint}>{s.status === 'working' ? <LiveDot /> : <Icon name={st.icon} size={12} />}{st.label}</span>;
 }
 
 /** Subagente: uma linha compacta (estado com ícone + palavra, nome, quando, tokens). O que já está no pai não se repete. */
@@ -47,8 +52,10 @@ function AgentRow({ s, sel, onPick, tick, last }) {
   const title = s.label || s.title || s.lastText || 'Subagente';
   return (
     <button type="button" className={'am-agent' + (sel ? ' is-sel' : '') + (last ? ' is-last' : '')} onClick={() => onPick(s.key)} data-tick={tick} title={`${title} — ${st.hint}`}>
-      <span className={'am-agent__state is-' + st.tone}><Icon name={st.icon} size={12} /><span>{st.label}</span></span>
+      <span className={'am-agent__state is-' + st.tone}>{s.status === 'working' ? <LiveDot /> : <Icon name={st.icon} size={12} />}<span>{st.label}</span></span>
       <span className="am-agent__title am-priv">{title}</span>
+      {s.status === 'error' && s.error && <span className="am-agent__err am-priv" title={s.error.message}>{s.error.message}</span>}
+      {s.lastToolFailed && s.status !== 'error' && <span className="am-agent__warn" title="A última ferramenta falhou"><Icon name="triangle-alert" size={12} />falhou</span>}
       {s.repo && s.repo.worktree && <span className="lg-pill am-priv" title={`Worktree: ${s.repo.top}`}><Icon name="git-fork" size={10} />{s.repo.worktree}</span>}
       <span className="lg-muted">{ago(s.lastTs || s.mtime)}</span>
       <span className="lg-muted" title="Tokens (entrada + saída + cache)">{fmtCompact(totalTokens(s.tokens))} tok</span>
@@ -60,7 +67,7 @@ function AgentRow({ s, sel, onPick, tick, last }) {
 function SessionRow({ s, sel, onPick, tick, sum, collapsed, onToggle }) {
   const title = s.label || s.title || s.lastText || 'Sessão sem título';
   const row = (
-    <button type="button" className={'am-session' + (sel ? ' is-sel' : '') + (sum ? ' has-agents' : '')} onClick={() => onPick(s.key)} data-tick={tick}>
+    <button type="button" className={'am-session' + (sel ? ' is-sel' : '') + (sum ? ' has-agents' : '') + (s.status === 'working' ? ' is-working' : '')} onClick={() => onPick(s.key)} data-tick={tick}>
       <span className="am-session__top">
         <span className="am-session__title am-priv">{title}</span>
       </span>
@@ -73,6 +80,9 @@ function SessionRow({ s, sel, onPick, tick, sum, collapsed, onToggle }) {
         <span className="lg-muted" title="Tokens (entrada + saída + cache)">{fmtCompact(totalTokens(s.tokens))} tok</span>
         <span className="lg-muted">{ago(s.lastTs || s.mtime)}</span>
       </span>
+      {s.status === 'waiting' && s.waitingFor && <span className="am-session__wait am-priv"><Icon name="hand" size={12} />{s.waitingFor}</span>}
+      {s.status === 'error' && s.error && <span className="am-session__err am-priv"><Icon name="circle-alert" size={12} />{s.error.message}</span>}
+      {s.lastToolFailed && s.status !== 'error' && <span className="am-alert is-card is-soft" title="A última ferramenta falhou. O agente costuma tentar de novo; só chama atenção se a sessão parou aí."><Icon name="triangle-alert" size={11} />Última ferramenta falhou</span>}
       {s.repo && gitAlerts({ branch: s.repo.branch, dirty: s.dirty, active: s.status === 'working' || s.status === 'waiting' }).map((a) => <span key={a.id} className="am-alert is-card" title={a.title}><Icon name={a.icon} size={11} />{a.text}</span>)}
       {s.status !== 'idle' && s.lastTool && <span className="am-session__tool am-priv"><Icon name="wrench" size={10} />{s.lastTool.name}{s.lastTool.summary ? ' · ' + s.lastTool.summary : ''}</span>}
       {sum && (
@@ -138,7 +148,7 @@ function Timeline({ data, kinds, q }) {
     const needle = q.trim().toLowerCase();
     return (data ? data.events : []).filter((e) => {
       const k = e.kind === 'tool_result' ? 'tool_use' : e.kind;
-      if (KIND_ICON[e.kind] && !['turn_start', 'turn_end', 'commit'].includes(e.kind) && !kinds.includes(k)) return false;
+      if (KIND_ICON[e.kind] && !['turn_start', 'turn_end', 'commit', 'error'].includes(e.kind) && !kinds.includes(k)) return false;
       return !needle || (e.summary || '').toLowerCase().includes(needle) || (e.tool || '').toLowerCase().includes(needle);
     });
   }, [data, kinds, q]);
@@ -203,6 +213,7 @@ export function AIMonitor({ toast }) {
   const current = list.find((s) => s.key === ui.sel) || null;
   const working = list.filter((s) => s.status === 'working').length;
   const waiting = list.filter((s) => s.status === 'waiting').length;
+  const failed = list.filter((s) => s.status === 'error').length;
   const view = ui.view === 'changes' ? 'changes' : 'timeline';
   const tab = ui.tab === 'lanes' || ui.tab === 'plans' ? ui.tab : 'sessions';
   const toggleBg = () => api().setBackground(!bg).then((on) => { setBg(on); toast(on ? 'Acompanhamento em segundo plano ligado' : 'Acompanhamento em segundo plano desligado', on ? 'Continua lendo as sessões com esta tela fechada; o Git passa a mostrar o selo de IA.' : 'Só acompanha com esta tela aberta.', 'ok'); }, (e) => toast('Monitor de IA', errText(e), 'error'));
@@ -228,7 +239,7 @@ export function AIMonitor({ toast }) {
         <div className="gt-head__title">
           <Icon name="bot" size={18} />
           <b>Monitor de IA</b>
-          <span className="lg-muted">{working} trabalhando{waiting ? ` · ${waiting} esperando` : ''} · {list.length} sessão(ões) nas últimas 24 h</span>
+          <span className="lg-muted">{working} trabalhando{waiting ? ` · ${waiting} esperando` : ''}{failed ? ` · ${failed} com erro` : ''} · {list.length} sessão(ões) nas últimas 24 h</span>
         </div>
         <div className="gt-head__actions">
           <SegmentedControl size="sm" options={TABS} value={tab} onChange={(v) => setUi((u) => ({ ...u, tab: v }))} />

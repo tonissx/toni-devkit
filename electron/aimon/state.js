@@ -7,6 +7,8 @@
  *   waiting  turno aberto, ferramenta sem resultado e sem atividade há WAIT_MS — costuma ser aprovação pendente (heurística)
  *   stale    turno aberto mas sem sinal há STALE_MS — a sessão provavelmente foi fechada no meio
  *   idle     turno terminou
+ *   error    a sessão parou por um erro da API (login expirado, limite, servidor); some com nova atividade
+ * Falha de uma ferramenta não é status: o agente costuma tentar de novo (lastToolFailed vira só um aviso no card).
  */
 const WAIT_MS = 15_000;
 const STALE_MS = 10 * 60_000;
@@ -21,13 +23,22 @@ function apply(s, ev) {
   if (ev.ts && ev.ts > s.lastTs) s.lastTs = ev.ts;
   switch (ev.kind) {
     case 'title': s.title = ev.summary || s.title; break;
-    case 'prompt': s.turnOpen = true; s.turns++; s.pending.clear(); break;
-    case 'turn_start': if (!s.turnOpen) s.turns++; s.turnOpen = true; break;
+    case 'prompt': s.turnOpen = true; s.turns++; s.pending.clear(); s.error = null; s.lastToolFailed = false; break;
+    case 'turn_start': if (!s.turnOpen) s.turns++; s.turnOpen = true; s.error = null; break;
     case 'turn_end': s.turnOpen = false; s.pending.clear(); break;
-    case 'text': s.lastText = ev.summary || s.lastText; s.turnOpen = true; break;
-    case 'thinking': s.turnOpen = true; break;
-    case 'tool_use': s.turnOpen = true; s.tools++; s.lastTool = { name: ev.tool, summary: ev.summary, ts: ev.ts }; if (ev.ref) s.pending.set(ev.ref, ev.ts); break;
-    case 'tool_result': if (ev.ref) s.pending.delete(ev.ref); break;
+    case 'text': s.lastText = ev.summary || s.lastText; s.turnOpen = true; s.error = null; break;
+    case 'thinking': s.turnOpen = true; s.error = null; break;
+    // Erro grave da sessão (API): o turno acaba e o estado fica em erro até haver nova atividade.
+    case 'error': s.error = { ts: ev.ts, code: ev.code || null, message: ev.summary || '' }; s.turnOpen = false; s.pending.clear(); break;
+    case 'tool_use': s.turnOpen = true; s.error = null; s.tools++; s.lastTool = { name: ev.tool, summary: ev.summary, ts: ev.ts }; if (ev.ref) { s.pending.set(ev.ref, ev.ts); const names = s.toolByRef || (s.toolByRef = new Map()); if (names.size > 100) names.clear(); names.set(ev.ref, ev.tool); } break;
+    case 'tool_result': {
+      if (ev.ref) s.pending.delete(ev.ref);
+      const name = s.toolByRef && s.toolByRef.get(ev.ref);
+      if (s.toolByRef) s.toolByRef.delete(ev.ref);
+      // A entrega do relatório do subagente (SubagentHandback) sempre dá "ok": não pode apagar o aviso da falha anterior.
+      if (name !== 'SubagentHandback') s.lastToolFailed = !!ev.error;
+      break;
+    }
     case 'usage': {
       const t = ev.tokens || {};
       for (const k of ['input', 'output', 'cacheRead', 'cacheWrite']) s.tokens[k] += t[k] || 0;
@@ -43,7 +54,17 @@ function apply(s, ev) {
   return s;
 }
 
-function statusOf(s, now) {
+/**
+ * live: estado informado pelo próprio agente ({ status: 'busy' | 'waiting' | 'idle' | 'shell' }), quando existe. Vale mais
+ * que a estimativa pelo transcript: o transcript não mostra uma chamada pendente, então só ele sabe que há uma resposta esperada.
+ */
+function statusOf(s, now, live) {
+  if (s.error) return 'error';
+  if (live) {
+    if (live.status === 'waiting') return 'waiting';
+    if (live.status === 'busy') return 'working'; // processo vivo e ocupado: nunca "sem sinal"
+    if (live.status === 'idle' || live.status === 'shell') return 'idle';
+  }
   if (!s.turnOpen) return 'idle';
   const quiet = now - s.lastTs;
   if (quiet > STALE_MS) return 'stale';
@@ -51,10 +72,12 @@ function statusOf(s, now) {
   return 'working';
 }
 
-function summary(s, now) {
+function summary(s, now, live) {
+  const known = !!live && ['waiting', 'busy', 'idle', 'shell'].includes(live.status);
   return {
-    status: statusOf(s, now), title: s.title, cwd: s.cwd, branch: s.branch, lastTs: s.lastTs, lastTool: s.lastTool, lastText: s.lastText,
+    status: statusOf(s, now, live), statusSource: known ? 'live' : 'transcript', waitingFor: known && live.status === 'waiting' ? live.waitingFor || null : null, title: s.title, cwd: s.cwd, branch: s.branch, lastTs: s.lastTs, lastTool: s.lastTool, lastText: s.lastText,
     tokens: { ...s.tokens }, model: s.model, turns: s.turns, tools: s.tools, pending: s.pending.size,
+    error: s.error ? { ...s.error } : null, lastToolFailed: !!s.lastToolFailed,
   };
 }
 

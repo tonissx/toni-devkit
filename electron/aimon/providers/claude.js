@@ -8,7 +8,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
-const { clip, describeInput } = require('../util');
+const { clip, describeInput, textOf, isRejection, isRealApiError, describeError } = require('../util');
 const { createCommitTracker } = require('../commits');
 
 const id = 'claude';
@@ -33,13 +33,16 @@ function parseLine(line, ctx = {}) {
     } else if (Array.isArray(c)) {
       for (const b of c) {
         if (!b) continue;
-        if (b.type === 'tool_result') ev.push({ ts: t, kind: 'tool_result', ref: b.tool_use_id, error: !!b.is_error, summary: clip(typeof b.content === 'string' ? b.content : (Array.isArray(b.content) ? b.content.map((x) => x && x.text).filter(Boolean).join(' ') : ''), 300) });
+        if (b.type === 'tool_result') ev.push({ ts: t, kind: 'tool_result', ref: b.tool_use_id, error: !!b.is_error && !isRejection(b.content), rejected: !!b.is_error && isRejection(b.content), summary: clip(typeof b.content === 'string' ? b.content : (Array.isArray(b.content) ? b.content.map((x) => x && x.text).filter(Boolean).join(' ') : ''), 300) });
         else if (b.type === 'text' && b.text && b.text.trim() && !o.isMeta) ev.push({ ts: t, kind: 'prompt', summary: clip(b.text, 400) });
       }
     }
   } else if (o.type === 'assistant' && o.message) {
     const m = o.message;
-    for (const b of Array.isArray(m.content) ? m.content : []) {
+    // Erro da API (login expirado, limite, servidor): vira um evento de erro, não um texto do agente.
+    const apiError = isRealApiError(o);
+    if (apiError) ev.push({ ts: t, kind: 'error', code: String(o.error || 'api_error'), summary: describeError(o.error, textOf(m.content)) });
+    for (const b of apiError ? [] : (Array.isArray(m.content) ? m.content : [])) {
       if (!b) continue;
       if (b.type === 'thinking') ev.push({ ts: t, kind: 'thinking', summary: clip(b.thinking || '', 200) });
       else if (b.type === 'text' && b.text) ev.push({ ts: t, kind: 'text', summary: clip(b.text, 600) });
@@ -94,4 +97,31 @@ async function listSessions(since, base = root()) {
   return out;
 }
 
-module.exports = { id, name: 'Claude Code', icon: 'sparkles', root, parseLine, listSessions };
+const sessionsDir = () => path.join(os.homedir(), '.claude', 'sessions');
+const pidAlive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return !!e && e.code === 'EPERM'; } };
+const waitingText = (w) => (w == null || w === '' ? null : clip(typeof w === 'string' ? w : JSON.stringify(w), 80));
+
+/**
+ * Estado ao vivo das sessões, do arquivo que o próprio Claude Code mantém em ~/.claude/sessions/<pid>.json
+ * ({ sessionId, status: busy | waiting | shell…, waitingFor?, statusUpdatedAt }). O transcript não registra uma chamada
+ * pendente (a linha só aparece quando o resultado chega), então "esperando você" só se sabe por aqui.
+ * Só entra processo que ainda existe. Os arquivos .key da pasta guardam segredo e nunca são lidos.
+ * → Map sessionId → { status, waitingFor, statusUpdatedAt, pid }
+ */
+async function live(dir = sessionsDir(), alive = pidAlive) {
+  const out = new Map();
+  let names;
+  try { names = await fs.readdir(dir); } catch { return out; }
+  for (const n of names) {
+    if (!n.endsWith('.json')) continue;
+    let o;
+    try { o = JSON.parse(await fs.readFile(path.join(dir, n), 'utf8')); } catch { continue; }
+    if (!o || typeof o.sessionId !== 'string' || !Number.isFinite(o.pid) || !alive(o.pid)) continue;
+    const info = { status: String(o.status || ''), waitingFor: waitingText(o.waitingFor), statusUpdatedAt: Number.isFinite(o.statusUpdatedAt) ? o.statusUpdatedAt : null, pid: o.pid, updatedAt: Number.isFinite(o.updatedAt) ? o.updatedAt : 0 };
+    const prev = out.get(o.sessionId);
+    if (!prev || info.updatedAt >= prev.updatedAt) out.set(o.sessionId, info); // sessão retomada em outro processo: vale o mais recente
+  }
+  return out;
+}
+
+module.exports = { id, name: 'Claude Code', icon: 'sparkles', root, parseLine, listSessions, live };

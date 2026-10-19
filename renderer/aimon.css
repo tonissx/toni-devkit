@@ -21,10 +21,7 @@
 
 .am-status { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: var(--tk-radius-pill); font: 600 11px var(--tk-font-sans); background: var(--tk-surface-3); color: var(--tk-text-2); }
 .am-status.is-work { background: color-mix(in srgb, var(--tk-accent) 14%, transparent); color: var(--tk-accent-text); }
-.am-status.is-work svg { animation: am-spin 1.4s linear infinite; }
 .am-status.is-wait { background: var(--tk-amber-a12); color: var(--tk-text); }
-@keyframes am-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .am-status.is-work svg { animation: none; } }
 
 .am-main__head { padding: 12px 16px 8px; display: flex; flex-direction: column; gap: 6px; border-bottom: 1px solid var(--tk-border); }
 .am-main__title { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -112,7 +109,7 @@
 .am-session__agents.is-live { color: var(--tk-accent-text); }
 
 /* ligações entre a sessão e seus subagentes */
-.am-session { position: relative; }
+.am-session { position: relative; overflow: hidden; }
 .am-lane__plot svg { overflow: visible; }
 .am-link line { stroke: var(--tk-text-3); stroke-width: 1.5; stroke-dasharray: 3 2; opacity: .8; }
 .am-link circle { fill: var(--tk-text-3); }
@@ -174,3 +171,34 @@
 .am-agent__state.is-wait { color: var(--lg-warn); }
 .am-agent__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tk-text); }
 .am-agent .lg-muted, .am-agent .lg-pill { flex: none; }
+
+/* status Erro e sinais de vida (só transform/opacity; tudo para com "reduzir movimento") */
+.am-status.is-err { background: var(--tk-red-a12); color: var(--tk-text); }
+.am-status.is-err svg { color: var(--lg-error); }
+.am-live { position: relative; display: inline-block; width: 12px; height: 12px; flex: none; }
+.am-live i { position: absolute; inset: 3px; border-radius: 50%; background: var(--tk-accent); }
+.am-live::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--tk-accent); animation: am-ping 1.6s ease-out infinite; }
+@keyframes am-ping { 0% { transform: scale(.4); opacity: .9; } 100% { transform: scale(1.5); opacity: 0; } }
+.am-session.is-working::after { content: ''; position: absolute; left: 0; bottom: 0; width: 40%; height: 2px; pointer-events: none; background: linear-gradient(90deg, transparent, var(--tk-accent), transparent); animation: am-shimmer 1.8s ease-in-out infinite; }
+@keyframes am-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+.am-status.is-wait svg, .am-agent__state.is-wait svg { animation: am-breathe 2.4s ease-in-out infinite; }
+@keyframes am-breathe { 0%, 100% { opacity: .45; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.08); } }
+.am-session__err { display: flex; align-items: flex-start; gap: 5px; color: var(--lg-error); font: 600 11.5px var(--tk-font-sans); line-height: 1.35; }
+.am-session__err svg { margin-top: 1px; }
+.am-agent__state.is-err { color: var(--lg-error); }
+.am-agent__err { flex: 0 1 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lg-error); font-weight: 600; }
+.am-alert.is-soft { background: var(--tk-surface-3); font-weight: 500; }
+.am-key.is-error { background: var(--lg-error); }
+.am-emark rect { fill: transparent; cursor: pointer; }
+.am-emark line { stroke: var(--lg-error); stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+.am-seg.is-live { animation: am-seglive 2s ease-in-out infinite; }
+@keyframes am-seglive { 0%, 100% { opacity: .72; } 50% { opacity: 1; } }
+.am-nowline { animation: am-nowpulse 2s ease-in-out infinite; }
+@keyframes am-nowpulse { 0%, 100% { opacity: .35; } 50% { opacity: .9; } }
+@media (prefers-reduced-motion: reduce) {
+  .am-live::after, .am-status.is-wait svg, .am-agent__state.is-wait svg, .am-seg.is-live, .am-nowline { animation: none; }
+  .am-session.is-working::after { display: none; }
+}
+.am-agent__warn { display: inline-flex; align-items: center; gap: 3px; flex: none; color: var(--lg-warn); font: 600 11px var(--tk-font-sans); }
+.am-session__wait { display: flex; align-items: flex-start; gap: 5px; color: var(--tk-text); font: 600 11.5px var(--tk-font-sans); line-height: 1.35; }
+.am-session__wait svg { margin-top: 1px; color: var(--lg-warn); }

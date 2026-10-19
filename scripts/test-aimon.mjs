@@ -340,7 +340,7 @@ const K = (status, tools, out, lastTs = 0) => ({ status, tools, tokens: { input:
 
 test('subagentes: totais e texto do resumo', () => {
   const sum = agents.summarizeAgents([K('working', 5, 10, 100), K('idle', 3, 20, 300), K('stale', 2, 5, 200), K('waiting', 1, 1, 50), null]);
-  assert.deepEqual(sum, { n: 4, working: 1, waiting: 1, idle: 2, tools: 11, tokens: 40, lastTs: 300 });
+  assert.deepEqual(sum, { n: 4, working: 1, waiting: 1, error: 0, idle: 2, tools: 11, tokens: 40, lastTs: 300 });
   assert.deepEqual(agents.agentParts(sum), ['4 agentes', '1 trabalhando', '1 esperando']);
   assert.deepEqual(agents.agentParts(agents.summarizeAgents([K('idle', 1, 1), K('idle', 1, 1)])), ['2 agentes', 'todos concluídos']);
   assert.deepEqual(agents.agentParts(agents.summarizeAgents([K('idle', 1, 1)])), ['1 agente', 'concluído']);
