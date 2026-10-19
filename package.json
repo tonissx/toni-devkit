@@ -81,6 +81,11 @@
       "src/tools/aimon/aiInput.js",
       "package.json"
     ],
+    "extraFiles": [
+      { "from": "LICENSE", "to": "LICENSE.toni-devkit.txt" },
+      { "from": "THIRD-PARTY-NOTICES.md", "to": "THIRD-PARTY-NOTICES.md" },
+      { "from": "licenses", "to": "licenses" }
+    ],
     "asarUnpack": [
       "node_modules/pyodide/**",
       "vendor/python/**",
