@@ -226,7 +226,7 @@ export function AIMonitor({ toast }) {
     <div className={'am' + (ui.hide ? ' is-private' : '')}>
       <header className="gt-head">
         <div className="gt-head__title">
-          <Icon name="radar" size={18} />
+          <Icon name="bot" size={18} />
           <b>Monitor de IA</b>
           <span className="lg-muted">{working} trabalhando{waiting ? ` · ${waiting} esperando` : ''} · {list.length} sessão(ões) nas últimas 24 h</span>
         </div>

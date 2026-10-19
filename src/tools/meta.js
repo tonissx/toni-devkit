@@ -86,7 +86,7 @@ const TOOL_META = [
   {
     id: 'aimon',
     name: 'Monitor de IA',
-    icon: 'radar',
+    icon: 'bot',
     group: 'Texto & código',
     desc: 'O que cada sessão de IA (Claude Code, Codex…) está fazendo agora: status, subagentes, tokens e timeline — só leitura, local',
     keywords: ['ia', 'ai', 'claude', 'codex', 'agente', 'agentes', 'subagente', 'sessão', 'sessões', 'monitor', 'timeline', 'tokens', 'transcript'],
