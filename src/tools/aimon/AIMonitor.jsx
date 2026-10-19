@@ -8,7 +8,11 @@ import { Lanes, SCALES } from './Lanes.jsx';
 import { Plans } from './Plans.jsx';
 import { Changes } from './Changes.jsx';
 import { SessionAi } from './SessionAi.jsx';
-import { gitAlerts } from './alerts.js';
+import { Usage } from './Usage.jsx';
+import { Search } from './Search.jsx';
+import { Compare } from './Compare.jsx';
+import { reviewBadge } from './Review.jsx';
+import { gitAlerts, sessionAlerts } from './alerts.js';
 import { summarizeAgents, agentParts, isCollapsed } from './agents.js';
 
 const { Icon, Spinner, EmptyState, SegmentedControl } = DS;
@@ -22,7 +26,9 @@ const STATUS = {
   stale: { label: 'Sem sinal', icon: 'moon', tone: 'idle', hint: 'Turno aberto, mas sem atividade há mais de 10 min — a sessão provavelmente foi fechada' },
   error: { label: 'Erro', icon: 'circle-alert', tone: 'err', hint: 'A sessão parou por um erro (login expirado, limite de uso, servidor). Some quando houver nova atividade.' },
 };
-const TABS = [{ value: 'sessions', label: 'Sessões' }, { value: 'lanes', label: 'Raias' }, { value: 'plans', label: 'Planos' }];
+const TABS = [{ value: 'sessions', label: 'Sessões' }, { value: 'lanes', label: 'Raias' }, { value: 'plans', label: 'Planos' }, { value: 'compare', label: 'Comparar' }, { value: 'usage', label: 'Uso' }, { value: 'search', label: 'Busca' }];
+const TAB_IDS = TABS.map((t) => t.value);
+const NO_PROVIDER_FILTER = ['plans', 'usage', 'search', 'compare']; // telas que não filtram por provedor
 const KINDS = [
   { v: 'prompt', label: 'Prompts', icon: 'message-square' },
   { v: 'text', label: 'Respostas', icon: 'bot' },
@@ -84,6 +90,8 @@ function SessionRow({ s, sel, onPick, tick, sum, collapsed, onToggle }) {
       {s.status === 'error' && s.error && <span className="am-session__err am-priv"><Icon name="circle-alert" size={12} />{s.error.message}</span>}
       {s.lastToolFailed && s.status !== 'error' && <span className="am-alert is-card is-soft" title="A última ferramenta falhou. O agente costuma tentar de novo; só chama atenção se a sessão parou aí."><Icon name="triangle-alert" size={11} />Última ferramenta falhou</span>}
       {s.repo && gitAlerts({ branch: s.repo.branch, dirty: s.dirty, active: s.status === 'working' || s.status === 'waiting' }).map((a) => <span key={a.id} className="am-alert is-card" title={a.title}><Icon name={a.icon} size={11} />{a.text}</span>)}
+      {sessionAlerts(s).map((a) => <span key={a.id} className="am-alert is-card" title={a.title}><Icon name={a.icon} size={11} /><span className="am-priv">{a.text}</span></span>)}
+      {(() => { const rb = reviewBadge(s); return rb ? <span className={'am-alert is-card is-review is-' + rb.tone} title={rb.title}><Icon name={rb.icon} size={11} />{rb.text}</span> : null; })()}
       {s.status !== 'idle' && s.lastTool && <span className="am-session__tool am-priv"><Icon name="wrench" size={10} />{s.lastTool.name}{s.lastTool.summary ? ' · ' + s.lastTool.summary : ''}</span>}
       {sum && (
         <span className={'am-session__agents' + (sum.working || sum.waiting ? ' is-live' : '')} title="Subagentes desta sessão">
@@ -174,7 +182,7 @@ function Timeline({ data, kinds, q }) {
   );
 }
 
-export function AIMonitor({ toast }) {
+export function AIMonitor({ toast, request }) {
   const [ui, setUi] = usePersisted('aimon.ui', { provider: 'all', kinds: KINDS.map((k) => k.v), hide: false, sel: null });
   const [providers, setProviders] = React.useState(null);
   const [sessions, setSessions] = React.useState(null);
@@ -182,6 +190,7 @@ export function AIMonitor({ toast }) {
   const [q, setQ] = React.useState('');
   const [tick, setTick] = React.useState(0);
   const [bg, setBg] = React.useState(false); // acompanhar em segundo plano (desligado por padrão)
+  const [notify, setNotify] = React.useState(false); // avisos do sistema quando uma sessão espera por você ou dá erro (desligado por padrão)
   const [rev, setRev] = React.useState(0); // sobe a cada aviso do processo principal: as raias buscam de novo
   const selRef = React.useRef(null);
   const provRef = React.useRef('all');
@@ -197,7 +206,7 @@ export function AIMonitor({ toast }) {
 
   React.useEffect(() => {
     api().providers().then(setProviders, () => setProviders([]));
-    api().prefs().then((p) => setBg(!!(p && p.background)), () => {});
+    api().prefs().then((p) => { setBg(!!(p && p.background)); setNotify(!!(p && p.notify)); }, () => {});
     api().setActive(true).catch(() => {});
     let raf = 0;
     const off = api().onChanged(() => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; loadList(); loadTimeline(); setRev((r) => r + 1); }); });
@@ -205,6 +214,11 @@ export function AIMonitor({ toast }) {
     return () => { off(); clearInterval(clockT); if (raf) cancelAnimationFrame(raf); api().setActive(false).catch(() => {}); };
   }, []);
   React.useEffect(() => { loadList(); }, [ui.provider]);
+  // Clique no aviso do sistema (ou link vindo de outra tela): abre a timeline da sessão.
+  React.useEffect(() => {
+    if (request && request.sel) setUi((u) => ({ ...u, sel: request.sel, tab: 'sessions', provider: 'all' }));
+    else if (request && request.tab && TAB_IDS.includes(request.tab)) setUi((u) => ({ ...u, tab: request.tab }));
+  }, [request && request.nonce]);
   React.useEffect(() => { setData(null); loadTimeline(); }, [ui.sel]);
 
   const installed = (providers || []).filter((p) => p.installed);
@@ -215,7 +229,8 @@ export function AIMonitor({ toast }) {
   const waiting = list.filter((s) => s.status === 'waiting').length;
   const failed = list.filter((s) => s.status === 'error').length;
   const view = ui.view === 'changes' ? 'changes' : 'timeline';
-  const tab = ui.tab === 'lanes' || ui.tab === 'plans' ? ui.tab : 'sessions';
+  const tab = TAB_IDS.includes(ui.tab) ? ui.tab : 'sessions';
+  const toggleNotify = () => api().setNotify(!notify).then((on) => { setNotify(on); toast(on ? 'Avisos do sistema ligados' : 'Avisos do sistema desligados', on ? 'Você será avisado quando uma sessão esperar por você ou der erro, mesmo com esta tela fechada (liga o acompanhamento em segundo plano).' : 'Sem avisos do sistema.', 'ok'); }, (e) => toast('Monitor de IA', errText(e), 'error'));
   const toggleBg = () => api().setBackground(!bg).then((on) => { setBg(on); toast(on ? 'Acompanhamento em segundo plano ligado' : 'Acompanhamento em segundo plano desligado', on ? 'Continua lendo as sessões com esta tela fechada; o Git passa a mostrar o selo de IA.' : 'Só acompanha com esta tela aberta.', 'ok'); }, (e) => toast('Monitor de IA', errText(e), 'error'));
   const openGit = async (r, extra = {}) => {
     try {
@@ -243,16 +258,26 @@ export function AIMonitor({ toast }) {
         </div>
         <div className="gt-head__actions">
           <SegmentedControl size="sm" options={TABS} value={tab} onChange={(v) => setUi((u) => ({ ...u, tab: v }))} />
-          {tab !== 'plans' && <SegmentedControl size="sm" options={options} value={ui.provider} onChange={(provider) => setUi((u) => ({ ...u, provider, sel: null }))} />}
+          {!NO_PROVIDER_FILTER.includes(tab) && <SegmentedControl size="sm" options={options} value={ui.provider} onChange={(provider) => setUi((u) => ({ ...u, provider, sel: null }))} />}
           <button type="button" className={'gt-op is-ghost is-sm' + (ui.hide ? ' is-on' : '')} onClick={() => setUi((u) => ({ ...u, hide: !u.hide }))} title="Desfoca prompts, respostas e comandos (útil ao compartilhar a tela)" aria-pressed={ui.hide}>
             <Icon name={ui.hide ? 'eye-off' : 'eye'} size={14} /><span>{ui.hide ? 'Conteúdo oculto' : 'Ocultar conteúdo'}</span>
           </button>
           <button type="button" className={'gt-op is-ghost is-sm' + (bg ? ' is-on' : '')} onClick={toggleBg} aria-pressed={bg} title="Continua lendo as sessões com esta tela fechada (desligado por padrão). Ligado, a tela do Git mostra quantas sessões de IA estão ativas em cada repositório.">
             <Icon name="radio" size={14} /><span>{bg ? 'Segundo plano: ligado' : 'Segundo plano'}</span>
           </button>
+          <button type="button" className={'gt-op is-ghost is-sm' + (notify ? ' is-on' : '')} onClick={toggleNotify} aria-pressed={notify} title="Aviso do sistema quando uma sessão passa a esperar por você (permissão ou resposta) ou dá erro. Clicar no aviso abre a sessão. Mantém o acompanhamento ligado com esta tela fechada.">
+            <Icon name={notify ? 'bell-ring' : 'bell'} size={14} /><span>{notify ? 'Avisos: ligados' : 'Avisos'}</span>
+          </button>
         </div>
       </header>
-      {tab === 'plans' ? (
+      {tab === 'compare' ? (
+        <Compare sessions={list} toast={toast} />
+      ) : tab === 'usage' ? (
+        <Usage rev={rev} toast={toast} />
+      ) : tab === 'search' ? (
+        <Search sessions={list} toast={toast} onPlans={() => setUi((u) => ({ ...u, tab: 'plans' }))}
+          onOpenSession={(sel) => setUi((u) => ({ ...u, sel, tab: 'sessions', provider: 'all' }))} />
+      ) : tab === 'plans' ? (
         <Plans sessions={list} toast={toast} onOpenCommit={async (plan, c) => { try { const r = await api().resolveRepo(plan.cwd); if (!r || !r.git) { toast('Repositório não encontrado', 'A pasta deste plano não é mais um repositório git.', 'warn'); return; } openGit({ main: r.main, name: r.name }, { tab: 'history', hash: c.hash }); } catch (e) { toast('Não foi possível abrir no Git', errText(e), 'error'); } }} onOpenSession={(sel) => setUi((u) => ({ ...u, sel, tab: 'sessions', provider: 'all' }))} />
       ) : tab === 'lanes' ? (
         <Lanes provider={ui.provider} scale={ui.scale || SCALES[0].value} onScale={(scale) => setUi((u) => ({ ...u, scale }))} sel={ui.sel} rev={rev} toast={toast}
@@ -282,7 +307,7 @@ export function AIMonitor({ toast }) {
                   {current.repo && <button type="button" className="lg-btn" onClick={() => openGit(current.repo)} title="Abre este repositório na ferramenta Git"><Icon name="folder-git-2" size={12} /><span>Abrir no Git</span></button>}
                 </div>
               </div>
-              <SessionAi session={current} events={data ? data.events : null} />
+              <SessionAi session={current} events={data ? data.events : null} toast={toast} />
               <div className="am-subtabs" role="tablist">
                 <button type="button" role="tab" aria-selected={view === 'timeline'} className={view === 'timeline' ? 'is-on' : ''} onClick={() => setUi((u) => ({ ...u, view: 'timeline' }))}><Icon name="list" size={13} /><span>Timeline</span></button>
                 <button type="button" role="tab" aria-selected={view === 'changes'} className={view === 'changes' ? 'is-on' : ''} onClick={() => setUi((u) => ({ ...u, view: 'changes' }))}><Icon name="git-compare" size={13} /><span>Alterações</span></button>

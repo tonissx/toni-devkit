@@ -46,4 +46,27 @@ function sessionDigest(session, events) {
   };
 }
 
-module.exports = { sessionDigest };
+const DIARY_SESSIONS = 12;
+
+/**
+ * Entrada do diário de bordo: o que as sessões do dia fizeram (digests de sessionDigest), enxuto, mais os totais do dia.
+ * `day`: { date, sessions: [digest + tokens] }; `totals`: { workMs, waitMs, tokens, cost } (qualquer campo pode faltar).
+ */
+function diaryInput(day, totals) {
+  const d = day || {};
+  const t = totals || {};
+  const num = (v) => (Number.isFinite(v) && v >= 0 ? v : null);
+  const sessions = (Array.isArray(d.sessions) ? d.sessions : []).slice(-DIARY_SESSIONS).map((s) => {
+    const prompts = Array.isArray(s.prompts) ? s.prompts : [];
+    return {
+      title: s.title || '', project: s.project || '', branch: s.branch || '',
+      prompts: prompts.length > 5 ? [...prompts.slice(0, 2), ...prompts.slice(-3)] : prompts,
+      answers: (Array.isArray(s.answers) ? s.answers : []).slice(-1),
+      tools: s.tools || {}, files: (Array.isArray(s.files) ? s.files : []).slice(0, 15),
+      commits: (Array.isArray(s.commits) ? s.commits : []).slice(0, 10), tokens: num(s.tokens),
+    };
+  });
+  return { date: String(d.date || ''), sessions, totals: { workMs: num(t.workMs), waitMs: num(t.waitMs), tokens: num(t.tokens), cost: num(t.cost) } };
+}
+
+module.exports = { sessionDigest, diaryInput };

@@ -4,6 +4,7 @@ import { DS } from '../../lib/ds.js';
 import { errText, ago, fmtTime } from '../../lib/fmt.jsx';
 import { gitAlerts } from './alerts.js';
 import { ChangesAi } from './SessionAi.jsx';
+import { AutoReview } from './Review.jsx';
 
 const { Icon, Spinner } = DS;
 
@@ -81,6 +82,7 @@ export function Changes({ session, events, onOpenGit, toast }) {
           </div>
           {alerts.map((a) => <div key={a.id} className="am-alert" title={a.title}><Icon name={a.icon} size={13} /><span>{a.text}</span></div>)}
           <ChangesAi session={session} events={events} dirty={c.total > 0} toast={toast} />
+          {!session.parentId && <AutoReview session={session} toast={toast} />}
           {c.truncated && <div className="am-note"><Icon name="info" size={12} />Mostrando os primeiros {c.files.length} de {c.total} arquivos.</div>}
           <div className="am-files">
             {c.files.map((f) => {

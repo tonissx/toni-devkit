@@ -95,17 +95,23 @@ test('serviço: pasta fora de repositório ou apagada não gera repo nem erro', 
   } finally { svc.stop(); }
 });
 
-test('preferências: segundo plano é desligado por padrão e persiste', async () => {
+test('preferências: segundo plano e avisos são desligados por padrão e persistem', async () => {
   const file = path.join(tmp(), 'aimon.json');
   let p = createPrefs({ file });
-  assert.deepEqual(await p.init(), { background: false });
+  assert.deepEqual(await p.init(), { background: false, notify: false, prices: {}, limitTokens: null, autoReview: false });
   assert.equal(await p.setBackground(true), true);
+  assert.equal(await p.setNotify(true), true);
+  assert.equal(await p.setLimit(2_500_000.4), 2_500_000);
+  assert.equal(await p.setAutoReview(true), true);
+  assert.deepEqual(await p.setPrices({ 'meu-modelo': { input: 2, output: 8 }, ruim: { input: -1, output: 3 }, texto: 'x' }), { 'meu-modelo': { input: 2, output: 8 } });
   await p.flush();
   p = createPrefs({ file });
-  assert.deepEqual(await p.init(), { background: true });
+  assert.deepEqual(await p.init(), { background: true, notify: true, prices: { 'meu-modelo': { input: 2, output: 8 } }, limitTokens: 2_500_000, autoReview: true });
+  assert.equal(await p.setLimit('lixo'), null);   // limite inválido volta a "estimado"
+  assert.equal(await p.setLimit(-5), null);
   fs.writeFileSync(file, 'lixo');
   p = createPrefs({ file });
-  assert.deepEqual(await p.init(), { background: false }); // arquivo estragado volta ao padrão
+  assert.deepEqual(await p.init(), { background: false, notify: false, prices: {}, limitTokens: null, autoReview: false }); // arquivo estragado volta ao padrão
 });
 
 test('garantia: a ferramenta Git só consulta o Monitor de IA — nunca liga o acompanhamento', () => {
