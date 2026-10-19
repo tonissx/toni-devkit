@@ -88,7 +88,7 @@ export function Plans({ sessions, onOpenSession, onOpenCommit, toast }) {
             </select>
           )}
         </div>
-        <div className="am-list tk-scroll">
+        <div className="am-list am-list--plans tk-scroll">
           {empty && <div className="gt-msg">{dq || filter !== 'all' || project !== 'all' ? 'Nenhum plano com esses filtros.' : 'Nenhum plano encontrado nas sessões ainda.'}</div>}
           {rows.map((r) => (
             <button key={r.id} type="button" className={'am-session' + (sel === r.id ? ' is-sel' : '')} onClick={() => setSel(r.id)}>

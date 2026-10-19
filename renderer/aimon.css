@@ -202,3 +202,9 @@
 .am-agent__warn { display: inline-flex; align-items: center; gap: 3px; flex: none; color: var(--lg-warn); font: 600 11px var(--tk-font-sans); }
 .am-session__wait { display: flex; align-items: flex-start; gap: 5px; color: var(--tk-text); font: 600 11.5px var(--tk-font-sans); line-height: 1.35; }
 .am-session__wait svg { margin-top: 1px; color: var(--lg-warn); }
+
+/* lista com rolagem: os cards nunca encolhem (com overflow hidden eles cortavam o texto) */
+.am-list > *, .am-group > *, .am-card > * { flex-shrink: 0; }
+/* planos: o título é longo — até 2 linhas em vez de reticências na primeira */
+.am-list--plans .am-session__title { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.am-list--plans .am-session__top { align-items: flex-start; }
