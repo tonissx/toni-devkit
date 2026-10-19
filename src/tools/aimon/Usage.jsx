@@ -141,6 +141,104 @@ function Diary({ toast }) {
   );
 }
 
+/** Padrões dos pedidos: o que se repete nos pedidos que levaram a correções, falhas ou plano recusado, e como pedir melhor. */
+function Patterns({ toast }) {
+  const cfg = useAiMode();
+  const pat = useAiTask('aimonPatterns', cfg);
+  const reason = aiOn(cfg) ? null : 'IA desligada';
+  const gather = async () => {
+    const p = await api().patterns();
+    if (p.sessions.length < 3) { toast('Poucas sessões', 'São necessárias pelo menos 3 sessões recentes com pedido para achar padrões.', 'warn'); return null; }
+    return p;
+  };
+  return (
+    <div className="am-us__diary">
+      <div className="am-ai__bar">
+        <AiButton ai={pat} label="Padrões dos meus pedidos" disabled={!!reason} reason={reason} onClick={() => pat.start(gather)}
+          title="A IA compara os pedidos que renderam bem com os que geraram correções, falhas de ferramenta ou plano recusado, e sugere como pedir melhor" />
+      </div>
+      <div className="am-priv"><AiPanel ai={pat} /></div>
+    </div>
+  );
+}
+
+/** Ritmo de consumo nas últimas 5 h e a projeção do limite de uso (estimativa; o provedor não informa o limite). */
+export function Burn({ rev, toast }) {
+  const [b, setB] = React.useState(null);
+  const [draft, setDraft] = React.useState('');
+  const last = React.useRef(0);
+  const load = React.useCallback((force) => {
+    const at = Date.now();
+    if (!force && at - last.current < 8000) return;
+    last.current = at;
+    api().burn().then(setB, () => {});
+  }, []);
+  React.useEffect(() => { load(true); api().prefs().then((p) => setDraft(p && p.limitTokens ? String(p.limitTokens) : ''), () => {}); }, []);
+  React.useEffect(() => { load(false); }, [rev]);
+  if (!b) return null;
+  const saveLimit = (value) => {
+    const n = value === '' ? null : Number(String(value).replace(/[^\d]/g, ''));
+    api().setLimit(n).then((v) => { setDraft(v ? String(v) : ''); toast(v ? 'Limite salvo' : 'Limite automático', v ? `${fmtNum(v)} tokens em 5 h` : 'Voltou a ser estimado pelas vezes em que o limite estourou.', 'ok'); load(true); }, (e) => toast('Monitor de IA', errText(e), 'error'));
+  };
+  const pctUsed = b.limit ? Math.min(100, Math.round((b.used5h / b.limit) * 100)) : null;
+  const eta = b.etaMs == null ? (b.limit ? 'não atinge' : '—') : b.etaMs === 0 ? 'atingido' : dur(b.etaMs);
+  const hot = b.etaMs != null && b.etaMs <= 30 * 60e3;
+  return (
+    <section className="lg-card am-us__card">
+      <header className="lg-card__head"><div><h3>Ritmo e limite de uso</h3><small>janela de 5 h · estimativa</small></div></header>
+      <div className="lg-stats">
+        <Stat label="Últimas 5 h" value={fmtCompact(b.used5h)} note={pctUsed != null ? `${pctUsed}% do limite` : 'tokens contáveis'} tone={pctUsed >= 85 ? 'warn' : undefined} />
+        <Stat label="Ritmo" value={fmtCompact(b.ratePerHour) + '/h'} note="média da última hora" />
+        <Stat label="Limite" value={b.limit ? fmtCompact(b.limit) : '—'} note={b.limitSource === 'manual' ? 'definido por você' : b.limitSource === 'auto' ? `estimado (${b.hits.length} estouro(s))` : 'ainda não estimado'} />
+        <Stat label="No ritmo atual" value={eta} note={b.etaMs ? 'até o limite' : b.limit ? 'nas próximas 5 h' : 'defina ou espere um estouro'} tone={hot ? 'warn' : undefined} />
+      </div>
+      {pctUsed != null && <div className="am-us__meter" role="img" aria-label={`${pctUsed}% do limite usado`}><i style={{ width: pctUsed + '%' }} className={pctUsed >= 85 ? 'is-hot' : ''} /></div>}
+      <div className="am-us__row">
+        <label className="lg-muted">Limite (tokens em 5 h)
+          <input className="am-us__in am-us__limit" inputMode="numeric" placeholder="automático" value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveLimit(draft); }} aria-label="Limite de uso em tokens por 5 horas" />
+        </label>
+        <button type="button" className="lg-btn" onClick={() => saveLimit(draft)}>Salvar</button>
+        {b.limitSource === 'manual' && <button type="button" className="lg-btn" onClick={() => saveLimit('')}>Voltar ao automático</button>}
+      </div>
+      <p className="lg-muted am-us__fine">Conta entrada, saída e gravação de cache; leitura de cache fica de fora porque quase não pesa no limite. O limite automático é a mediana do que você tinha consumido nas 5 h anteriores às últimas vezes em que o limite estourou; só enxerga o que passou por este computador. A projeção supõe que o ritmo da última hora continua e leva em conta o que sai da janela.</p>
+    </section>
+  );
+}
+
+/** Duração curta de ferramenta: 120 ms · 4 s · 1 min 05 s. */
+const dms = (ms) => (ms < 1000 ? `${Math.round(ms)} ms` : dur(ms));
+const slow = (t) => t.avgMs != null && t.avgMs >= 20000 && t.n >= 3;
+const flaky = (t) => t.n >= 5 && t.errorRate >= 0.2;
+
+/** Duração e falhas por ferramenta, e duração dos turnos. */
+export function Tools({ tools, turns }) {
+  if (!tools.length && !turns.n) return null;
+  return (
+    <section className="lg-card am-us__card">
+      <header className="lg-card__head"><div><h3>Ferramentas e turnos</h3><small>onde o tempo vai e o que mais falha</small></div></header>
+      {turns.n > 0 && <div className="lg-muted am-us__fine">{fmtNum(turns.n)} turno(s) · duração média {dur(turns.avgMs || 0)} · o maior durou {dur(turns.maxMs)}</div>}
+      {tools.length > 0 && (
+        <table className="am-us__table">
+          <thead><tr><th>Ferramenta</th><th className="is-num">Execuções</th><th className="is-num">Erros</th><th className="is-num">Média</th><th className="is-num">Maior</th><th /></tr></thead>
+          <tbody>
+            {tools.slice(0, 12).map((t) => (
+              <tr key={t.tool}>
+                <td className="am-us__model" title={t.tool}>{t.tool}</td>
+                <td className="is-num">{fmtNum(t.n)}</td>
+                <td className="is-num">{t.errors ? `${fmtNum(t.errors)} (${Math.round(t.errorRate * 100)}%)` : '0'}</td>
+                <td className="is-num">{t.avgMs == null ? '—' : dms(t.avgMs)}</td>
+                <td className="is-num">{t.maxMs ? dms(t.maxMs) : '—'}</td>
+                <td>{slow(t) && <span className="lg-pill is-warn" title="Média acima de 20 s"><Icon name="timer" size={10} />lenta</span>} {flaky(t) && <span className="lg-pill is-warn" title="20% ou mais das execuções falharam"><Icon name="triangle-alert" size={10} />falha muito</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <p className="lg-muted am-us__fine">A duração vai do pedido da ferramenta até o resultado, então pode incluir a sua demora para aprovar uma permissão (execuções acima de 30 min ficam fora da média). Recusas suas não contam como execução.</p>
+    </section>
+  );
+}
+
 export function Usage({ rev, toast }) {
   const [days, setDays] = React.useState('7');
   const [metric, setMetric] = React.useState('cost');
@@ -163,6 +261,12 @@ export function Usage({ rev, toast }) {
   if (!data) return <div className="lg-muted lg-pad"><Spinner size={12} /> Carregando…</div>;
   const t = data.totals;
   const empty = !t.total && !t.workMs && !t.waitMs;
+  const doExport = async (format) => {
+    try {
+      const r = await api().usageExport(Number(days), format);
+      if (r.saved) toast('Métricas exportadas', r.path, 'ok');
+    } catch (e) { toast('Não foi possível exportar', errText(e), 'error'); }
+  };
   const clear = async () => { try { await api().usageClear(); setConfirm(false); toast('Métricas apagadas', 'O histórico de uso foi esquecido.', 'ok'); load(true); } catch (e) { toast('Monitor de IA', errText(e), 'error'); } };
 
   return (
@@ -170,6 +274,11 @@ export function Usage({ rev, toast }) {
       <div className="am-us__bar">
         <SegmentedControl size="sm" options={RANGES} value={days} onChange={setDays} />
         <div className="am-us__actions">
+          {['csv', 'json', 'md'].map((f) => (
+            <button key={f} type="button" className="lg-btn" onClick={() => doExport(f)} disabled={empty} title={`Salva as métricas dos ${days} dias em ${f === 'md' ? 'Markdown' : f.toUpperCase()}`}>
+              <Icon name="download" size={12} /><span>{f === 'md' ? 'Markdown' : f.toUpperCase()}</span>
+            </button>
+          ))}
           <button type="button" className={'lg-btn' + (prices ? ' is-accent' : '')} aria-pressed={prices} onClick={() => setPrices((v) => !v)} title="Ajusta os preços usados na estimativa de custo"><Icon name="coins" size={12} /><span>Preços</span></button>
           {confirm
             ? <><button type="button" className="lg-btn is-accent" onClick={clear}>Apagar tudo?</button><button type="button" className="lg-btn" onClick={() => setConfirm(false)}>Cancelar</button></>
@@ -178,6 +287,8 @@ export function Usage({ rev, toast }) {
       </div>
 
       <Diary toast={toast} />
+      <Patterns toast={toast} />
+      <Burn rev={rev} toast={toast} />
 
       {empty ? (
         <EmptyState title="Ainda não há métricas" animate="none" description="As métricas começam a ser guardadas quando o Monitor de IA acompanha as sessões (tela aberta, segundo plano ou avisos ligados). Volte depois de usar o Claude Code ou o Codex." />
@@ -217,6 +328,8 @@ export function Usage({ rev, toast }) {
               </table>
             </section>
           </div>
+
+          <Tools tools={data.byTool || []} turns={data.turns || { n: 0 }} />
 
           {(data.plans.approved + data.plans.rejected) > 0 && (
             <section className="lg-card am-us__card">

@@ -12,7 +12,7 @@ const fs = require('node:fs/promises');
 const state = require('./state');
 const { segments, overlayWaiting, stats: lanesStats } = require('./lanes');
 const { splitByDay, dayKey, dayStart } = require('./usage');
-const { zero, sumTokens } = require('./pricing');
+const { zero, sumTokens, costByModel } = require('./pricing');
 const { searchSessions } = require('./search');
 const { createGitInfo } = require('./gitinfo');
 const { redact } = require('../../src/logs/redact.js');
@@ -24,10 +24,17 @@ const FIRST_READ_MAX = 6 * 1024 * 1024; // arquivo maior que isso: lê só o fin
 const USAGE_FLUSH_MS = 30_000;         // de quanto em quanto tempo as métricas diárias vão para o disco
 const CONFLICT_MS = 30 * 60_000;       // dois agentes no mesmo arquivo: só conta edição dessa janela
 const IDLE_DIRTY_MS = 6 * 3600e3;      // sessão parada há mais que isso não tem o git consultado
+const FIVE_H = 5 * 3600e3;             // janela do limite de uso
+const BURN_CACHE_MS = 20_000;
+const LIMIT_WARN_MS = 30 * 60_000;     // avisa quando, no ritmo atual, o limite chega em menos que isso
+const countable = (t) => ((t && t.input) || 0) + ((t && t.output) || 0) + ((t && t.cacheWrite) || 0); // leitura de cache quase não conta no limite
+const median = (a) => { const b = [...a].sort((x, y) => x - y); return b.length ? (b.length % 2 ? b[(b.length - 1) / 2] : (b[b.length / 2 - 1] + b[b.length / 2]) / 2) : 0; };
+const LIMIT_HIT = /rate_limit|usage limit|limite de uso/i;
+const WORDS = (s) => new Set(String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length >= 4));
 const base = (p) => String(p || '').split('\\').join('/').split('/').filter(Boolean).pop() || '';
 
 function createAimonService({ providers, broadcast = () => {}, now = () => Date.now(), pollMs = 1500, rescanMs = 6000, windowMs = WINDOW_MS, gitinfo = null,
-  usage = null, getPrices = () => ({}), onAttention = () => {} }) {
+  usage = null, getPrices = () => ({}), getLimit = () => null, getReview = () => null, onAttention = () => {}, onSettled = () => {} }) {
   const byId = new Map(providers.map((p) => [p.id, p]));
   const tracked = new Map(); // "provider:sessionId" → { meta, ctx, st, events, offset, tail, busy, partial, version }
   let timer = null;
@@ -47,6 +54,9 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
   const conflictMap = new Map(); // "provedor:sessão" → [{ path, with: [rótulos] }]: outro agente editou o mesmo arquivo há pouco
   const ownerOfCwd = new Map();  // pasta → sessão principal mais recente dela (só ela mostra "parada com alterações")
   let lastUsageFlush = 0;
+  let burnCache = null;
+  let lastLimitNotice = 0;
+  const settledAt = new Map();   // "provedor:sessão" → quando avisou que ficou ociosa (evita repetir)
 
   const keyOf = (m) => m.provider + ':' + m.sessionId;
 
@@ -102,7 +112,7 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
   }
 
   function reset(t) {
-    t.st = state.createSessionState(); t.ctx = {}; t.events = []; t.offset = 0; t.partial = false; t.skipFirst = false; t.daily = {};
+    t.st = state.createSessionState(); t.ctx = {}; t.events = []; t.offset = 0; t.partial = false; t.skipFirst = false; t.daily = {}; t.minutes = new Map();
   }
 
   /** Tokens do evento de uso, no dia dele (as métricas diárias; ver usage.js). */
@@ -111,6 +121,8 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
     const day = dayKey(ev.ts);
     const d = t.daily[day] || (t.daily[day] = { tokens: zero(), byModel: {} });
     d.tokens = sumTokens(d.tokens, ev.tokens || {});
+    const minute = Math.floor(ev.ts / 60000);
+    t.minutes.set(minute, (t.minutes.get(minute) || 0) + countable(ev.tokens));
     if (ev.model) d.byModel[ev.model] = sumTokens(d.byModel[ev.model] || zero(), ev.tokens || {});
   }
 
@@ -125,12 +137,14 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
       const agent = !!t.meta.parentId;
       const split = agent ? {} : splitByDay(overlayWaiting(segments(t.events, at, { from: 0 }), waits.get(key), 0, at));
       const project = projectOf(t);
-      for (const day of new Set([...Object.keys(t.daily), ...Object.keys(split)])) {
+      for (const day of new Set([...Object.keys(t.daily), ...Object.keys(split), ...Object.keys(t.st.toolDaily), ...Object.keys(t.st.turnDaily)])) {
         const d = t.daily[day] || { tokens: zero(), byModel: {} };
         const sp = split[day] || { workMs: 0, waitMs: 0, waitCount: 0 };
+        const tools = t.st.toolDaily[day] || {};
+        const turn = (t.st.turnDaily[day] || {}).turn || null;
         const tok = d.tokens.input + d.tokens.output + d.tokens.cacheRead + d.tokens.cacheWrite;
-        if (!tok && !sp.workMs && !sp.waitMs) continue;
-        (out[day] || (out[day] = {}))[key] = { project, agent, tokens: d.tokens, byModel: d.byModel, workMs: sp.workMs, waitMs: sp.waitMs, waitCount: sp.waitCount };
+        if (!tok && !sp.workMs && !sp.waitMs && !Object.keys(tools).length && !turn) continue;
+        (out[day] || (out[day] = {}))[key] = { project, agent, tokens: d.tokens, byModel: d.byModel, workMs: sp.workMs, waitMs: sp.waitMs, waitCount: sp.waitCount, tools, turn };
       }
     }
     return out;
@@ -140,7 +154,61 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
     if (!usage) return;
     if (!force && now() - lastUsageFlush < USAGE_FLUSH_MS) return;
     lastUsageFlush = now();
-    try { usage.merge(usageContribution()); usage.persist().catch(() => {}); } catch { /* métrica nunca derruba o monitor */ }
+    try {
+      usage.merge(usageContribution());
+      usage.recordHits(limitHits());
+      burnCache = null; // os estouros mudam o limite estimado
+      usage.persist().catch(() => {});
+    } catch { /* métrica nunca derruba o monitor */ }
+  }
+
+  /** Tokens "contáveis" (entrada + saída + gravação de cache) consumidos entre dois instantes, em todas as sessões acompanhadas. */
+  function usedBetween(from, to) {
+    const a = Math.floor(from / 60000); const b = Math.floor(to / 60000);
+    let n = 0;
+    for (const t of tracked.values()) for (const [m, v] of t.minutes) if (m >= a && m <= b) n += v;
+    return n;
+  }
+
+  /** Vezes em que o limite de uso estourou (erro do agente) e quanto se havia consumido nas 5 h anteriores. */
+  function limitHits() {
+    const out = [];
+    for (const t of tracked.values()) {
+      for (const e of t.events) if (e.kind === 'error' && e.ts && (LIMIT_HIT.test(e.code || '') || LIMIT_HIT.test(e.summary || ''))) out.push({ ts: e.ts, used: usedBetween(e.ts - FIVE_H, e.ts) });
+    }
+    return out;
+  }
+
+  /**
+   * Ritmo de consumo e projeção do limite de uso. O limite vem da preferência (manual) ou da mediana das últimas vezes em
+   * que o limite estourou (automático: quanto havia sido consumido nas 5 h anteriores). A projeção simula a janela de 5 h
+   * andando: o que sai dela libera espaço e o ritmo da última hora continua. É uma estimativa, não um dado do provedor.
+   */
+  function burn() {
+    const at = now();
+    if (burnCache && at - burnCache.at < BURN_CACHE_MS) return burnCache.value;
+    const a = Math.floor(at / 60000);
+    const buf = new Array(300).fill(0); // buf[i] = tokens no minuto (a - 299 + i)
+    for (const t of tracked.values()) for (const [m, v] of t.minutes) { const i = m - (a - 299); if (i >= 0 && i < 300) buf[i] += v; }
+    const sum = (arr) => arr.reduce((x, y) => x + y, 0);
+    const used5h = sum(buf);
+    const lastHour = sum(buf.slice(240));
+    const hits = usage ? usage.hits() : [];
+    const manual = Number(getLimit()) > 0 ? Number(getLimit()) : null;
+    const auto = hits.length ? Math.round(median(hits.slice(-5).map((h) => h.used))) : null;
+    const limit = manual || auto || null;
+    let etaMs = null;
+    if (limit) {
+      if (used5h >= limit) etaMs = 0;
+      else if (lastHour > 0) {
+        const perMin = lastHour / 60;
+        let used = used5h;
+        for (let k = 1; k <= 300; k++) { used += perMin - buf[k - 1]; if (used >= limit) { etaMs = k * 60000; break; } }
+      }
+    }
+    const value = { at, used5h, lastHour, ratePerHour: lastHour, limit, limitSource: manual ? 'manual' : auto ? 'auto' : null, hits: hits.slice(-5), etaMs };
+    burnCache = { at, value };
+    return value;
   }
 
   /** Avisa (onAttention) quando uma sessão principal passa a esperar por você (informado pelo próprio agente) ou dá erro. */
@@ -154,6 +222,11 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
       const prev = lastStatus.get(key);
       lastStatus.set(key, status);
       if (prev === undefined || prev === status) continue; // 1ª vez que vê a sessão só anota: não avisa do que já estava assim
+      // Terminou o trabalho (voltou a ficar ociosa): quem quiser (ex.: revisão automática) reage.
+      if ((prev === 'working' || prev === 'waiting') && status === 'idle' && at - (settledAt.get(key) || 0) > 60_000) {
+        settledAt.set(key, at);
+        try { onSettled({ key, ts: at }); } catch { /* gancho nunca derruba o monitor */ }
+      }
       // "Esperando" só vale quando o agente informa: a estimativa pelo transcript confunde com ferramenta demorada.
       const kind = status === 'error' ? 'error' : status === 'waiting' && live && live.status === 'waiting' ? 'waiting' : null;
       if (!kind) continue;
@@ -166,6 +239,12 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
       } catch { /* aviso nunca derruba o monitor */ }
     }
     for (const k of [...lastStatus.keys()]) if (!tracked.has(k)) lastStatus.delete(k);
+    // Perto do limite de uso: avisa uma vez por hora.
+    const b = burn();
+    if (b.etaMs != null && b.etaMs > 0 && b.etaMs <= LIMIT_WARN_MS && at - lastLimitNotice > 3600e3) {
+      lastLimitNotice = at;
+      try { onAttention({ kind: 'limit', key: null, project: '', title: 'Perto do limite de uso', detail: `No ritmo atual, em cerca de ${Math.max(1, Math.round(b.etaMs / 60000))} min`, ts: at }); } catch { /* idem */ }
+    }
   }
 
   /** Dois agentes ao mesmo tempo no mesmo arquivo (editado nos últimos 30 min): nas mesmas pastas isso vira conflito. */
@@ -207,7 +286,7 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
           const k = keyOf(m);
           seen.add(k);
           let t = tracked.get(k);
-          if (!t) { t = { meta: m, ctx: {}, st: state.createSessionState(), events: [], offset: 0, partial: false, skipFirst: false, busy: false, version: 0, daily: {} }; tracked.set(k, t); }
+          if (!t) { t = { meta: m, ctx: {}, st: state.createSessionState(), events: [], offset: 0, partial: false, skipFirst: false, busy: false, version: 0, daily: {}, minutes: new Map() }; tracked.set(k, t); }
           else t.meta = m;
         }
       }
@@ -295,8 +374,8 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
     resolveRepos();
     refreshDirty();
     computeConflicts();
+    flushUsage(false); // antes dos avisos: grava os estouros de limite que a projeção usa
     checkAttention();
-    flushUsage(false);
     // O status depende do relógio (trabalhando → esperando): reavisa a tela mesmo sem linha nova se algo está em andamento.
     const live = [...tracked.values()].some((t) => t.st.turnOpen);
     if (g === gen && (any || dirty || live)) { dirty = false; broadcast({ type: 'changed' }); }
@@ -316,6 +395,7 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
     repo: repoOf(t),
     dirty: dirtyOf(t),
     conflicts: conflictMap.get(keyOf(t.meta)) || [],
+    review: t.meta.parentId ? null : getReview(keyOf(t.meta)),
   });
 
   /** Arquivos alterados na pasta: das sessões em andamento e da sessão principal mais recente de cada pasta (parada com alterações). */
@@ -407,6 +487,49 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
       if (!usage) return null;
       flushUsage(true);
       return usage.range(days, { prices: getPrices(), plans });
+    },
+    /** Ritmo de consumo (tokens/h) e projeção do limite de uso das 5 h. */
+    burn,
+    /** Primeiro pedido da sessão (o objetivo), para a revisão automática. */
+    goal(key) { const t = tracked.get(key); return t ? t.st.firstPrompt : ''; },
+    /** Métricas lado a lado de sessões (para comparar Claude × Codex na mesma tarefa). */
+    compare(keys) {
+      const prices = getPrices();
+      const at = now();
+      return (Array.isArray(keys) ? keys : []).slice(0, 4).map((k) => tracked.get(String(k))).filter(Boolean).map((t) => {
+        const key = keyOf(t.meta);
+        const segs = overlayWaiting(segments(t.events, at, { from: 0 }), waits.get(key), 0, at);
+        const sum = (st) => segs.filter((x) => x.state === st).reduce((n, x) => n + (x.to - x.from), 0);
+        const tk = t.st.tokens;
+        const c = costByModel(t.st.byModel, prices);
+        return {
+          key, provider: t.meta.provider, title: t.meta.label || t.st.title || t.st.firstPrompt || 'Sessão sem título', model: t.st.model, project: projectOf(t), branch: t.st.branch, partial: t.partial,
+          firstPrompt: t.st.firstPrompt, durationMs: t.st.firstTs && t.st.lastTs ? t.st.lastTs - t.st.firstTs : 0, workMs: sum('working'), waitMs: sum('waiting'),
+          turns: t.st.turns, tools: t.st.tools, toolErrors: t.st.toolErrors, corrections: t.st.corrections,
+          tokens: tk, total: tk.input + tk.output + tk.cacheRead + tk.cacheWrite, cost: c.unpriced.length && !c.cost ? null : c.cost, files: t.st.edits.size,
+          commits: t.events.filter((e) => e.kind === 'commit').length,
+        };
+      });
+    },
+    /** Pares de sessões de provedores diferentes com pedidos parecidos (candidatas a comparação). */
+    pairs() {
+      const mains = [...tracked.values()].filter((t) => !t.meta.parentId && t.st.firstPrompt).map((t) => ({ t, w: WORDS(t.st.firstPrompt) })).filter((x) => x.w.size >= 3);
+      const out = [];
+      for (let i = 0; i < mains.length; i++) for (let j = i + 1; j < mains.length; j++) {
+        const a = mains[i]; const b = mains[j];
+        if (a.t.meta.provider === b.t.meta.provider) continue;
+        let inter = 0; for (const w of a.w) if (b.w.has(w)) inter++;
+        const score = inter / (a.w.size + b.w.size - inter);
+        if (score >= 0.35) out.push({ a: keyOf(a.t.meta), b: keyOf(b.t.meta), score: Math.round(score * 100) / 100, prompt: a.t.st.firstPrompt.slice(0, 140) });
+      }
+      return out.sort((x, y) => y.score - x.score).slice(0, 5);
+    },
+    /** Base da análise de padrões de prompt: o primeiro pedido de cada sessão recente e sinais de retrabalho. */
+    patterns() {
+      const rows = [...tracked.values()].filter((t) => !t.meta.parentId && t.st.firstPrompt)
+        .sort((x, y) => (y.st.lastTs || 0) - (x.st.lastTs || 0)).slice(0, 25)
+        .map((t) => ({ provider: t.meta.provider, prompt: t.st.firstPrompt, turns: t.st.turns, corrections: t.st.corrections, toolErrors: t.st.toolErrors, tools: t.st.tools, commits: t.events.filter((e) => e.kind === 'commit').length }));
+      return { sessions: rows };
     },
     /** Esquece as métricas guardadas. */
     async usageClear() { if (usage) await usage.clear(); return true; },

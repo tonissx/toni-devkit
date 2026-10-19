@@ -332,6 +332,21 @@ contextBridge.exposeInMainWorld('devkit', {
     /** Métricas dos últimos `days` dias: custo estimado, tokens, tempo trabalhando e esperando por você, por modelo e projeto. */
     usage: (days) => ipcRenderer.invoke('aimon:usage', days),
     usageClear: () => ipcRenderer.invoke('aimon:usageClear'),
+    /** Exporta as métricas dos últimos `days` dias ('csv' | 'json' | 'md') para um arquivo escolhido → { saved, path? }. */
+    usageExport: (days, format) => ipcRenderer.invoke('aimon:usageExport', days, format),
+    /** Ritmo de consumo e projeção do limite de uso das 5 h. */
+    burn: () => ipcRenderer.invoke('aimon:burn'),
+    /** Limite de uso informado por você (tokens contáveis em 5 h); vazio volta à estimativa automática. */
+    setLimit: (n) => ipcRenderer.invoke('aimon:setLimit', n),
+    /** Revisão automática das alterações quando a sessão fica ociosa (só com a IA em modo Local). */
+    setAutoReview: (on) => ipcRenderer.invoke('aimon:setAutoReview', on),
+    review: (key) => ipcRenderer.invoke('aimon:review', key),
+    reviewRun: (key) => ipcRenderer.invoke('aimon:reviewRun', key),
+    /** Sessões lado a lado (compare) e pares de sessões com pedidos parecidos em provedores diferentes (pairs). */
+    compare: (keys) => ipcRenderer.invoke('aimon:compare', keys),
+    pairs: () => ipcRenderer.invoke('aimon:pairs'),
+    /** Base da análise de padrões dos pedidos (para a IA). */
+    patterns: () => ipcRenderer.invoke('aimon:patterns'),
     /** Busca nos prompts e respostas das sessões em disco (últimos `days` dias) e nos planos guardados. */
     search: (q, opts) => ipcRenderer.invoke('aimon:search', q, opts),
     /** O que as sessões fizeram hoje, enxuto, para o diário de bordo (IA). */

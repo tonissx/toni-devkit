@@ -18,18 +18,26 @@ export function SessionAi({ session, events, toast }) {
   const empty = !events || !events.some((e) => e.kind === 'prompt' || e.kind === 'text');
   const reason = offReason(cfg) || (empty ? 'Sessão sem conteúdo' : null);
 
-  const gatherBrief = async () => {
-    let changes = [];
-    try { const c = await api().gitChanges(session.key); changes = (c.files || []).slice(0, 40).map((f) => ({ kind: f.kind, path: f.path })); } catch { /* sem Git: segue só com o resumo */ }
-    // Último plano aprovado desta sessão (do arquivo local de planos), para o briefing saber o rumo combinado.
-    let plan = null;
+  // Último plano aprovado desta sessão (do arquivo local de planos): o rumo combinado, para o briefing e para a descrição de PR.
+  const lastPlan = async () => {
     try {
       await api().plansScan();
       const { rows } = await api().plans({ status: 'approved' });
       const last = rows.find((r) => r.sessionId === session.sessionId); // já vêm do mais novo ao mais antigo
-      if (last) { const p = await api().plan(last.id); plan = p && p.plan; }
-    } catch { /* sem plano: o briefing segue sem ele */ }
-    return { ...(await api().digest(session.key)), changes, lastPlan: plan };
+      if (last) { const p = await api().plan(last.id); return p && p.plan; }
+    } catch { /* sem plano: segue sem ele */ }
+    return null;
+  };
+  const changesOf = async () => {
+    try { const c = await api().gitChanges(session.key); return (c.files || []).slice(0, 40).map((f) => ({ kind: f.kind, path: f.path })); } catch { return []; } // sem Git: segue só com o resto
+  };
+  const gatherBrief = async () => ({ ...(await api().digest(session.key)), changes: await changesOf(), lastPlan: await lastPlan() });
+  // Descrição de PR: plano aprovado + commits da sessão + arquivos tocados. Só texto para copiar; nada é aberto nem enviado ao GitHub.
+  const pr = useAiTask('aimonPr', cfg);
+  const gatherPr = async () => {
+    const d = await api().digest(session.key);
+    const changed = (await changesOf()).map((c) => c.path);
+    return { title: d.title, branch: d.branch, goal: (d.prompts || [])[0] || '', plan: await lastPlan(), commits: d.commits, files: [...new Set([...(d.files || []), ...changed])] };
   };
   // Retomar com um clique: abre um terminal na pasta da sessão (ver electron/aimon/resume.js). Só sessão principal; subagente não se retoma.
   const canResume = !session.parentId && !!session.cwd;
@@ -56,8 +64,11 @@ export function SessionAi({ session, events, toast }) {
         <AiButton ai={summary} label="Resumir sessão" disabled={!!reason} reason={reason} onClick={() => summary.start(() => api().digest(session.key))} />
         <AiButton ai={brief} label="Briefing para retomar" disabled={!!reason} reason={reason} onClick={() => brief.start(gatherBrief)}
           title="Gera um texto para colar numa sessão nova continuar este trabalho" />
+        <AiButton ai={pr} label="Descrição de PR" disabled={!!reason} reason={reason} onClick={() => pr.start(gatherPr)}
+          title="Monta a descrição de um pull request a partir do plano aprovado, dos commits e dos arquivos da sessão. Só gera o texto: nada é aberto nem enviado." />
       </div>
       <div className="am-priv"><AiPanel ai={summary} /></div>
+      <div className="am-priv"><AiPanel ai={pr} /></div>
       <div className="am-priv"><AiPanel ai={brief} actions={[{ label: 'Abrir sessão nova com este briefing', icon: 'square-terminal', primary: true, disabled: !canResume, onClick: openWithBrief }]} /></div>
     </div>
   );

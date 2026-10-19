@@ -250,3 +250,30 @@ button.am-sr__item:hover { background: var(--tk-surface-3); }
 .am-sr__kind { display: inline-flex; align-items: center; gap: 4px; flex: none; min-width: 128px; color: var(--tk-text-3); font-size: 11px; }
 .am-sr__snip { min-width: 0; overflow-wrap: anywhere; line-height: 1.45; color: var(--tk-text-2); }
 .am-sr__snip mark { background: color-mix(in srgb, var(--tk-accent) 28%, transparent); color: var(--tk-text); border-radius: 3px; padding: 0 1px; }
+
+/* ritmo e limite de uso, ferramentas */
+.am-us__meter { height: 8px; border-radius: 4px; background: var(--tk-surface-3); overflow: hidden; }
+.am-us__meter i { display: block; height: 100%; border-radius: 4px; background: var(--tk-accent); }
+.am-us__meter i.is-hot { background: var(--tk-amber); }
+.am-us__limit { width: 130px; margin-left: 8px; }
+.am-us__fine { margin: 0; font-size: 11.5px; line-height: 1.45; }
+.am-us__card .lg-stats { margin: 4px 0 8px; }
+
+/* comparar sessões (src/tools/aimon/Compare.jsx) */
+.am-cmp { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+.am-cmp > * { flex-shrink: 0; }
+.am-cmp__pick { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.am-cmp__pick label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; color: var(--tk-text-3); min-width: 0; }
+.am-cmp__pick select { max-width: 420px; }
+.am-cmp__pairs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.am-cmp__table td, .am-cmp__table th { vertical-align: top; overflow-wrap: anywhere; }
+.am-cmp__table td { font-variant-numeric: tabular-nums; }
+.am-cmp__table td.is-best { color: var(--tk-text); font-weight: 600; background: var(--tk-green-a12); }
+.am-cmp__table td.is-best svg { margin-left: 4px; color: var(--lg-ok); vertical-align: -1px; }
+
+/* revisão automática (src/tools/aimon/Review.jsx) */
+.am-rv { display: flex; flex-direction: column; gap: 8px; }
+.am-rv__bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.am-alert.is-ok { background: var(--tk-green-a12); }
+.am-alert.is-ok svg { color: var(--lg-ok); }
+.am-alert.is-run { background: color-mix(in srgb, var(--tk-accent) 14%, transparent); }

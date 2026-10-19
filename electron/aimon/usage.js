@@ -12,10 +12,7 @@ const { atomicWrite, createQueue } = require('../lib/fsx');
 const { costByModel, sumTokens, zero } = require('./pricing');
 
 const KEEP_DAYS = 400;
-const pad = (n) => String(n).padStart(2, '0');
-/** Dia local (AAAA-MM-DD) de um instante em ms. */
-const dayKey = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-const dayStart = (key) => { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d).getTime(); };
+const { dayKey, dayStart } = require('./time');
 
 /** Blocos [{ from, to, state }] → { [dia]: { workMs, waitMs, waitCount } }, cortando o que atravessa a meia-noite. */
 function splitByDay(segs) {
@@ -39,15 +36,25 @@ function splitByDay(segs) {
 
 const maxTokens = (a, b) => ({ input: Math.max(a.input || 0, b.input || 0), output: Math.max(a.output || 0, b.output || 0), cacheRead: Math.max(a.cacheRead || 0, b.cacheRead || 0), cacheWrite: Math.max(a.cacheWrite || 0, b.cacheWrite || 0) });
 
+/** Estatística de uma ferramenta/turno: { n, errors, ms, timed, max }. Mesma regra do resto: máximo campo a campo. */
+const maxStat = (a, b) => ({ n: Math.max(a.n || 0, b.n || 0), errors: Math.max(a.errors || 0, b.errors || 0), ms: Math.max(a.ms || 0, b.ms || 0), timed: Math.max(a.timed || 0, b.timed || 0), max: Math.max(a.max || 0, b.max || 0) });
+const maxStats = (a, b) => { const out = { ...(a || {}) }; for (const [k, v] of Object.entries(b || {})) out[k] = maxStat(out[k] || {}, v); return out; };
+const addStat = (a, b) => (b ? { n: (a.n || 0) + (b.n || 0), errors: (a.errors || 0) + (b.errors || 0), ms: (a.ms || 0) + (b.ms || 0), timed: (a.timed || 0) + (b.timed || 0), max: Math.max(a.max || 0, b.max || 0) } : a);
+const addStats = (into, tools) => { for (const [k, v] of Object.entries(tools || {})) into[k] = addStat(into[k] || {}, v); };
+
 function mergeEntry(prev, next) {
-  if (!prev) return { project: next.project || '', agent: !!next.agent, tokens: { ...zero(), ...next.tokens }, byModel: JSON.parse(JSON.stringify(next.byModel || {})), workMs: next.workMs || 0, waitMs: next.waitMs || 0, waitCount: next.waitCount || 0 };
+  if (!prev) return { project: next.project || '', agent: !!next.agent, tokens: { ...zero(), ...next.tokens }, byModel: JSON.parse(JSON.stringify(next.byModel || {})), workMs: next.workMs || 0, waitMs: next.waitMs || 0, waitCount: next.waitCount || 0, tools: maxStats({}, next.tools), turn: maxStat({}, next.turn || {}) };
   const byModel = { ...prev.byModel };
   for (const [m, t] of Object.entries(next.byModel || {})) byModel[m] = maxTokens(byModel[m] || {}, t);
-  return { project: next.project || prev.project, agent: prev.agent, tokens: maxTokens(prev.tokens, next.tokens || {}), byModel, workMs: Math.max(prev.workMs, next.workMs || 0), waitMs: Math.max(prev.waitMs, next.waitMs || 0), waitCount: Math.max(prev.waitCount, next.waitCount || 0) };
+  return { project: next.project || prev.project, agent: prev.agent, tokens: maxTokens(prev.tokens, next.tokens || {}), byModel, workMs: Math.max(prev.workMs, next.workMs || 0), waitMs: Math.max(prev.waitMs, next.waitMs || 0), waitCount: Math.max(prev.waitCount, next.waitCount || 0),
+    tools: maxStats(prev.tools, next.tools), turn: maxStat(prev.turn || {}, next.turn || {}) };
 }
 
+const MAX_HITS = 20;
+const HIT_GAP = 30 * 60_000; // dois avisos de limite com menos que isso entre si são o mesmo limite
+
 function createUsageStore({ file, now = () => Date.now() }) {
-  let data = { v: 1, days: {} };
+  let data = { v: 1, days: {}, hits: [] };
   let dirty = false;
   const queue = createQueue();
 
@@ -60,7 +67,7 @@ function createUsageStore({ file, now = () => Date.now() }) {
     async init() {
       try {
         const raw = JSON.parse(await fs.readFile(file, 'utf8'));
-        if (raw && raw.v === 1 && raw.days && typeof raw.days === 'object') data = { v: 1, days: raw.days };
+        if (raw && raw.v === 1 && raw.days && typeof raw.days === 'object') data = { v: 1, days: raw.days, hits: Array.isArray(raw.hits) ? raw.hits.filter((h) => h && Number.isFinite(h.ts) && Number.isFinite(h.used)).slice(-MAX_HITS) : [] };
       } catch { /* primeira vez ou arquivo ilegível: começa vazio */ }
       return this;
     },
@@ -82,7 +89,19 @@ function createUsageStore({ file, now = () => Date.now() }) {
       await queue.run('save', () => atomicWrite(file, JSON.stringify(data)));
       return true;
     },
-    async clear() { data = { v: 1, days: {} }; dirty = false; await queue.run('save', () => atomicWrite(file, JSON.stringify(data))); return true; },
+    /** Vezes em que o limite de uso foi atingido: [{ ts, used }] (used = tokens contáveis nas 5 h anteriores). */
+    recordHits(list) {
+      for (const h of list || []) {
+        if (!h || !Number.isFinite(h.ts) || !Number.isFinite(h.used) || h.used <= 0) continue;
+        const near = data.hits.find((x) => Math.abs(x.ts - h.ts) < HIT_GAP);
+        if (near) { if (h.used > near.used) { near.used = h.used; dirty = true; } continue; }
+        data.hits.push({ ts: h.ts, used: h.used }); dirty = true;
+      }
+      data.hits.sort((a, b) => a.ts - b.ts);
+      if (data.hits.length > MAX_HITS) data.hits.splice(0, data.hits.length - MAX_HITS);
+    },
+    hits: () => data.hits.map((h) => ({ ...h })),
+    async clear() { data = { v: 1, days: {}, hits: [] }; dirty = false; await queue.run('save', () => atomicWrite(file, JSON.stringify(data))); return true; },
     flush: () => queue.flush(),
     /**
      * Totais dos últimos `days` dias (hoje incluído). `prices`: preços personalizados por modelo. `plans`: [{ ts, status }]
@@ -94,6 +113,7 @@ function createUsageStore({ file, now = () => Date.now() }) {
       const list = [];
       for (let i = n - 1; i >= 0; i--) list.push(dayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i).getTime()));
       const totals = { tokens: zero(), workMs: 0, waitMs: 0, waitCount: 0 };
+      const toolStats = {}; let turnStat = {};
       const modelTokens = {}; const projects = {}; const seen = new Set(); const seenAgents = new Set();
       const outDays = list.map((day) => {
         const d = data.days[day];
@@ -108,6 +128,7 @@ function createUsageStore({ file, now = () => Date.now() }) {
             byModelDay[m] = sumTokens(byModelDay[m] || zero(), t);
             modelTokens[m] = sumTokens(modelTokens[m] || zero(), t);
           }
+          addStats(toolStats, e.tools); turnStat = addStat(turnStat, e.turn);
           if (e.agent) { seenAgents.add(key); continue; } // subagente: só tokens (o tempo é o da sessão que o criou)
           row.workMs += e.workMs; row.waitMs += e.waitMs;
           totals.workMs += e.workMs; totals.waitMs += e.waitMs; totals.waitCount += e.waitCount;
@@ -129,6 +150,9 @@ function createUsageStore({ file, now = () => Date.now() }) {
         .sort((a, b) => (b.cost || 0) - (a.cost || 0) || b.total - a.total);
       const byProject = Object.values(projects).map((p) => ({ project: p.project, total: p.tokens.input + p.tokens.output + p.tokens.cacheRead + p.tokens.cacheWrite, cost: costByModel(p.byModel, prices).cost, workMs: p.workMs, waitMs: p.waitMs, sessions: p.keys.size }))
         .filter((p) => p.total || p.workMs || p.waitMs).sort((a, b) => b.cost - a.cost || b.total - a.total);
+      const byTool = Object.entries(toolStats).map(([tool, t]) => ({ tool, n: t.n, errors: t.errors, errorRate: t.n ? t.errors / t.n : 0, avgMs: t.timed ? t.ms / t.timed : null, maxMs: t.max, totalMs: t.ms }))
+        .sort((a, b) => b.totalMs - a.totalMs || b.n - a.n);
+      const turns = { n: turnStat.n || 0, avgMs: turnStat.timed ? turnStat.ms / turnStat.timed : null, maxMs: turnStat.max || 0 };
       const since = dayStart(list[0]);
       const inRange = (plans || []).filter((p) => p && p.ts >= since);
       return {
@@ -136,7 +160,7 @@ function createUsageStore({ file, now = () => Date.now() }) {
         series: outDays,
         totals: { ...totals, total: totals.tokens.input + totals.tokens.output + totals.tokens.cacheRead + totals.tokens.cacheWrite, cost: priced.cost, savings: priced.savings, sessions: seen.size, agents: seenAgents.size,
           waitShare: totals.workMs + totals.waitMs > 0 ? totals.waitMs / (totals.workMs + totals.waitMs) : 0 },
-        byModel, byProject, unpriced: priced.unpriced,
+        byModel, byProject, byTool, turns, unpriced: priced.unpriced,
         plans: { approved: inRange.filter((p) => p.status === 'approved').length, rejected: inRange.filter((p) => p.status === 'rejected').length },
         since,
       };

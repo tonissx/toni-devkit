@@ -10,6 +10,8 @@ import { Changes } from './Changes.jsx';
 import { SessionAi } from './SessionAi.jsx';
 import { Usage } from './Usage.jsx';
 import { Search } from './Search.jsx';
+import { Compare } from './Compare.jsx';
+import { reviewBadge } from './Review.jsx';
 import { gitAlerts, sessionAlerts } from './alerts.js';
 import { summarizeAgents, agentParts, isCollapsed } from './agents.js';
 
@@ -24,9 +26,9 @@ const STATUS = {
   stale: { label: 'Sem sinal', icon: 'moon', tone: 'idle', hint: 'Turno aberto, mas sem atividade há mais de 10 min — a sessão provavelmente foi fechada' },
   error: { label: 'Erro', icon: 'circle-alert', tone: 'err', hint: 'A sessão parou por um erro (login expirado, limite de uso, servidor). Some quando houver nova atividade.' },
 };
-const TABS = [{ value: 'sessions', label: 'Sessões' }, { value: 'lanes', label: 'Raias' }, { value: 'plans', label: 'Planos' }, { value: 'usage', label: 'Uso' }, { value: 'search', label: 'Busca' }];
+const TABS = [{ value: 'sessions', label: 'Sessões' }, { value: 'lanes', label: 'Raias' }, { value: 'plans', label: 'Planos' }, { value: 'compare', label: 'Comparar' }, { value: 'usage', label: 'Uso' }, { value: 'search', label: 'Busca' }];
 const TAB_IDS = TABS.map((t) => t.value);
-const NO_PROVIDER_FILTER = ['plans', 'usage', 'search']; // telas que não filtram por provedor
+const NO_PROVIDER_FILTER = ['plans', 'usage', 'search', 'compare']; // telas que não filtram por provedor
 const KINDS = [
   { v: 'prompt', label: 'Prompts', icon: 'message-square' },
   { v: 'text', label: 'Respostas', icon: 'bot' },
@@ -89,6 +91,7 @@ function SessionRow({ s, sel, onPick, tick, sum, collapsed, onToggle }) {
       {s.lastToolFailed && s.status !== 'error' && <span className="am-alert is-card is-soft" title="A última ferramenta falhou. O agente costuma tentar de novo; só chama atenção se a sessão parou aí."><Icon name="triangle-alert" size={11} />Última ferramenta falhou</span>}
       {s.repo && gitAlerts({ branch: s.repo.branch, dirty: s.dirty, active: s.status === 'working' || s.status === 'waiting' }).map((a) => <span key={a.id} className="am-alert is-card" title={a.title}><Icon name={a.icon} size={11} />{a.text}</span>)}
       {sessionAlerts(s).map((a) => <span key={a.id} className="am-alert is-card" title={a.title}><Icon name={a.icon} size={11} /><span className="am-priv">{a.text}</span></span>)}
+      {(() => { const rb = reviewBadge(s); return rb ? <span className={'am-alert is-card is-review is-' + rb.tone} title={rb.title}><Icon name={rb.icon} size={11} />{rb.text}</span> : null; })()}
       {s.status !== 'idle' && s.lastTool && <span className="am-session__tool am-priv"><Icon name="wrench" size={10} />{s.lastTool.name}{s.lastTool.summary ? ' · ' + s.lastTool.summary : ''}</span>}
       {sum && (
         <span className={'am-session__agents' + (sum.working || sum.waiting ? ' is-live' : '')} title="Subagentes desta sessão">
@@ -214,6 +217,7 @@ export function AIMonitor({ toast, request }) {
   // Clique no aviso do sistema (ou link vindo de outra tela): abre a timeline da sessão.
   React.useEffect(() => {
     if (request && request.sel) setUi((u) => ({ ...u, sel: request.sel, tab: 'sessions', provider: 'all' }));
+    else if (request && request.tab && TAB_IDS.includes(request.tab)) setUi((u) => ({ ...u, tab: request.tab }));
   }, [request && request.nonce]);
   React.useEffect(() => { setData(null); loadTimeline(); }, [ui.sel]);
 
@@ -266,7 +270,9 @@ export function AIMonitor({ toast, request }) {
           </button>
         </div>
       </header>
-      {tab === 'usage' ? (
+      {tab === 'compare' ? (
+        <Compare sessions={list} toast={toast} />
+      ) : tab === 'usage' ? (
         <Usage rev={rev} toast={toast} />
       ) : tab === 'search' ? (
         <Search sessions={list} toast={toast} onPlans={() => setUi((u) => ({ ...u, tab: 'plans' }))}

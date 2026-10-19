@@ -20,6 +20,8 @@ test('todas as tarefas montam system + user em texto', () => {
     logIncident: { groups: [{ level: 'ERROR', count: 3, title: 'x', first: '10:00', last: '10:05' }], total: 10 },
     aimonSummary: { title: 'Sessão', prompts: ['faz X'], answers: ['feito'] }, aimonReview: { diff: patch, goal: 'ajustar a' }, aimonBrief: { title: 'Sessão', prompts: ['faz X'] },
     aimonDiary: { date: '2026-10-19', sessions: [{ title: 'Sessão', prompts: ['faz X'] }], totals: { workMs: 3600e3 } },
+    aimonPr: { title: 'Sessão', branch: 'feat/x', plan: '# Plano\n- passo', commits: [{ hash: 'abcdef1', subject: 'faz x' }], files: ['src/a.js'] },
+    aimonPatterns: { sessions: [{ provider: 'claude', prompt: 'faz x', turns: 3, corrections: 1, toolErrors: 0 }, { provider: 'claude', prompt: 'faz y', turns: 2 }, { provider: 'codex', prompt: 'faz z', turns: 9, corrections: 4 }], plans: [{ status: 'rejected', title: 'Plano', reason: 'amplo demais' }] },
     dbQuery: { sql: 'SELECT * FROM t WHERE a = 1', stats: { executions: 10 } },
     dbPlan: { sql: 'select 1', plan: { cost: 1, operators: 1 }, insights: [], operators: [] },
     dbDeadlock: { processes: [{ spid: 63, victim: true, sql: 'UPDATE a' }], resources: [{ type: 'keylock', object: 'db.dbo.T', holders: ['58'], waiters: ['63'] }] },

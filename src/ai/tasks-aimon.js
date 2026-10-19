@@ -84,6 +84,52 @@ module.exports = function aimonTasks({ clip, tidy, PT, MD, redact }) {
       clean: tidy,
     },
 
+    aimonPr: {
+      label: 'Descrição de PR', maxTokens: 800,
+      build(i) {
+        const commits = arr(i.commits).slice(0, 30);
+        if (!i.plan && !commits.length && !arr(i.files).length) throw new Error('A sessão ainda não tem plano, commits nem alterações para descrever');
+        const parts = [];
+        if (i.title) parts.push(`Sessão: ${safe(i.title, 160)}`);
+        if (i.branch) parts.push(`Branch: ${safe(i.branch, 80)}${i.base ? ` → ${safe(i.base, 40)}` : ''}`);
+        if (i.goal) parts.push('', 'Pedido original:', safe(i.goal, 600));
+        if (i.plan) parts.push('', 'Plano aprovado:', safe(i.plan, 2500));
+        if (commits.length) parts.push('', 'Commits:', ...commits.map((c) => `- ${String(c.hash || '').slice(0, 7)} ${safe(c.subject || c.summary || '', 140)}`));
+        const files = arr(i.files).slice(0, 40);
+        if (files.length) parts.push('', 'Arquivos tocados:', ...files.map((f) => `- ${safe(f, 200)}`));
+        return {
+          system: ['Você escreve a descrição de um pull request a partir do plano aprovado e dos commits de uma sessão de trabalho com um agente de IA.', PT, MD,
+            'Seções curtas: "## O que muda" (tópicos objetivos), "## Por quê" (uma ou duas frases, a partir do pedido e do plano), "## Como testar" (passos que decorram do que foi feito; se não der para saber, diga que falta confirmar) e "## Pontos de atenção" (riscos ou decisões; omita se não houver).',
+            'Use SOMENTE os dados fornecidos: não invente testes executados, resultados nem arquivos. NÃO inclua linhas de atribuição a IA (como "Generated with…" ou "Co-Authored-By") nem menção de que um agente escreveu o código.'].join('\n'),
+          user: parts.join('\n'),
+        };
+      },
+      clean: tidy,
+    },
+
+    aimonPatterns: {
+      label: 'Padrões dos meus pedidos', maxTokens: 900,
+      build(i) {
+        const sessions = arr(i.sessions).slice(0, 25);
+        if (sessions.length < 3) throw new Error('Há poucas sessões para achar padrões (são necessárias pelo menos 3)');
+        const plans = arr(i.plans).slice(0, 20);
+        const parts = ['Sessões recentes (primeiro pedido e sinais de retrabalho):'];
+        sessions.forEach((s, n) => parts.push(`${n + 1}. [${safe(s.provider, 12)}] "${safe(s.prompt, 300)}" — turnos: ${Number(s.turns) || 0}, correções da pessoa: ${Number(s.corrections) || 0}, falhas de ferramenta: ${Number(s.toolErrors) || 0}, commits: ${Number(s.commits) || 0}`));
+        if (plans.length) {
+          parts.push('', 'Planos recentes:');
+          for (const p of plans) parts.push(`- ${p.status === 'rejected' ? 'RECUSADO' : 'aprovado'}: ${safe(p.title, 140)}${p.reason ? ` — motivo: ${safe(p.reason, 240)}` : ''}`);
+        }
+        return {
+          system: ['Você analisa como uma pessoa desenvolvedora escreve pedidos para agentes de IA de programação e o que leva a retrabalho.', PT, MD,
+            'Compare os pedidos de sessões com muitas correções, muitos turnos, falhas de ferramenta ou planos recusados com os de sessões que correram bem.',
+            'Entregue: "## O que se repete" (2 a 4 padrões, citando trechos dos pedidos) e "## Como pedir melhor" (3 a 5 dicas práticas, cada uma com um exemplo de reescrita curto).',
+            'Use SOMENTE os dados fornecidos; se a amostra for pequena demais para concluir algo, diga isso em vez de inventar. Não critique a pessoa: foque no texto dos pedidos.'].join('\n'),
+          user: parts.join('\n'),
+        };
+      },
+      clean: tidy,
+    },
+
     aimonBrief: {
       label: 'Briefing para retomar', maxTokens: 700,
       build(i) {
