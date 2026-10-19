@@ -78,6 +78,7 @@
       "src/ai/**",
       "src/commands/search.js",
       "src/commands/binds.js",
+      "src/tools/aimon/aiInput.js",
       "package.json"
     ],
     "asarUnpack": [
