@@ -13,6 +13,7 @@ const { createCommitTracker } = require('../commits');
 
 const id = 'claude';
 const root = () => path.join(os.homedir(), '.claude', 'projects');
+const MSG_MEMORY = 200; // mensagens lembradas para não contar o `usage` repetido
 const ts = (o, ctx) => { const t = Date.parse(o && o.timestamp); return Number.isFinite(t) ? t : (ctx && ctx.lastTs) || 0; };
 
 /** Uma linha do .jsonl → eventos normalizados (ver ../util.js). `ctx` é o estado do arquivo ({ lastTs, … }). */
@@ -50,7 +51,19 @@ function parseLine(line, ctx = {}) {
     }
     if (m.usage) {
       const u = m.usage;
-      ev.push({ ts: t, kind: 'usage', model: m.model, tokens: { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0, cacheWrite: u.cache_creation_input_tokens || 0 } });
+      const full = { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0, cacheWrite: u.cache_creation_input_tokens || 0 };
+      // O Claude Code grava uma linha por bloco da mesma mensagem (thinking, text, tool_use) e repete o mesmo `usage` em todas:
+      // contar cada linha infla tokens e custo. Conta-se uma vez por `message.id`; se o id reaparecer com números maiores
+      // (saída que cresceu), soma só o acréscimo.
+      const seen = ctx.msgUsage || (ctx.msgUsage = new Map());
+      const prev = m.id ? seen.get(m.id) : null;
+      if (m.id) {
+        seen.delete(m.id);
+        seen.set(m.id, prev ? { input: Math.max(prev.input, full.input), output: Math.max(prev.output, full.output), cacheRead: Math.max(prev.cacheRead, full.cacheRead), cacheWrite: Math.max(prev.cacheWrite, full.cacheWrite) } : full);
+        if (seen.size > MSG_MEMORY) seen.delete(seen.keys().next().value);
+      }
+      const delta = prev ? { input: Math.max(0, full.input - prev.input), output: Math.max(0, full.output - prev.output), cacheRead: Math.max(0, full.cacheRead - prev.cacheRead), cacheWrite: Math.max(0, full.cacheWrite - prev.cacheWrite) } : full;
+      if (!prev || delta.input || delta.output || delta.cacheRead || delta.cacheWrite) ev.push({ ts: t, kind: 'usage', model: m.model, tokens: delta, call: !prev ? full : null });
     }
     // Subagente termina entregando o relatório (ferramenta SubagentHandback), sem um end_turn.
     if (m.stop_reason === 'end_turn' || (Array.isArray(m.content) && m.content.some((b) => b && b.type === 'tool_use' && b.name === 'SubagentHandback'))) ev.push({ ts: t, kind: 'turn_end' });
