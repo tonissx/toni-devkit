@@ -10,8 +10,11 @@ const api = () => window.devkit.aimon;
 
 const offReason = (cfg) => (aiOn(cfg) ? null : 'IA desligada');
 
-/** Resumir, Briefing para retomar e Retomar no terminal — no cabeçalho da sessão. */
-export function SessionAi({ session, events, toast }) {
+/**
+ * Retomar, Resumir, Briefing e PR — no cabeçalho da sessão. `slot`: elemento do cabeçalho onde os botões entram (undefined =
+ * dentro da própria faixa; null = o cabeçalho ainda não montou, nada é desenhado).
+ */
+export function SessionAi({ session, events, toast, slot }) {
   const cfg = useAiMode();
   const summary = useAiTask('aimonSummary', cfg);
   const brief = useAiTask('aimonBrief', cfg);
@@ -54,23 +57,35 @@ export function SessionAi({ session, events, toast }) {
     await resume('new');
     toast('Briefing copiado', 'Cole no terminal que acabou de abrir para começar a sessão nova.', 'ok');
   };
+  // Com o motivo (IA desligada, sessão sem conteúdo) no tooltip em vez de dentro do botão: três botões repetindo "IA desligada" ocupam espaço à toa.
+  const tip = (base) => (reason ? `${reason} — ${base}` : base);
+  const buttons = (
+    <>
+      <button type="button" className="lg-btn is-accent" disabled={!canResume} onClick={() => resume('resume')}
+        title={canResume ? `Abre um terminal em ${session.cwd} e retoma esta sessão (${session.provider === 'codex' ? 'codex resume' : 'claude --resume'}), com todo o contexto dela` : 'Só sessões principais com pasta conhecida podem ser retomadas'}>
+        <Icon name="square-terminal" size={12} /><span>Retomar</span>
+      </button>
+      <AiButton ai={summary} label="Resumir" disabled={!!reason} onClick={() => summary.start(() => api().digest(session.key))}
+        title={tip('Resume a sessão em até 6 tópicos')} />
+      <AiButton ai={brief} label="Briefing" disabled={!!reason} onClick={() => brief.start(gatherBrief)}
+        title={tip('Gera um texto para colar numa sessão nova continuar este trabalho')} />
+      <AiButton ai={pr} label="PR" disabled={!!reason} onClick={() => pr.start(gatherPr)}
+        title={tip('Monta a descrição de um pull request a partir do plano aprovado, dos commits e dos arquivos da sessão. Só gera o texto: nada é aberto nem enviado.')} />
+    </>
+  );
+  // Os botões vão para a linha do cabeçalho (ao lado de "Abrir no Git"), no `slot`; os resultados ficam numa faixa abaixo, só quando há algo.
+  const anyPanel = !!(summary.st || brief.st || pr.st);
   return (
-    <div className="am-ai">
-      <div className="am-ai__bar">
-        <button type="button" className="lg-btn is-accent" disabled={!canResume} onClick={() => resume('resume')}
-          title={canResume ? `Abre um terminal em ${session.cwd} e retoma esta sessão (${session.provider === 'codex' ? 'codex resume' : 'claude --resume'}), com todo o contexto dela` : 'Só sessões principais com pasta conhecida podem ser retomadas'}>
-          <Icon name="square-terminal" size={12} /><span>Retomar no terminal</span>
-        </button>
-        <AiButton ai={summary} label="Resumir sessão" disabled={!!reason} reason={reason} onClick={() => summary.start(() => api().digest(session.key))} />
-        <AiButton ai={brief} label="Briefing para retomar" disabled={!!reason} reason={reason} onClick={() => brief.start(gatherBrief)}
-          title="Gera um texto para colar numa sessão nova continuar este trabalho" />
-        <AiButton ai={pr} label="Descrição de PR" disabled={!!reason} reason={reason} onClick={() => pr.start(gatherPr)}
-          title="Monta a descrição de um pull request a partir do plano aprovado, dos commits e dos arquivos da sessão. Só gera o texto: nada é aberto nem enviado." />
-      </div>
-      <div className="am-priv"><AiPanel ai={summary} /></div>
-      <div className="am-priv"><AiPanel ai={pr} /></div>
-      <div className="am-priv"><AiPanel ai={brief} actions={[{ label: 'Abrir sessão nova com este briefing', icon: 'square-terminal', primary: true, disabled: !canResume, onClick: openWithBrief }]} /></div>
-    </div>
+    <>
+      {slot === undefined ? <div className="am-ai"><div className="am-ai__bar">{buttons}</div></div> : slot ? ReactDOM.createPortal(buttons, slot) : null}
+      {anyPanel && (
+        <div className="am-ai">
+          <div className="am-priv"><AiPanel ai={summary} /></div>
+          <div className="am-priv"><AiPanel ai={pr} /></div>
+          <div className="am-priv"><AiPanel ai={brief} actions={[{ label: 'Abrir sessão nova com este briefing', icon: 'square-terminal', primary: true, disabled: !canResume, onClick: openWithBrief }]} /></div>
+        </div>
+      )}
+    </>
   );
 }
 

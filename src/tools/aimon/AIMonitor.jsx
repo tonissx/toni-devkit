@@ -190,6 +190,7 @@ export function AIMonitor({ toast, request }) {
   const [q, setQ] = React.useState('');
   const [tick, setTick] = React.useState(0);
   const [bg, setBg] = React.useState(false); // acompanhar em segundo plano (desligado por padrão)
+  const [aiSlot, setAiSlot] = React.useState(null); // onde o SessionAi desenha os botões (linha do cabeçalho da sessão)
   const [notify, setNotify] = React.useState(false); // avisos do sistema quando uma sessão espera por você ou dá erro (desligado por padrão)
   const [rev, setRev] = React.useState(0); // sobe a cada aviso do processo principal: as raias buscam de novo
   const selRef = React.useRef(null);
@@ -305,9 +306,10 @@ export function AIMonitor({ toast, request }) {
                   {current.cwd && <span className="am-priv" title={current.cwd}>{base(current.cwd)}</span>}
                   {current.repo && <span className="am-priv" title={current.repo.main}>repo {current.repo.name}{current.repo.worktree ? ` · worktree ${current.repo.worktree}` : ''}{current.repo.branch ? ` · ${current.repo.branch}` : ''}</span>}
                   {current.repo && <button type="button" className="lg-btn" onClick={() => openGit(current.repo)} title="Abre este repositório na ferramenta Git"><Icon name="folder-git-2" size={12} /><span>Abrir no Git</span></button>}
+                  <span className="am-main__ai" ref={setAiSlot} />
                 </div>
               </div>
-              <SessionAi session={current} events={data ? data.events : null} toast={toast} />
+              <SessionAi session={current} events={data ? data.events : null} toast={toast} slot={aiSlot} />
               <div className="am-subtabs" role="tablist">
                 <button type="button" role="tab" aria-selected={view === 'timeline'} className={view === 'timeline' ? 'is-on' : ''} onClick={() => setUi((u) => ({ ...u, view: 'timeline' }))}><Icon name="list" size={13} /><span>Timeline</span></button>
                 <button type="button" role="tab" aria-selected={view === 'changes'} className={view === 'changes' ? 'is-on' : ''} onClick={() => setUi((u) => ({ ...u, view: 'changes' }))}><Icon name="git-compare" size={13} /><span>Alterações</span></button>
