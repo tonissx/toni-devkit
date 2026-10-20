@@ -251,6 +251,10 @@ button.am-sr__item:hover { background: var(--tk-surface-3); }
 .am-sr__snip { min-width: 0; overflow-wrap: anywhere; line-height: 1.45; color: var(--tk-text-2); }
 .am-sr__snip mark { background: color-mix(in srgb, var(--tk-accent) 28%, transparent); color: var(--tk-text); border-radius: 3px; padding: 0 1px; }
 
+/* botões de IA da sessão: na linha do cabeçalho, ao lado de "Abrir no Git" */
+.am-main__ai { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.am-main__ai:empty { display: none; }
+
 /* ritmo e limite de uso, ferramentas */
 .am-us__meter { height: 8px; border-radius: 4px; background: var(--tk-surface-3); overflow: hidden; }
 .am-us__meter i { display: block; height: 100%; border-radius: 4px; background: var(--tk-accent); }
