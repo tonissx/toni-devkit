@@ -344,6 +344,8 @@ contextBridge.exposeInMainWorld('devkit', {
     reviewRun: (key) => ipcRenderer.invoke('aimon:reviewRun', key),
     /** Sessões lado a lado (compare) e pares de sessões com pedidos parecidos em provedores diferentes (pairs). */
     compare: (keys) => ipcRenderer.invoke('aimon:compare', keys),
+    /** Do que é feito o contexto de uma sessão: composição, base fixa, maiores consumidores, compactações e sugestões (estimativa). */
+    context: (key) => ipcRenderer.invoke('aimon:context', key),
     pairs: () => ipcRenderer.invoke('aimon:pairs'),
     /** Base da análise de padrões dos pedidos (para a IA). */
     patterns: () => ipcRenderer.invoke('aimon:patterns'),

@@ -14,6 +14,7 @@ const { segments, overlayWaiting, stats: lanesStats } = require('./lanes');
 const { splitByDay, dayKey, dayStart } = require('./usage');
 const { zero, sumTokens, costByModel } = require('./pricing');
 const { searchSessions } = require('./search');
+const { summarize: summarizeCtx, suggest: suggestCtx } = require('./context');
 const { createGitInfo } = require('./gitinfo');
 const { redact } = require('../../src/logs/redact.js');
 const { sessionDigest } = require('../../src/tools/aimon/aiInput.js');
@@ -99,7 +100,7 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
         for (const ev of evs) {
           state.apply(t.st, ev);
           if (ev.kind === 'usage') addDaily(t, ev);
-          if (ev.kind !== 'usage' && ev.kind !== 'title') { t.events.push(ev); changed = true; }
+          if (ev.kind !== 'usage' && ev.kind !== 'title' && ev.kind !== 'ctx_attach') { t.events.push(ev); changed = true; }
           else changed = true;
         }
       }
@@ -490,6 +491,14 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
     },
     /** Ritmo de consumo (tokens/h) e projeção do limite de uso das 5 h. */
     burn,
+    /** Do que é feito o contexto de uma sessão (composição, base fixa, maiores consumidores e sugestões). Estimativa; só números. */
+    context(key) {
+      const t = tracked.get(key);
+      if (!t) return { has: false, partial: false, found: false };
+      // Arquivo grande: só o final foi lido, então o começo (anexos da base fixa) pode não ter passado por aqui.
+      const sm = summarizeCtx(t.st.cx, { partial: t.partial });
+      return { ...sm, found: true, suggestions: suggestCtx(sm) };
+    },
     /** Primeiro pedido da sessão (o objetivo), para a revisão automática. */
     goal(key) { const t = tracked.get(key); return t ? t.st.firstPrompt : ''; },
     /** Métricas lado a lado de sessões (para comparar Claude × Codex na mesma tarefa). */

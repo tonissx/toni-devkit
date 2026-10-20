@@ -10,6 +10,7 @@ import { Changes } from './Changes.jsx';
 import { SessionAi } from './SessionAi.jsx';
 import { Usage } from './Usage.jsx';
 import { Search } from './Search.jsx';
+import { Context } from './Context.jsx';
 import { Compare } from './Compare.jsx';
 import { reviewBadge } from './Review.jsx';
 import { gitAlerts, sessionAlerts } from './alerts.js';
@@ -35,8 +36,8 @@ const KINDS = [
   { v: 'tool_use', label: 'Ferramentas', icon: 'wrench' },
   { v: 'thinking', label: 'Raciocínio', icon: 'brain' },
 ];
-const KIND_ICON = { error: 'circle-alert', commit: 'git-commit-horizontal', prompt: 'message-square', text: 'bot', thinking: 'brain', tool_use: 'wrench', tool_result: 'corner-down-right', turn_start: 'play', turn_end: 'flag' };
-const KIND_LABEL = { error: 'Erro', commit: 'Commit', prompt: 'Prompt', text: 'Resposta', thinking: 'Raciocínio', tool_use: 'Ferramenta', tool_result: 'Resultado', turn_start: 'Início do turno', turn_end: 'Fim do turno' };
+const KIND_ICON = { error: 'circle-alert', commit: 'git-commit-horizontal', prompt: 'message-square', text: 'bot', thinking: 'brain', tool_use: 'wrench', tool_result: 'corner-down-right', turn_start: 'play', turn_end: 'flag', compact: 'archive' };
+const KIND_LABEL = { error: 'Erro', commit: 'Commit', prompt: 'Prompt', text: 'Resposta', thinking: 'Raciocínio', tool_use: 'Ferramenta', tool_result: 'Resultado', turn_start: 'Início do turno', turn_end: 'Fim do turno', compact: 'Compactação' };
 
 const base = (p) => String(p || '').split(/[\\/]/).filter(Boolean).pop() || '';
 const projectOf = (s) => base(s.cwd) || s.project || 'Sem projeto';
@@ -156,7 +157,7 @@ function Timeline({ data, kinds, q }) {
     const needle = q.trim().toLowerCase();
     return (data ? data.events : []).filter((e) => {
       const k = e.kind === 'tool_result' ? 'tool_use' : e.kind;
-      if (KIND_ICON[e.kind] && !['turn_start', 'turn_end', 'commit', 'error'].includes(e.kind) && !kinds.includes(k)) return false;
+      if (KIND_ICON[e.kind] && !['turn_start', 'turn_end', 'commit', 'error', 'compact'].includes(e.kind) && !kinds.includes(k)) return false;
       return !needle || (e.summary || '').toLowerCase().includes(needle) || (e.tool || '').toLowerCase().includes(needle);
     });
   }, [data, kinds, q]);
@@ -229,7 +230,7 @@ export function AIMonitor({ toast, request }) {
   const working = list.filter((s) => s.status === 'working').length;
   const waiting = list.filter((s) => s.status === 'waiting').length;
   const failed = list.filter((s) => s.status === 'error').length;
-  const view = ui.view === 'changes' ? 'changes' : 'timeline';
+  const view = ui.view === 'changes' || ui.view === 'context' ? ui.view : 'timeline';
   const tab = TAB_IDS.includes(ui.tab) ? ui.tab : 'sessions';
   const toggleNotify = () => api().setNotify(!notify).then((on) => { setNotify(on); toast(on ? 'Avisos do sistema ligados' : 'Avisos do sistema desligados', on ? 'Você será avisado quando uma sessão esperar por você ou der erro, mesmo com esta tela fechada (liga o acompanhamento em segundo plano).' : 'Sem avisos do sistema.', 'ok'); }, (e) => toast('Monitor de IA', errText(e), 'error'));
   const toggleBg = () => api().setBackground(!bg).then((on) => { setBg(on); toast(on ? 'Acompanhamento em segundo plano ligado' : 'Acompanhamento em segundo plano desligado', on ? 'Continua lendo as sessões com esta tela fechada; o Git passa a mostrar o selo de IA.' : 'Só acompanha com esta tela aberta.', 'ok'); }, (e) => toast('Monitor de IA', errText(e), 'error'));
@@ -313,8 +314,9 @@ export function AIMonitor({ toast, request }) {
               <div className="am-subtabs" role="tablist">
                 <button type="button" role="tab" aria-selected={view === 'timeline'} className={view === 'timeline' ? 'is-on' : ''} onClick={() => setUi((u) => ({ ...u, view: 'timeline' }))}><Icon name="list" size={13} /><span>Timeline</span></button>
                 <button type="button" role="tab" aria-selected={view === 'changes'} className={view === 'changes' ? 'is-on' : ''} onClick={() => setUi((u) => ({ ...u, view: 'changes' }))}><Icon name="git-compare" size={13} /><span>Alterações</span></button>
+                <button type="button" role="tab" aria-selected={view === 'context'} className={view === 'context' ? 'is-on' : ''} onClick={() => setUi((u) => ({ ...u, view: 'context' }))} title="Do que é feito o contexto desta sessão"><Icon name="gauge" size={13} /><span>Contexto</span></button>
               </div>
-              {view === 'changes' ? <Changes session={current} events={data ? data.events : null} onOpenGit={openGit} toast={toast} /> : (
+              {view === 'context' ? <Context session={current} rev={rev} toast={toast} /> : view === 'changes' ? <Changes session={current} events={data ? data.events : null} onOpenGit={openGit} toast={toast} /> : (
               <>
               <div className="am-filters">
                 {KINDS.map((k) => (
