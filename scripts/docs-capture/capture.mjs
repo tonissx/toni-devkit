@@ -23,6 +23,9 @@ await main.send('Page.enable');
 await pal.send('Page.enable');
 await sleep(2500);
 
+// ONLY=logs-db,git refaz só esses cenários (padrão: todos). Nomes: palette, json, notes, vault, devcore, git, logs-db.
+const want = (n) => !process.env.ONLY || process.env.ONLY.split(',').includes(n);
+
 /* ─────────────── utilidades ─────────────── */
 const png = (name) => path.join(out, name + '.png');
 const still = (name) => main.shot(png(name), fs);
@@ -83,7 +86,7 @@ async function composite(backFile, palFile, outFile, y = 120) {
 }
 
 /* ─────────────── 1) Palette: GIF + still ─────────────── */
-{
+if (want('palette')) {
   await main.key('1', { ctrl: true });
   await nav('1');
   await main.eval('document.querySelector("body").focus()');
@@ -114,7 +117,7 @@ async function composite(backFile, palFile, outFile, y = 120) {
 }
 
 /* ─────────────── 2) JSON como grafo ─────────────── */
-{
+if (want('json')) {
   await nav('6');
   const doc = JSON.stringify({
     pedido: 10482,
@@ -140,7 +143,7 @@ async function composite(backFile, palFile, outFile, y = 120) {
 }
 
 /* ─────────────── 3) Notes (editor lado a lado) ─────────────── */
-{
+if (want('notes')) {
   await nav('4');
   await sleep(600);
   await clickText('Índices no PostgreSQL', { prefix: true });
@@ -154,7 +157,7 @@ async function composite(backFile, palFile, outFile, y = 120) {
 }
 
 /* ─────────────── 4) Vault ─────────────── */
-{
+if (want('vault')) {
   await nav('7');
   await sleep(600);
   await main.type(VAULT_PASSWORD);
@@ -166,14 +169,14 @@ async function composite(backFile, palFile, outFile, y = 120) {
 }
 
 /* ─────────────── 5) DevCore ─────────────── */
-{
+if (want('devcore')) {
   await nav('5');
   await sleep(3500);
   await still('devcore');
 }
 
 /* ─────────────── 6) Git: GIF ─────────────── */
-{
+if (want('git')) {
   await nav('8');
   await sleep(1200);
   await clickText('loja-api');
@@ -190,6 +193,33 @@ async function composite(backFile, palFile, outFile, y = 120) {
   await clickText('Últimos 3'); await sleep(700);
   await sleep(1200); await rec.add(shot, 2.8);
   await rec.gif('git-graph', 900);
+}
+
+/* ─────────────── 7) Logs → Banco: do erro ao bloqueio ─────────────── */
+if (want('logs-db')) {
+  // Destrava o cofre antes: o Banco mostra "Vault trancado" enquanto a credencial do servidor está fechada.
+  await clickText('Vault', { within: 'nav' }).catch(() => clickText('Vault'));
+  await sleep(800);
+  await main.type(VAULT_PASSWORD);
+  await main.key('Enter');
+  await sleep(2500);
+  await clickText('Logs', { within: 'nav' }).catch(() => clickText('Logs'));
+  await sleep(1200);
+  await clickText('server.log');
+  await sleep(2500);
+  const rec = recorder(path.join(work, 'frames-logs-db'));
+  const shot = (f) => main.shot(f, fs);
+  await rec.add(shot, 2.0);                       // o log aberto, com o pico de erros na linha do tempo
+  await clickText('Linhas', { prefix: true }); await sleep(800); // dá o foco à lista para o atalho `n`
+  await main.key('n'); await sleep(1300);          // próximo erro
+  await still('logs');
+  await rec.add(shot, 2.8);                       // o erro, já agrupado como um problema só
+  await clickText('O que o banco fazia?'); await sleep(2500);
+  await rec.add(shot, 2.4);                       // histórico do Banco aberto naquele horário
+  await clickText('Sessão 57', { prefix: true, nth: 1 }); await sleep(1800); // abre o retrato do incidente
+  await rec.add(shot, 3.4);                       // quem segura quem: a transação esquecida no topo da árvore
+  await still('db-blocking');
+  await rec.gif('log-to-db', 900);
 }
 
 main.close(); pal.close();

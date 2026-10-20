@@ -288,4 +288,87 @@ makeRepo('scripts-infra', (c) => {
 
 writeFileSync(path.join(dirs.userData, 'git-repos.json'), JSON.stringify({ v: 1, last: path.join(dirs.repos, 'loja-api'), repos: ['docs-site', 'loja-api', 'scripts-infra'].map((n) => ({ path: path.join(dirs.repos, n), name: n, added: new Date().toISOString() })) }, null, 2));
 
-console.log(JSON.stringify({ root, ...dirs, lojaApi }));
+/* ─────────────── Logs + Banco: o mesmo incidente visto nos dois lados ─────────────── */
+// Cenário: uma transação esquecida aberta (sessão 57) segura o UPDATE de estoque de outras sessões; o Fluig estoura
+// timeout no server.log. Tudo fictício. T = 90 min atrás, para o histórico caber no passado.
+const { blockingTree } = require('../../src/db/blocking.js');
+const H = require('../../src/db/history.js');
+const T = Math.floor((Date.now() - 90 * 60e3) / 1000) * 1000;
+
+// server.log (formato Fluig/JBoss)
+const stamp = (ms) => {
+  const d = new Date(ms);
+  const p = (n, w = 2) => String(n).padStart(w, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())},${p(d.getMilliseconds(), 3)}`;
+};
+const logLines = [];
+const L = (ms, level, logger, thread, msg, extra = '') => logLines.push({ ms, text: `${stamp(ms)} ${level.padEnd(5)} [${logger}] (${thread}) ${msg}${extra ? '\n' + extra : ''}` });
+const info = ['Requisição concluída em', 'Sessão renovada para o usuário', 'Dataset carregado:', 'Processo movimentado:'];
+let seqId = 7000;
+for (let ms = T - 25 * 60e3; ms < T + 25 * 60e3; ms += 7000 + (seqId++ % 5) * 900) {
+  const k = seqId % info.length;
+  L(ms, 'INFO', 'com.fluig.portal.Request', `default task-${(seqId % 9) + 1}`, `${info[k]} ${k === 0 ? (40 + (seqId * 37) % 260) + ' ms' : k === 1 ? 'usuario' + (seqId % 40) : k === 2 ? 'ds_estoque_saldo' : 'solicitação #' + seqId}`);
+}
+const stack = (n) => [
+  'java.sql.SQLTimeoutException: Query timed out: nenhum resultado em 30 s',
+  '\tat com.microsoft.sqlserver.jdbc.SQLServerStatement.checkTimeout(SQLServerStatement.java:917)',
+  '\tat com.microsoft.sqlserver.jdbc.SQLServerStatement.executeUpdate(SQLServerStatement.java:735)',
+  '\tat org.jboss.jca.adapters.jdbc.WrappedStatement.executeUpdate(WrappedStatement.java:410)',
+  '\tat com.fluig.estoque.dao.SaldoDao.baixar(SaldoDao.java:88)',
+  '\tat com.fluig.estoque.service.BaixaService.executar(BaixaService.java:51)',
+  `\tat com.fluig.estoque.rest.BaixaResource.post(BaixaResource.java:31)`,
+  '\tat org.jboss.resteasy.core.MethodInjectorImpl.invoke(MethodInjectorImpl.java:138)',
+  '\t... 24 more',
+].join('\n');
+[[-5, 9100], [-2, 9104], [6, 9107], [14, 9111], [31, 9116], [58, 9120]].forEach(([s, ref], i) => {
+  L(T + s * 1000 + 133, 'ERROR', 'com.fluig.estoque.service.BaixaService', `default task-${3 + i}`, `Falha ao baixar o estoque (solicitação #${ref}): Query timed out`, stack(i));
+});
+L(T + 40e3, 'WARN', 'com.fluig.portal.Pool', 'pool-2-thread-1', 'Pool de conexões com 94% de uso (47/50)');
+L(T + 52e3, 'WARN', 'com.fluig.portal.Pool', 'pool-2-thread-1', 'Pool de conexões com 100% de uso (50/50): requisições na fila');
+logLines.sort((a, b) => a.ms - b.ms);
+mkdirSync(path.join(root, 'logs'), { recursive: true });
+const logFile = path.join(root, 'logs', 'server.log');
+writeFileSync(logFile, logLines.map((x) => x.text).join('\n') + '\n');
+
+writeFileSync(path.join(dirs.userData, 'logs.json'), JSON.stringify({ recents: [{ kind: 'file', path: logFile, family: null, name: 'server.log', at: Date.now() }], presets: [], overrides: {} }, null, 2));
+
+// Banco: servidor cadastrado + histórico em disco (um ndjson por dia)
+const dbEntry = await vault.save({ name: 'ERP produção (demo)', kind: 'db', tags: ['erp'], fields: [F('Servidor', 'erp-db.example.com'), F('Porta', '1433'), F('Banco', 'ERP'), F('Usuário', 'monitor_ro'), F('Senha', 'senha-de-exemplo-4', true)] });
+await vault.flush();
+const SERVER_ID = 'erp-prod-demo';
+writeFileSync(path.join(dirs.userData, 'db-servers.json'), JSON.stringify({
+  servers: [{ id: SERVER_ID, name: 'ERP produção (demo)', host: 'erp-db.example.com', port: 1433, database: 'ERP', vaultEntryId: (dbEntry && dbEntry.id) || 'demo', encrypt: true, trustCert: false, intervalSec: 5, background: false }],
+  settings: { keepDays: 7, blockMs: 10000, longMs: 30000 },
+}, null, 2));
+
+const row = (o) => ({ status: 'suspended', command: 'UPDATE', wait_type: 'LCK_M_U', cpu_time: 0, logical_reads: 3, writes: 0, database_name: 'ERP', login_name: 'svc_fluig', host_name: 'FLUIG-APP01', program_name: 'Fluig Server', client_net_address: '10.0.4.21', open_transaction_count: 1, ...o });
+const updateSql = (id) => `UPDATE ESTOQUE_SALDO SET QTD = QTD - @p1 WHERE COD_PRODUTO = @p2 AND ARMAZEM = ${id % 3 + 1}`;
+const blockedSessions = [71, 74, 78, 83, 88, 92].map((id, i) => row({
+  session_id: id, blocking_session_id: 57, wait_resource: 'KEY: 7:72057594043432960 (a1f2c0d4e5b6)', wait_time: 28000 - i * 4000, total_elapsed_time: 28500 - i * 4000,
+  start_time: new Date(T - 29e3 + i * 4000).toISOString(), statement_text: updateSql(id), batch_text: updateSql(id), object_name: 'ESTOQUE_SALDO',
+}));
+const head = row({
+  session_id: 57, blocking_session_id: 0, status: 'sleeping', command: '', wait_type: null, wait_time: 0, total_elapsed_time: 0, login_name: 'ana.souza', host_name: 'NB-ANA', program_name: 'Microsoft SQL Server Management Studio - Query',
+  client_net_address: '10.0.7.113', open_transaction_count: 1, transaction_begin_time: new Date(T - 3 * 3600e3).toISOString(), last_request_end_time: new Date(T - 3 * 3600e3 + 4000).toISOString(),
+  statement_text: "UPDATE ESTOQUE_SALDO SET QTD = 0 WHERE COD_PRODUTO = 'TEC-001'", batch_text: "BEGIN TRAN;\nUPDATE ESTOQUE_SALDO SET QTD = 0 WHERE COD_PRODUTO = 'TEC-001'\n-- esqueci o COMMIT", object_name: 'ESTOQUE_SALDO',
+});
+const incState = {};
+const records = [];
+const spanStart = T - 40e3; const spanEnd = T + 130e3;
+for (let t = T - 2 * 3600e3; t <= T + 40 * 60e3; t += 30e3) {
+  const inside = t >= spanStart && t <= spanEnd;
+  const jitter = Math.sin(t / 60e3) * 3;
+  const reqs = inside
+    ? blockedSessions.map((r) => ({ ...r, wait_time: Math.min(r.wait_time + (t - spanStart), 60000), total_elapsed_time: r.total_elapsed_time + (t - spanStart) })).slice(0, Math.min(6, 2 + Math.floor((t - spanStart) / 30e3)))
+    : Array.from({ length: 4 + (Math.round(jitter + 3) % 4) }, (_, i) => row({ session_id: 100 + i, status: 'running', wait_type: null, wait_time: 0, blocking_session_id: 0, total_elapsed_time: 200 + i * 150 }));
+  const tree = blockingTree(reqs, inside ? [head] : []);
+  const snap = { t, requests: reqs, tree, rates: { batchPerSec: inside ? 38 : 220 + jitter * 9, transactionsPerSec: inside ? 12 : 90 + jitter * 4, userConnections: inside ? 49 : 34 + Math.round(jitter), ple: 5400 + Math.round(jitter * 40), lockWaitsPerSec: inside ? 14 : 0.4, memoryGrantsPending: 0 }, waits: null, cpu: { sql_cpu: inside ? 9 : 24 + Math.round(jitter * 2), system_idle: inside ? 85 : 62 } };
+  records.push(H.sampleRecord(snap), ...H.detectIncidents(incState, snap, { blockMs: 10000, longMs: 30000 }));
+}
+const dbDir = path.join(dirs.userData, 'db-monitor', SERVER_ID);
+mkdirSync(dbDir, { recursive: true });
+const byDay = new Map();
+for (const r of records) { const k = H.dayKey(r.t); byDay.set(k, (byDay.get(k) || '') + JSON.stringify(r) + '\n'); }
+for (const [day, text] of byDay) writeFileSync(path.join(dbDir, day + '.ndjson'), text);
+
+console.log(JSON.stringify({ root, ...dirs, lojaApi, logFile, incidentAt: T }));

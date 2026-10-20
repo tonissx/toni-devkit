@@ -52,3 +52,31 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npx electron-builder ${{ matrix.args }} --publish always --config.extraMetadata.version=${{ needs.version.outputs.version }}
+
+  # Checksums + atestado de procedência (SLSA) dos instaladores, para quem quiser verificar o download.
+  # Verificação: `gh attestation verify <arquivo> -R tonissx/toni-devkit` e `SHA256SUMS.txt` na página da release.
+  verify-assets:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: v${{ needs.version.outputs.version }}
+    steps:
+      - name: Baixa os instaladores da release
+        run: |
+          mkdir assets
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir assets \
+            --pattern '*.exe' --pattern '*.dmg' --pattern '*.AppImage'
+          ls -l assets
+      - name: Gera o SHA256SUMS.txt
+        working-directory: assets
+        run: sha256sum * > ../SHA256SUMS.txt && cat ../SHA256SUMS.txt
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: assets/*
+      - name: Anexa o SHA256SUMS.txt à release
+        run: gh release upload "$TAG" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
