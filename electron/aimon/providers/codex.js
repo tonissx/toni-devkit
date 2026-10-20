@@ -27,7 +27,7 @@ function parseLine(line, ctx = {}) {
     if (p.model) ctx.model = p.model;
   } else if (o.type === 'event_msg') {
     if (p.type === 'task_started') ev.push({ ts: t, kind: 'turn_start' });
-    else if (p.type === 'user_message') ev.push({ ts: t, kind: 'prompt', summary: clip(p.message, 400) });
+    else if (p.type === 'user_message') ev.push({ ts: t, kind: 'prompt', summary: clip(p.message, 400), size: String(p.message || '').length });
     else if (p.type === 'agent_message') ev.push({ ts: t, kind: 'text', summary: clip(p.message, 600) });
     else if (p.type === 'task_complete' || p.type === 'turn_aborted') ev.push({ ts: t, kind: 'turn_end' });
     else if (/error/i.test(String(p.type))) ev.push({ ts: t, kind: 'error', code: String(p.type), summary: describeError(p.type, p.message || p.error || '') });
@@ -35,7 +35,7 @@ function parseLine(line, ctx = {}) {
       const u = p.info.last_token_usage;
       // Codex conta o cache dentro de input_tokens: separa para não somar duas vezes.
       const cached = u.cached_input_tokens || 0;
-      ev.push({ ts: t, kind: 'usage', model: ctx.model, tokens: { input: Math.max(0, (u.input_tokens || 0) - cached), output: u.output_tokens || 0, cacheRead: cached, cacheWrite: 0 } });
+      ev.push({ ts: t, kind: 'usage', model: ctx.model, window: Number(p.info.model_context_window) || 0, tokens: { input: Math.max(0, (u.input_tokens || 0) - cached), output: u.output_tokens || 0, cacheRead: cached, cacheWrite: 0 } });
     }
   } else if (o.type === 'response_item') {
     if (p.type === 'reasoning') ev.push({ ts: t, kind: 'thinking', summary: '' });
@@ -45,7 +45,7 @@ function parseLine(line, ctx = {}) {
       ev.push({ ts: t, kind: 'tool_use', ref: p.call_id || p.id, tool: p.name || (p.type === 'local_shell_call' ? 'shell' : 'tool'), summary: describeInput(input) });
     } else if (p.type === 'function_call_output' || p.type === 'custom_tool_call_output') {
       const out = typeof p.output === 'string' ? p.output : p.output && p.output.content;
-      ev.push({ ts: t, kind: 'tool_result', ref: p.call_id, summary: clip(out, 300) });
+      ev.push({ ts: t, kind: 'tool_result', ref: p.call_id, summary: clip(out, 300), size: String(out == null ? '' : out).length });
     }
   }
   if (ev.length) ctx.lastTs = ev[ev.length - 1].ts || ctx.lastTs;

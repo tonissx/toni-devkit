@@ -13,7 +13,41 @@ const { createCommitTracker } = require('../commits');
 
 const id = 'claude';
 const root = () => path.join(os.homedir(), '.claude', 'projects');
+const MSG_MEMORY = 200; // mensagens lembradas para não contar o `usage` repetido
 const ts = (o, ctx) => { const t = Date.parse(o && o.timestamp); return Number.isFinite(t) ? t : (ctx && ctx.lastTs) || 0; };
+
+/** Tamanho do conteúdo de um tool_result em caracteres (texto) e quantas imagens ele trouxe. Só números: o texto não é guardado. */
+function contentSize(content) {
+  if (typeof content === 'string') return { size: content.length };
+  if (!Array.isArray(content)) return { size: 0 };
+  let size = 0; let images = 0;
+  for (const x of content) { if (x && x.type === 'image') images++; else if (x && typeof x.text === 'string') size += x.text.length; }
+  return images ? { size, images } : { size };
+}
+
+const json = (v) => { try { return JSON.stringify(v).length; } catch { return 0; } };
+const baseName = (p) => String(p || '').split('\\').join('/').split('/').filter(Boolean).pop() || String(p || '');
+
+/**
+ * Linha `attachment` do transcrito → partes do que o agente injeta no contexto (a "base fixa"): CLAUDE.md, lista de skills,
+ * instruções de MCP, nomes de ferramentas adiadas, lista de agentes e dados do ambiente. → [{ part, name, size }]
+ */
+function attachmentParts(a) {
+  switch (a.type) {
+    case 'instructions': return (Array.isArray(a.files) ? a.files : []).filter((f) => f && typeof f.content === 'string').map((f) => ({ part: 'instructions', name: `${baseName(f.path)}${f.type ? ` (${f.type === 'Project' ? 'projeto' : f.type === 'User' ? 'usuário' : String(f.type).toLowerCase()})` : ''}`, size: f.content.length }));
+    case 'skill_listing': return [{ part: 'skills', name: 'Lista de skills', size: String(a.content || '').length }];
+    case 'mcp_instructions_delta': return [{ part: 'mcp', name: 'Instruções de servidores MCP', size: (Array.isArray(a.addedBlocks) ? a.addedBlocks : []).join('').length }];
+    case 'deferred_tools_delta': return [{ part: 'tools', name: 'Ferramentas adiadas (nomes)', size: (Array.isArray(a.addedNames) ? a.addedNames : []).join(', ').length }];
+    case 'agent_listing_delta': return [{ part: 'agents', name: 'Lista de agentes', size: json(a) }];
+    case 'environment': case 'session_context': case 'model': case 'date': return [{ part: 'other', name: 'Ambiente e sessão', size: json(a) }];
+    // Durante a sessão o agente ainda injeta coisas no contexto; nomeá-las evita um "Outros" gigante e sem explicação.
+    case 'edited_text_file': return [{ part: 'files', name: 'Arquivos alterados fora do agente', size: json(a) }];
+    case 'file': return [{ part: 'files', name: 'Arquivos anexados', size: json(a) }];
+    case 'plan_file_reference': case 'plan_mode': case 'plan_mode_exit': case 'plan_mode_reentry': return [{ part: 'plan', name: 'Modo de plano', size: json(a) }];
+    case 'total_tokens_reminder': case 'task_reminder': case 'silent_turn_reminder': case 'queued_command': case 'hook_system_message': case 'auto_mode': case 'thinking_drop': return [{ part: 'reminders', name: 'Lembretes e avisos do agente', size: json(a) }];
+    default: return [];
+  }
+}
 
 /** Uma linha do .jsonl → eventos normalizados (ver ../util.js). `ctx` é o estado do arquivo ({ lastTs, … }). */
 function parseLine(line, ctx = {}) {
@@ -28,13 +62,14 @@ function parseLine(line, ctx = {}) {
   if (o.type === 'ai-title' && o.aiTitle) ev.push({ ts: t, kind: 'title', summary: clip(o.aiTitle, 120) });
   else if (o.type === 'user' && o.message) {
     const c = o.message.content;
+    // O resumo que o agente gera ao compactar chega como mensagem de usuário: não é um pedido (vem junto do evento `compact`).
     if (typeof c === 'string') {
-      if (c.trim() && !o.isMeta) ev.push({ ts: t, kind: 'prompt', summary: clip(c, 400) });
+      if (c.trim() && !o.isMeta && !o.isCompactSummary) ev.push({ ts: t, kind: 'prompt', summary: clip(c, 400), size: c.length });
     } else if (Array.isArray(c)) {
       for (const b of c) {
         if (!b) continue;
-        if (b.type === 'tool_result') ev.push({ ts: t, kind: 'tool_result', ref: b.tool_use_id, error: !!b.is_error && !isRejection(b.content), rejected: !!b.is_error && isRejection(b.content), summary: clip(typeof b.content === 'string' ? b.content : (Array.isArray(b.content) ? b.content.map((x) => x && x.text).filter(Boolean).join(' ') : ''), 300) });
-        else if (b.type === 'text' && b.text && b.text.trim() && !o.isMeta) ev.push({ ts: t, kind: 'prompt', summary: clip(b.text, 400) });
+        if (b.type === 'tool_result') ev.push({ ts: t, kind: 'tool_result', ref: b.tool_use_id, error: !!b.is_error && !isRejection(b.content), rejected: !!b.is_error && isRejection(b.content), summary: clip(typeof b.content === 'string' ? b.content : (Array.isArray(b.content) ? b.content.map((x) => x && x.text).filter(Boolean).join(' ') : ''), 300), ...contentSize(b.content) });
+        else if (b.type === 'text' && b.text && b.text.trim() && !o.isMeta && !o.isCompactSummary) ev.push({ ts: t, kind: 'prompt', summary: clip(b.text, 400), size: b.text.length });
       }
     }
   } else if (o.type === 'assistant' && o.message) {
@@ -50,11 +85,28 @@ function parseLine(line, ctx = {}) {
     }
     if (m.usage) {
       const u = m.usage;
-      ev.push({ ts: t, kind: 'usage', model: m.model, tokens: { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0, cacheWrite: u.cache_creation_input_tokens || 0 } });
+      const full = { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0, cacheWrite: u.cache_creation_input_tokens || 0 };
+      // O Claude Code grava uma linha por bloco da mesma mensagem (thinking, text, tool_use) e repete o mesmo `usage` em todas:
+      // contar cada linha infla tokens e custo. Conta-se uma vez por `message.id`; se o id reaparecer com números maiores
+      // (saída que cresceu), soma só o acréscimo.
+      const seen = ctx.msgUsage || (ctx.msgUsage = new Map());
+      const prev = m.id ? seen.get(m.id) : null;
+      if (m.id) {
+        seen.delete(m.id);
+        seen.set(m.id, prev ? { input: Math.max(prev.input, full.input), output: Math.max(prev.output, full.output), cacheRead: Math.max(prev.cacheRead, full.cacheRead), cacheWrite: Math.max(prev.cacheWrite, full.cacheWrite) } : full);
+        if (seen.size > MSG_MEMORY) seen.delete(seen.keys().next().value);
+      }
+      const delta = prev ? { input: Math.max(0, full.input - prev.input), output: Math.max(0, full.output - prev.output), cacheRead: Math.max(0, full.cacheRead - prev.cacheRead), cacheWrite: Math.max(0, full.cacheWrite - prev.cacheWrite) } : full;
+      if (!prev || delta.input || delta.output || delta.cacheRead || delta.cacheWrite) ev.push({ ts: t, kind: 'usage', model: m.model, tokens: delta, call: !prev ? full : null });
     }
     // Subagente termina entregando o relatório (ferramenta SubagentHandback), sem um end_turn.
     if (m.stop_reason === 'end_turn' || (Array.isArray(m.content) && m.content.some((b) => b && b.type === 'tool_use' && b.name === 'SubagentHandback'))) ev.push({ ts: t, kind: 'turn_end' });
+  } else if (o.type === 'system' && o.subtype === 'compact_boundary') {
+    const m = o.compactMetadata || {};
+    ev.push({ ts: t, kind: 'compact', trigger: m.trigger === 'manual' ? 'manual' : 'auto', pre: Number(m.preTokens) || 0, post: Number(m.postTokens) || 0,
+      summary: `Conversa compactada (${m.trigger === 'manual' ? 'manual' : 'automática'})${m.preTokens ? `: ${m.preTokens} → ${m.postTokens || '?'} tokens` : ''}` });
   } else if (o.type === 'system' && typeof o.durationMs === 'number') ev.push({ ts: t, kind: 'turn_end' });
+  else if (o.type === 'attachment' && o.attachment) for (const a of attachmentParts(o.attachment)) ev.push({ ts: t, kind: 'ctx_attach', ...a });
   // Commits que a própria sessão fez (o git responde com "[branch abc1234] mensagem").
   for (const c of (ctx.commits || (ctx.commits = createCommitTracker())).feed(o)) ev.push({ ts: c.ts || t, kind: 'commit', hash: c.hash, branch: c.branch, summary: c.subject });
   if (ev.length) ctx.lastTs = ev[ev.length - 1].ts || ctx.lastTs;

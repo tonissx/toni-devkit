@@ -251,6 +251,29 @@ button.am-sr__item:hover { background: var(--tk-surface-3); }
 .am-sr__snip { min-width: 0; overflow-wrap: anywhere; line-height: 1.45; color: var(--tk-text-2); }
 .am-sr__snip mark { background: color-mix(in srgb, var(--tk-accent) 28%, transparent); color: var(--tk-text); border-radius: 3px; padding: 0 1px; }
 
+/* contexto da sessão (src/tools/aimon/Context.jsx) */
+.am-cx { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+.am-cx > * { flex-shrink: 0; }
+.am-cx__chart { position: relative; min-width: 0; }
+.am-cx__chart svg { display: block; }
+.am-cx__line { fill: none; stroke: var(--tk-accent); stroke-width: 2; stroke-linejoin: round; }
+.am-cx__area { fill: color-mix(in srgb, var(--tk-accent) 14%, transparent); stroke: none; }
+.am-cx__limit { stroke: var(--tk-amber); stroke-width: 1; stroke-dasharray: 4 3; opacity: .8; }
+.am-cx__dot { fill: var(--tk-accent); stroke: var(--tk-bg); stroke-width: 1.5; }
+.am-cx__mark line { stroke: var(--tk-text-3); stroke-width: 1; stroke-dasharray: 2 3; }
+.am-cx__mark text { fill: var(--tk-text-3); font: 10px var(--tk-font-sans); }
+.am-cx__stack { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--tk-surface-3); gap: 1px; }
+.am-cx__stack i { display: block; height: 100%; min-width: 2px; }
+.am-cx__legend { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 4px 16px; }
+.am-cx__legend li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; font-size: 12px; color: var(--tk-text-2); }
+.am-cx__legend b { color: var(--tk-text); font-variant-numeric: tabular-nums; }
+.am-cx__sw { width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--tk-border); }
+.am-cx__sub { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 8px; font-size: 12px; }
+.am-cx__tips { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.am-cx__tips li { display: flex; flex-direction: column; gap: 2px; font-size: 12px; line-height: 1.45; }
+.am-cx__tip-t { display: inline-flex; align-items: center; gap: 6px; color: var(--tk-text); }
+.am-cx__tip-t svg { color: var(--lg-warn); }
+
 /* botões de IA da sessão: na linha do cabeçalho, ao lado de "Abrir no Git" */
 .am-main__ai { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .am-main__ai:empty { display: none; }

@@ -43,7 +43,7 @@ function sessionAlerts(s, now = Date.now()) {
   }
   const ctx = s.context;
   if (ctx && ctx.pct >= CTX_WARN_PCT && s.status !== 'error') {
-    out.push({ id: 'context', icon: 'brain', text: `Contexto ~${ctx.pct}% cheio`, title: `A última chamada leu cerca de ${kTok(ctx.tokens)} tokens de contexto (de uns ${kTok(ctx.limit)}; estimativa). Perto do limite a sessão perde qualidade ou compacta sozinha — considere /compact ou uma sessão nova com o briefing.` });
+    out.push({ id: 'context', icon: 'brain', text: `Contexto ~${ctx.pct}% cheio`, title: `A última chamada leu cerca de ${kTok(ctx.tokens)} tokens de contexto (de uns ${kTok(ctx.limit)}; estimativa). Perto do limite a sessão perde qualidade ou compacta sozinha — considere /compact ou uma sessão nova com o briefing. A sub-aba Contexto mostra o que ocupa o espaço.` });
   }
   const parked = (s.status === 'idle' || s.status === 'stale') && now - (s.lastTs || 0) > PARKED_MS;
   if (parked && Number.isFinite(s.dirty) && s.dirty > 0) {

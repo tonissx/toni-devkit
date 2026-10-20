@@ -814,6 +814,7 @@ ipcMain.handle('aimon:setAutoReview', async (_e, on) => (aimonPrefs ? aimonPrefs
 ipcMain.handle('aimon:review', (_e, key) => aimonReviewer().read(String(key || '')));
 ipcMain.handle('aimon:reviewRun', (_e, key) => aimonReviewer().run(String(key || '')));
 ipcMain.handle('aimon:compare', (_e, keys) => aimon().compare(keys));
+ipcMain.handle('aimon:context', (_e, key) => aimon().context(String(key || '')));
 ipcMain.handle('aimon:pairs', () => aimon().pairs());
 // Base da análise de padrões: primeiros pedidos das sessões recentes + planos aprovados/recusados (com o motivo da recusa).
 ipcMain.handle('aimon:patterns', async () => {

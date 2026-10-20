@@ -432,3 +432,32 @@ test('parada com alterações: só a sessão principal mais recente de cada past
     assert.deepEqual(sessionAlerts(velha), []);
   } finally { svc.stop(); }
 });
+
+/* ─────────────── usage repetido nas linhas da mesma mensagem ─────────────── */
+
+test('usage: o Claude Code repete o mesmo usage em cada bloco da mensagem — conta uma vez por message.id', () => {
+  const u = (out) => ({ input_tokens: 2, cache_creation_input_tokens: 100, cache_read_input_tokens: 5000, output_tokens: out });
+  const line = (id, content, usage) => JSON.stringify({ type: 'assistant', timestamp: '2026-10-19T10:00:00.000Z', message: { model: 'claude-sonnet-5-5', ...(id ? { id } : {}), content, usage } });
+  const ctx = {};
+  const tokens = (evs) => evs.filter((e) => e.kind === 'usage').map((e) => e.tokens);
+  const a = claude.parseLine(line('msg_A', [{ type: 'thinking', thinking: 'x' }], u(285)), ctx);
+  const b = claude.parseLine(line('msg_A', [{ type: 'text', text: 'oi' }], u(285)), ctx);
+  const c = claude.parseLine(line('msg_A', [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } }], u(285)), ctx);
+  assert.deepEqual(tokens(a), [{ input: 2, output: 285, cacheRead: 5000, cacheWrite: 100 }]);
+  assert.deepEqual([tokens(b), tokens(c)], [[], []]);                     // blocos repetidos não somam de novo
+  assert.ok(b.some((e) => e.kind === 'text') && c.some((e) => e.kind === 'tool_use'));   // mas o conteúdo deles continua aparecendo
+  // saída que cresce entre as linhas: soma só o acréscimo
+  const d1 = claude.parseLine(line('msg_B', [{ type: 'text', text: 'a' }], u(10)), ctx);
+  const d2 = claude.parseLine(line('msg_B', [{ type: 'text', text: 'b' }], u(40)), ctx);
+  assert.equal(tokens(d1)[0].output + tokens(d2)[0].output, 40);
+  assert.deepEqual([tokens(d2)[0].input, tokens(d2)[0].cacheRead], [0, 0]);
+  // outra mensagem conta; linha sem id conta sempre (como antes)
+  assert.equal(tokens(claude.parseLine(line('msg_C', [{ type: 'text', text: 'c' }], u(7)), ctx)).length, 1);
+  assert.equal(tokens(claude.parseLine(line(null, [{ type: 'text', text: 'd' }], u(7)), ctx)).length, 1);
+  assert.equal(tokens(claude.parseLine(line(null, [{ type: 'text', text: 'e' }], u(7)), ctx)).length, 1);
+  // pelo estado: 3 linhas da mesma mensagem = 1 chamada de tokens
+  const s = state.createSessionState();
+  const ctx2 = {};
+  for (const l of [line('msg_X', [{ type: 'thinking', thinking: 'x' }], u(285)), line('msg_X', [{ type: 'text', text: 'oi' }], u(285)), line('msg_X', [{ type: 'tool_use', id: 'z', name: 'Read', input: { file_path: '/a' } }], u(285))]) for (const e of claude.parseLine(l, ctx2)) state.apply(s, e);
+  assert.deepEqual(s.tokens, { input: 2, output: 285, cacheRead: 5000, cacheWrite: 100 });
+});

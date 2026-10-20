@@ -11,6 +11,7 @@
  * Falha de uma ferramenta não é status: o agente costuma tentar de novo (lastToolFailed vira só um aviso no card).
  */
 const { dayKey } = require('./time');
+const { newCtx, applyCtx } = require('./context');
 
 const WAIT_MS = 15_000;
 const STALE_MS = 10 * 60_000;
@@ -25,7 +26,7 @@ const CORRECTION = /\b(n[ãa]o\s+(era|é|foi|fez|funcion|quer|assim)|errado|erro
 const HARNESS = /^\s*<(task-notification|system-reminder|command-name|command-message|command-args|local-command|user-prompt-submit-hook)\b/i;
 
 function createSessionState() {
-  return { title: '', cwd: null, branch: null, turnOpen: false, pending: new Map(), lastTs: 0, lastTool: null, lastText: '', tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, byModel: {}, model: null, turns: 0, tools: 0, failStreak: null, ctxTokens: 0, edits: new Map(),
+  return { title: '', cwd: null, branch: null, turnOpen: false, pending: new Map(), lastTs: 0, lastTool: null, lastText: '', tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, byModel: {}, model: null, turns: 0, tools: 0, failStreak: null, ctxTokens: 0, cx: newCtx(), edits: new Map(),
     firstTs: 0, firstPrompt: '', corrections: 0, toolErrors: 0, toolDaily: {}, turnDaily: {}, turnStartTs: 0 };
 }
 
@@ -51,6 +52,7 @@ function closeTurn(s, ev) {
 /** Aplica um evento. Eventos fora de ordem de tempo não voltam o relógio. */
 function apply(s, ev) {
   if (!ev) return s;
+  applyCtx(s.cx, ev); // do que é feito o contexto (context.js)
   if (ev.ts && ev.ts > s.lastTs) s.lastTs = ev.ts;
   if (ev.ts && (!s.firstTs || ev.ts < s.firstTs) && ev.kind !== 'title') s.firstTs = ev.ts;
   switch (ev.kind) {
@@ -120,7 +122,10 @@ function noteEdit(s, ev) {
 /** Quanto do contexto parece ocupado: { tokens, limit, pct } ou null. A janela é estimada (200 mil; acima disso, 1 milhão). */
 function contextOf(s) {
   if (!s.ctxTokens) return null;
-  const limit = s.ctxTokens > CTX_WINDOW ? CTX_WINDOW_XL : CTX_WINDOW;
+  // Janela informada pelo provedor (Codex) ou, sem ela, estimada pelo maior contexto já visto: depois de uma compactação o
+  // valor atual cai, mas a janela continua a mesma.
+  const seen = Math.max(s.cx.maxCtx, s.ctxTokens);
+  const limit = s.cx.window > 0 ? s.cx.window : seen > CTX_WINDOW ? CTX_WINDOW_XL : CTX_WINDOW;
   return { tokens: s.ctxTokens, limit, pct: Math.round((s.ctxTokens / limit) * 100) };
 }
 
