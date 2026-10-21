@@ -747,7 +747,7 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     tasks({ status = 'open', tag } = {}) {
       const out = [];
       for (const n of notes.values()) {
-        if (n.type === 'snippet' || isTemplate(n)) continue; // "- [ ]" de um template é modelo, não tarefa
+        if (n.type === 'snippet' || n.type === 'diagram' || isTemplate(n)) continue; // "- [ ]" de um template é modelo, não tarefa
         const tags = allTags(n);
         if (tag && !tags.includes(tag)) continue;
         for (const t of tasksOf(n.content)) {

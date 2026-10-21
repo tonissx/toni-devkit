@@ -29,6 +29,7 @@ const FILTERS = [
   { id: 'quick', label: 'Quick', filter: { quick: true } },
   { id: 'pinned', label: 'Pinned', filter: { pinned: true } },
   { id: 'snippet', label: 'Snippets', filter: { type: 'snippet' } },
+  { id: 'diagram', label: 'Diagramas', filter: { type: 'diagram' } },
   { id: 'favorite', label: 'Favoritas', filter: { favorite: true } },
   { id: 'recent', label: 'Recentes', filter: null },
 ];
@@ -46,7 +47,7 @@ const remapFolder = (p, from, to) => (p === from ? to : p != null && isDescendan
 /** 'a/b/c' → ['a', 'a/b', 'a/b/c'] */
 const ancestors = (p) => p.split('/').map((_, i, a) => a.slice(0, i + 1).join('/'));
 
-const rowIcon = (n) => (n.type === 'snippet' ? 'braces' : n.quick ? 'sticky-note' : 'file-text');
+const rowIcon = (n) => (n.type === 'snippet' ? 'braces' : n.type === 'diagram' ? 'workflow' : n.quick ? 'sticky-note' : 'file-text');
 
 function Hl({ text, idx }) {
   if (!idx || !idx.length) return text;

@@ -5,7 +5,7 @@
  */
 const { normalize } = require('../commands/search.js');
 
-const TYPES = ['note', 'snippet'];
+const TYPES = ['note', 'snippet', 'diagram'];
 
 /** Id ordenável por data e legível no nome do arquivo: 20260926-142100-x7k2. */
 function newId(date = new Date()) {
