@@ -11,7 +11,7 @@ const E = require('../src/notes/edit.js');
 const { serialize, parse } = require('../src/notes/format.js');
 const { searchNotes, withinOne } = require('../src/notes/search.js');
 const { createStore } = require('../electron/notes/store.js');
-const { createNotesService } = require('../electron/notes/service.js');
+const { createNotesService, isExecutableAsset } = require('../electron/notes/service.js');
 
 const tmp = () => mkdtempSync(path.join(tmpdir(), 'devkit-notes-'));
 const titles = (rs) => rs.map((r) => r.title);
@@ -520,6 +520,28 @@ test('service: saveImage writes to .assets (hidden from folders), validates type
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('service: saveAttachment stores any file type in .assets, keeps the original name as label, validates size', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 1, 2]);
+    const a = await svc.saveAttachment({ bytes, name: 'Relatório Março.PDF' });
+    assert.match(a.path, /^\.assets\/\d{4}-\d{2}-\d{2}-\d{6}-[0-9a-f]{4}\.pdf$/);
+    assert.equal(a.name, 'Relatório Março.PDF');
+    assert.deepEqual([...readFileSync(path.join(dir, a.path))], [...bytes]);
+    assert.equal((await svc.saveAttachment({ bytes, name: 'semextensao' })).path.endsWith('.bin'), true);
+    assert.match((await svc.saveAttachment({ bytes, name: 'C:\\x\\run.bat' })).name, /run\.bat$/);
+    await assert.rejects(svc.saveAttachment({ bytes: new Uint8Array(0), name: 'a.zip' }), /vazio/);
+    await assert.rejects(svc.saveAttachment({ bytes: new Uint8Array(50 * 1024 * 1024 + 1), name: 'a.zip' }), /grande demais/);
+    assert.equal(svc.assetFile(a.path), path.join(dir, a.path));
+    assert.equal(isExecutableAsset('x/.assets/a.BAT'), true);
+    assert.equal(isExecutableAsset('a.pdf'), false);
+    await svc.init();
+    assert.deepEqual(svc.folders(), []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('edit: toggleTaskLines cycles text → open → done → text, also for selections', () => {
   const { toggleTaskLines: tg } = E;
   let r = tg('comprar leite', 3, 3);
@@ -989,6 +1011,14 @@ test('markdown: pasted images (.assets/) render as <img>; other local paths do n
   assert.equal((html.match(/<img/g) || []).length, 1);
   assert.match(html, /<img class="md-img" src="devkit-note:\/\/asset\/2026-09-29-142100-ab12\.png" alt="print" data-asset="2026-09-29-142100-ab12\.png"/);
   assert.match(html, /<a href="https:\/\/a.com\/x.png"[^>]*>🖼 d<\/a>/);
+});
+
+test('markdown: links to .assets/ become attachment chips; other local links stay plain text', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const { html } = renderMarkdown('[Relatório.pdf](.assets/2026-09-29-142100-ab12.pdf) [x](.assets/../x.pdf) [y](C:/x.pdf)');
+  assert.equal((html.match(/class="md-file"/g) || []).length, 1);
+  assert.match(html, /<a class="md-file" href="#" data-asset="2026-09-29-142100-ab12\.pdf"[^>]*>📎 Relatório\.pdf<\/a>/);
+  assert.ok(!/C:\/x\.pdf"/.test(html));
 });
 
 test('markdown: @date and !1..!3 become chips; lookalikes stay text', async () => {

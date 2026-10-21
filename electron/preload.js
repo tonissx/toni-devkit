@@ -179,6 +179,7 @@ contextBridge.exposeInMainWorld('devkit', {
     relaunch: () => ipcRenderer.invoke('notes:relaunch'),
     /** Imagem colada/arrastada ({ bytes: Uint8Array, mime }) → grava em .assets\ → { path: '.assets/<nome>' }. */
     saveImage: (data) => ipcRenderer.invoke('notes:saveImage', data),
+    saveAttachment: (data) => ipcRenderer.invoke('notes:saveAttachment', data),
     /** Abre uma imagem de .assets\ no visualizador do sistema. */
     openAsset: (ref) => ipcRenderer.invoke('notes:open-asset', ref),
     /** Abre uma nota ({ id } ou { new: true, title? }) na janela principal. */

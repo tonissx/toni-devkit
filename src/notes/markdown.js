@@ -129,6 +129,8 @@ export function renderMarkdown(md, { resolve = () => null, secret = () => undefi
       checkbox: ({ checked }) => `<input type="checkbox" class="md-task" data-task="${task++}"${checked ? ' checked' : ''} aria-label="Tarefa"> `,
       link({ href, title, tokens }) {
         const text = this.parser.parseInline(tokens);
+        const asset = ASSET_RE.exec(href || '');
+        if (asset) return `<a class="md-file" href="#" data-asset="${esc(asset[1])}" title="Abrir anexo">📎 ${text}</a>`;
         if (!/^(https?:|mailto:)/i.test(href || '')) return text;
         return `<a href="${esc(href)}" target="_blank" rel="noreferrer"${title ? ` title="${esc(title)}"` : ''}>${text}</a>`;
       },

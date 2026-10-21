@@ -122,8 +122,8 @@ export function NotePreview({ content, hideCode, embeds, resolve, onOpenLink, on
     if (vaultBtn) { onVault(vaultBtn); return; }
     const copy = e.target.closest('.md-code__copy');
     if (copy) { onCopy(blocks[Number(copy.dataset.copy)]); return; }
-    const img = e.target.closest('.md-img');
-    if (img) { window.devkit.notes.openAsset(img.dataset.asset); return; }
+    const img = e.target.closest('.md-img, .md-file');
+    if (img) { e.preventDefault(); window.devkit.notes.openAsset(img.dataset.asset); return; }
     const task = e.target.closest('.md-task');
     if (task && onChange) onChange(toggleTask(content, Number(task.dataset.task)));
   };

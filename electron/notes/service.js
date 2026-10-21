@@ -22,6 +22,13 @@ const VIEWED_MAX = 20;
 const INBOX_TITLE = 'Inbox'; // nota que recebe as tarefas capturadas pela palette (task: …)
 const IMAGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 const IMAGE_MAX = 20 * 1024 * 1024;
+const ATTACHMENT_MAX = 50 * 1024 * 1024;
+// Extensões que o Windows executa ao abrir: o clique no anexo pede confirmação antes (main.js).
+const EXECUTABLE_EXT = new Set(['exe', 'com', 'bat', 'cmd', 'ps1', 'psm1', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'msi', 'msp', 'scr', 'pif', 'lnk', 'url', 'reg', 'hta', 'jar', 'cpl', 'dll']);
+function isExecutableAsset(ref) {
+  const m = /\.([A-Za-z0-9]+)$/.exec(String(ref || ''));
+  return !!m && EXECUTABLE_EXT.has(m[1].toLowerCase());
+}
 const LINK_LINE_RE = /\[\[([^[\]\n|]+)(?:\|[^\]\n]+)?\]\]/g;
 
 /** Resumo leve para listas (sem o conteúdo inteiro). */
@@ -41,6 +48,18 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 function createNotesService({ dir, broadcast = () => {}, events = null, historyGapMs = 10 * 60 * 1000, historyMax }) {
   const store = createStore(dir, historyMax ? { historyMax } : undefined);
+
+  /** Grava bytes em .assets\ como AAAA-MM-DD-HHmmss-xxxx.<ext>, tentando outro sufixo se o nome existir. */
+  async function writeNamedAsset(bytes, ext, what) {
+    const d = new Date();
+    const p2 = (n) => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
+    for (let i = 0; i < 8; i++) {
+      const name = `${stamp}-${Math.random().toString(16).slice(2, 6).padEnd(4, '0')}.${ext}`;
+      if (await store.writeAsset(name, bytes)) return { path: '.assets/' + name };
+    }
+    err(`Não foi possível gerar um nome para ${what}.`);
+  }
   const notes = new Map();
   const folderSet = new Set(); // pastas existentes (diretórios reais, inclusive vazias): 'a', 'a/b'
   const folderMeta = new Map(); // pasta → configuração (.folder.json): só pastas que têm algo configurado
@@ -800,14 +819,22 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
       const size = bytes ? bytes.byteLength : 0;
       if (!size) err('Imagem vazia.');
       if (size > IMAGE_MAX) err('Imagem grande demais (máximo 20 MB).');
-      const d = new Date();
-      const p2 = (n) => String(n).padStart(2, '0');
-      const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
-      for (let i = 0; i < 8; i++) {
-        const name = `${stamp}-${Math.random().toString(16).slice(2, 6).padEnd(4, '0')}.${ext}`;
-        if (await store.writeAsset(name, bytes)) return { path: '.assets/' + name };
-      }
-      err('Não foi possível gerar um nome para a imagem.');
+      return writeNamedAsset(bytes, ext, 'a imagem');
+    },
+
+    /**
+     * Arquivo qualquer anexado à nota (arrastar do Explorer): grava em .assets\ com nome gerado e
+     * devolve { path: '.assets/<nome>', name } — name é o nome original, usado como rótulo do link.
+     * Nenhum tipo é recusado (até 50 MB); quem abre executáveis pede confirmação (isExecutableAsset).
+     */
+    async saveAttachment({ bytes, name } = {}) {
+      const size = bytes ? bytes.byteLength : 0;
+      if (!size) err('Arquivo vazio.');
+      if (size > ATTACHMENT_MAX) err('Arquivo grande demais (máximo 50 MB).');
+      const label = String(name || '').replace(/[\\/]/g, ' ').trim().slice(-120) || 'arquivo';
+      const m = /\.([A-Za-z0-9]{1,10})$/.exec(label);
+      const { path } = await writeNamedAsset(bytes, m ? m[1].toLowerCase() : 'bin', 'o arquivo');
+      return { path, name: label };
     },
 
     /** Caminho absoluto de uma imagem referenciada como ".assets/<nome>" (ou só "<nome>"). */
@@ -819,4 +846,4 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
   };
 }
 
-module.exports = { createNotesService, summary };
+module.exports = { createNotesService, summary, isExecutableAsset };

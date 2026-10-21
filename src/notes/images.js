@@ -1,6 +1,7 @@
-// Imagens nas Notes (renderer): colar (Ctrl+V) ou arrastar uma imagem para o textarea grava o
-// arquivo em .assets\ (processo principal) e insere "![imagem](.assets/<nome>)" no cursor.
-// Quem liga isso no textarea é pasteProps (paste.js), que decide entre texto e imagem.
+// Imagens e anexos nas Notes (renderer): colar (Ctrl+V) ou arrastar um arquivo para o textarea grava
+// o arquivo em .assets\ (processo principal) e insere no cursor "![imagem](.assets/<nome>)" para
+// imagens ou "[nome.pdf](.assets/<nome>)" para qualquer outro arquivo.
+// Quem liga isso no textarea é pasteProps (paste.js), que decide entre texto e arquivo.
 import { notesApi, cleanError } from './client.js';
 import { insertBlock } from './edit.js';
 
@@ -15,12 +16,25 @@ export function imageFiles(dt) {
   return [...(dt.items || [])].filter((i) => i.kind === 'file' && IMAGE_TYPES.includes(i.type)).map((i) => i.getAsFile()).filter(Boolean);
 }
 
+/** Todos os arquivos de um DataTransfer (imagens e anexos). */
+export function transferFiles(dt) {
+  if (!dt) return [];
+  const files = [...(dt.files || [])];
+  if (files.length) return files;
+  return [...(dt.items || [])].filter((i) => i.kind === 'file').map((i) => i.getAsFile()).filter(Boolean);
+}
+
+/** Rótulo seguro para o texto de um link markdown: sem colchetes nem quebras de linha. */
+function linkLabel(name) {
+  return String(name || 'arquivo').replace(/[[\]\r\n]/g, ' ').replace(/\s+/g, ' ').trim() || 'arquivo';
+}
+
 /**
- * Handler de onPaste/onDrop do textarea. Sem imagem → não faz nada (o navegador cola o texto normal).
+ * Handler de onPaste/onDrop do textarea. Sem arquivo → não faz nada (o navegador cola o texto normal).
  * insert(r) aplica o resultado { value, start, end } no textarea; onError(msg) avisa o usuário.
  */
 export function handleImageTransfer(e, dt, { insert, onError }) {
-  const files = imageFiles(dt);
+  const files = transferFiles(dt);
   if (!files.length) return false;
   e.preventDefault();
   const t = e.target;
@@ -29,8 +43,14 @@ export function handleImageTransfer(e, dt, { insert, onError }) {
     const refs = [];
     for (const f of files) {
       try {
-        const { path } = await notesApi().saveImage({ bytes: new Uint8Array(await f.arrayBuffer()), mime: f.type });
-        refs.push(`![imagem](${path})`);
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        if (IMAGE_TYPES.includes(f.type)) {
+          const { path } = await notesApi().saveImage({ bytes, mime: f.type });
+          refs.push(`![imagem](${path})`);
+        } else {
+          const { path, name } = await notesApi().saveAttachment({ bytes, name: f.name });
+          refs.push(`[${linkLabel(name)}](${path})`);
+        }
       } catch (err) { onError(cleanError(err)); }
     }
     if (refs.length) insert(insertBlock(t.value, start, end, refs.join('\n')));

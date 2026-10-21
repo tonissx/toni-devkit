@@ -510,6 +510,8 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .md-preview p, .md-preview ul, .md-preview ol, .md-preview blockquote, .md-preview table, .md-preview .md-code { margin: 0 0 .85em; }
 .md-preview ul, .md-preview ol { padding-left: 1.4em; }
 .md-preview .md-img { display: block; max-width: 100%; height: auto; margin: 4px 0; border-radius: 6px; border: 1px solid var(--tk-border); cursor: zoom-in; }
+.md-preview .md-file { display: inline-block; padding: 1px 8px; border: 1px solid var(--tk-border); border-radius: 6px; background: var(--tk-surface-2, transparent); cursor: pointer; }
+.md-preview .md-file:hover { border-color: var(--tk-accent); text-decoration: none; }
 .md-preview li:has(> .md-task) { list-style: none; margin-left: -1.3em; }
 .md-preview .md-task { margin: 0 6px 0 0; vertical-align: -2px; accent-color: var(--tk-accent); cursor: pointer; }
 .md-preview a { color: var(--tk-accent-text); text-decoration: none; }

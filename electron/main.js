@@ -10,7 +10,7 @@ const { createPaster } = require('./paste');
 const { createWinHelper } = require('./winfocus');
 const { UI_BINDABLE_IDS, SELECTION_BIND_IDS } = require('../src/commands/binds.js');
 const { createSelectionCopier } = require('./selection');
-const { createNotesService } = require('./notes/service');
+const { createNotesService, isExecutableAsset } = require('./notes/service');
 const { createNotesSettings } = require('./notes/settings');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
@@ -413,7 +413,7 @@ function initNotes() {
   notesReady = notes.init().catch((e) => { console.error('[notes]', e); throw e; });
 }
 
-const NOTES_API = ['info', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage', 'backlinks', 'linkRefs', 'renameLinks', 'history', 'version', 'restoreVersion', 'trashList', 'restoreFromTrash', 'deleteFromTrash', 'emptyTrash', 'templates', 'fromTemplate', 'ensureRootFolder', 'graph', 'trashCount',
+const NOTES_API = ['info', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage', 'saveAttachment', 'backlinks', 'linkRefs', 'renameLinks', 'history', 'version', 'restoreVersion', 'trashList', 'restoreFromTrash', 'deleteFromTrash', 'emptyTrash', 'templates', 'fromTemplate', 'ensureRootFolder', 'graph', 'trashCount',
   'setFolderMeta', 'moveFolderOrder', 'folderClash', 'duplicateFolder', 'trashFolders', 'restoreFolderFromTrash', 'folderAbs'];
 for (const fn of NOTES_API) {
   ipcMain.handle('notes:' + fn, async (_e, ...args) => { await notesReady; return notes[fn](...args); });
@@ -437,8 +437,22 @@ ipcMain.handle('notes:pick-dir', async (e) => {
   return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
 });
 ipcMain.handle('notes:relaunch', () => { app.relaunch(); app.quit(); });
-// Clique numa imagem do preview: abre no visualizador do sistema.
-ipcMain.handle('notes:open-asset', async (_e, ref) => { await notesReady; return shell.openPath(notes.assetFile(ref)); });
+// Clique numa imagem/anexo do preview: abre no programa padrão do sistema. Executáveis (.exe, .bat, .ps1…)
+// pedem confirmação antes, já que o arquivo pode ter chegado por sync ou ser de outra pessoa.
+ipcMain.handle('notes:open-asset', async (e, ref) => {
+  await notesReady;
+  const file = notes.assetFile(ref);
+  if (isExecutableAsset(file)) {
+    const r = await dialog.showMessageBox(fromEvent(e), {
+      type: 'warning', buttons: ['Executar', 'Mostrar na pasta', 'Cancelar'], defaultId: 2, cancelId: 2,
+      title: 'Abrir anexo', message: 'Este anexo é um arquivo executável.',
+      detail: `${path.basename(file)}\n\nExecute só se você confia na origem dele.`,
+    });
+    if (r.response === 1) { shell.showItemInFolder(file); return ''; }
+    if (r.response !== 0) return '';
+  }
+  return shell.openPath(file);
+});
 
 // Imagens das notas (.assets\) chegam ao renderer por devkit-note://asset/<nome> (a CSP libera só este esquema).
 protocol.registerSchemesAsPrivileged([{ scheme: 'devkit-note', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);

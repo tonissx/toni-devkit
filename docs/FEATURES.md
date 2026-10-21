@@ -551,6 +551,10 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   - Imagem (print com `Win+Shift+S`, "Copiar imagem" do navegador) ou arquivo de imagem arrastado → gravada em
     `Devkit Notes\.assets\` e inserida como `![imagem](.assets/…)`; o preview mostra a imagem e o clique abre no
     visualizador do sistema (PNG/JPG/GIF/WebP até 20 MB)
+  - **Anexos**: qualquer outro arquivo (PDF, zip, planilha…) colado ou arrastado do Explorer vai para o mesmo
+    `.assets\` (até 50 MB) e entra como `[nome.pdf](.assets/…)`; o preview mostra um chip 📎 e o clique abre no
+    programa padrão. Executáveis (`.exe`, `.bat`, `.ps1`, `.lnk`…) pedem confirmação antes de abrir. Anexos
+    sensíveis não devem ir para as notas (use o Vault)
   - Células do Excel, resultado do SSMS ou tabela do navegador → **tabela Markdown** alinhada (colunas numéricas à
     direita). URL colada com texto selecionado → `[texto](url)`. `Ctrl+Shift+V` cola sem transformar
   - `Ctrl+B` negrito · `Ctrl+I` itálico · `Ctrl+K` com texto selecionado vira link (sem seleção, abre a palette) ·
