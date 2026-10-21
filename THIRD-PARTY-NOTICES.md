@@ -17,6 +17,7 @@ instalado, ao lado do `LICENSE`).
 | [Lucide](https://lucide.dev) | Ícones (`renderer/vendor/lucide.min.js`); parte deles vem do Feather (MIT), coberto no mesmo arquivo | ISC | `licenses/LICENSE.lucide.txt` |
 | [Geist e Geist Mono](https://vercel.com/font) | Fontes (`renderer/ds/fonts`) | SIL OFL 1.1 | `licenses/LICENSE.geist-OFL-1.1.txt` e `renderer/ds/fonts/OFL.txt` |
 | [marked](https://github.com/markedjs/marked) | Markdown das notas, empacotado no app | MIT | `licenses/LICENSE.marked.txt` |
+| [Excalidraw](https://excalidraw.com) | Quadro de desenho da ferramenta Diagramas, empacotado em `renderer/dist/excalidraw.js` (com o próprio React) e carregado só quando ela é aberta | MIT | `licenses/LICENSE.excalidraw.txt` |
 | [electron-updater](https://www.electron.build) | Atualização automática | MIT | no `app.asar` |
 | [@anthropic-ai/sdk](https://github.com/anthropics/anthropic-sdk-typescript) | IA opcional na nuvem | MIT | no `app.asar` |
 | [esbuild](https://esbuild.github.io) e [electron-builder](https://www.electron.build) | Build e empacotamento (desenvolvimento) | MIT | — |
@@ -27,6 +28,27 @@ O `tedious`, o `electron-updater` e o `@anthropic-ai/sdk` trazem outras bibliote
 `jsonwebtoken`, `ws`, `js-yaml`, `iconv-lite`, `semver`, `tslib`, `argparse`, `sax`, `fast-sha256`). Todas são
 permissivas: MIT, ISC, BSD-3-Clause, Apache-2.0, 0BSD, BlueOak-1.0.0, Unlicense e Python-2.0. O texto de cada uma
 acompanha o pacote em `node_modules/<pacote>/` dentro do `app.asar`.
+
+O Excalidraw empacota 82 pacotes, incluindo React e React DOM (radix-ui, roughjs, jotai, pako, perfect-freehand, entre outros). Todos
+são permissivos: MIT, Apache-2.0, CC0-1.0, 0BSD e MIT AND Zlib. Como ficam dentro do bundle, os textos estão em
+`licenses/LICENSE.excalidraw-deps.txt`, gerado por `scripts/gen-excalidraw-licenses.mjs` a partir do que o esbuild de
+fato inclui (rode de novo ao atualizar o pacote). Os pacotes `@radix-ui/*` e o `react-remove-scroll-bar` não trazem o
+arquivo no npm; valem os textos oficiais dos repositórios, em `licenses/LICENSE.radix-ui.txt` e
+`licenses/LICENSE.react-remove-scroll-bar.txt`.
+
+As fontes que acompanham o Excalidraw são de terceiros, cada uma com a licença do seu autor, e o pacote não traz esses
+textos. Eles foram reunidos em `licenses/LICENSE.excalidraw-fonts.txt`, cada um a partir da origem indicada na própria
+seção (repositório do autor ou metadados do arquivo de fonte):
+
+| Fonte | Licença |
+| --- | --- |
+| Assistant, Cascadia Code, Excalifont, Lilita One, Nunito, Virgil, Xiaolai | SIL OFL 1.1 |
+| Comic Shanns | MIT |
+
+A **Liberation Sans não é distribuída**: o Excalidraw só a usa para exportar no servidor, ela não aparece no seletor de
+fontes e a cópia do pacote é a 1.x, sob GPL com exceção para fontes (a OFL só vale a partir da 2.00). O
+`scripts/build-renderer.mjs` a deixa de fora; um desenho que peça essa fonte cai numa fonte sem serifa do sistema. Se
+algum dia ela for incluída de novo, a licença correta precisa vir junto.
 
 O Ollama, usado só quando o usuário escolhe a IA local, é um programa separado, instalado à parte e sob a licença
 dele. A IA na nuvem usa a chave de API do próprio usuário e está sujeita aos termos do serviço escolhido.

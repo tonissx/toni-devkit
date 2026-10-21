@@ -27,7 +27,8 @@ const LINK_LINE_RE = /\[\[([^[\]\n|]+)(?:\|[^\]\n]+)?\]\]/g;
 /** Resumo leve para listas (sem o conteúdo inteiro). */
 function summary(n) {
   const { open, done } = taskStats(n.content);
-  const preview = String(n.content || '').replace(/^(```|~~~).*$/gm, '').split('\n').map(plainLine).filter(Boolean).join(' · ');
+  // Diagrama: o conteúdo é o JSON de um desenho, não texto para ler numa lista.
+  const preview = n.type === 'diagram' ? '' : String(n.content || '').replace(/^(```|~~~).*$/gm, '').split('\n').map(plainLine).filter(Boolean).join(' · ');
   return {
     id: n.id, title: displayTitle(n), rawTitle: n.title, type: n.type, tags: allTags(n),
     pinned: n.pinned, favorite: n.favorite, quick: n.quick, created: n.created, updated: n.updated,
@@ -747,7 +748,7 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     tasks({ status = 'open', tag, tags: wanted, tagMode } = {}) {
       const out = [];
       for (const n of notes.values()) {
-        if (n.type === 'snippet' || isTemplate(n)) continue; // "- [ ]" de um template é modelo, não tarefa
+        if (n.type === 'snippet' || n.type === 'diagram' || isTemplate(n)) continue; // "- [ ]" de um template é modelo, não tarefa
         const tags = allTags(n);
         if (!matchesTags(tags, { tag, tags: wanted, tagMode })) continue;
         for (const t of tasksOf(n.content)) {

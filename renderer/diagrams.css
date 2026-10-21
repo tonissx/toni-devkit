@@ -1,0 +1,66 @@
+/* Diagramas (src/tools/diagrams) — prefixo dgm- */
+.dgm-screen { height: 100%; display: flex; flex-direction: column; }
+.dgm { flex: 1; min-height: 0; display: flex; gap: 16px; padding: 0 24px 20px; }
+.dgm__side {
+  width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; min-height: 0;
+  background: var(--tk-bg); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); padding: 10px;
+}
+.dgm__main { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.dgm-empty { flex: 1; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--tk-border); border-radius: var(--tk-radius-md); }
+
+.dgm-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.dgm-list__empty { padding: 16px 8px; text-align: center; font-size: 12px; color: var(--tk-text-3); }
+.dgm-row {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px; border: 0; border-radius: var(--tk-radius-sm, 6px);
+  background: none; color: var(--tk-text); font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+}
+.dgm-row:hover { background: var(--tk-surface-2); }
+.dgm-row.is-active { background: var(--tk-surface-3, var(--tk-surface-2)); box-shadow: inset 2px 0 0 var(--tk-accent); }
+.dgm-row__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dgm-row__time { font-size: 11px; color: var(--tk-text-3); white-space: nowrap; }
+
+.dgm-editor { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--tk-bg); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); overflow: hidden; }
+.dgm-editor__head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px 16px; border-bottom: 1px solid var(--tk-border); }
+.dgm-title { flex: 1; min-width: 0; border: 0; outline: none; background: none; color: var(--tk-text); font: 600 16px/1.3 var(--tk-font-sans); }
+.dgm-status { min-width: 56px; text-align: right; font-size: 11px; color: var(--tk-text-3); }
+.dgm-status.is-error { color: var(--tk-danger, #ff6b6b); }
+.dgm-editor__body { flex: 1; min-height: 0; display: flex; }
+
+/* Excalidraw: o contêiner precisa de tamanho definido, então o editor fica absoluto dentro de um bloco relativo. */
+.dgm-host { position: relative; flex: 1; min-width: 0; min-height: 0; }
+.dgm-host__inner { position: absolute; inset: 0; }
+.dgm-host__hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--tk-text-3); pointer-events: none; }
+.dgm-host__hint.is-error { color: var(--tk-danger, #ff6b6b); }
+
+/* Entradas do "Mais ferramentas" do Excalidraw que não funcionam neste app (offline, CSP): Web Embed (iframes) e
+   "Mermaid to Excalidraw" (o Mermaid não está no bundle). O Excalidraw usa o mesmo data-testid nas duas e o título
+   do grupo ("Generate") é um div sem classe; não há opção de UI para esconder isso. */
+.dgm-host [data-testid="toolbar-embeddable"],
+.dgm-host .dropdown-menu-container > div:not([class]),
+.dgm-host .dropdown-menu-container > div[class=""] { display: none !important; } /* !important: o CSS do Excalidraw entra depois deste */
+
+/* Diagrama em formato antigo (texto Mermaid): só leitura, nada é regravado. */
+.dgm-legacy { flex: 1; min-width: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.dgm-legacy__msg { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.5; color: var(--tk-danger, #ff6b6b); }
+.dgm-legacy__raw { margin: 0; padding: 12px 14px; font: 12.5px/1.55 var(--tk-font-mono); white-space: pre-wrap; color: var(--tk-text-3); background: var(--tk-surface-1); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); }
+
+/* Cartão de diagrama dentro de Notes (src/tools/notes/DiagramCard.jsx) */
+.nts-diagram { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.nts-diagram__bar { display: flex; align-items: center; gap: 8px; }
+.nts-diagram__title { font-weight: 600; font-size: 14px; }
+.nts-diagram__thumb { display: flex; align-items: center; justify-content: center; min-height: 220px; padding: 12px; background: var(--tk-surface-1); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); }
+.nts-diagram__thumb img { max-width: 100%; max-height: 520px; }
+.nts-diagram__hint { font-size: 13px; color: var(--tk-text-3); }
+.nts-diagram__hint.is-error { color: var(--tk-danger, #ff6b6b); }
+.nts-diagram__legacy { font-size: 13px; color: var(--tk-danger, #ff6b6b); }
+.nts-diagram__legacy pre { margin: 8px 0 0; padding: 12px 14px; font: 12.5px/1.55 var(--tk-font-mono); white-space: pre-wrap; color: var(--tk-text-3); background: var(--tk-surface-1); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); }
+
+/* ![[Diagrama]] dentro do texto das notas (NotePreview + src/tools/notes/embedPaint.js) */
+.md-embed { display: block; margin: .85em 0; }
+.md-embed__chip { display: inline-block; padding: 4px 10px; font-size: 12px; color: var(--tk-text-3); background: var(--tk-surface-2); border: 1px dashed var(--tk-border-strong); border-radius: 999px; }
+.md-embed.is-bad .md-embed__chip, .md-embed.is-missing .md-embed__chip, .md-embed.is-error .md-embed__chip { color: var(--tk-danger, #ff6b6b); border-color: var(--tk-danger, #ff6b6b); }
+.md-embed.is-ready, .md-embed.is-empty { cursor: pointer; }
+.md-embed.is-ready { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px; background: var(--tk-surface-1); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); }
+.md-embed.is-ready:hover { border-color: var(--tk-accent); }
+.md-embed__img { max-width: 100%; max-height: 520px; }
+.md-embed__caption { font-size: 12px; color: var(--tk-text-3); }

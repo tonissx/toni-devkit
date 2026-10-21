@@ -33,6 +33,7 @@ const FILTERS = [
   { id: 'quick', label: 'Quick', filter: { quick: true } },
   { id: 'pinned', label: 'Pinned', filter: { pinned: true } },
   { id: 'snippet', label: 'Snippets', filter: { type: 'snippet' } },
+  { id: 'diagram', label: 'Diagramas', filter: { type: 'diagram' } },
   { id: 'favorite', label: 'Favoritas', filter: { favorite: true } },
   { id: 'recent', label: 'Recentes', filter: null },
 ];
@@ -50,7 +51,7 @@ const remapFolder = (p, from, to) => (p === from ? to : p != null && isDescendan
 /** 'a/b/c' → ['a', 'a/b', 'a/b/c'] */
 const ancestors = (p) => p.split('/').map((_, i, a) => a.slice(0, i + 1).join('/'));
 
-const rowIcon = (n) => (n.type === 'snippet' ? 'braces' : n.quick ? 'sticky-note' : 'file-text');
+const rowIcon = (n) => (n.type === 'snippet' ? 'braces' : n.type === 'diagram' ? 'workflow' : n.quick ? 'sticky-note' : 'file-text');
 
 function Hl({ text, idx }) {
   if (!idx || !idx.length) return text;
@@ -760,20 +761,27 @@ export function NotesScreen({ toast, request }) {
 
             {useTree ? (
               <>
+                {/* Uma linha fina depois de cada bloco fixado separa o que está fixado do resto da árvore. */}
                 {pinnedFolders.length > 0 && (
-                  <div role="group" aria-label="Pastas fixadas">
-                    <div className="tk-menu__heading">📁 Pastas fixadas</div>
-                    {pinnedFolders.map((f) => (
-                      <PinnedFolderRow key={'pf:' + f.path} path={f.path} meta={metaOf(f.path)} onReveal={revealFolder}
-                        onContext={(path, x, y) => setCtxMenu({ x, y, kind: 'folder', path })} />
-                    ))}
-                  </div>
+                  <>
+                    <div role="group" aria-label="Pastas fixadas">
+                      <div className="tk-menu__heading">📁 Pastas fixadas</div>
+                      {pinnedFolders.map((f) => (
+                        <PinnedFolderRow key={'pf:' + f.path} path={f.path} meta={metaOf(f.path)} onReveal={revealFolder}
+                          onContext={(path, x, y) => setCtxMenu({ x, y, kind: 'folder', path })} />
+                      ))}
+                    </div>
+                    <div className="tk-menu__sep nts-list__sep" role="separator" />
+                  </>
                 )}
                 {rows && rows.some((r) => r.pinned) && (
-                  <div role="group" aria-label="Pinned">
-                    <div className="tk-menu__heading">📌 Pinned</div>
-                    {rows.filter((r) => r.pinned).map((r) => noteRow({ ...r, time: r.updated }, 'pin:' + r.id, { nav: 'p' }))}
-                  </div>
+                  <>
+                    <div role="group" aria-label="Pinned">
+                      <div className="tk-menu__heading">📌 Pinned</div>
+                      {rows.filter((r) => r.pinned).map((r) => noteRow({ ...r, time: r.updated }, 'pin:' + r.id, { nav: 'p' }))}
+                    </div>
+                    <div className="tk-menu__sep nts-list__sep" role="separator" />
+                  </>
                 )}
                 <div role="group" aria-label="Pastas e notas">
                   {tree.map((n) => renderFolder(n))}

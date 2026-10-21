@@ -2204,3 +2204,6 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dc.is-perf .dc-hud__card { backdrop-filter: none !important; }
 /* Janela oculta ou sem foco: congela o que sobrou (vale com ou sem o modo performance). */
 .dc.is-idle *, .dc.is-idle *::before, .dc.is-idle *::after { animation-play-state: paused !important; }
+
+/* Notas: linha fina entre o que está fixado (pastas e notas) e o resto da árvore */
+.nts-list__sep { margin: 6px 8px; opacity: .7; }

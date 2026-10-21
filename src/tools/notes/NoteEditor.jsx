@@ -6,6 +6,7 @@ import { pasteProps } from '../../notes/paste.js';
 import { toggleWrap, makeLink, codeToggle } from '../../notes/markup.js';
 import { applyToTextarea } from '../../notes/textarea.js';
 import { NotePreview, SnippetCard } from './NotePreview.jsx';
+import { DiagramCard } from './DiagramCard.jsx';
 import { useSuggest, linkSource, varSource } from './Suggest.jsx';
 import { isTemplateFolder } from '../../notes/templates.js';
 import { Backlinks } from './Backlinks.jsx';
@@ -110,6 +111,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
 
   // Autocomplete: [[link]] sempre; em templates (pasta Templates) também {{variáveis}} ao digitar "{".
   const isTemplate = isTemplateFolder(note.folder);
+  const isDiagram = note.type === 'diagram'; // o conteúdo é o JSON de um desenho: sem editor de texto (ver DiagramCard)
   const sources = React.useMemo(() => (isTemplate ? [varSource, linkSource(note.id)] : [linkSource(note.id)]), [isTemplate, note.id]);
   const suggest = useSuggest({ taRef: bodyRef, apply: applyEdit, sources });
 
@@ -218,6 +220,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
       <NotePreview
         content={note.content}
         hideCode={note.type === 'snippet'}
+        embeds
         resolve={resolve}
         onOpenLink={onOpenLink}
         onCopy={copy}
@@ -245,17 +248,17 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
         />
         <div className="nts-editor__tools">
           <span className={'nts-status is-' + status} role="status">{statusLabel(status)}</span>
-          {aiOn(cfg) && ai.button}
+          {aiOn(cfg) && !isDiagram && ai.button}
           <IconButton size="sm" className="nts-pin" icon="pin" label={note.pinned ? 'Desafixar' : 'Fixar (Pinned)'} active={note.pinned} onClick={() => update({ pinned: !note.pinned })} />
           <IconButton size="sm" className="nts-fav" icon="star" label={note.favorite ? 'Remover dos favoritos' : 'Favoritar'} active={note.favorite} onClick={() => update({ favorite: !note.favorite })} />
-          <IconButton size="sm" icon="sticky-note" label="Fixar na tela (sticky note)" disabled={isNew && status === 'idle'}
+          <IconButton size="sm" icon="sticky-note" label={isDiagram ? 'Sticky note não está disponível para diagramas' : 'Fixar na tela (sticky note)'} disabled={isDiagram || (isNew && status === 'idle')}
             onClick={async () => { await flush(); window.devkit.stickies.open(note.id).catch((e) => toast('Não foi possível fixar na tela', cleanError(e), 'error')); }} />
           <IconButton size="sm" icon="history" label="Versões anteriores" onClick={() => setShowHistory(true)} disabled={isNew && status === 'idle'} />
           <IconButton size="sm" icon="trash-2" label="Excluir (Delete) — vai para a lixeira" onClick={async () => { await flush(); onDelete(note); }} disabled={isNew && status === 'idle'} />
         </div>
       </div>
       <div className="nts-editor__meta">
-        <SegmentedControl size="sm" options={TYPE_OPTIONS} value={note.type} onChange={(type) => update({ type })} />
+        {!isDiagram && <SegmentedControl size="sm" options={TYPE_OPTIONS} value={note.type} onChange={(type) => update({ type })} />}
         {note.folder && onRevealFolder && (
           <nav className="nts-crumbs" aria-label="Pasta da nota">
             {note.folder.split('/').map((seg, i, all) => {
@@ -289,7 +292,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
         />
         <span className="nts-editor__spacer" />
         {note.quick && <span className="nts-quick-badge" title="Dê um título para transformar em Note">Quick Note</span>}
-        <SegmentedControl size="sm" options={MODE_OPTIONS} value={mode} onChange={setMode} />
+        {!isDiagram && <SegmentedControl size="sm" options={MODE_OPTIONS} value={mode} onChange={setMode} />}
       </div>
       {error && (
         <Alert variant="error" title="Não foi possível salvar — seu texto está seguro aqui">
@@ -305,12 +308,17 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
         </Alert>
       )}
       {aiOn(cfg) && ai.panels}
-      <div className={'nts-editor__body is-' + mode}>
-        {mode !== 'preview' && editor}
-        {mode !== 'edit' && preview}
+      <div className={'nts-editor__body is-' + (isDiagram ? 'preview' : mode)}>
+        {isDiagram ? <div className="nts-preview tk-scroll"><DiagramCard note={note} /></div> : (<>
+          {mode !== 'preview' && editor}
+          {mode !== 'edit' && preview}
+        </>)}
       </div>
       {onOpenNote && <Backlinks noteId={note.id} onOpen={onOpenNote} />}
       {showHistory && <HistoryModal note={note} flush={flush} onClose={() => setShowHistory(false)} toast={toast} />}
+      {isDiagram ? (
+        <div className="nts-editor__foot"><span>Diagrama (Excalidraw) · edite na ferramenta Diagramas</span></div>
+      ) : (
       <div className="nts-editor__foot">
         <span>Markdown</span>
         <span><Kbd size="sm">{mod('E')}</Kbd> editar/visualizar</span>
@@ -323,6 +331,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
         <span className="nts-editor__spacer" />
         <span>{note.content.length} caracteres</span>
       </div>
+      )}
     </div>
   );
 }

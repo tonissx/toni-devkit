@@ -341,6 +341,20 @@ test('edit: linkQueryAt opens after [[ and closes on ]], |, newline or inside co
   assert.deepEqual(at('`a` [[x|^'), { start: 6, query: 'x' });
 });
 
+test('edit: linkQueryAt reconhece ![[ (embed de diagrama) e só então devolve embed: true', () => {
+  const at = (s) => E.linkQueryAt(s.replace('|^', ''), s.indexOf('|^'));
+  assert.deepEqual(at('veja ![[|^'), { start: 8, query: '', embed: true });
+  assert.deepEqual(at('![[Fl|^'), { start: 3, query: 'Fl', embed: true });
+  assert.deepEqual(at('a ![[x]] e ![[Fluxo de apr|^ fim'), { start: 'a ![[x]] e ![['.length, query: 'Fluxo de apr', embed: true });
+  assert.ok(!('embed' in at('ver [[x|^')), 'sem "!": o objeto é o de sempre');
+  assert.ok(!('embed' in at('[[x|^')), '[[ no começo da linha: sem "!"');
+  assert.ok(!('embed' in at('a!\n[[x|^')), '"!" na linha de cima não conta');
+  assert.equal(at('usar `![[x|^'), null, 'dentro de código continua sem sugerir');
+  // completar mantém o "!" que já estava no texto
+  const q = at('veja ![[Flu|^');
+  assert.equal(E.completeLink('veja ![[Flu', q.start, 11, 'Fluxo').value, 'veja ![[Fluxo]]');
+});
+
 test('edit: completeLink writes "title]]" and reuses an existing "]]"', () => {
   assert.deepEqual(E.completeLink('ver [[sq', 6, 8, 'SQL - Paginação'), { value: 'ver [[SQL - Paginação]]', start: 23, end: 23 });
   assert.deepEqual(E.completeLink('ver [[sq]] fim', 6, 8, 'SQL'), { value: 'ver [[SQL]] fim', start: 11, end: 11 });

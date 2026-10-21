@@ -27,6 +27,7 @@ export const highlight = (code, lang) => code.split('\n')
 
 const ASSET_RE = /^\.assets\/([\w-][\w.-]*)$/;
 const WIKI_RE =/^\[\[([^[\]\n|]+)(?:\|([^\]\n]+))?\]\]/;
+const EMBED_RE = /^!\[\[([^[\]\n|]+)(?:\|([^\]\n]+))?\]\]/; // ![[Diagrama]] · ![[Diagrama|legenda]]
 const META_START_RE = /(^|\s)(?:@\d{4}-\d{2}-\d{2}|![123])(?=\s|$)/;
 const META_RE = /^(?:(@\d{4}-\d{2}-\d{2})|!([123]))(?=\s|$)/;
 
@@ -62,14 +63,33 @@ function secretCard(name, info) {
 /**
  * Renderiza markdown. resolve(título) → id | null decide o estilo dos [[links]].
  * secret(nome) → estado da entrada do Vault para os blocos ```secret``` (ver secretCard).
+ * embeds: liga o ![[Diagrama]] — vira um marcador `.md-embed` que o NotePreview troca pela miniatura do diagrama.
+ *   Desligado (padrão), `![[x]]` sai como "!" + link, como sempre: quem não sabe desenhar o embed (AI, Tarefas, Sticky,
+ *   Lixeira) não ganha uma caixa vazia.
  * Retorna { html, blocks } — blocks[i] é o código do i-ésimo bloco (para o botão Copiar).
  */
-export function renderMarkdown(md, { resolve = () => null, secret = () => undefined } = {}) {
+export function renderMarkdown(md, { resolve = () => null, secret = () => undefined, embeds = false } = {}) {
   const blocks = [];
   let task = 0;
   const marked = new Marked({ gfm: true, breaks: true });
   marked.use({
-    extensions: [{
+    extensions: [...(embeds ? [{
+      // ![[Diagrama]] → marcador com o id já resolvido; a miniatura é desenhada depois (NotePreview, assíncrono).
+      // Inerte de propósito: um alvo que não existe NÃO cria nota ao clicar, como faria um [[link]].
+      name: 'wikiembed',
+      level: 'inline',
+      start: (src) => { const i = src.indexOf('![['); return i === -1 ? undefined : i; },
+      tokenizer(src) {
+        const m = EMBED_RE.exec(src);
+        if (m) return { type: 'wikiembed', raw: m[0], target: m[1].trim(), caption: (m[2] || '').trim() };
+        return undefined;
+      },
+      renderer(t) {
+        const id = resolve(t.target);
+        if (!id) return `<span class="md-embed is-missing" data-embed="${esc(t.target)}" title="Diagrama não encontrado"><span class="md-embed__chip">Diagrama não encontrado: ${esc(t.target)}</span></span>`;
+        return `<span class="md-embed" data-embed="${esc(t.target)}" data-note-id="${esc(id)}"${t.caption ? ` data-caption="${esc(t.caption)}"` : ''} title="Abrir em Diagramas"><span class="md-embed__chip">Diagrama: ${esc(t.caption || t.target)}</span></span>`;
+      },
+    }] : []), {
       name: 'wikilink',
       level: 'inline',
       start: (src) => { const i = src.indexOf('[['); return i === -1 ? undefined : i; },

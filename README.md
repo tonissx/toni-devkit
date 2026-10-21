@@ -135,6 +135,7 @@ lugar do sistema.
 | 🗄️ | **Banco** | Monitor de SQL Server: quem bloqueia quem, queries lentas, deadlocks e saúde — ao vivo e no histórico |
 | 🧭 | **SQL Visualizer** | SQL como grafo, sem executar nada: diagrama ER (DDL, metadados ou direto do servidor), explorador de schemas grandes, lineage de query e plano de execução (`.sqlplan`) |
 | 📝 | **Notes** | Markdown com `[[links]]`, tags, grafo, snippets, tarefas e sticky notes |
+| 🔀 | **Diagramas** | Quadro de desenho livre (Excalidraw) para ER, fluxos e esquemas, offline; exporta PNG/SVG. Salvos junto das Notas |
 | 🔐 | **Vault** | Cofre local (AES-256-GCM) com senha mestra e cópia que se apaga |
 | 🎮 | **DevCore** | Um jogo idle opcional, com DevPets que você descobre usando o próprio Devkit |
 | ✦ | **IA (opcional)** | Desligada por padrão. Local via Ollama ou nuvem via Claude; nada é aplicado sem clique |

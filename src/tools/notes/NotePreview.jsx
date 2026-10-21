@@ -4,6 +4,9 @@ import { snippetCode, codeBlocks, removeFences } from '../../notes/note.js';
 import { secretRefs, sameName } from '../../vault/entry.js';
 import { useVaultRefs, copyFromVault, cleanError } from '../../vault/client.js';
 import { UnlockForm } from '../vault/UnlockForm.jsx';
+import { notesApi } from '../../notes/client.js';
+import { embedThumb, peekThumb } from '../../diagrams/thumb.js';
+import { paintEmbed } from './embedPaint.js';
 
 const { Button, Icon, Modal } = DS;
 
@@ -13,8 +16,10 @@ const { Button, Icon, Modal } = DS;
  * Cartão ```secret``` (Vault): Copiar → clipboard protegido pelo processo principal · Desbloquear → modal aqui
  * mesmo · Criar/Vault ↗ → abre a ferramenta Vault.
  * hideCode: não repete os blocos de código (o SnippetCard já os mostra). toast(título, texto, variante) opcional.
+ * embeds: desenha o ![[Diagrama]] no meio do texto (miniatura; clicar abre o diagrama na ferramenta Diagramas). Só o
+ *   editor de Notes liga: Sticky e Lixeira não carregam o Excalidraw por causa de um embed.
  */
-export function NotePreview({ content, hideCode, resolve, onOpenLink, onChange, onCopy, onDoubleClick, toast }) {
+export function NotePreview({ content, hideCode, embeds, resolve, onOpenLink, onChange, onCopy, onDoubleClick, toast }) {
   const shown = hideCode ? removeFences(content) : content;
   const names = React.useMemo(() => secretRefs(shown), [shown]);
   const refs = useVaultRefs(names);
@@ -25,7 +30,64 @@ export function NotePreview({ content, hideCode, resolve, onOpenLink, onChange, 
     const key = Object.keys(refs.items).find((k) => sameName(k, name));
     return (key !== undefined && refs.items[key]) || { missing: true };
   }, [refs]);
-  const { html, blocks } = React.useMemo(() => renderMarkdown(shown, { resolve, secret }), [shown, resolve, secret]);
+  const { html, blocks } = React.useMemo(() => renderMarkdown(shown, { resolve, secret, embeds }), [shown, resolve, secret, embeds]);
+
+  // ── ![[Diagrama]] ──────────────────────────────────────────────────────────────────────────────────────────────
+  // O HTML é regravado a cada mudança do texto (no "Lado a lado", a cada tecla) e isso descarta o DOM que mexemos aqui.
+  // Por isso: (1) antes de pintar, reaplica as miniaturas do cache, de forma síncrona (a imagem não pisca); (2) depois,
+  // confere cada nota (tipo e data) e gera só o que falta; (3) o diagrama editado em outro lugar atualiza o preview.
+  const previewRef = React.useRef(null);
+  const embedIds = React.useRef(new Set());
+  const [tick, setTick] = React.useState(0);
+
+  React.useLayoutEffect(() => {
+    const root = previewRef.current;
+    if (!embeds || !root) return;
+    const ids = new Set();
+    for (const span of root.querySelectorAll('.md-embed[data-note-id]')) {
+      ids.add(span.dataset.noteId);
+      const cached = peekThumb(span.dataset.noteId);
+      if (cached) paintEmbed(span, cached);
+    }
+    embedIds.current = ids;
+  }, [html, embeds]);
+
+  React.useEffect(() => {
+    const root = previewRef.current;
+    if (!embeds || !root) return undefined;
+    const spans = [...root.querySelectorAll('.md-embed[data-note-id]')];
+    if (!spans.length) return undefined;
+    let gone = false;
+    const run = async () => {
+      const notes = new Map(); // a mesma nota embutida duas vezes é buscada uma vez
+      for (const span of spans) {
+        const id = span.dataset.noteId;
+        if (!notes.has(id)) notes.set(id, notesApi().get(id).catch(() => null));
+        const note = await notes.get(id);
+        if (gone || !span.isConnected) continue;
+        if (!note) { paintEmbed(span, { state: 'missing' }); continue; }
+        if (note.type !== 'diagram') { paintEmbed(span, { state: 'notdiagram' }); continue; }
+        const r = await embedThumb(note);
+        if (!gone && span.isConnected) paintEmbed(span, r);
+      }
+    };
+    // Sem cache ainda: gera já. Com cache (só conferindo se mudou, como a cada tecla): espera o texto assentar.
+    const t = setTimeout(run, spans.some((s) => !peekThumb(s.dataset.noteId)) ? 0 : 250);
+    return () => { gone = true; clearTimeout(t); };
+  }, [html, embeds, tick]);
+
+  React.useEffect(() => {
+    if (!embeds) return undefined;
+    let timer = null;
+    const off = notesApi().onChanged((evt) => {
+      if (!evt) return;
+      const relevant = evt.type === 'saved' ? embedIds.current.has(evt.id) : ['removed', 'trash', 'folders'].includes(evt.type);
+      if (!relevant) return;
+      clearTimeout(timer); // o autosave do Excalidraw dispara muitas vezes seguidas
+      timer = setTimeout(() => setTick((n) => n + 1), 300);
+    });
+    return () => { clearTimeout(timer); off(); };
+  }, [embeds]);
 
   /** Feedback no próprio botão (e no toast, se houver). */
   const flash = (btn, text, ok = true, detail) => {
@@ -49,6 +111,11 @@ export function NotePreview({ content, hideCode, resolve, onOpenLink, onChange, 
   };
 
   const onClick = (e) => {
+    const embed = e.target.closest('.md-embed');
+    if (embed) { // alvo inválido (is-bad) é só uma etiqueta; os demais abrem o diagrama no editor
+      if (embed.dataset.noteId && !embed.classList.contains('is-bad')) window.devkit.app.open('diagrams', { id: embed.dataset.noteId });
+      return;
+    }
     const link = e.target.closest('.md-wikilink');
     if (link) { e.preventDefault(); onOpenLink(link.dataset.note); return; }
     const vaultBtn = e.target.closest('[data-vault-copy],[data-vault-unlock],[data-vault-create],[data-vault-open]');
@@ -67,7 +134,7 @@ export function NotePreview({ content, hideCode, resolve, onOpenLink, onChange, 
   }
   // eslint-disable-next-line react/no-danger — HTML gerado por renderMarkdown (HTML cru escapado)
   return (<>
-    <div className="md-preview" onClick={onClick} onDoubleClick={onDoubleClick} dangerouslySetInnerHTML={{ __html: html }} />
+    <div ref={previewRef} className="md-preview" onClick={onClick} onDoubleClick={onDoubleClick} dangerouslySetInnerHTML={{ __html: html }} />
     {unlock && (
       <Modal open onClose={() => setUnlock(null)} icon="lock-keyhole" title="Desbloquear o cofre" width={420}
         description="Os campos das entradas aparecem na nota; os segredos continuam mascarados.">

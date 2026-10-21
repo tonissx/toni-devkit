@@ -275,6 +275,12 @@ const noteCommands = [
     run: (ctx) => ctx.openApp('notes', { view: 'template' }),
   },
   {
+    id: 'diagrams:new', name: 'Novo diagrama', icon: 'workflow',
+    description: 'Quadro de desenho livre (ER, fluxo, esquema), salvo junto das Notas',
+    keywords: ['diagrama', 'desenho', 'quadro', 'excalidraw', 'whiteboard', 'er', 'fluxo', 'workflow', 'fluxograma', 'esquema'],
+    run: (ctx) => ctx.openApp('diagrams', { new: true }),
+  },
+  {
     id: 'notes:search', name: 'Search Notes', icon: 'search', keepOpen: true,
     description: 'Buscar só nas notas e snippets',
     keywords: ['buscar notas', 'procurar', 'note', 'snippets'],

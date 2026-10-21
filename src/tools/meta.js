@@ -76,6 +76,14 @@ const TOOL_META = [
     keywords: ['anotações', 'notas', 'snippets', 'conhecimento', 'markdown', 'wiki'],
   },
   {
+    id: 'diagrams',
+    name: 'Diagramas',
+    icon: 'workflow',
+    group: 'Conhecimento',
+    desc: 'ER, fluxos, sequência e estados em Mermaid, com preview ao vivo — salvos junto das Notas',
+    keywords: ['diagrama', 'mermaid', 'er', 'entidade relacionamento', 'fluxo', 'workflow', 'flowchart', 'sequência', 'estados', 'desenho', 'excalidraw'],
+  },
+  {
     id: 'vault',
     name: 'Vault',
     icon: 'vault',
