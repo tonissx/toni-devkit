@@ -5,3 +5,4 @@ renderer/vendor/react*.js
 CLAUDE.md
 .capture-tmp/
 renderer/vendor/excalidraw-assets/
+.superpowers/

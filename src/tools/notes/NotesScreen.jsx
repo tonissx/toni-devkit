@@ -18,6 +18,10 @@ import { sortNotes, FOLDER_COLORS } from '../../notes/foldermeta.js';
 import { emit } from '../../lib/events.js';
 import { useAiMode, aiOn } from '../../ai/ui.jsx';
 import { AskNotes } from './AskNotes.jsx';
+import { DateFilter } from './DateFilter.jsx';
+import { TagFilter } from './TagFilter.jsx';
+import { useDismiss } from './useDismiss.js';
+import { countByDay, rangeLabel } from '../../notes/calendar.js';
 import { sideWidth, SIDE_COLLAPSED, SIDE_MAX, SIDE_DEFAULT, SIDE_WIDE } from '../../notes/panel.js';
 
 const { PageHeader, Button, IconButton, EmptyState, Icon, Kbd, Spinner, ContextMenu } = DS;
@@ -79,6 +83,15 @@ export function NotesScreen({ toast, request }) {
   const [tags, setTags] = React.useState([]);
   const [info, setInfo] = React.useState(null);
   const [current, setCurrent] = React.useState(null);  // { note, isNew, focus }
+  const [calOpen, setCalOpen] = React.useState(false);   // calendário do filtro de data aberto
+  const calChipRef = React.useRef(null);
+  const calRef = React.useRef(null);
+  const [tagsOpen, setTagsOpen] = React.useState(false);  // painel do filtro de tags aberto
+  const tagChipRef = React.useRef(null);
+  const tagsRef = React.useRef(null);
+  // Clicar fora do painel (ou Esc) recolhe; o chip abre de novo. O filtro continua valendo.
+  useDismiss(calOpen, [calRef, calChipRef], () => setCalOpen(false));
+  useDismiss(tagsOpen, [tagsRef, tagChipRef], () => setTagsOpen(false));
   const [loadError, setLoadError] = React.useState(null);
   const [deleted, setDeleted] = React.useState(null);  // última exclusão para desfazer: { kind: 'note'|'folder', snap, label }
   const [folders, setFolders] = React.useState([]);     // [{ path, count }] (diretórios reais, inclusive vazios)
@@ -130,7 +143,22 @@ export function NotesScreen({ toast, request }) {
   // "Só aqui": a lista (e a busca) ficam restritas à pasta ativa e às subpastas dela.
   const scope = !!ui.scope && !!folderSel;
   const scopeFolder = scope ? folderSel : null;
-  const filter = { ...(filterDef.filter || {}), ...(ui.tag ? { tag: ui.tag } : {}), ...(scopeFolder ? { folder: scopeFolder, recursive: true } : {}) };
+  // Intervalo de criação ('YYYY-MM-DD' local), escolhido no calendário; vale também com ele recolhido.
+  const dateFrom = typeof ui.dateFrom === 'string' && ui.dateFrom && typeof ui.dateTo === 'string' && ui.dateTo ? ui.dateFrom : null;
+  const dateTo = dateFrom ? ui.dateTo : null;
+  const range = React.useMemo(() => (dateFrom ? { from: dateFrom, to: dateTo } : null), [dateFrom, dateTo]);
+  const setRange = (r) => setUi((u) => ({ ...u, dateFrom: r ? r.from : null, dateTo: r ? r.to : null }));
+  const dayCounts = React.useMemo(() => countByDay(allRows), [allRows]);
+  // Tags escolhidas (lista; `ui.tag` é o formato antigo, de uma só) e como combinam: Todas ou Qualquer.
+  const selTags = React.useMemo(() => (Array.isArray(ui.tags) ? ui.tags : ui.tag ? [ui.tag] : []), [ui.tags, ui.tag]);
+  const tagMode = ui.tagMode === 'any' ? 'any' : 'all';
+  const tagsKey = selTags.join(' ') + '|' + tagMode;
+  const hasTags = selTags.length > 0;
+  const sep = tagMode === 'any' ? ' ou ' : ' + ';
+  const tagsLabel = !hasTags ? 'Tags' : selTags.length <= 2 ? selTags.join(sep) : `${selTags[0]} +${selTags.length - 1}`;
+  const tagsTitle = `Notas com ${tagMode === 'any' ? 'qualquer uma de' : 'todas'}: ${selTags.map((t) => '#' + t).join(', ')}`;
+  const setSelTags = (list) => setUi((u) => ({ ...u, tag: null, tags: list }));
+  const filter = { ...(filterDef.filter || {}), ...(hasTags ? { tags: selTags, tagMode } : {}), ...(scopeFolder ? { folder: scopeFolder, recursive: true } : {}), ...(range ? { created: range } : {}) };
   const q = query.trim();
 
   const refresh = React.useCallback(async () => {
@@ -149,13 +177,17 @@ export function NotesScreen({ toast, request }) {
       setRows(list); setAllRows(all); setTags(tg); setInfo(inf); setRecent(rec); setFolders(fld); setTrashCount(trash); setLoadError(null); setFoldersLoaded(true);
       // A pasta ativa deixou de existir (apagada ou renomeada): novas notas voltam para a raiz (e o "Só aqui" desliga junto).
       setUi((u) => (typeof u.folder === 'string' && u.folder && !fld.some((f) => f.path === u.folder) ? { ...u, folder: null } : u));
-      // A tag ativa deixou de existir: sem isso a lista fica filtrada por algo que o usuário nem vê.
-      setUi((u) => (u.tag && !tg.some((t) => t.tag === u.tag) ? { ...u, tag: null } : u));
+      // Tag escolhida que deixou de existir: sem isso a lista fica filtrada por algo que o usuário nem vê.
+      setUi((u) => {
+        const cur = Array.isArray(u.tags) ? u.tags : u.tag ? [u.tag] : [];
+        const keep = cur.filter((t) => tg.some((x) => x.tag === t));
+        return keep.length === cur.length && !(u.tag && !Array.isArray(u.tags)) ? u : { ...u, tag: null, tags: keep };
+      });
     } catch (e) {
       setLoadError(cleanError(e));
       setRows([]);
     }
-  }, [q, ui.filter, ui.tag, scopeFolder]);
+  }, [q, ui.filter, tagsKey, scopeFolder, dateFrom, dateTo]);
 
   React.useEffect(() => { refresh(); }, [refresh]);
   // Chaves de pastas que já não existem saem do estado "aberta" (senão o objeto só cresce).
@@ -464,16 +496,16 @@ export function NotesScreen({ toast, request }) {
         { title: 'Recently Viewed', items: recent.viewed.map((r) => ({ ...r, time: r.viewedAt })) },
       ].filter((g) => g.items.length);
     }
-    if (q || ui.filter !== 'all' || ui.tag) return [{ title: null, items: rows.map((r) => ({ ...r, time: r.updated })) }];
+    if (q || ui.filter !== 'all' || hasTags || range) return [{ title: null, items: rows.map((r) => ({ ...r, time: r.updated })) }];
     const pinned = rows.filter((r) => r.pinned);
     return [
       pinned.length && { title: '📌 Pinned', items: pinned.map((r) => ({ ...r, time: r.updated })) },
       { title: pinned.length ? 'Todas' : null, items: rows.filter((r) => !r.pinned).map((r) => ({ ...r, time: r.updated })) },
     ].filter((g) => g && g.items.length);
-  }, [rows, recent, q, ui.filter, ui.tag]);
+  }, [rows, recent, q, ui.filter, hasTags, range]);
 
   // Com pastas (e sem busca/filtro/tag) a lista vira uma árvore em cascata: cada pasta abre as subpastas e as notas dela.
-  const useTree = !q && ui.filter === 'all' && !ui.tag && !scope && folders.length > 0;
+  const useTree = !q && ui.filter === 'all' && !hasTags && !range && !scope && folders.length > 0;
   const openMap = foldersUi.open || {};
   const tree = React.useMemo(() => buildTree(folders), [folders]);
   // Notas de cada pasta, na ordem configurada nela (padrão: editadas recentemente).
@@ -673,15 +705,21 @@ export function NotesScreen({ toast, request }) {
               <button key={f.id} type="button" className={'nts-chip' + (ui.filter === f.id ? ' is-on' : '')} aria-pressed={ui.filter === f.id}
                 onClick={() => setUi((u) => ({ ...u, filter: f.id }))}>{f.label}</button>
             ))}
+            <span ref={tagChipRef} className={'nts-chip nts-chip--pop' + (hasTags || tagsOpen ? ' is-on' : '')}>
+              <button type="button" className="nts-chip__main" aria-pressed={tagsOpen} aria-expanded={tagsOpen} title={hasTags ? tagsTitle : 'Filtrar por tags'} onClick={() => setTagsOpen((o) => !o)}>
+                <Icon name="tag" size={11} /> {tagsLabel}
+              </button>
+              {hasTags && <button type="button" className="nts-chip__x" aria-label="Limpar filtro de tags" onClick={() => setSelTags([])}><Icon name="x" size={10} /></button>}
+            </span>
+            <span ref={calChipRef} className={'nts-chip nts-chip--pop' + (range || calOpen ? ' is-on' : '')}>
+              <button type="button" className="nts-chip__main" aria-pressed={calOpen} aria-expanded={calOpen} title="Filtrar pela data de criação" onClick={() => setCalOpen((o) => !o)}>
+                <Icon name="calendar" size={11} /> {range ? rangeLabel(range) : 'Data'}
+              </button>
+              {range && <button type="button" className="nts-chip__x" aria-label="Limpar filtro de data" onClick={() => setRange(null)}><Icon name="x" size={10} /></button>}
+            </span>
           </div>
-          {tags.length > 0 && (
-            <div className="nts-tagcloud" aria-label="Tags">
-              {[...tags.slice(0, 16), ...tags.slice(16).filter((t) => t.tag === ui.tag)].map((t) => (
-                <button key={t.tag} type="button" className={'nts-chip is-tag' + (ui.tag === t.tag ? ' is-on' : '')} aria-pressed={ui.tag === t.tag}
-                  onClick={() => setUi((u) => ({ ...u, tag: u.tag === t.tag ? null : t.tag }))}>#{t.tag}<span>{t.count}</span></button>
-              ))}
-            </div>
-          )}
+          {calOpen && <DateFilter innerRef={calRef} range={range} counts={dayCounts} onChange={setRange} />}
+          {tagsOpen && <TagFilter innerRef={tagsRef} tags={tags} selected={selTags} mode={tagMode} onChange={setSelTags} onMode={(m) => setUi((u) => ({ ...u, tagMode: m }))} />}
           <div className="nts-listbar">
             <span className="nts-listbar__title">{useTree ? 'Explorador' : 'Notas'}</span>
             {folderSel && (
@@ -714,8 +752,8 @@ export function NotesScreen({ toast, request }) {
                 : (
                   <div className="nts-list__msg">
                     Nada neste filtro.
-                    {(ui.filter !== 'all' || ui.tag) && (
-                      <><br /><Button size="sm" variant="secondary" onClick={() => setUi((u) => ({ ...u, filter: 'all', tag: null }))}>Limpar filtros</Button></>
+                    {(ui.filter !== 'all' || hasTags || range) && (
+                      <><br /><Button size="sm" variant="secondary" onClick={() => setUi((u) => ({ ...u, filter: 'all', tag: null, tags: [], dateFrom: null, dateTo: null }))}>Limpar filtros</Button></>
                     )}
                   </div>
                 )
@@ -798,7 +836,7 @@ export function NotesScreen({ toast, request }) {
             )}
           </div>
           {view === 'tasks' ? (
-            <TasksPanel tag={ui.tag} onOpen={(id) => openNote(id)} toast={toast} />
+            <TasksPanel tags={selTags} tagMode={tagMode} onOpen={(id) => openNote(id)} toast={toast} />
           ) : view === 'trash' ? (
             <TrashPanel onOpen={(id) => openNote(id)} toast={toast} />
           ) : view === 'graph' ? (

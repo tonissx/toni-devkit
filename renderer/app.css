@@ -246,8 +246,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-views__tab.is-extra { margin-left: auto; cursor: default; }
 .nts-search { width: 100%; }
 .nts-search input { min-width: 0; }
-.nts-filters, .nts-tagcloud { display: flex; flex-wrap: wrap; gap: 4px; }
-.nts-tagcloud { max-height: 56px; overflow: hidden; }
+.nts-filters { display: flex; flex-wrap: wrap; gap: 4px; }
 /* Pastas (diretórios reais): árvore na sidebar, alvo de soltar notas/pastas, seletor no editor */
 .nts-listbar { flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 2px 0 6px; font: 600 10.5px var(--tk-font-sans); letter-spacing: .06em; text-transform: uppercase; color: var(--tk-text-3); }
 .nts-listbar__dest { display: inline-flex; align-items: center; gap: 4px; max-width: 150px; height: 20px; padding: 0 6px; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--fc, var(--tk-accent)) 12%, transparent); color: var(--fc, var(--tk-accent-text)); font: 500 10.5px var(--tk-font-sans); letter-spacing: 0; text-transform: none; cursor: pointer; overflow: hidden; white-space: nowrap; }
@@ -332,6 +331,42 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .nts-chip.is-on { color: var(--tk-accent-text); border-color: var(--tk-accent); background: color-mix(in srgb, var(--tk-accent) 10%, transparent); }
 .nts-chip.is-tag { font-family: var(--tk-font-mono); font-size: 11px; }
 .nts-chip.is-tag span { margin-left: 4px; opacity: .6; }
+/* Filtro de data: chip com o intervalo (e um ✕ ao lado) + mês com a contagem de notas criadas por dia */
+.nts-chip--pop { display: inline-flex; align-items: center; padding: 0; overflow: hidden; }
+.nts-chip--pop button { display: inline-flex; align-items: center; gap: 4px; height: 100%; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.nts-chip__main { padding: 0 8px; }
+.nts-chip__x { padding: 0 6px 0 0; }
+.nts-chip--pop button:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: -2px; }
+.nts-tagf { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-1); }
+.nts-tagf__sel { display: flex; flex-wrap: wrap; gap: 4px; }
+.nts-tagf__chip { display: inline-flex; align-items: center; gap: 4px; }
+.nts-tagf__mode { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--tk-text-3); }
+.nts-tagf__input { width: 100%; box-sizing: border-box; height: 28px; padding: 0 8px; border: 1px solid var(--tk-border-strong); border-radius: var(--tk-radius-sm); background: var(--tk-bg); color: var(--tk-text); font: 400 12.5px var(--tk-font-sans); }
+.nts-tagf__input:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: -1px; }
+.nts-tagf__list { margin: 0; padding: 0; list-style: none; max-height: 200px; overflow-y: auto; }
+.nts-tagf__opt { display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 28px; padding: 0 8px; border-radius: var(--tk-radius-sm); color: var(--tk-text-2); font: 400 12px var(--tk-font-mono); cursor: pointer; }
+.nts-tagf__opt small { font: 400 10.5px var(--tk-font-mono); color: var(--tk-text-3); }
+.nts-tagf__opt.is-hi { background: color-mix(in srgb, var(--tk-accent) 12%, transparent); color: var(--tk-text); }
+.nts-tagf__none { padding: 6px 8px; font-size: 11.5px; color: var(--tk-text-3); }
+.nts-cal { padding: 8px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-1); }
+.nts-cal__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.nts-cal__title { font: 600 12px var(--tk-font-sans); color: var(--tk-text-2); text-transform: capitalize; }
+.nts-cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; user-select: none; touch-action: none; } /* arrastar seleciona o intervalo: sem seleção de texto nem rolagem por toque */
+.nts-cal__dow { padding-bottom: 2px; font: 500 10px var(--tk-font-sans); color: var(--tk-text-3); }
+/* Número do dia sempre na mesma altura; a contagem ganha uma linha só dela (selo), sem encostar no número */
+.nts-cal__day { display: flex; flex-direction: column; align-items: center; gap: 3px; height: 40px; padding: 6px 0 0; border: 0; border-radius: 6px; background: none; color: var(--tk-text-3); font: 400 12px/14px var(--tk-font-sans); cursor: pointer; }
+.nts-cal__day.is-empty { cursor: default; }
+.nts-cal__day b { font-weight: inherit; }
+.nts-cal__day.has-notes { color: var(--tk-text); }
+.nts-cal__day.has-notes b { font-weight: 600; }
+.nts-cal__day i { min-width: 16px; height: 14px; padding: 0 5px; border-radius: 999px; background: color-mix(in srgb, var(--tk-accent) 16%, transparent); color: var(--tk-accent-text); font: 600 10px/14px var(--tk-font-mono); font-style: normal; box-sizing: border-box; }
+.nts-cal__day:not(.is-empty):hover { background: var(--tk-surface-3); color: var(--tk-text); }
+.nts-cal__day.is-today b { text-decoration: underline; text-underline-offset: 2px; }
+.nts-cal__day.is-in { background: color-mix(in srgb, var(--tk-accent) 12%, transparent); color: var(--tk-text); }
+.nts-cal__day.is-in i { background: color-mix(in srgb, var(--tk-accent) 28%, transparent); }
+.nts-cal__day.is-edge { background: var(--tk-accent); color: #fff; }
+.nts-cal__day.is-edge i { background: rgba(255, 255, 255, .26); color: #fff; }
+.nts-cal__day:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: -2px; }
 
 .nts-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
 .nts-list__msg { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 16px 8px; font-size: 12.5px; color: var(--tk-text-3); line-height: 1.5; }

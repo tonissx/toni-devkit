@@ -7,6 +7,7 @@
 const { normalize } = require('../commands/search.js');
 const { displayTitle, allTags, excerpt } = require('./note.js');
 const { folderOf } = require('./folders.js');
+const { localDay, inRange } = require('./calendar.js');
 
 // Campos normalizados por nota. As notas são imutáveis no serviço (salvar cria outro objeto),
 // então o cache por objeto nunca fica velho.
@@ -81,8 +82,21 @@ function scoreTerm(f, t) {
 }
 
 /**
- * Filtros: { quick, pinned, favorite, type, tag, folder, recursive } — folder: '' = raiz, 'a/b' = notas diretas
- * dessa pasta; com `recursive` inclui também as subpastas ('' + recursive = tudo).
+ * Tags do filtro: `tag` (uma) e/ou `tags` (lista). `tagMode` 'all' (padrão) = a nota precisa ter todas;
+ * 'any' = basta uma. A `tag` avulsa sempre é exigida (é o formato antigo, de uma tag só).
+ */
+function matchesTags(noteTags, flt) {
+  if (!flt) return true;
+  if (flt.tag && !noteTags.includes(flt.tag)) return false;
+  const want = Array.isArray(flt.tags) ? flt.tags.filter(Boolean) : [];
+  if (!want.length) return true;
+  return flt.tagMode === 'any' ? want.some((t) => noteTags.includes(t)) : want.every((t) => noteTags.includes(t));
+}
+
+/**
+ * Filtros: { quick, pinned, favorite, type, tag, tags, tagMode, folder, recursive, created } — folder: '' = raiz, 'a/b' = notas diretas
+ * dessa pasta; com `recursive` inclui também as subpastas ('' + recursive = tudo). created: { from, to } em
+ * 'YYYY-MM-DD' local, pontas incluídas.
  */
 function matchesFilter(note, flt) {
   if (!flt) return true;
@@ -94,7 +108,8 @@ function matchesFilter(note, flt) {
   if (flt.pinned && !note.pinned) return false;
   if (flt.favorite && !note.favorite) return false;
   if (flt.type && note.type !== flt.type) return false;
-  if (flt.tag && !fieldsOf(note).tags.includes(flt.tag)) return false;
+  if (!matchesTags(fieldsOf(note).tags, flt)) return false;
+  if (flt.created && !inRange(localDay(note.created), flt.created)) return false;
   return true;
 }
 
@@ -146,4 +161,4 @@ function searchNotes(notes, query, { limit = 50, filter } = {}) {
   });
 }
 
-module.exports = { searchNotes, matchesFilter, withinOne };
+module.exports = { searchNotes, matchesFilter, matchesTags, withinOne };

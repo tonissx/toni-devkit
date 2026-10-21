@@ -9,7 +9,7 @@
  */
 const { createStore } = require('./store.js');
 const { createNote, displayTitle, allTags, plainLine, tasksOf, taskStats, toggleTaskAt, wikiLinks, replaceLinks, maskCode } = require('../../src/notes/note.js');
-const { searchNotes } = require('../../src/notes/search.js');
+const { searchNotes, matchesTags } = require('../../src/notes/search.js');
 const { validFolderPath, validFolderName, normFolder, folderOf, baseName, parentOf, joinPath, isDescendant, buildTree, siblingsOf, copyName } = require('../../src/notes/folders.js');
 const { mergeMeta, sanitizeMeta, cleanTag } = require('../../src/notes/foldermeta.js');
 const { normalize } = require('../../src/commands/search.js');
@@ -743,14 +743,14 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
 
     /**
      * Tarefas de todas as notas (fora de código): [{ noteId, noteTitle, index, line, text, checked, due, priority, tags }].
-     * filter: { status: 'open' (padrão) | 'done' | 'all', tag }. Ordem: vencimento, prioridade, nota mais recente.
+     * filter: { status: 'open' (padrão) | 'done' | 'all', tag, tags, tagMode } (tags como no filtro da lista). Ordem: vencimento, prioridade, nota mais recente.
      */
-    tasks({ status = 'open', tag } = {}) {
+    tasks({ status = 'open', tag, tags: wanted, tagMode } = {}) {
       const out = [];
       for (const n of notes.values()) {
         if (n.type === 'snippet' || n.type === 'diagram' || isTemplate(n)) continue; // "- [ ]" de um template é modelo, não tarefa
         const tags = allTags(n);
-        if (tag && !tags.includes(tag)) continue;
+        if (!matchesTags(tags, { tag, tags: wanted, tagMode })) continue;
         for (const t of tasksOf(n.content)) {
           if (status === 'open' && t.checked) continue;
           if (status === 'done' && !t.checked) continue;
