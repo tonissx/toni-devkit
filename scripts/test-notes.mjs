@@ -546,6 +546,10 @@ test('attachments: previewKind classifies by extension; executables never previe
   const A = require('../src/notes/attachments.js');
   const kinds = { 'a.PNG': 'image', 'a.pdf': 'pdf', 'a.mp3': 'audio', 'a.mp4': 'video', 'a.json': 'text', 'a.csv': 'text', 'a.md': 'text', 'a.zip': 'other', 'a.bin': 'other', semext: 'other', 'a.bat': 'exec', 'a.js': 'exec', 'a.ps1': 'exec', 'a.lnk': 'exec' };
   for (const [name, kind] of Object.entries(kinds)) assert.equal(A.previewKind(name), kind, name);
+  const groups = { 'a.pdf': 'pdf', 'a.mp4': 'video', 'a.mp3': 'audio', 'a.PNG': 'image', 'a.docx': 'doc', 'a.xlsx': 'sheet', 'a.csv': 'sheet', 'a.pptx': 'slides', 'a.zip': 'archive', 'a.json': 'code', 'a.txt': 'text', 'a.bat': 'exec', 'a.xyz': 'other' };
+  for (const [name, g] of Object.entries(groups)) assert.equal(A.visualKind(name), g, name);
+  for (const g of new Set(Object.values(groups))) assert.ok(A.KIND_ICON[g], g);
+  assert.deepEqual([...A.THUMB_KINDS].sort(), ['doc', 'pdf', 'sheet', 'slides', 'video']);
   assert.equal(A.mimeFor('x.pdf'), 'application/pdf');
   assert.equal(A.mimeFor('x.m4a'), 'audio/mp4');
   assert.equal(A.mimeFor('x.zip'), '');
@@ -1051,7 +1055,13 @@ test('markdown: links to .assets/ become attachment chips; other local links sta
   const { renderMarkdown } = await loadMarkdown();
   const { html } = renderMarkdown('[Relatório.pdf](.assets/2026-09-29-142100-ab12.pdf) [x](.assets/../x.pdf) [y](C:/x.pdf)');
   assert.equal((html.match(/class="md-file"/g) || []).length, 1);
-  assert.match(html, /<a class="md-file" href="#" data-asset="2026-09-29-142100-ab12\.pdf"[^>]*>📎 Relatório\.pdf<\/a>/);
+  assert.match(html, /<a class="md-file" href="#" data-asset="2026-09-29-142100-ab12\.pdf" data-kind="pdf" data-thumb="1"[^>]*>/);
+  assert.match(html, /<span class="md-file__ext">PDF<\/span>/);
+  assert.match(html, /<span class="md-file__name">Relatório\.pdf<\/span>/);
+  const z = renderMarkdown('[a.zip](.assets/2026-09-29-142100-ab12.zip) [b.png](.assets/2026-09-29-142100-ab13.png)').html;
+  assert.match(z, /data-kind="archive" title="[^"]*"><span class="md-file__thumb"><span class="md-file__ext">ZIP/); // sem miniatura: fica o selo colorido
+  assert.ok(!/data-kind="archive"[^>]*data-thumb/.test(z));
+  assert.match(z, /data-kind="image" title="[^"]*"><span class="md-file__thumb has-img" style="background-image:url\(devkit-note:\/\/asset\/2026-09-29-142100-ab13\.png\)"/);
   assert.ok(!/C:\/x\.pdf"/.test(html));
 });
 

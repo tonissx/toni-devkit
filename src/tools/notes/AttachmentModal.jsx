@@ -1,11 +1,9 @@
 import { DS } from '../../lib/ds.js';
 import { highlight } from '../../notes/markdown.js';
-import { extOf, formatSize } from '../../notes/attachments.js';
+import { extOf, formatSize, visualKind, KIND_ICON } from '../../notes/attachments.js';
 import { notesApi, cleanError } from '../../notes/client.js';
 
 const { Modal, Button, Icon, Spinner } = DS;
-
-const KIND_ICON = { image: 'image', pdf: 'file-text', audio: 'music', video: 'video', text: 'file-code', exec: 'shield-alert', other: 'file' };
 
 /**
  * Pré-visualização de um anexo da nota (arquivo de .assets\). Imagem, PDF, áudio e vídeo vêm direto do
@@ -27,6 +25,7 @@ export function AttachmentModal({ asset, label, onClose }) {
   const url = `devkit-note://asset/${encodeURIComponent(asset)}`;
   const shown = label || (info && info.name) || asset;
   const kind = info ? info.kind : 'other';
+  const icon = KIND_ICON[visualKind(asset)];
 
   let body;
   if (error) body = <div className="nts-attach__card"><Icon name="triangle-alert" size={28} /><strong>Não foi possível abrir</strong><span>{error}</span></div>;
@@ -44,7 +43,7 @@ export function AttachmentModal({ asset, label, onClose }) {
   } else {
     body = (
       <div className="nts-attach__card">
-        <Icon name={KIND_ICON[kind]} size={32} />
+        <Icon name={icon} size={32} />
         <strong>{shown}</strong>
         <span>{formatSize(info.size)}</span>
         <span>{kind === 'exec' ? 'Arquivo executável: não é pré-visualizado. Abrir pede confirmação.' : 'Sem pré-visualização para este tipo de arquivo.'}</span>
@@ -53,7 +52,7 @@ export function AttachmentModal({ asset, label, onClose }) {
   }
 
   return (
-    <Modal open onClose={onClose} icon={KIND_ICON[kind]} title={shown} width={1040}
+    <Modal open onClose={onClose} icon={icon} title={shown} width={1040}
       description={info ? `${formatSize(info.size)} · ${info.name}` : undefined}
       footer={<>
         <Button variant="ghost" icon="folder-open" disabled={!info} onClick={() => notesApi().revealAsset(asset)}>Mostrar na pasta</Button>

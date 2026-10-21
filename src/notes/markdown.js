@@ -10,6 +10,7 @@ import { toggleTaskAt } from './note.js';
 import { isoDate } from './edit.js';
 import { priorityInfo } from './priority.js';
 import { secretNameFromBlock, kindOf, isDbLike } from '../vault/entry.js';
+import { visualKind, extOf, THUMB_KINDS } from './attachments.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -26,6 +27,21 @@ export const highlight = (code, lang) => code.split('\n')
   .join('\n');
 
 const ASSET_RE = /^\.assets\/([\w-][\w.-]*)$/;
+
+/**
+ * Cartão de um anexo ([nome.pdf](.assets/…)): miniatura + nome + tipo. Sem miniatura, o selo colorido com a
+ * extensão (data-kind decide a cor) serve de placeholder. Imagens já nascem com o próprio arquivo como fundo;
+ * pdf/vídeo/Office levam data-thumb="1" e o NotePreview pede a miniatura ao Windows depois de pintar.
+ */
+function fileChip(asset, labelHtml) {
+  const kind = visualKind(asset);
+  const ext = (extOf(asset) || 'arq').toUpperCase().slice(0, 4);
+  const thumb = kind === 'image' ? ` style="background-image:url(devkit-note://asset/${encodeURIComponent(asset)})"` : '';
+  const cls = 'md-file__thumb' + (kind === 'image' ? ' has-img' : '');
+  return `<a class="md-file" href="#" data-asset="${esc(asset)}" data-kind="${kind}"${THUMB_KINDS.has(kind) ? ' data-thumb="1"' : ''} title="Abrir pré-visualização">`
+    + `<span class="${cls}"${thumb}><span class="md-file__ext">${esc(ext)}</span></span>`
+    + `<span class="md-file__name">${labelHtml}</span></a>`;
+}
 const WIKI_RE =/^\[\[([^[\]\n|]+)(?:\|([^\]\n]+))?\]\]/;
 const EMBED_RE = /^!\[\[([^[\]\n|]+)(?:\|([^\]\n]+))?\]\]/; // ![[Diagrama]] · ![[Diagrama|legenda]]
 const META_START_RE = /(^|\s)(?:@\d{4}-\d{2}-\d{2}|![123])(?=\s|$)/;
@@ -130,7 +146,7 @@ export function renderMarkdown(md, { resolve = () => null, secret = () => undefi
       link({ href, title, tokens }) {
         const text = this.parser.parseInline(tokens);
         const asset = ASSET_RE.exec(href || '');
-        if (asset) return `<a class="md-file" href="#" data-asset="${esc(asset[1])}" title="Abrir anexo">📎 ${text}</a>`;
+        if (asset) return fileChip(asset[1], text);
         if (!/^(https?:|mailto:)/i.test(href || '')) return text;
         return `<a href="${esc(href)}" target="_blank" rel="noreferrer"${title ? ` title="${esc(title)}"` : ''}>${text}</a>`;
       },

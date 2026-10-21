@@ -11,6 +11,20 @@ import { AttachmentModal } from './AttachmentModal.jsx';
 
 const { Button, Icon, Modal } = DS;
 
+const thumbCache = new Map(); // anexo → data URL da miniatura ('' = o Windows não gerou)
+
+/** Aplica as miniaturas já conhecidas nos cartões de anexo do preview. */
+function paintThumbs(root) {
+  if (!root) return;
+  for (const el of root.querySelectorAll('.md-file[data-thumb]')) {
+    const url = thumbCache.get(el.dataset.asset);
+    const box = el.querySelector('.md-file__thumb');
+    if (!url || !box || box.classList.contains('has-img')) continue;
+    box.style.backgroundImage = `url("${url}")`;
+    box.classList.add('has-img');
+  }
+}
+
 /**
  * Preview do markdown. Cliques: [[link]] → onOpenLink(título) · "Copiar" num bloco → copia ·
  * checkbox de tarefa → onChange(conteúdo com a tarefa alternada) · imagem/anexo → modal de pré-visualização
@@ -92,6 +106,26 @@ export function NotePreview({ content, hideCode, embeds, resolve, onOpenLink, on
     return () => { clearTimeout(timer); off(); };
   }, [embeds]);
 
+  // ── Miniaturas dos anexos (pdf, vídeo, Office) ─────────────────────────────────────────────────────────────────────
+  // Mesmo problema do embed: o HTML é regravado a cada mudança e descarta o que pintamos. Então pinta do cache (síncrono,
+  // sem piscar) e depois pede ao processo principal só as que faltam. '' no cache = sem miniatura (fica o placeholder).
+  React.useLayoutEffect(() => { paintThumbs(previewRef.current); }, [html]);
+  React.useEffect(() => {
+    const root = previewRef.current;
+    if (!root) return undefined;
+    const missing = [...new Set([...root.querySelectorAll('.md-file[data-thumb]')].map((el) => el.dataset.asset))].filter((a) => !thumbCache.has(a));
+    if (!missing.length) return undefined;
+    let gone = false;
+    (async () => {
+      for (const a of missing) {
+        thumbCache.set(a, await notesApi().assetThumb(a).catch(() => '') || '');
+        if (gone) return;
+        paintThumbs(previewRef.current);
+      }
+    })();
+    return () => { gone = true; };
+  }, [html]);
+
   /** Feedback no próprio botão (e no toast, se houver). */
   const flash = (btn, text, ok = true, detail) => {
     const old = btn.dataset.label || btn.textContent;
@@ -130,7 +164,7 @@ export function NotePreview({ content, hideCode, embeds, resolve, onOpenLink, on
       e.preventDefault();
       // Ctrl/Shift+clique pula a pré-visualização e abre direto no programa padrão do sistema.
       if (e.ctrlKey || e.shiftKey) window.devkit.notes.openAsset(img.dataset.asset);
-      else setAttachment({ asset: img.dataset.asset, label: img.classList.contains('md-file') ? img.textContent.replace(/^📎\s*/, '') : '' });
+      else setAttachment({ asset: img.dataset.asset, label: img.classList.contains('md-file') ? (img.querySelector('.md-file__name') || img).textContent : '' });
       return;
     }
     const task = e.target.closest('.md-task');

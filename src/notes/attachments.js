@@ -33,6 +33,38 @@ function previewKind(name) {
   return 'other';
 }
 
+const DOC_EXT = new Set(['doc', 'docx', 'dot', 'dotx', 'odt', 'rtf']);
+const SHEET_EXT = new Set(['xls', 'xlsx', 'xlsm', 'xlsb', 'ods', 'csv', 'tsv']);
+const SLIDES_EXT = new Set(['ppt', 'pptx', 'pps', 'ppsx', 'odp']);
+const ARCHIVE_EXT = new Set(['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz']);
+const CODE_EXT = new Set(['json', 'jsonc', 'xml', 'html', 'htm', 'yml', 'yaml', 'sql', 'mjs', 'ts', 'jsx', 'tsx', 'css', 'java', 'cs', 'py', 'sh', 'ftl', 'xsd', 'wsdl', 'ini', 'cfg', 'conf', 'toml', 'properties']);
+
+/**
+ * Grupo visual do arquivo (cor/ícone do cartão do anexo): 'pdf' | 'image' | 'video' | 'audio' | 'doc' | 'sheet' |
+ * 'slides' | 'archive' | 'code' | 'text' | 'exec' | 'other'. Mais fino que previewKind, que decide só o modal.
+ */
+function visualKind(name) {
+  const ext = extOf(name);
+  if (EXECUTABLE_EXT.has(ext)) return 'exec';
+  if (IMAGE_EXT.has(ext)) return 'image';
+  if (ext === 'pdf') return 'pdf';
+  if (VIDEO_EXT[ext]) return 'video';
+  if (AUDIO_EXT[ext]) return 'audio';
+  if (DOC_EXT.has(ext)) return 'doc';
+  if (SHEET_EXT.has(ext)) return 'sheet';
+  if (SLIDES_EXT.has(ext)) return 'slides';
+  if (ARCHIVE_EXT.has(ext)) return 'archive';
+  if (CODE_EXT.has(ext)) return 'code';
+  if (TEXT_EXT.has(ext)) return 'text';
+  return 'other';
+}
+
+/** Grupos cuja miniatura vem do Windows (createThumbnailFromPath). Imagem usa o próprio arquivo; os demais, placeholder. */
+const THUMB_KINDS = new Set(['pdf', 'video', 'doc', 'sheet', 'slides']);
+
+/** Ícone Lucide de cada grupo (modal de pré-visualização). */
+const KIND_ICON = { pdf: 'file-text', image: 'image', video: 'film', audio: 'music', doc: 'file-text', sheet: 'file-spreadsheet', slides: 'presentation', archive: 'file-archive', code: 'file-code', text: 'file-text', exec: 'shield-alert', other: 'file' };
+
 /** Content-Type de pdf/áudio/vídeo (o net.fetch de file:// não dá um para todos); '' = deixa o padrão. */
 function mimeFor(name) {
   const ext = extOf(name);
@@ -52,4 +84,4 @@ function formatSize(bytes) {
 
 const TEXT_PREVIEW_MAX = 512 * 1024;
 
-module.exports = { extOf, isExecutableAsset, previewKind, mimeFor, formatSize, TEXT_PREVIEW_MAX, EXECUTABLE_EXT };
+module.exports = { extOf, isExecutableAsset, previewKind, visualKind, THUMB_KINDS, KIND_ICON, mimeFor, formatSize, TEXT_PREVIEW_MAX, EXECUTABLE_EXT };

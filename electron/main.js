@@ -11,7 +11,7 @@ const { createWinHelper } = require('./winfocus');
 const { UI_BINDABLE_IDS, SELECTION_BIND_IDS } = require('../src/commands/binds.js');
 const { createSelectionCopier } = require('./selection');
 const { createNotesService, isExecutableAsset } = require('./notes/service');
-const { mimeFor } = require('../src/notes/attachments.js');
+const { mimeFor, visualKind, THUMB_KINDS } = require('../src/notes/attachments.js');
 const { createNotesSettings } = require('./notes/settings');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
@@ -456,6 +456,23 @@ ipcMain.handle('notes:open-asset', async (e, ref) => {
 });
 // Pré-visualização de anexos (modal do preview): metadados/texto do arquivo e "Mostrar na pasta".
 ipcMain.handle('notes:read-asset', async (_e, ref) => { await notesReady; return notes.readAsset(ref); });
+// Miniatura do anexo (PDF, vídeo, Word/Excel/PowerPoint) pelo provedor de miniaturas do Windows — o mesmo do
+// Explorer. Devolve um data URL PNG, ou '' quando o sistema não consegue (o renderer mostra um placeholder).
+// Executáveis nunca passam pelo shell. Os anexos são imutáveis (nome único), então o cache vale a sessão toda.
+const assetThumbs = new Map();
+ipcMain.handle('notes:asset-thumb', async (_e, ref) => {
+  await notesReady;
+  const file = notes.assetFile(ref);
+  if (!THUMB_KINDS.has(visualKind(file))) return '';
+  if (assetThumbs.has(file)) return assetThumbs.get(file);
+  let url = '';
+  try {
+    const img = await nativeImage.createThumbnailFromPath(file, { width: 192, height: 192 });
+    if (img && !img.isEmpty()) url = img.toDataURL();
+  } catch { /* sem provedor de miniatura para este arquivo */ }
+  assetThumbs.set(file, url);
+  return url;
+});
 ipcMain.handle('notes:reveal-asset', async (_e, ref) => { await notesReady; shell.showItemInFolder(notes.assetFile(ref)); });
 
 // Imagens das notas (.assets\) chegam ao renderer por devkit-note://asset/<nome> (a CSP libera só este esquema).
