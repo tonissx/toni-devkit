@@ -510,6 +510,16 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   (clicar abre a nota; se ela não existe, cria). Tags, aliases, pinned e favoritas; filtros da lista (chips na
   lateral) Quick · Pinned · Snippets · Favoritas · Recentes (editadas e vistas). A área principal tem abas de visão
   **Nota | Tarefas | Grafo** — os filtros mudam a lista, as abas mudam o painel
+- **Filtro por tags**: o chip **Tags** abre um campo que sugere as tags existentes, com a quantidade de notas (as mais
+  usadas primeiro; digitar filtra, sem acento; `↑/↓` e `Enter` escolhem, `Backspace` remove a última, `Esc` limpa o
+  campo e depois recolhe). As escolhidas viram chips removíveis; com duas ou mais aparece o modo **Todas** (a nota tem
+  todas as tags, o padrão) ou **Qualquer** (basta uma). A escolha vale também para o painel Tarefas
+- **Filtro por data**: o chip **📅 Data** (ao lado dos filtros) abre um mês com o número de notas **criadas** em cada
+  dia (de todas as notas, independente da busca, pasta ou tag ativas). Clique num dia para ver só as notas dele; clique
+  em outro para fechar um intervalo (em qualquer ordem, as duas pontas entram) — ou aperte num dia e **arraste** até o
+  outro: o intervalo aparece enquanto arrasta e vale ao soltar; clicar no mesmo dia, ou no **✕** do
+  chip, limpa. Clicar fora do calendário (ou `Esc`) recolhe; o chip abre de novo. O filtro soma com busca, tags e pasta, continua com o calendário recolhido e depois de fechar o app;
+  enquanto ele estiver ativo a lista fica plana, sem a árvore de pastas. O dia vale no seu fuso horário
 - **Links entre notas**: digitar `[[` abre sugestões de notas (↑/↓, `Enter`/`Tab` completa, `Esc` fecha; "Nova nota: …"
   quando nada casa). Abaixo do editor, **Mencionada em (N)** lista as notas que apontam para a aberta (por título ou
   alias), com a linha do link. Ao trocar o título, o Devkit oferece atualizar os `[[links]]` que usavam o nome antigo

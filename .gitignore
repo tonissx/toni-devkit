@@ -4,3 +4,4 @@ renderer/dist/
 renderer/vendor/react*.js
 CLAUDE.md
 .capture-tmp/
+.superpowers/
