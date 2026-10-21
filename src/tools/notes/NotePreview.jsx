@@ -4,6 +4,7 @@ import { snippetCode, codeBlocks, removeFences } from '../../notes/note.js';
 import { secretRefs, sameName } from '../../vault/entry.js';
 import { useVaultRefs, copyFromVault, cleanError } from '../../vault/client.js';
 import { UnlockForm } from '../vault/UnlockForm.jsx';
+import { renderDiagram } from '../../diagrams/render.js';
 
 const { Button, Icon, Modal } = DS;
 
@@ -13,9 +14,10 @@ const { Button, Icon, Modal } = DS;
  * Cartão ```secret``` (Vault): Copiar → clipboard protegido pelo processo principal · Desbloquear → modal aqui
  * mesmo · Criar/Vault ↗ → abre a ferramenta Vault.
  * hideCode: não repete os blocos de código (o SnippetCard já os mostra). toast(título, texto, variante) opcional.
+ * diagram: a nota é um diagrama (tipo 'diagram'): o conteúdo todo é Mermaid, sem cerca — o preview o desenha.
  */
-export function NotePreview({ content, hideCode, resolve, onOpenLink, onChange, onCopy, onDoubleClick, toast }) {
-  const shown = hideCode ? removeFences(content) : content;
+export function NotePreview({ content, hideCode, diagram, resolve, onOpenLink, onChange, onCopy, onDoubleClick, toast }) {
+  const shown = diagram ? `~~~mermaid\n${content || ''}\n~~~` : hideCode ? removeFences(content) : content;
   const names = React.useMemo(() => secretRefs(shown), [shown]);
   const refs = useVaultRefs(names);
   const [unlock, setUnlock] = React.useState(null); // status do cofre enquanto o modal de desbloqueio está aberto
@@ -26,6 +28,22 @@ export function NotePreview({ content, hideCode, resolve, onOpenLink, onChange, 
     return (key !== undefined && refs.items[key]) || { missing: true };
   }, [refs]);
   const { html, blocks } = React.useMemo(() => renderMarkdown(shown, { resolve, secret }), [shown, resolve, secret]);
+
+  // Blocos ```mermaid: troca o marcador pelo SVG. O HTML é regravado a cada mudança do conteúdo, então roda de novo;
+  // `gone` descarta o resultado de uma renderização que ficou para trás.
+  const previewRef = React.useRef(null);
+  React.useEffect(() => {
+    const root = previewRef.current;
+    const slots = root ? [...root.querySelectorAll('.md-mermaid[data-mermaid]')] : [];
+    if (!slots.length) return undefined;
+    let gone = false;
+    slots.reduce((chain, slot) => chain.then(async () => {
+      const r = await renderDiagram(blocks[Number(slot.dataset.mermaid)]);
+      if (gone || !slot.isConnected) return;
+      if (r.svg) { slot.innerHTML = r.svg; slot.classList.add('is-rendered'); } else { slot.classList.add('is-error'); slot.title = r.error || 'Diagrama inválido'; }
+    }), Promise.resolve());
+    return () => { gone = true; };
+  }, [html, blocks]);
 
   /** Feedback no próprio botão (e no toast, se houver). */
   const flash = (btn, text, ok = true, detail) => {
@@ -67,7 +85,7 @@ export function NotePreview({ content, hideCode, resolve, onOpenLink, onChange, 
   }
   // eslint-disable-next-line react/no-danger — HTML gerado por renderMarkdown (HTML cru escapado)
   return (<>
-    <div className="md-preview" onClick={onClick} onDoubleClick={onDoubleClick} dangerouslySetInnerHTML={{ __html: html }} />
+    <div ref={previewRef} className="md-preview" onClick={onClick} onDoubleClick={onDoubleClick} dangerouslySetInnerHTML={{ __html: html }} />
     {unlock && (
       <Modal open onClose={() => setUnlock(null)} icon="lock-keyhole" title="Desbloquear o cofre" width={420}
         description="Os campos das entradas aparecem na nota; os segredos continuam mascarados.">

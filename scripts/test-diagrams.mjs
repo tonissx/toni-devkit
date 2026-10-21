@@ -27,6 +27,32 @@ const { TEMPLATES, fromTemplate, diagramKind } = require('../src/diagrams/templa
 const { viewBoxOf, standaloneSvg, safeFileName } = require('../src/diagrams/svg.js');
 const { ddlToMermaid, typeOf } = require('../src/diagrams/ddlToMermaid.js');
 
+/* ─────────────── ```mermaid no markdown das Notas (bundle com esbuild, como no app) ─────────────── */
+async function loadMarkdown() {
+  const esbuild = await import('esbuild');
+  const out = await esbuild.build({ entryPoints: ['src/notes/markdown.js'], bundle: true, write: false, format: 'cjs', platform: 'node', logLevel: 'error' });
+  const mod = { exports: {} };
+  new Function('module', 'exports', 'require', out.outputFiles[0].text)(mod, mod.exports, require);
+  return mod.exports;
+}
+
+test('markdown: ```mermaid vira marcador com o código escapado; outros blocos seguem iguais', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const md = 'antes\n\n```mermaid\nflowchart TD\n  A["<img src=x onerror=alert(1)>"] --> B\n```\n\n```sql\nSELECT 1\n```\n';
+  const { html, blocks } = renderMarkdown(md);
+  assert.match(html, /<div class="md-mermaid" data-mermaid="0"><pre><code>flowchart TD/);
+  assert.ok(!html.includes('<img') && html.includes('&lt;img'), 'HTML dentro do diagrama é escapado');
+  assert.ok(!/class="md-code__copy" data-copy="0"/.test(html), 'bloco mermaid não ganha botão Copiar');
+  assert.match(html, /data-copy="1"/); // o sql continua com o índice dele em blocks
+  assert.deepEqual(blocks.map((b) => b.split('\n')[0]), ['flowchart TD', 'SELECT 1']);
+});
+
+test('markdown: nota de diagrama embrulhada em ~~~mermaid também vira marcador', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const { html } = renderMarkdown('~~~mermaid\nerDiagram\n  A ||--o{ B : x\n~~~');
+  assert.match(html, /<div class="md-mermaid" data-mermaid="0">/);
+});
+
 const DDL = `
 CREATE TABLE dbo.Cliente (Id INT IDENTITY(1,1) PRIMARY KEY, Nome NVARCHAR(100) NOT NULL, Email VARCHAR(200) UNIQUE);
 CREATE TABLE dbo.Pedido (Id INT PRIMARY KEY, ClienteId INT NOT NULL, Total DECIMAL(10,2),

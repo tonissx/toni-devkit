@@ -70,3 +70,10 @@
 .dgm-import__status { margin-top: 8px; font-size: 12px; }
 .dgm-import__status.is-ok { color: var(--tk-accent-text, var(--tk-accent)); }
 .dgm-import__status.is-error { color: var(--tk-danger, #ff6b6b); }
+
+/* Blocos ```mermaid e notas do tipo diagrama no preview das Notas (NotePreview) */
+.md-mermaid { margin: 0 0 .85em; padding: 12px; overflow: auto; text-align: center; background: var(--tk-surface-1); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); }
+.md-mermaid svg { max-width: 100%; height: auto; }
+.md-mermaid > pre { margin: 0; text-align: left; font: 12px/1.5 var(--tk-font-mono); color: var(--tk-text-3); white-space: pre-wrap; }
+.md-mermaid.is-error { border-color: var(--tk-danger, #ff6b6b); }
+.md-mermaid.is-error > pre { color: var(--tk-text); }

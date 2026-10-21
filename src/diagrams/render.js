@@ -25,8 +25,10 @@ export function renderDiagram(source) {
   const job = chain.then(async () => {
     try {
       const m = await loadMermaid();
-      // O body não define fonte; a do app vem de um contêiner interno — lê da própria tela de Diagramas.
-      const font = getComputedStyle(document.querySelector('.dgm-screen') || document.body).fontFamily;
+      // O body não define fonte (a do app vem de um contêiner interno), então lê a variável do tema; o fallback é a
+      // fonte de uma tela que a usa. Funciona na tela Diagramas e no preview de Notas.
+      const font = getComputedStyle(document.documentElement).getPropertyValue('--tk-font-sans').trim()
+        || getComputedStyle(document.querySelector('.dgm-screen, .md-preview') || document.body).fontFamily;
       return await m.render(String(source || ''), themeFromColors({ ...readColors(), font }));
     } catch (e) {
       return { error: e.message };

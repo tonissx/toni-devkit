@@ -115,7 +115,7 @@ export function TrashPanel({ onOpen, toast }) {
                 <Button size="sm" variant="primary" icon="rotate-ccw" onClick={() => restore(current)}>Restaurar</Button>
               </div>
               <div className="nts-preview tk-scroll">
-                <NotePreview content={current.content} resolve={() => null} onOpenLink={noop} onCopy={noop} />
+                <NotePreview content={current.content} diagram={current.type === 'diagram'} resolve={() => null} onOpenLink={noop} onCopy={noop} />
               </div>
             </div>
           )}

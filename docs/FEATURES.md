@@ -41,6 +41,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **Banco**: monitor de SQL Server — bloqueios, sessões, queries caras, deadlocks e saúde, ao vivo e com histórico | ✅ |
 | **SQL Visualizer**: SQL como grafo — diagrama ER, explorador de schemas grandes, lineage de query e plano de execução | ✅ |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
+| **Diagramas**: ER, fluxos, sequência e estados em Mermaid, com preview ao vivo, importação de DDL e exportação PNG/SVG | ✅ |
 | **Vault**: cofre de senhas, tokens e credenciais de banco, com senha mestra e cópia que se apaga | ✅ |
 | **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
 
@@ -642,6 +643,29 @@ await window.devkit.notes.create({ title: 'Resultado da análise', content: '...
 const hits = await window.devkit.notes.search('coalesce', { limit: 5 });
 window.devkit.notes.open({ id: hits[0].id }); // abre no editor
 ```
+
+## Diagramas
+
+Diagramas em texto ([Mermaid](https://mermaid.js.org)) com preview ao vivo: **ER**, **fluxo (workflow)**, **sequência** e
+**estados**. Funciona offline: o Mermaid vem empacotado e só é carregado quando você abre a ferramenta.
+
+- **Escrever**: texto Mermaid à esquerda, diagrama à direita, atualizado enquanto você digita. Erro de sintaxe aparece
+  embaixo e o último diagrama válido continua na tela. Arraste para mover, roda do mouse para o zoom, duplo clique
+  para ajustar à tela.
+- **Novo diagrama**: parte de um modelo (ER, fluxo, sequência ou estados). Na palette: **Novo diagrama ER** e
+  **Novo fluxo (workflow)**.
+- **Importar DDL**: cola `CREATE TABLE` / `ALTER TABLE` do SQL Server (ou o JSON de metadados do SQL Visualizer) e gera o
+  `erDiagram`: tipos, `PK`/`FK`/`UK`, `identity` e as relações. A cardinalidade vem da FK: **NOT NULL** → pai
+  obrigatório (`||`), nulável → opcional (`|o`); linha cheia quando a FK faz parte da chave primária do filho,
+  pontilhada nos demais casos. Nada é executado; só o texto é lido.
+- **Exportar**: **PNG** (2x), **SVG** (autônomo, com o fundo do tema, abre em qualquer ferramenta) ou o texto **`.mmd`**.
+- **Dentro das Notas**: um bloco ` ```mermaid ` em qualquer nota é desenhado no preview; se o texto for inválido, o
+  bloco continua como código, com a borda vermelha.
+
+Cada diagrama é uma **nota do tipo `diagram`** (um `.md` com o texto Mermaid), guardada com as suas Notas. Por isso o
+histórico de versões e a lixeira são os mesmos das Notas (excluir um diagrama o manda para a lixeira de **Notes**), e
+no **Notes** o filtro **Diagramas** mostra só eles; lá também dá para organizar em pastas e adicionar tags. Diagramas
+ficam de fora da lista de **Tarefas**.
 
 ## Vault
 
