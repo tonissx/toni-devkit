@@ -41,7 +41,7 @@ npm run dist:linux # gera AppImage (Linux)
 | **Banco**: monitor de SQL Server — bloqueios, sessões, queries caras, deadlocks e saúde, ao vivo e com histórico | ✅ |
 | **SQL Visualizer**: SQL como grafo — diagrama ER, explorador de schemas grandes, lineage de query e plano de execução | ✅ |
 | **Notes**: memória técnica em Markdown, snippets e busca, integrada à palette | ✅ |
-| **Diagramas**: ER, fluxos, sequência e estados em Mermaid, com preview ao vivo, importação de DDL e exportação PNG/SVG | ✅ |
+| **Diagramas**: quadro de desenho livre (Excalidraw) para ER, fluxos e esquemas, salvo junto das Notas, com exportação PNG/SVG | ✅ |
 | **Vault**: cofre de senhas, tokens e credenciais de banco, com senha mestra e cópia que se apaga | ✅ |
 | **DevCore**: infraestrutura idle com DevPets, descobertas pelo uso do DevKit | ✅ |
 
@@ -646,26 +646,28 @@ window.devkit.notes.open({ id: hits[0].id }); // abre no editor
 
 ## Diagramas
 
-Diagramas em texto ([Mermaid](https://mermaid.js.org)) com preview ao vivo: **ER**, **fluxo (workflow)**, **sequência** e
-**estados**. Funciona offline: o Mermaid vem empacotado e só é carregado quando você abre a ferramenta.
+Quadro de desenho livre para **ER**, **fluxos** e **esquemas**, feito com o [Excalidraw](https://excalidraw.com) embutido.
+Você arrasta, redimensiona e liga as formas direto na tela (retângulo, losango, elipse, setas que seguem as caixas,
+linha, lápis, texto, imagem, quadros). Funciona offline: o editor e as fontes vêm empacotados, e o editor só é carregado
+quando você abre a ferramenta.
 
-- **Escrever**: texto Mermaid à esquerda, diagrama à direita, atualizado enquanto você digita. Erro de sintaxe aparece
-  embaixo e o último diagrama válido continua na tela. Arraste para mover, roda do mouse para o zoom, duplo clique
-  para ajustar à tela.
-- **Novo diagrama**: parte de um modelo (ER, fluxo, sequência ou estados). Na palette: **Novo diagrama ER** e
-  **Novo fluxo (workflow)**.
-- **Importar DDL**: cola `CREATE TABLE` / `ALTER TABLE` do SQL Server (ou o JSON de metadados do SQL Visualizer) e gera o
-  `erDiagram`: tipos, `PK`/`FK`/`UK`, `identity` e as relações. A cardinalidade vem da FK: **NOT NULL** → pai
-  obrigatório (`||`), nulável → opcional (`|o`); linha cheia quando a FK faz parte da chave primária do filho,
-  pontilhada nos demais casos. Nada é executado; só o texto é lido.
-- **Exportar**: **PNG** (2x), **SVG** (autônomo, com o fundo do tema, abre em qualquer ferramenta) ou o texto **`.mmd`**.
-- **Dentro das Notas**: um bloco ` ```mermaid ` em qualquer nota é desenhado no preview; se o texto for inválido, o
-  bloco continua como código, com a borda vermelha.
+- **Novo diagrama**: botão **Novo diagrama** (ou **Novo diagrama** na palette) cria um quadro em branco. A lista à
+  esquerda busca por título e tags, e o último diagrama aberto reabre sozinho.
+- **Salvar**: automático enquanto você desenha (e ao trocar de diagrama ou fechar o app); só grava quando o desenho muda
+  de fato, não quando você só rola ou seleciona.
+- **Exportar**: **PNG** (2x), **SVG** (com a fonte do desenho embutida) ou o arquivo **`.excalidraw`** (o formato do
+  próprio Excalidraw). A imagem sai no tema claro, o padrão do Excalidraw para colar em documentos.
+- **Gerar ER a partir de DDL**: não faz parte desta ferramenta; use o **SQL Visualizer**.
 
-Cada diagrama é uma **nota do tipo `diagram`** (um `.md` com o texto Mermaid), guardada com as suas Notas. Por isso o
-histórico de versões e a lixeira são os mesmos das Notas (excluir um diagrama o manda para a lixeira de **Notes**), e
-no **Notes** o filtro **Diagramas** mostra só eles; lá também dá para organizar em pastas e adicionar tags. Diagramas
-ficam de fora da lista de **Tarefas**.
+Cada diagrama é uma **nota do tipo `diagram`**: um `.md` guardado com as suas Notas, cujo conteúdo é o desenho em JSON.
+Por isso o histórico de versões e a lixeira são os mesmos das Notas (excluir um diagrama o manda para a lixeira de
+**Notes**). No **Notes**, o filtro **Diagramas** mostra só eles; ali um diagrama aparece como um **cartão com miniatura**
+e o botão **Abrir em Diagramas**, não como texto (editar o JSON à mão corromperia o desenho), e lá também dá para
+organizar em pastas e adicionar tags. Diagramas ficam de fora da lista de **Tarefas** e não viram sticky note.
+
+Um diagrama criado numa versão anterior (texto Mermaid) abre como **somente leitura**, com o texto preservado: o
+Devkit nunca grava por cima de um conteúdo que não reconhece. Do Excalidraw ficam de fora, por dependerem de rede, o
+**Web Embed** e o **Mermaid → Excalidraw**.
 
 ## Vault
 

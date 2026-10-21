@@ -138,7 +138,7 @@ anywhere in the system.
 | 🗄️ | **Database** | SQL Server monitor: who blocks whom, slow queries, deadlocks and health, live and from history |
 | 🧭 | **SQL Visualizer** | SQL as a graph without running anything: ER diagram (DDL, metadata or straight from the server), big-schema explorer, query lineage and execution plans (`.sqlplan`) |
 | 📝 | **Notes** | Markdown with `[[links]]`, tags, graph, snippets, tasks and sticky notes |
-| 🔀 | **Diagrams** | ER, flowcharts, sequence and state diagrams in Mermaid with live preview; imports DDL to generate the ER and exports PNG/SVG. Stored with your Notes |
+| 🔀 | **Diagrams** | Free-form whiteboard (Excalidraw) for ER diagrams, flows and sketches, offline; exports PNG/SVG. Stored with your Notes |
 | 🔐 | **Vault** | Local vault (AES-256-GCM) with a master password and self-clearing copy |
 | 🎮 | **DevCore** | An optional idle game, with DevPets you discover by using Devkit itself |
 | ✦ | **AI (optional)** | Off by default. Local via Ollama or cloud via Claude; nothing is applied without a click |
