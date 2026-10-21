@@ -1,15 +1,19 @@
-// Exportar o diagrama: SVG autônomo, PNG (2x) ou o texto Mermaid (.mmd). Só roda no renderer.
-import { readColors, svgToPng } from '../tools/json-visualizer/exportImage.js';
-import { standaloneSvg, safeFileName, viewBoxOf } from './svg.js';
+// Exportar o diagrama: PNG (2x), SVG ou o arquivo .excalidraw (reabre no excalidraw.com). Só roda no renderer.
+// O editor é escuro, mas as cores guardadas são as do modo claro; exportar em claro dá a imagem padrão para
+// colar em documentos.
+import { loadExcalidraw } from './excalidraw.js';
+import { serializeScene, safeFileName } from './scene.js';
 
-/** kind: 'svg' | 'png' | 'mmd'. Devolve { path, name } ou null se o usuário cancelou o diálogo. */
-export async function exportDiagram(kind, { svg, title, code }) {
+/**
+ * kind: 'png' | 'svg' | 'excalidraw'. scene: { elements, appState, files } (o estado atual do editor).
+ * Devolve { path, name } ou null se o usuário cancelou o diálogo de salvar.
+ */
+export async function exportDiagram(kind, { scene, title }) {
   const save = window.devkit.files.saveExport;
   const name = safeFileName(title);
-  if (kind === 'mmd') return save(String(code || ''), name + '.mmd');
-  if (!svg) throw new Error('Não há diagrama renderizado para exportar');
-  const out = standaloneSvg(svg, readColors().bg);
-  if (kind === 'svg') return save(out, name + '.svg');
-  const vb = viewBoxOf(out);
-  return save(await svgToPng(out, vb ? vb.w : 800, vb ? vb.h : 600), name + '.png');
+  if (kind === 'excalidraw') return save(serializeScene(scene.elements, scene.appState, scene.files), name + '.excalidraw');
+  if (!(scene.elements || []).some((e) => !e.isDeleted)) throw new Error('O diagrama está vazio');
+  const X = await loadExcalidraw();
+  if (kind === 'svg') return save(await X.exportSvg(scene, { dark: false }), name + '.svg');
+  return save(await X.exportPng(scene, { dark: false }), name + '.png');
 }

@@ -275,16 +275,10 @@ const noteCommands = [
     run: (ctx) => ctx.openApp('notes', { view: 'template' }),
   },
   {
-    id: 'diagrams:er', name: 'Novo diagrama ER', icon: 'database',
-    description: 'Diagrama de entidades e relacionamentos em Mermaid, com preview ao vivo',
-    keywords: ['diagrama', 'er', 'mermaid', 'entidade', 'relacionamento', 'banco', 'schema', 'tabelas'],
-    run: (ctx) => ctx.openApp('diagrams', { template: 'er' }),
-  },
-  {
-    id: 'diagrams:flow', name: 'Novo fluxo (workflow)', icon: 'workflow',
-    description: 'Fluxograma em Mermaid, com preview ao vivo',
-    keywords: ['diagrama', 'fluxo', 'workflow', 'flowchart', 'processo', 'mermaid', 'fluxograma'],
-    run: (ctx) => ctx.openApp('diagrams', { template: 'flow' }),
+    id: 'diagrams:new', name: 'Novo diagrama', icon: 'workflow',
+    description: 'Quadro de desenho livre (ER, fluxo, esquema), salvo junto das Notas',
+    keywords: ['diagrama', 'desenho', 'quadro', 'excalidraw', 'whiteboard', 'er', 'fluxo', 'workflow', 'fluxograma', 'esquema'],
+    run: (ctx) => ctx.openApp('diagrams', { new: true }),
   },
   {
     id: 'notes:search', name: 'Search Notes', icon: 'search', keepOpen: true,

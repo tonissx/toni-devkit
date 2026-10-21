@@ -53,6 +53,72 @@ test('markdown: nota de diagrama embrulhada em ~~~mermaid também vira marcador'
   assert.match(html, /<div class="md-mermaid" data-mermaid="0">/);
 });
 
+/* ─────────────── cena do Excalidraw (src/diagrams/scene.js) ─────────────── */
+const S = require('../src/diagrams/scene.js');
+
+const rect = (id, extra = {}) => ({ id, type: 'rectangle', x: 0, y: 0, width: 10, height: 10, isDeleted: false, ...extra });
+
+test('parseScene: vazio vira cena em branco; cena válida volta intacta', () => {
+  for (const blank of ['', '   \n', null, undefined]) {
+    const r = S.parseScene(blank);
+    assert.deepEqual(r.scene.elements, []);
+    assert.equal(r.scene.type, 'excalidraw');
+    assert.ok(!r.error);
+  }
+  const text = S.serializeScene([rect('a'), rect('b')], { viewBackgroundColor: '#112233' }, {});
+  const r = S.parseScene(text);
+  assert.equal(r.scene.elements.length, 2);
+  assert.equal(r.scene.appState.viewBackgroundColor, '#112233');
+});
+
+test('parseScene: texto que não é uma cena (Mermaid antigo, JSON alheio) devolve erro com o texto original', () => {
+  const mermaid = 'erDiagram\n  A ||--o{ B : tem\n';
+  const r = S.parseScene(mermaid);
+  assert.ok(r.error && !r.scene);
+  assert.equal(r.raw, mermaid); // o editor mostra isto e NÃO grava por cima
+  assert.ok(S.parseScene('{"foo":1}').error);
+  assert.ok(S.parseScene('[1,2]').error);
+  assert.ok(S.parseScene('{"type":"excalidraw","elements":"x"}').error);
+  assert.ok(!S.parseScene('{"type":"excalidraw"}').error, 'sem elements é tolerado (cena vazia)');
+});
+
+test('serializeScene: só elementos vivos, só imagens usadas, só a cor de fundo do appState', () => {
+  const els = [rect('a'), rect('b', { isDeleted: true }), { id: 'i1', type: 'image', fileId: 'f1', isDeleted: false }, { id: 'i2', type: 'image', fileId: 'f2', isDeleted: true }];
+  const files = { f1: { id: 'f1', dataURL: 'data:image/png;base64,AAA' }, f2: { id: 'f2', dataURL: 'data:image/png;base64,BBB' }, f3: { id: 'f3' } };
+  const out = JSON.parse(S.serializeScene(els, { viewBackgroundColor: '#fff', zoom: { value: 3 }, scrollX: 99, selectedElementIds: { a: true } }, files));
+  assert.deepEqual(out.elements.map((e) => e.id), ['a', 'i1']);
+  assert.deepEqual(Object.keys(out.files), ['f1']);
+  assert.deepEqual(out.appState, { viewBackgroundColor: '#fff' });
+  assert.equal(out.type, 'excalidraw');
+});
+
+test('serializeScene: entradas ausentes não quebram', () => {
+  const out = JSON.parse(S.serializeScene(undefined, undefined, undefined));
+  assert.deepEqual(out.elements, []);
+  assert.equal(out.appState.viewBackgroundColor, '#ffffff');
+});
+
+test('sceneIsEmpty ignora elementos apagados', () => {
+  assert.ok(S.sceneIsEmpty(S.emptyScene()));
+  assert.ok(S.sceneIsEmpty({ elements: [rect('a', { isDeleted: true })] }));
+  assert.ok(!S.sceneIsEmpty({ elements: [rect('a')] }));
+  assert.ok(S.sceneIsEmpty(null));
+});
+
+test('nota de diagrama com a cena sobrevive ao ciclo do arquivo .md (front matter + JSON)', () => {
+  const content = S.serializeScene([rect('a', { text: 'linha: com "aspas" e --- traços' })], { viewBackgroundColor: '#fff' }, {});
+  const n = N.createNote({ title: 'Quadro', type: 'diagram', content });
+  const back = parse(serialize(n));
+  assert.equal(back.type, 'diagram');
+  assert.equal(JSON.parse(back.content).elements[0].text, 'linha: com "aspas" e --- traços');
+  assert.equal(S.parseScene(back.content).scene.elements.length, 1);
+});
+
+test('safeFileName (cena): sem caracteres proibidos no Windows', () => {
+  assert.equal(S.safeFileName('Pedidos: v2? <final>'), 'Pedidos v2 final');
+  assert.equal(S.safeFileName('???'), 'diagrama');
+});
+
 const DDL = `
 CREATE TABLE dbo.Cliente (Id INT IDENTITY(1,1) PRIMARY KEY, Nome NVARCHAR(100) NOT NULL, Email VARCHAR(200) UNIQUE);
 CREATE TABLE dbo.Pedido (Id INT PRIMARY KEY, ClienteId INT NOT NULL, Total DECIMAL(10,2),

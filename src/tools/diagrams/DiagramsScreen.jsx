@@ -2,24 +2,21 @@ import { DS } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { notesApi, recoverUnsaved, shortTime, cleanError } from '../../notes/client.js';
 import { normalize } from '../../commands/search.js';
-import { TEMPLATES, fromTemplate } from '../../diagrams/templates.js';
+import { emptyScene, serializeScene } from '../../diagrams/scene.js';
 import { DiagramEditor } from './DiagramEditor.jsx';
-import { ImportDdlModal } from './ImportDdlModal.jsx';
 
 const { PageHeader, Button, EmptyState, Icon } = DS;
 
 /**
- * Diagramas: notas do tipo 'diagram' (texto Mermaid) com preview ao vivo.
- * Moram na mesma pasta das Notas — tags, pastas, histórico, lixeira e busca vêm de graça.
- * `request`: { template } cria um diagrama novo · { id } abre um existente (vem da command palette).
+ * Diagramas: quadros de desenho livre (Excalidraw) guardados como notas do tipo 'diagram'.
+ * Moram na mesma pasta das Notas — histórico, lixeira e busca vêm de graça.
+ * `request`: { new: true } cria um diagrama em branco · { id } abre um existente (vem da command palette).
  */
 export function DiagramsScreen({ toast, request }) {
   const [items, setItems] = React.useState(null);
   const [query, setQuery] = React.useState('');
   const [ui, setUi] = usePersisted('diagrams.ui', { selectedId: null });
   const [current, setCurrent] = React.useState(null); // nota completa em edição
-  const [menu, setMenu] = React.useState(false);
-  const [importing, setImporting] = React.useState(false);
 
   const refresh = React.useCallback(async () => {
     try { setItems(await notesApi().list({ type: 'diagram' })); } catch (e) { toast('Não foi possível listar os diagramas', cleanError(e), 'error'); setItems([]); }
@@ -30,22 +27,14 @@ export function DiagramsScreen({ toast, request }) {
     if (n && n.type === 'diagram') { setCurrent(n); setUi({ selectedId: n.id }); } else { setCurrent(null); setUi({ selectedId: null }); }
   }, [setUi]);
 
-  const create = React.useCallback(async (templateId) => {
-    setMenu(false);
+  const create = React.useCallback(async () => {
     try {
-      const n = await notesApi().create(fromTemplate(templateId));
+      const s = emptyScene();
+      const n = await notesApi().create({ title: 'Novo diagrama', type: 'diagram', content: serializeScene(s.elements, s.appState, s.files) });
       await refresh();
       if (n) await open(n.id);
-    } catch (e) { toast('Não foi possível concluir', cleanError(e), 'error'); }
+    } catch (e) { toast('Não foi possível criar o diagrama', cleanError(e), 'error'); }
   }, [refresh, open, toast]);
-
-  // Diagrama ER a partir do DDL colado: erros sobem para o modal (ele mostra e continua aberto).
-  const createFromCode = async (content, title) => {
-    const n = await notesApi().create({ title, content, type: 'diagram', tags: ['er'] });
-    await refresh();
-    if (n) await open(n.id);
-    toast('Diagrama ER gerado', 'Edite o texto Mermaid à vontade');
-  };
 
   // Primeira abertura: recupera o que ficou só no backup local, carrega a lista e reabre o último diagrama.
   React.useEffect(() => {
@@ -55,18 +44,17 @@ export function DiagramsScreen({ toast, request }) {
 
   React.useEffect(() => {
     if (!request) return;
-    if (request.template) create(request.template);
+    if (request.new) create();
     else if (request.id) open(request.id);
   }, [request && request.nonce]);
 
   const remove = async () => {
     if (!current) return;
-    const n = current;
     try {
-      await notesApi().remove(n.id);
+      await notesApi().remove(current.id);
       setCurrent(null); setUi({ selectedId: null });
       toast('Diagrama movido para a lixeira', 'Ele continua recuperável na lixeira de Notas');
-    } catch (e) { toast('Não foi possível concluir', cleanError(e), 'error'); }
+    } catch (e) { toast('Não foi possível excluir o diagrama', cleanError(e), 'error'); }
   };
 
   const shown = React.useMemo(() => {
@@ -79,24 +67,9 @@ export function DiagramsScreen({ toast, request }) {
       <PageHeader
         icon="workflow"
         title="Diagramas"
-        subtitle="ER, fluxos, sequência e estados em Mermaid — preview ao vivo, salvo junto das suas Notas"
-        actions={<>
-          <Button variant="secondary" icon="database" onClick={() => setImporting(true)}>Importar DDL</Button>
-          <div className="dgm-new">
-            <Button variant="primary" icon="plus" onClick={() => setMenu((m) => !m)}>Novo diagrama</Button>
-            {menu && (
-              <div className="dgm-new__menu" role="menu" onMouseLeave={() => setMenu(false)}>
-                {TEMPLATES.map((t) => (
-                  <button key={t.id} type="button" role="menuitem" className="dgm-new__item" onClick={() => create(t.id)}>
-                    <Icon name={t.icon} size={14} /> {t.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </>}
+        subtitle="Quadro de desenho livre para ER, fluxos e esquemas — salvo junto das suas Notas"
+        actions={<Button variant="primary" icon="plus" onClick={create}>Novo diagrama</Button>}
       />
-      {importing && <ImportDdlModal onCreate={createFromCode} onClose={() => setImporting(false)} />}
       <div className="dgm">
         <aside className="dgm__side">
           <label className="tk-input tk-input--sm">
@@ -122,8 +95,8 @@ export function DiagramsScreen({ toast, request }) {
               <div className="dgm-empty">
                 <EmptyState
                   title="Nenhum diagrama aberto"
-                  description="Crie um diagrama a partir de um modelo ou escolha um da lista."
-                  action={<Button variant="primary" icon="plus" onClick={() => create('er')}>Novo diagrama ER</Button>}
+                  description="Crie um quadro em branco ou escolha um da lista."
+                  action={<Button variant="primary" icon="plus" onClick={create}>Novo diagrama</Button>}
                 />
               </div>
             )}
