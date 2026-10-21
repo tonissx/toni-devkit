@@ -32,17 +32,17 @@
 .dgm-host__hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--tk-text-3); pointer-events: none; }
 .dgm-host__hint.is-error { color: var(--tk-danger, #ff6b6b); }
 
+/* Entradas do "Mais ferramentas" do Excalidraw que não funcionam neste app (offline, CSP): Web Embed (iframes) e
+   "Mermaid to Excalidraw" (o Mermaid não está no bundle). O Excalidraw usa o mesmo data-testid nas duas e o título
+   do grupo ("Generate") é um div sem classe; não há opção de UI para esconder isso. */
+.dgm-host [data-testid="toolbar-embeddable"],
+.dgm-host .dropdown-menu-container > div:not([class]),
+.dgm-host .dropdown-menu-container > div[class=""] { display: none !important; } /* !important: o CSS do Excalidraw entra depois deste */
+
 /* Diagrama em formato antigo (texto Mermaid): só leitura, nada é regravado. */
 .dgm-legacy { flex: 1; min-width: 0; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .dgm-legacy__msg { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.5; color: var(--tk-danger, #ff6b6b); }
 .dgm-legacy__raw { margin: 0; padding: 12px 14px; font: 12.5px/1.55 var(--tk-font-mono); white-space: pre-wrap; color: var(--tk-text-3); background: var(--tk-surface-1); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); }
-
-/* Blocos ```mermaid e notas do tipo diagrama no preview das Notas (NotePreview) */
-.md-mermaid { margin: 0 0 .85em; padding: 12px; overflow: auto; text-align: center; background: var(--tk-surface-1); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); }
-.md-mermaid svg { max-width: 100%; height: auto; }
-.md-mermaid > pre { margin: 0; text-align: left; font: 12px/1.5 var(--tk-font-mono); color: var(--tk-text-3); white-space: pre-wrap; }
-.md-mermaid.is-error { border-color: var(--tk-danger, #ff6b6b); }
-.md-mermaid.is-error > pre { color: var(--tk-text); }
 
 /* Cartão de diagrama dentro de Notes (src/tools/notes/DiagramCard.jsx) */
 .nts-diagram { display: flex; flex-direction: column; gap: 12px; padding: 16px; }

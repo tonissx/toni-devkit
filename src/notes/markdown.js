@@ -102,9 +102,6 @@ export function renderMarkdown(md, { resolve = () => null, secret = () => undefi
         if (secretName) return secretCard(secretName, secret(secretName));
         const i = blocks.push(text) - 1;
         const label = String(lang || '').trim().split(/\s+/)[0];
-        // ```mermaid: o preview troca este marcador pelo SVG (NotePreview + src/diagrams/render.js). O código
-        // escapado fica dentro como alternativa enquanto renderiza ou se o Mermaid recusar o texto.
-        if (label === 'mermaid') return `<div class="md-mermaid" data-mermaid="${i}"><pre><code>${esc(text)}</code></pre></div>`;
         return `<div class="md-code"><div class="md-code__bar"><span>${esc(label || 'código')}</span>`
           + `<button type="button" class="md-code__copy" data-copy="${i}">Copiar</button></div>`
           + `<pre><code>${highlight(text, label)}</code></pre></div>`;

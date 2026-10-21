@@ -17,7 +17,6 @@ instalado, ao lado do `LICENSE`).
 | [Lucide](https://lucide.dev) | Ícones (`renderer/vendor/lucide.min.js`); parte deles vem do Feather (MIT), coberto no mesmo arquivo | ISC | `licenses/LICENSE.lucide.txt` |
 | [Geist e Geist Mono](https://vercel.com/font) | Fontes (`renderer/ds/fonts`) | SIL OFL 1.1 | `licenses/LICENSE.geist-OFL-1.1.txt` e `renderer/ds/fonts/OFL.txt` |
 | [marked](https://github.com/markedjs/marked) | Markdown das notas, empacotado no app | MIT | `licenses/LICENSE.marked.txt` |
-| [Mermaid](https://mermaid.js.org) | Diagramas (ER, fluxo, sequência…), empacotado em `renderer/dist/mermaid.js` e carregado só quando a ferramenta Diagramas é aberta | MIT | `licenses/LICENSE.mermaid.txt` |
 | [Excalidraw](https://excalidraw.com) | Quadro de desenho da ferramenta Diagramas, empacotado em `renderer/dist/excalidraw.js` (com o próprio React) e carregado só quando ela é aberta | MIT | `licenses/LICENSE.excalidraw.txt` |
 | [electron-updater](https://www.electron.build) | Atualização automática | MIT | no `app.asar` |
 | [@anthropic-ai/sdk](https://github.com/anthropics/anthropic-sdk-typescript) | IA opcional na nuvem | MIT | no `app.asar` |
@@ -29,11 +28,6 @@ O `tedious`, o `electron-updater` e o `@anthropic-ai/sdk` trazem outras bibliote
 `jsonwebtoken`, `ws`, `js-yaml`, `iconv-lite`, `semver`, `tslib`, `argparse`, `sax`, `fast-sha256`). Todas são
 permissivas: MIT, ISC, BSD-3-Clause, Apache-2.0, 0BSD, BlueOak-1.0.0, Unlicense e Python-2.0. O texto de cada uma
 acompanha o pacote em `node_modules/<pacote>/` dentro do `app.asar`.
-
-O Mermaid também empacota bibliotecas próprias (d3, dagre-d3-es, cytoscape, chevrotain, langium, DOMPurify, khroma, KaTeX,
-lodash-es e outras). Todas são permissivas: MIT, ISC, BSD-3-Clause, Apache-2.0 e Unlicense; o DOMPurify é oferecido em
-MPL-2.0 ou Apache-2.0 e é usado aqui sob a Apache-2.0. Como ficam dentro do bundle, o texto de cada licença está em
-`licenses/LICENSE.mermaid-deps.txt`.
 
 O Excalidraw empacota 82 pacotes, incluindo React e React DOM (radix-ui, roughjs, jotai, pako, perfect-freehand, entre outros). Todos
 são permissivos: MIT, Apache-2.0, CC0-1.0, 0BSD e MIT AND Zlib. Como ficam dentro do bundle, os textos estão em
