@@ -11,6 +11,10 @@ async function render(source, themeVariables) {
   mermaid.initialize({
     startOnLoad: false, securityLevel: 'strict', theme: 'base', themeVariables, fontFamily: themeVariables.fontFamily,
     flowchart: { htmlLabels: false }, htmlLabels: false,
+    // Com rótulos em <text>, o CSS do Mermaid pinta fundo e texto do rótulo da aresta com `nodeBorder` (escuro no nosso
+    // tema) e o texto some. Aqui cada um recebe a sua cor. themeCSS entra no próprio SVG: vale também no arquivo exportado.
+    themeCSS: `.edgeLabel .label rect.background { fill: ${themeVariables.background}; stroke: none; opacity: 0.9; } `
+      + `.edgeLabel .label text { fill: ${themeVariables.textColor}; }`,
   });
   const id = `dgm-svg-${++seq}`;
   try {

@@ -59,3 +59,14 @@
   background: var(--tk-surface-2); border-top: 1px solid var(--tk-border-strong); max-height: 30%; overflow: auto;
 }
 .dgm-error pre { margin: 0; font: 12px/1.5 var(--tk-font-mono); white-space: pre-wrap; }
+
+/* Importar DDL */
+.dgm-import {
+  width: 100%; height: 260px; resize: vertical; padding: 12px 14px; box-sizing: border-box; outline: none;
+  background: var(--tk-surface-1); color: var(--tk-text); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md);
+  font: 12.5px/1.55 var(--tk-font-mono); white-space: pre; overflow: auto;
+}
+.dgm-import:focus { border-color: var(--tk-accent); }
+.dgm-import__status { margin-top: 8px; font-size: 12px; }
+.dgm-import__status.is-ok { color: var(--tk-accent-text, var(--tk-accent)); }
+.dgm-import__status.is-error { color: var(--tk-danger, #ff6b6b); }

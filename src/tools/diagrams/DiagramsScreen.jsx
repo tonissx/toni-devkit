@@ -4,6 +4,7 @@ import { notesApi, recoverUnsaved, shortTime, cleanError } from '../../notes/cli
 import { normalize } from '../../commands/search.js';
 import { TEMPLATES, fromTemplate } from '../../diagrams/templates.js';
 import { DiagramEditor } from './DiagramEditor.jsx';
+import { ImportDdlModal } from './ImportDdlModal.jsx';
 
 const { PageHeader, Button, EmptyState, Icon } = DS;
 
@@ -18,6 +19,7 @@ export function DiagramsScreen({ toast, request }) {
   const [ui, setUi] = usePersisted('diagrams.ui', { selectedId: null });
   const [current, setCurrent] = React.useState(null); // nota completa em edição
   const [menu, setMenu] = React.useState(false);
+  const [importing, setImporting] = React.useState(false);
 
   const refresh = React.useCallback(async () => {
     try { setItems(await notesApi().list({ type: 'diagram' })); } catch (e) { toast('Não foi possível listar os diagramas', cleanError(e), 'error'); setItems([]); }
@@ -36,6 +38,14 @@ export function DiagramsScreen({ toast, request }) {
       if (n) await open(n.id);
     } catch (e) { toast('Não foi possível concluir', cleanError(e), 'error'); }
   }, [refresh, open, toast]);
+
+  // Diagrama ER a partir do DDL colado: erros sobem para o modal (ele mostra e continua aberto).
+  const createFromCode = async (content, title) => {
+    const n = await notesApi().create({ title, content, type: 'diagram', tags: ['er'] });
+    await refresh();
+    if (n) await open(n.id);
+    toast('Diagrama ER gerado', 'Edite o texto Mermaid à vontade');
+  };
 
   // Primeira abertura: recupera o que ficou só no backup local, carrega a lista e reabre o último diagrama.
   React.useEffect(() => {
@@ -70,7 +80,8 @@ export function DiagramsScreen({ toast, request }) {
         icon="workflow"
         title="Diagramas"
         subtitle="ER, fluxos, sequência e estados em Mermaid — preview ao vivo, salvo junto das suas Notas"
-        actions={
+        actions={<>
+          <Button variant="secondary" icon="database" onClick={() => setImporting(true)}>Importar DDL</Button>
           <div className="dgm-new">
             <Button variant="primary" icon="plus" onClick={() => setMenu((m) => !m)}>Novo diagrama</Button>
             {menu && (
@@ -83,8 +94,9 @@ export function DiagramsScreen({ toast, request }) {
               </div>
             )}
           </div>
-        }
+        </>}
       />
+      {importing && <ImportDdlModal onCreate={createFromCode} onClose={() => setImporting(false)} />}
       <div className="dgm">
         <aside className="dgm__side">
           <label className="tk-input tk-input--sm">
