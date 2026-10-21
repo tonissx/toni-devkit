@@ -23,6 +23,26 @@ test('diagrama sobrevive ao ciclo serialize → parse com o texto Mermaid intact
 });
 
 const { themeFromColors } = require('../src/diagrams/theme.js');
+const { TEMPLATES, fromTemplate, diagramKind } = require('../src/diagrams/templates.js');
+
+test('todo template vira uma nota de diagrama e começa com um tipo Mermaid reconhecido', () => {
+  const ids = TEMPLATES.map((t) => t.id);
+  assert.deepEqual(ids, ['er', 'flow', 'sequence', 'state']);
+  for (const id of ids) {
+    const f = fromTemplate(id);
+    assert.equal(f.type, 'diagram');
+    assert.ok(f.title);
+    assert.ok(diagramKind(f.content), `template ${id} sem tipo reconhecido`);
+  }
+  assert.equal(fromTemplate('inexistente').title, TEMPLATES[0].title);
+});
+
+test('diagramKind ignora comentários e linhas em branco', () => {
+  assert.equal(diagramKind('%% nota\n\n  flowchart LR\n A-->B'), 'flowchart');
+  assert.equal(diagramKind('stateDiagram-v2\n[*] --> A'), 'stateDiagram-v2');
+  assert.equal(diagramKind('qualquer coisa'), '');
+  assert.equal(diagramKind(''), '');
+});
 
 test('themeFromColors usa as cores do DS e liga o modo escuro', () => {
   const t = themeFromColors({ bg: '#000', node: '#111', border: '#222', text: '#fff', dim: '#888', accent: '#0f0', key: '#0ff' });
@@ -32,4 +52,6 @@ test('themeFromColors usa as cores do DS e liga o modo escuro', () => {
   assert.equal(t.primaryTextColor, '#fff');
   assert.equal(t.lineColor, '#888');
   assert.equal(t.noteBorderColor, '#0f0');
+  assert.equal(t.fontFamily, 'inherit');
+  assert.equal(themeFromColors({ bg: '#000', font: 'Geist, sans-serif' }).fontFamily, 'Geist, sans-serif');
 });

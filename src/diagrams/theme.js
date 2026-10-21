@@ -1,13 +1,15 @@
 'use strict';
 /**
  * Tema do Mermaid a partir das cores do DS (as mesmas de readColors em json-visualizer/exportImage.js).
- * Puro: recebe { bg, node, border, text, dim, accent, key } e devolve `themeVariables` do tema "base".
+ * Puro: recebe { bg, node, border, text, dim, accent, key, font? } e devolve `themeVariables` do tema "base".
+ * `font` é a família já resolvida: o Mermaid mede o texto fora da tela, e 'inherit' pode medir com outra fonte
+ * (rótulos cortados).
  */
 function themeFromColors(c) {
   return {
     darkMode: true,
     background: c.bg,
-    fontFamily: 'inherit',
+    fontFamily: c.font || 'inherit',
     primaryColor: c.node,
     primaryBorderColor: c.border,
     primaryTextColor: c.text,

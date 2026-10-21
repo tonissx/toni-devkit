@@ -6,7 +6,7 @@ let seq = 0;
 
 async function render(source, themeVariables) {
   // Reinicializa a cada render: o tema acompanha as variáveis --tk-* do momento.
-  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'base', themeVariables, fontFamily: 'inherit' });
+  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'base', themeVariables, fontFamily: themeVariables.fontFamily });
   const id = `dgm-svg-${++seq}`;
   try {
     await mermaid.parse(source); // falha cedo e sem deixar nó de erro solto no DOM

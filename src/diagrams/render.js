@@ -25,7 +25,9 @@ export function renderDiagram(source) {
   const job = chain.then(async () => {
     try {
       const m = await loadMermaid();
-      return await m.render(String(source || ''), themeFromColors(readColors()));
+      // O body não define fonte; a do app vem de um contêiner interno — lê da própria tela de Diagramas.
+      const font = getComputedStyle(document.querySelector('.dgm-screen') || document.body).fontFamily;
+      return await m.render(String(source || ''), themeFromColors({ ...readColors(), font }));
     } catch (e) {
       return { error: e.message };
     }
