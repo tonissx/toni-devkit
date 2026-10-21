@@ -607,7 +607,8 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
     quando há homônimas). **Grafo**: filtro por pasta. **Perguntar às notas** (IA): opção de limitar à pasta; notas da
     pasta Templates nunca entram no contexto
 - **Configurações de Notes** (engrenagem no topo): pasta das notas (vale depois de reiniciar; as notas atuais não são
-  movidas) · quantas versões guardar e o intervalo entre elas · tempo do auto-save · tempo do "Desfazer" após excluir
+  movidas) · **pasta sincronizada** por Dropbox/OneDrive/Syncthing (vigia a pasta, trata conflitos; ver
+  *Sincronizar entre computadores*) e **Recarregar do disco** · quantas versões guardar e o intervalo entre elas · tempo do auto-save · tempo do "Desfazer" após excluir
 - **Tarefas** (`- [ ] texto`), sem digitar a sintaxe à mão:
   - No editor, `Enter` numa tarefa continua a lista (em tarefa vazia, sai dela) · `Ctrl+L` alterna a linha (ou as
     linhas selecionadas) entre texto → `- [ ]` → `- [x]` → texto · `[]` ou `todo` + espaço no começo da linha vira `- [ ] `
@@ -645,11 +646,35 @@ Um arquivo `.md` por nota em **`Documentos\Devkit Notes`** ou numa subpasta dela
 reais), com metadados simples no topo (front matter). Dá para abrir em qualquer editor, fazer backup copiando a
 pasta, versionar com git e sincronizar pelo OneDrive. A gravação é atômica (arquivo temporário + rename). Excluir
 move o arquivo para `.trash\` (mantendo a subpasta), nada é apagado de verdade. Os recentes vistos ficam em
-`.devkit\state.json`. Pastas e arquivos cujo nome começa com `.` (`.trash`, `.devkit`, `.git`…) são ignorados. O
+`notes-state.json` na pasta de dados do app (assim cada PC tem os seus; o antigo `.devkit\state.json` ainda é lido
+uma vez). Pastas e arquivos cujo nome começa com `.` (`.trash`, `.devkit`, `.git`…) são ignorados. O
 processo principal carrega todas as notas em memória na inicialização; a busca roda aí em milissegundos.
 
-> Não há monitoramento de arquivos: criar, mover ou renomear pastas e notas **pelo Explorer** com o app aberto só
-> aparece depois de reiniciar o Devkit. Prefira organizar pelo próprio app.
+> Sem a opção de pasta sincronizada (abaixo), criar, mover ou renomear pastas e notas **pelo Explorer** com o app
+> aberto só aparece depois de **Recarregar do disco** (Configurações de Notes) ou de reiniciar o Devkit.
+
+### Sincronizar entre computadores (sem servidor)
+
+O Devkit não tem servidor: a sincronização é feita pelo serviço de nuvem que você já usa.
+
+1. Em **Configurações de Notes → Pasta das notas → Alterar…**, escolha uma pasta dentro do Dropbox, OneDrive, Google
+   Drive, iCloud ou Syncthing — a **mesma** nos dois PCs (as notas que já existem não são movidas: copie os `.md`
+   e as pastas antes de reiniciar).
+2. Marque **Esta pasta é sincronizada por outro programa**.
+
+O que muda com a opção ligada:
+- **Vigia da pasta**: o que o outro PC criar, editar, mover ou excluir aparece sem reiniciar. Se uma nota aberta no
+  editor é alterada de fora e você não está digitando, ela é atualizada; a sua versão anterior vai para o **Histórico**.
+  Mesmo desligada, **Recarregar do disco** faz a mesma leitura na hora.
+- **Conflitos**: se dois PCs editam a mesma nota antes de sincronizar, o serviço de nuvem costuma deixar duas cópias
+  do arquivo (“… (conflicted copy)”, “.sync-conflict-…”). Como as duas têm o mesmo `id`, a mais recente continua
+  sendo a nota e a outra vira uma nota própria, “Título (conflito)”, para você comparar e apagar uma. Nada é perdido.
+- **Anexos sem uso** só entram na limpeza depois de 24 h (e não 10 min): o anexo pode chegar ao PC antes da nota
+  que o cita.
+- O histórico (`.devkit\history`) também sincroniza. Se preferir, exclua `.devkit` do sync: perde-se só o histórico.
+
+Limites: duas pessoas/PCs editando a mesma nota **ao mesmo tempo** gera conflito, não mescla; e o app não sabe se o
+serviço de nuvem já terminou de baixar um arquivo — nota ilegível aparece em erros e volta no próximo recarregamento.
 
 ```md
 ---

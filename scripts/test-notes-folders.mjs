@@ -69,7 +69,7 @@ test('settings: validação, padrões e persistência', () => {
     const file = path.join(dir, 'sub', 'notes-settings.json');
     const s = createNotesSettings(file);
     assert.deepEqual(s.get(), DEFAULTS);
-    assert.deepEqual(s.set({ historyMax: 100, historyGapMin: 5 }), { historyMax: 100, historyGapMin: 5 });
+    assert.deepEqual(s.set({ historyMax: 100, historyGapMin: 5 }), { historyMax: 100, historyGapMin: 5, syncFolder: false });
     assert.throws(() => s.set({ historyMax: 2 }), /Versões por nota/);
     assert.throws(() => s.set({ historyGapMin: 9999 }), /Intervalo/);
     assert.throws(() => s.set({ dir: 'relativa/pasta' }), /pasta/);

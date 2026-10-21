@@ -171,9 +171,11 @@ contextBridge.exposeInMainWorld('devkit', {
     openFolder: (folder) => ipcRenderer.invoke('notes:open-folder', folder),
     /** Caminho absoluto de uma pasta (para copiar). */
     folderAbs: (path) => ipcRenderer.invoke('notes:folderAbs', path),
-    /** Configurações de Notes: { historyMax, historyGapMin, dir, defaultDir, envLocked, customDir }. */
+    /** Relê a pasta das notas e aplica o que mudou por fora (sync): { added, updated, removed, folders }. */
+    reload: () => ipcRenderer.invoke('notes:reload'),
+    /** Configurações de Notes: { historyMax, historyGapMin, syncFolder, dir, defaultDir, envLocked, customDir }. */
     settings: () => ipcRenderer.invoke('notes:settings'),
-    /** Patch { historyMax, historyGapMin, dir } (null volta ao padrão) → { restart } (a pasta nova só vale após reiniciar). */
+    /** Patch { historyMax, historyGapMin, syncFolder, dir } (null volta ao padrão) → { restart } (a pasta nova só vale após reiniciar). */
     setSettings: (patch) => ipcRenderer.invoke('notes:set-settings', patch),
     pickDir: () => ipcRenderer.invoke('notes:pick-dir'),
     relaunch: () => ipcRenderer.invoke('notes:relaunch'),
