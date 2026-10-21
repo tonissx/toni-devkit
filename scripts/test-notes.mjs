@@ -542,6 +542,40 @@ test('service: saveAttachment stores any file type in .assets, keeps the origina
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('attachments: previewKind classifies by extension; executables never preview as text', () => {
+  const A = require('../src/notes/attachments.js');
+  const kinds = { 'a.PNG': 'image', 'a.pdf': 'pdf', 'a.mp3': 'audio', 'a.mp4': 'video', 'a.json': 'text', 'a.csv': 'text', 'a.md': 'text', 'a.zip': 'other', 'a.bin': 'other', semext: 'other', 'a.bat': 'exec', 'a.js': 'exec', 'a.ps1': 'exec', 'a.lnk': 'exec' };
+  for (const [name, kind] of Object.entries(kinds)) assert.equal(A.previewKind(name), kind, name);
+  assert.equal(A.mimeFor('x.pdf'), 'application/pdf');
+  assert.equal(A.mimeFor('x.m4a'), 'audio/mp4');
+  assert.equal(A.mimeFor('x.zip'), '');
+  assert.equal(A.formatSize(512), '512 B');
+  assert.equal(A.formatSize(1536), '1,5 KB');
+  assert.equal(A.formatSize(5 * 1024 * 1024), '5 MB');
+});
+
+test('service: readAsset returns metadata, reads text as UTF-8 (BOM stripped, truncated by max), never reads other kinds', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const txt = await svc.saveAttachment({ bytes: Buffer.from('﻿olá, mundo\nsegunda linha', 'utf8'), name: 'nota.txt' });
+    const r = await svc.readAsset(txt.path);
+    assert.deepEqual({ kind: r.kind, text: r.text, truncated: r.truncated }, { kind: 'text', text: 'olá, mundo\nsegunda linha', truncated: false });
+    assert.match(r.name, /\.txt$/);
+    const cut = await svc.readAsset(txt.path, { max: 5 });
+    assert.equal(cut.truncated, true);
+    assert.equal(cut.text.length > 0 && cut.text.length <= 5, true);
+    const pdf = await svc.saveAttachment({ bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]), name: 'a.pdf' });
+    const p = await svc.readAsset(pdf.path);
+    assert.deepEqual({ kind: p.kind, size: p.size, text: p.text }, { kind: 'pdf', size: 4, text: undefined });
+    const bat = await svc.saveAttachment({ bytes: Buffer.from('echo oi'), name: 'x.bat' });
+    assert.equal((await svc.readAsset(bat.path)).text, undefined);
+    await assert.rejects(svc.readAsset('.assets/2000-01-01-000000-ffff.txt'), /não encontrado/);
+    assert.throws(() => svc.assetFile('.assets/../x.txt'), /inválido/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('edit: toggleTaskLines cycles text → open → done → text, also for selections', () => {
   const { toggleTaskLines: tg } = E;
   let r = tg('comprar leite', 3, 3);

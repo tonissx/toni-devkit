@@ -11,6 +11,7 @@ const { createWinHelper } = require('./winfocus');
 const { UI_BINDABLE_IDS, SELECTION_BIND_IDS } = require('../src/commands/binds.js');
 const { createSelectionCopier } = require('./selection');
 const { createNotesService, isExecutableAsset } = require('./notes/service');
+const { mimeFor } = require('../src/notes/attachments.js');
 const { createNotesSettings } = require('./notes/settings');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
@@ -453,16 +454,26 @@ ipcMain.handle('notes:open-asset', async (e, ref) => {
   }
   return shell.openPath(file);
 });
+// Pré-visualização de anexos (modal do preview): metadados/texto do arquivo e "Mostrar na pasta".
+ipcMain.handle('notes:read-asset', async (_e, ref) => { await notesReady; return notes.readAsset(ref); });
+ipcMain.handle('notes:reveal-asset', async (_e, ref) => { await notesReady; shell.showItemInFolder(notes.assetFile(ref)); });
 
 // Imagens das notas (.assets\) chegam ao renderer por devkit-note://asset/<nome> (a CSP libera só este esquema).
-protocol.registerSchemesAsPrivileged([{ scheme: 'devkit-note', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+// stream: <video>/<audio> pedem o arquivo aos pedaços (Range) para poder buscar no meio.
+protocol.registerSchemesAsPrivileged([{ scheme: 'devkit-note', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 function registerNotesProtocol() {
   protocol.handle('devkit-note', async (req) => {
     try {
       const u = new URL(req.url);
       if (u.host !== 'asset') return new Response('Not found', { status: 404 });
       await notesReady;
-      return net.fetch(pathToFileURL(notes.assetFile(decodeURIComponent(u.pathname.slice(1)))).toString());
+      const file = notes.assetFile(decodeURIComponent(u.pathname.slice(1)));
+      const res = await net.fetch(pathToFileURL(file).toString(), { headers: req.headers });
+      const mime = mimeFor(file); // o file:// não dá Content-Type para tudo (ex.: m4a, flac)
+      if (!mime || res.headers.get('content-type') === mime) return res;
+      const headers = new Headers(res.headers);
+      headers.set('content-type', mime);
+      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
     } catch {
       return new Response('Not found', { status: 404 });
     }

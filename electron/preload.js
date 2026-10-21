@@ -182,6 +182,8 @@ contextBridge.exposeInMainWorld('devkit', {
     saveAttachment: (data) => ipcRenderer.invoke('notes:saveAttachment', data),
     /** Abre uma imagem de .assets\ no visualizador do sistema. */
     openAsset: (ref) => ipcRenderer.invoke('notes:open-asset', ref),
+    readAsset: (ref) => ipcRenderer.invoke('notes:read-asset', ref),
+    revealAsset: (ref) => ipcRenderer.invoke('notes:reveal-asset', ref),
     /** Abre uma nota ({ id } ou { new: true, title? }) na janela principal. */
     open: (payload) => ipcRenderer.send('app:open-note', payload),
     onChanged: (cb) => {

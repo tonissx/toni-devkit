@@ -16,6 +16,8 @@ const { normalize } = require('../../src/commands/search.js');
 const { templateVars, applyTemplate, isTemplateFolder } = require('../../src/notes/templates.js');
 const { buildGraph } = require('../../src/notes/graph.js');
 const { expandDueWords } = require('../../src/notes/edit.js');
+const { isExecutableAsset, previewKind, TEXT_PREVIEW_MAX } = require('../../src/notes/attachments.js');
+const fsp = require('node:fs/promises');
 
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
 const VIEWED_MAX = 20;
@@ -23,12 +25,6 @@ const INBOX_TITLE = 'Inbox'; // nota que recebe as tarefas capturadas pela palet
 const IMAGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 const IMAGE_MAX = 20 * 1024 * 1024;
 const ATTACHMENT_MAX = 50 * 1024 * 1024;
-// Extensões que o Windows executa ao abrir: o clique no anexo pede confirmação antes (main.js).
-const EXECUTABLE_EXT = new Set(['exe', 'com', 'bat', 'cmd', 'ps1', 'psm1', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'msi', 'msp', 'scr', 'pif', 'lnk', 'url', 'reg', 'hta', 'jar', 'cpl', 'dll']);
-function isExecutableAsset(ref) {
-  const m = /\.([A-Za-z0-9]+)$/.exec(String(ref || ''));
-  return !!m && EXECUTABLE_EXT.has(m[1].toLowerCase());
-}
 const LINK_LINE_RE = /\[\[([^[\]\n|]+)(?:\|[^\]\n]+)?\]\]/g;
 
 /** Resumo leve para listas (sem o conteúdo inteiro). */
@@ -840,6 +836,29 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     /** Caminho absoluto de uma imagem referenciada como ".assets/<nome>" (ou só "<nome>"). */
     assetFile(ref) {
       return store.assetPath(String(ref || '').replace(/^\.assets\//, ''));
+    },
+
+    /**
+     * Dados para a pré-visualização de um anexo: { name, size, kind } e, para texto, o conteúdo em UTF-8
+     * (até TEXT_PREVIEW_MAX bytes; truncated avisa que há mais). Imagem, PDF, áudio e vídeo só informam
+     * tamanho — o arquivo em si chega pelo protocolo devkit-note://. Executáveis nunca são lidos.
+     */
+    async readAsset(ref, { max = TEXT_PREVIEW_MAX } = {}) {
+      const file = this.assetFile(ref);
+      const name = file.split(/[\\/]/).pop();
+      const kind = previewKind(name);
+      let st;
+      try { st = await fsp.stat(file); } catch { err('Anexo não encontrado.'); }
+      const out = { name, size: st.size, kind };
+      if (kind !== 'text') return out;
+      const fh = await fsp.open(file, 'r');
+      try {
+        const buf = Buffer.alloc(Math.min(st.size, max));
+        const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+        out.text = buf.subarray(0, bytesRead).toString('utf8').replace(/^﻿/, '');
+        out.truncated = st.size > bytesRead;
+      } finally { await fh.close(); }
+      return out;
     },
 
     flush: () => store.flush(),
