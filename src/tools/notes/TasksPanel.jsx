@@ -35,17 +35,18 @@ function group(tasks, status, today) {
  * Painel "Tarefas": todas as "- [ ]" de todas as notas. Marcar aqui grava na nota de origem;
  * clicar no texto abre a nota. Atualiza sozinho quando qualquer nota muda (notes:changed).
  */
-export function TasksPanel({ tag, onOpen, toast }) {
+export function TasksPanel({ tags = [], tagMode = 'all', onOpen, toast }) {
   const [status, setStatus] = React.useState('open');
   const [tasks, setTasks] = React.useState(null); // null = carregando
   const [error, setError] = React.useState(null);
+  const tagsKey = tags.join(' ');
 
   const refresh = React.useCallback(async () => {
     try {
-      setTasks(await notesApi().tasks({ status, tag: tag || undefined }));
+      setTasks(await notesApi().tasks({ status, ...(tags.length ? { tags, tagMode } : {}) }));
       setError(null);
     } catch (e) { setError(cleanError(e)); setTasks([]); }
-  }, [status, tag]);
+  }, [status, tagsKey, tagMode]);
 
   React.useEffect(() => { setTasks(null); refresh(); }, [refresh]);
   React.useEffect(() => {
@@ -66,7 +67,7 @@ export function TasksPanel({ tag, onOpen, toast }) {
   return (
     <div className="nts-tasks">
       <div className="nts-tasks__head">
-        <h2>Tarefas{tag ? <span className="nts-tasks__tag"> #{tag}</span> : null}</h2>
+        <h2>Tarefas{tags.length ? <span className="nts-tasks__tag"> {tags.map((t) => '#' + t).join(tagMode === 'any' ? ' ou ' : ' + ')}</span> : null}</h2>
         <span className="nts-tasks__count" role="status">
           {tasks ? `${total} ${status === 'open' ? (total === 1 ? 'aberta' : 'abertas') : (total === 1 ? 'concluída' : 'concluídas')}` : ''}
         </span>

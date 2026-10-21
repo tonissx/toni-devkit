@@ -815,6 +815,8 @@ test('service: tasks aggregate (order, filters), toggleTask and appendTask to th
     assert.equal(svc.tasks({ status: 'done' }).length, 1);
     assert.equal(svc.tasks({ status: 'all' }).length, 4);
     assert.deepEqual(svc.tasks({ tag: 'proj' }).map((t) => t.text), ['urgente #x', 'sem data']);
+    assert.deepEqual(svc.tasks({ tags: ['proj', 'nada'], tagMode: 'any' }).map((t) => t.text), ['urgente #x', 'sem data']); // qualquer uma
+    assert.deepEqual(svc.tasks({ tags: ['proj', 'nada'] }), []);                                                           // todas (padrão)
     assert.deepEqual(svc.list().find((n) => n.id === a.id).tasksOpen, 2);
 
     await svc.toggleTask(a.id, 0);
