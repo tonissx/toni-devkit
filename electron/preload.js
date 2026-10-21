@@ -180,6 +180,8 @@ contextBridge.exposeInMainWorld('devkit', {
     /** Imagem colada/arrastada ({ bytes: Uint8Array, mime }) → grava em .assets\ → { path: '.assets/<nome>' }. */
     saveImage: (data) => ipcRenderer.invoke('notes:saveImage', data),
     saveAttachment: (data) => ipcRenderer.invoke('notes:saveAttachment', data),
+    orphanAssets: () => ipcRenderer.invoke('notes:orphanAssets'),
+    cleanAssets: () => ipcRenderer.invoke('notes:cleanAssets'),
     /** Abre uma imagem de .assets\ no visualizador do sistema. */
     openAsset: (ref) => ipcRenderer.invoke('notes:open-asset', ref),
     readAsset: (ref) => ipcRenderer.invoke('notes:read-asset', ref),

@@ -1,5 +1,6 @@
 import { DS } from '../../lib/ds.js';
 import { notesApi, cleanError } from '../../notes/client.js';
+import { formatSize } from '../../notes/attachments.js';
 
 const { Modal, Input, Button, Icon, Select } = DS;
 
@@ -19,6 +20,7 @@ export function NotesSettingsModal({ prefs, setPrefs, toast, onClose }) {
   const [error, setError] = React.useState(null);
   const [restart, setRestart] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const [orphans, setOrphans] = React.useState(null); // { count, bytes } depois de "Verificar anexos não usados"
 
   const load = React.useCallback(async () => {
     const c = await notesApi().settings();
@@ -36,6 +38,19 @@ export function NotesSettingsModal({ prefs, setPrefs, toast, onClose }) {
   const pickDir = async () => { const d = await notesApi().pickDir(); if (d) apply({ dir: d }); };
   const saveHistory = async () => { if (await apply({ historyMax: Number(max), historyGapMin: Number(gap) })) toast('Configurações salvas', 'Histórico atualizado'); };
   const histDirty = cfg && (Number(max) !== cfg.historyMax || Number(gap) !== cfg.historyGapMin);
+
+  const checkAssets = async () => {
+    setBusy(true); setError(null);
+    try { setOrphans(await notesApi().orphanAssets()); } catch (e) { setError(cleanError(e)); } finally { setBusy(false); }
+  };
+  const cleanAssets = async () => {
+    setBusy(true); setError(null);
+    try {
+      const r = await notesApi().cleanAssets();
+      setOrphans(await notesApi().orphanAssets()); // o que sobrou (em uso por outro programa, por exemplo)
+      toast('Anexos limpos', `${r.removed} ${r.removed === 1 ? 'arquivo removido' : 'arquivos removidos'} (${formatSize(r.bytes)})`);
+    } catch (e) { setError(cleanError(e)); } finally { setBusy(false); }
+  };
 
   return (
     <Modal open onClose={onClose} icon="settings" title="Configurações de Notes" width={520}
@@ -79,6 +94,22 @@ export function NotesSettingsModal({ prefs, setPrefs, toast, onClose }) {
               </div>
             </div>
             <div className="nts-fset__actions"><Button size="sm" variant="primary" disabled={busy || !histDirty} onClick={saveHistory}>Salvar histórico</Button></div>
+          </section>
+
+          <section className="nts-fset__sec">
+            <h3>Anexos</h3>
+            <small>Imagens e arquivos anexados ficam em <code>.assets</code>. Quando uma nota é excluída de vez (Lixeira), os anexos que só ela usava são apagados junto. Se você tirar o link de um anexo do texto, ele fica no disco até esta limpeza.</small>
+            <div className="nts-fset__actions">
+              <Button size="sm" variant="secondary" icon="search" disabled={busy} onClick={checkAssets}>Verificar anexos não usados</Button>
+              {orphans && orphans.count > 0 && <Button size="sm" variant="primary" icon="trash-2" disabled={busy} onClick={cleanAssets}>Limpar agora</Button>}
+            </div>
+            {orphans && (
+              <small role="status">
+                {orphans.count
+                  ? <>{orphans.count} {orphans.count === 1 ? 'arquivo' : 'arquivos'} ({formatSize(orphans.bytes)}) não {orphans.count === 1 ? 'é usado' : 'são usados'} por nenhuma nota. Versões antigas do histórico que citem esses arquivos passam a mostrar o link quebrado. Anexos de menos de 10 minutos ficam de fora.</>
+                  : 'Nenhum anexo sobrando.'}
+              </small>
+            )}
           </section>
 
           <section className="nts-fset__sec">

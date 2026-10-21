@@ -555,6 +555,12 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
     `.assets\` (até 50 MB) e entra como `[nome.pdf](.assets/…)`; o preview mostra um chip 📎 e o clique abre no
     programa padrão. Executáveis (`.exe`, `.bat`, `.ps1`, `.lnk`…) pedem confirmação antes de abrir. Anexos
     sensíveis não devem ir para as notas (use o Vault)
+  - **Limpeza de anexos**: ao **excluir de vez** uma nota (Lixeira → Excluir de vez, ou Esvaziar), os anexos que só ela
+    usava são apagados de `.assets\`; os que outra nota (viva ou na Lixeira) também cita ficam. Mandar para a Lixeira
+    não apaga nada, então Restaurar e Desfazer trazem a nota com os anexos. Tirar o link de um anexo do texto não
+    apaga o arquivo: **Configurações → Anexos → Verificar anexos não usados → Limpar agora** remove o que nenhuma nota
+    usa (anexos de menos de 10 minutos ficam de fora, pois a nota pode ainda não ter sido salva). Versões antigas do
+    histórico não contam como uso: restaurar uma versão que citava um anexo já limpo mostra o link quebrado
   - **Cartão do anexo**: cada anexo aparece como um cartão com **miniatura** e o nome. Imagem mostra o próprio arquivo;
     **PDF** mostra a primeira página (pdf.js, funciona em qualquer PC); vídeo e Word/Excel/PowerPoint pedem a miniatura ao
     Windows, a mesma do Explorer. Quando não há miniatura (ou ela ainda carrega), fica um selo colorido com a extensão e

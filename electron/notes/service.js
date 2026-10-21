@@ -16,7 +16,7 @@ const { normalize } = require('../../src/commands/search.js');
 const { templateVars, applyTemplate, isTemplateFolder } = require('../../src/notes/templates.js');
 const { buildGraph } = require('../../src/notes/graph.js');
 const { expandDueWords } = require('../../src/notes/edit.js');
-const { isExecutableAsset, previewKind, TEXT_PREVIEW_MAX } = require('../../src/notes/attachments.js');
+const { isExecutableAsset, previewKind, assetRefs, TEXT_PREVIEW_MAX } = require('../../src/notes/attachments.js');
 const fsp = require('node:fs/promises');
 
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
@@ -25,6 +25,7 @@ const INBOX_TITLE = 'Inbox'; // nota que recebe as tarefas capturadas pela palet
 const IMAGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 const IMAGE_MAX = 20 * 1024 * 1024;
 const ATTACHMENT_MAX = 50 * 1024 * 1024;
+const ORPHAN_GRACE_MS = 10 * 60 * 1000; // anexo mais novo que isso não entra na limpeza
 const THUMB_SOURCE_MAX = 30 * 1024 * 1024; // maior que isso o PDF não passa pelo IPC só para virar miniatura
 const LINK_LINE_RE = /\[\[([^[\]\n|]+)(?:\|[^\]\n]+)?\]\]/g;
 
@@ -45,6 +46,39 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 function createNotesService({ dir, broadcast = () => {}, events = null, historyGapMs = 10 * 60 * 1000, historyMax }) {
   const store = createStore(dir, historyMax ? { historyMax } : undefined);
+
+  /** Nomes (minúsculos: o Windows não distingue caixa) dos anexos citados por qualquer nota viva ou na Lixeira. */
+  async function referencedAssets() {
+    const refs = new Set();
+    const add = (content) => { for (const r of assetRefs(content)) refs.add(r.toLowerCase()); };
+    for (const n of notes.values()) add(n.content);
+    for (const t of await store.listTrash()) add(t.note.content);
+    return refs;
+  }
+
+  /**
+   * Apaga, dos anexos `names` (Set), os que nenhuma nota viva nem a Lixeira cita mais. Chamado depois que uma nota
+   * sai de vez da Lixeira. Um anexo que não apaga (em uso, sem permissão) não impede a exclusão da nota.
+   */
+  async function dropUnreferenced(names) {
+    if (!names.size) return 0;
+    const refs = await referencedAssets();
+    let removed = 0;
+    for (const name of names) {
+      if (refs.has(name.toLowerCase())) continue;
+      try { await store.removeAsset(name); removed++; } catch { /* fica para a limpeza manual */ }
+    }
+    return removed;
+  }
+
+  /** Anexos de .assets\ que nenhuma nota cita e que já têm mais de ORPHAN_GRACE_MS (o recém-colado ainda pode estar sem salvar). */
+  async function findOrphans() {
+    const refs = await referencedAssets();
+    const now = Date.now();
+    return (await store.listAssets())
+      .filter((a) => !refs.has(a.name.toLowerCase()) && now - a.mtimeMs >= ORPHAN_GRACE_MS)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
 
   /** Grava bytes em .assets\ como AAAA-MM-DD-HHmmss-xxxx.<ext>, tentando outro sufixo se o nome existir. */
   async function writeNamedAsset(bytes, ext, what) {
@@ -390,26 +424,47 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
       return this.get(n.id);
     },
 
-    /** Apaga de vez um item da lixeira (e o histórico da nota, se ela não existe mais). */
+    /** Apaga de vez um item da lixeira (o histórico da nota, se ela não existe mais, e os anexos que só ela usava). */
     deleteFromTrash(file) {
       return serial(async () => {
         const t = await store.readTrash(file);
         await store.removeTrash(t.file);
         if (!notes.has(t.note.id)) { await store.removeHistory(t.note.id).catch(() => {}); lastSnap.delete(t.note.id); }
+        await dropUnreferenced(assetRefs(t.note.content));
         changed('trash');
         return true;
       });
     },
 
-    /** Esvazia a lixeira (e o histórico das notas que só existiam nela). Devolve quantas notas apagou. */
+    /** Esvazia a lixeira (e o histórico e os anexos das notas que só existiam nela). Devolve quantas notas apagou. */
     emptyTrash() {
       return serial(async () => {
         const items = await store.listTrash();
         await store.emptyTrash();
         for (const t of items) if (!notes.has(t.note.id)) { await store.removeHistory(t.note.id).catch(() => {}); lastSnap.delete(t.note.id); }
         trashed.clear();
+        const names = new Set();
+        for (const t of items) for (const r of assetRefs(t.note.content)) names.add(r);
+        await dropUnreferenced(names);
         changed('trash');
         return items.length;
+      });
+    },
+
+    /** Anexos que nenhuma nota usa: { count, bytes, files: [{ name, size }] } — o que cleanAssets apagaria agora. */
+    async orphanAssets() {
+      const files = await findOrphans();
+      return { count: files.length, bytes: files.reduce((s, f) => s + f.size, 0), files: files.map(({ name, size }) => ({ name, size })) };
+    },
+
+    /** Apaga os anexos que nenhuma nota usa (ver orphanAssets). Devolve { removed, bytes }. */
+    cleanAssets() {
+      return serial(async () => {
+        let removed = 0, bytes = 0;
+        for (const f of await findOrphans()) {
+          try { await store.removeAsset(f.name); removed++; bytes += f.size; } catch { /* em uso: fica para a próxima */ }
+        }
+        return { removed, bytes };
       });
     },
 

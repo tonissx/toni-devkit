@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
@@ -577,6 +577,73 @@ test('service: readAsset returns metadata, reads text as UTF-8 (BOM stripped, tr
     assert.equal((await svc.readAsset(bat.path)).text, undefined);
     await assert.rejects(svc.readAsset('.assets/2000-01-01-000000-ffff.txt'), /não encontrado/);
     assert.throws(() => svc.assetFile('.assets/../x.txt'), /inválido/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('attachments: assetRefs finds .assets/<nome> in images, links and code; ignores traversal and other paths', () => {
+  const { assetRefs } = require('../src/notes/attachments.js');
+  const md = '![a](.assets/2026-01-01-000000-aaaa.png) [b](.assets/2026-01-01-000000-bbbb.pdf)\n`.assets/x.zip` ![r](.assets/2026-01-01-000000-aaaa.png)\n![t](.assets/../segredo.png) [c](assets/y.png) ![d](https://a.com/.assets/z.png)';
+  assert.deepEqual([...assetRefs(md)].sort(), ['2026-01-01-000000-aaaa.png', '2026-01-01-000000-bbbb.pdf', 'x.zip', 'z.png']);
+  assert.deepEqual([...assetRefs('')], []);
+  assert.deepEqual([...assetRefs(null)], []);
+});
+
+test('service: orphanAssets/cleanAssets only touch files no live or trashed note uses, and spare the last 10 minutes', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const bytes = Buffer.from('x');
+    const mk = async (name) => (await svc.saveAttachment({ bytes, name })).path;
+    const [used, inTrash, orphan, fresh] = [await mk('a.pdf'), await mk('b.pdf'), await mk('c.pdf'), await mk('d.pdf')];
+    const old = new Date(Date.now() - 60 * 60 * 1000);
+    for (const p of [used, inTrash, orphan]) utimesSync(path.join(dir, p), old, old);
+    await svc.create({ title: 'viva', content: `[a](${used})` });
+    const t = await svc.create({ title: 'apagada', content: `[b](${inTrash})` });
+    await svc.remove(t.id);
+
+    const r = await svc.orphanAssets();
+    assert.deepEqual(r.files.map((f) => '.assets/' + f.name), [orphan]); // a nota viva, a da Lixeira e o arquivo novo ficam
+    assert.equal(r.count, 1);
+    assert.equal(r.bytes, 1);
+    assert.deepEqual(await svc.cleanAssets(), { removed: 1, bytes: 1 });
+    for (const p of [used, inTrash, fresh]) assert.ok(existsSync(path.join(dir, p)), p);
+    assert.ok(!existsSync(path.join(dir, orphan)));
+    assert.equal((await svc.orphanAssets()).count, 0);
+    assert.deepEqual(await svc.cleanAssets(), { removed: 0, bytes: 0 });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('service: deleting a note for good removes its attachments, keeps shared ones; trash and restore keep everything', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const bytes = Buffer.from('x');
+    const mk = async (name) => (await svc.saveAttachment({ bytes, name })).path;
+    const [own, shared, own2, shared2] = [await mk('own.pdf'), await mk('shared.pdf'), await mk('own2.png'), await mk('shared2.png')];
+    const has = (p) => existsSync(path.join(dir, p));
+    await svc.create({ title: 'outra viva', content: `[s](${shared}) ![s2](${shared2})` });
+    const x = await svc.create({ title: 'X', content: `[o](${own}) [s](${shared})` });
+
+    await svc.remove(x.id); // só vai para a Lixeira: nada some
+    assert.ok(has(own) && has(shared));
+    const [item] = await svc.trashList();
+    await svc.restoreFromTrash(item.file); // restaurar traz a nota com os anexos
+    assert.ok(has(own) && has(shared));
+
+    await svc.remove(x.id);
+    await svc.deleteFromTrash((await svc.trashList())[0].file); // excluir de vez
+    assert.ok(!has(own), 'anexo só da nota X sai');
+    assert.ok(has(shared), 'anexo usado por outra nota fica');
+
+    const z = await svc.create({ title: 'Z', content: `![o](${own2}) ![s](${shared2})` });
+    await svc.remove(z.id);
+    assert.equal(await svc.emptyTrash(), 1);
+    assert.ok(!has(own2), 'esvaziar a Lixeira também remove');
+    assert.ok(has(shared2));
+    await svc.init();
+    assert.deepEqual(svc.folders(), []);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

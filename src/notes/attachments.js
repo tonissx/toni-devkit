@@ -84,4 +84,14 @@ function formatSize(bytes) {
 
 const TEXT_PREVIEW_MAX = 512 * 1024;
 
-module.exports = { extOf, isExecutableAsset, previewKind, visualKind, THUMB_KINDS, KIND_ICON, mimeFor, formatSize, TEXT_PREVIEW_MAX, EXECUTABLE_EXT };
+/**
+ * Nomes de anexo citados no texto de uma nota ('.assets/<nome>': imagem ou link). Conta até dentro de bloco de
+ * código, de propósito: na dúvida o anexo é considerado usado e não é apagado.
+ */
+function assetRefs(content) {
+  const out = new Set();
+  for (const m of String(content || '').matchAll(/\.assets\/([\w-][\w.-]*)/g)) out.add(m[1]);
+  return out;
+}
+
+module.exports = { assetRefs, extOf, isExecutableAsset, previewKind, visualKind, THUMB_KINDS, KIND_ICON, mimeFor, formatSize, TEXT_PREVIEW_MAX, EXECUTABLE_EXT };
