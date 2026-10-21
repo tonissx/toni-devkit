@@ -1,5 +1,5 @@
 import { DS } from '../../lib/ds.js';
-import { loadExcalidraw } from '../../diagrams/excalidraw.js';
+import { sceneThumb } from '../../diagrams/thumb.js';
 import { parseScene, sceneIsEmpty } from '../../diagrams/scene.js';
 
 const { Button, Icon } = DS;
@@ -20,11 +20,10 @@ export function DiagramCard({ note, readOnly }) {
     setThumb(''); setThumbError('');
     if (parsed.error || empty) return undefined;
     let gone = false;
-    loadExcalidraw()
-      .then((X) => X.exportSvg(parsed.scene, { dark: true }))
-      // <img> com data: URL: o SVG roda isolado (sem scripts nem carregamentos externos).
-      .then((svg) => { if (!gone) setThumb('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)); })
-      .catch((e) => { if (!gone) setThumbError(String((e && e.message) || e)); });
+    sceneThumb(note.content).then((r) => {
+      if (gone) return;
+      if (r.url) setThumb(r.url); else if (r.error) setThumbError(r.error);
+    });
     return () => { gone = true; };
   }, [parsed, empty]);
 

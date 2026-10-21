@@ -189,3 +189,61 @@ test('embed conta como link: backlinks, grafo e renomear mantêm o ![[…]] cone
     assert.equal(svc.get(outra.id).content, '`![[Fluxo]]` em código não conta');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+/* ─────────────── miniatura (src/diagrams/thumb.js) com o Excalidraw trocado por um duplo ─────────────── */
+async function loadThumb() {
+  const esbuild = await import('esbuild');
+  const stub = {
+    name: 'stub-excalidraw-loader',
+    setup(b) {
+      b.onResolve({ filter: /[\\/]excalidraw\.js$/ }, () => ({ path: 'excalidraw-stub', namespace: 'stub' }));
+      b.onLoad({ filter: /.*/, namespace: 'stub' }, () => ({ loader: 'js', contents: 'export const loadExcalidraw = async () => globalThis.__X;' }));
+    },
+  };
+  const out = await esbuild.build({ entryPoints: ['src/diagrams/thumb.js'], bundle: true, write: false, format: 'cjs', platform: 'node', logLevel: 'error', plugins: [stub] });
+  const mod = { exports: {} };
+  new Function('module', 'exports', 'require', out.outputFiles[0].text)(mod, mod.exports, require);
+  return mod.exports;
+}
+const fakeX = () => { const X = { calls: [], exportSvg: async (scene, opts) => { X.calls.push(opts); return `<svg data-n="${scene.elements.length}"/>`; } }; globalThis.__X = X; return X; };
+
+test('sceneThumb: cena vira data URL de SVG; vazia, formato antigo e falha do exportador viram resultados distintos', async () => {
+  const T = await loadThumb();
+  const X = fakeX();
+  const r = await T.sceneThumb(S.serializeScene([rect('a'), rect('b')], {}, {}));
+  assert.ok(r.url.startsWith('data:image/svg+xml;charset=utf-8,'));
+  assert.equal(decodeURIComponent(r.url.split(',')[1]), '<svg data-n="2"/>');
+  assert.deepEqual(X.calls, [{ dark: true }], 'escuro por padrão (combina com o app)');
+  assert.deepEqual(await T.sceneThumb(S.serializeScene([], {}, {})), { empty: true });
+  assert.ok((await T.sceneThumb('erDiagram\n A ||--o{ B : x')).error, 'Mermaid antigo: erro, sem tentar desenhar');
+  X.exportSvg = async () => { throw new Error('boom'); };
+  assert.deepEqual(await T.sceneThumb(S.serializeScene([rect('a')], {}, {})), { error: 'boom' });
+});
+
+test('embedThumb: reaproveita o cache enquanto `updated` não muda e regera quando muda', async () => {
+  const T = await loadThumb();
+  const X = fakeX();
+  T.forgetThumb();
+  const note = { id: 'n1', updated: 't1', content: S.serializeScene([rect('a')], {}, {}) };
+  assert.equal(T.peekThumb('n1'), undefined);
+  const a = await T.embedThumb(note);
+  const b = await T.embedThumb({ ...note });
+  assert.equal(X.calls.length, 1, 'segunda chamada veio do cache');
+  assert.deepEqual(a, b);
+  assert.deepEqual(T.peekThumb('n1'), a, 'peek devolve o cache de forma síncrona');
+  const c = await T.embedThumb({ ...note, updated: 't2', content: S.serializeScene([rect('a'), rect('b')], {}, {}) });
+  assert.equal(X.calls.length, 2, 'diagrama editado: gera de novo');
+  assert.notDeepEqual(c, a);
+  T.forgetThumb('n1');
+  assert.equal(T.peekThumb('n1'), undefined);
+});
+
+test('embedThumb: o cache é limitado (descarta as mais antigas)', async () => {
+  const T = await loadThumb();
+  fakeX();
+  T.forgetThumb();
+  const content = S.serializeScene([rect('a')], {}, {});
+  for (let i = 0; i < 40; i++) await T.embedThumb({ id: 'id' + i, updated: 'u', content });
+  assert.equal(T.peekThumb('id0'), undefined, 'a mais antiga saiu');
+  assert.ok(T.peekThumb('id39'), 'a mais nova ficou');
+});
