@@ -121,3 +121,71 @@ test('markdown: ```mermaid é um bloco de código comum (com Copiar), sem marcad
   assert.match(html, /data-copy="0"/);
   assert.deepEqual(blocks, ['flowchart TD\n  A --> B']);
 });
+
+/* ─────────────── ![[Diagrama]]: embed dentro do texto de uma nota ─────────────── */
+const ids = (t) => (t === 'Diag' || t === 'Fluxo de aprovação' ? 'id-' + t : null); // resolve(): só estes existem
+
+test('embed: ![[Diagrama]] entre textos vira um marcador na posição certa, com o id já resolvido', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const { html } = renderMarkdown('Antes do diagrama.\n\n![[Diag]]\n\nDepois do diagrama.', { resolve: ids, embeds: true });
+  assert.match(html, /<span class="md-embed" data-embed="Diag" data-note-id="id-Diag" title="Abrir em Diagramas">/);
+  assert.ok(!html.includes('md-wikilink'), 'não vira link comum');
+  const i = html.indexOf('Antes do diagrama'), j = html.indexOf('md-embed'), k = html.indexOf('Depois do diagrama');
+  assert.ok(i >= 0 && i < j && j < k, 'texto → diagrama → texto');
+});
+
+test('embed: legenda com |, e o título com acento e espaço', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const { html } = renderMarkdown('![[Fluxo de aprovação|Fluxo geral]]', { resolve: ids, embeds: true });
+  assert.match(html, /data-embed="Fluxo de aprovação" data-note-id="id-Fluxo de aprovação" data-caption="Fluxo geral"/);
+  assert.match(html, /Diagrama: Fluxo geral/);
+});
+
+test('embed: alvo que não existe vira etiqueta inerte (sem id, sem link que cria nota)', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const { html } = renderMarkdown('![[Inexistente]]', { resolve: ids, embeds: true });
+  assert.match(html, /class="md-embed is-missing" data-embed="Inexistente"/);
+  assert.ok(!html.includes('data-note-id') && !html.includes('md-wikilink') && !html.includes('data-note="'), 'não pode oferecer "Criar nota"');
+});
+
+test('embed: desligado (padrão) o ![[x]] sai como "!" + link, como sempre', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const { html } = renderMarkdown('veja ![[Diag]] aqui', { resolve: ids });
+  assert.ok(!html.includes('md-embed'));
+  assert.match(html, /!<a href="#" class="md-wikilink" data-note="Diag"/);
+});
+
+test('embed: dentro de code fence ou `código inline` não é embed; [[link]] comum e !1 seguem iguais', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const fenced = renderMarkdown('```\n![[Diag]]\n```', { resolve: ids, embeds: true }).html;
+  assert.ok(!fenced.includes('md-embed'));
+  assert.ok(!renderMarkdown('use `![[Diag]]` assim', { resolve: ids, embeds: true }).html.includes('md-embed'));
+  const mixed = renderMarkdown('[[Diag]] e ![[Diag]] - [ ] tarefa !1', { resolve: ids, embeds: true }).html;
+  assert.match(mixed, /<a href="#" class="md-wikilink" data-note="Diag"/);
+  assert.match(mixed, /class="md-embed"/);
+  assert.match(mixed, /class="md-pri is-p1"/);
+});
+
+test('embed: o alvo é escapado no HTML', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const { html } = renderMarkdown('![[a"><img src=x onerror=alert(1)>]]', { resolve: () => 'i"d', embeds: true });
+  assert.ok(!html.includes('<img'), 'sem HTML injetado');
+  assert.ok(!html.includes('data-note-id="i"d"'), 'id escapado');
+});
+
+test('embed conta como link: backlinks, grafo e renomear mantêm o ![[…]] conectado (e o "!")', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const d = await svc.create({ title: 'Fluxo', type: 'diagram', content: S.serializeScene([rect('a')], {}, {}) });
+    const doc = await svc.create({ title: 'Documento', content: 'antes\n\n![[Fluxo]]\n\ne depois, veja [[Fluxo]] também' });
+    const outra = await svc.create({ title: 'Outra', content: '`![[Fluxo]]` em código não conta' });
+    assert.deepEqual(svc.backlinks(d.id).map((x) => x.id), [doc.id], 'só a nota com o embed (e o link), não a de código');
+    assert.deepEqual(svc.graph().links.filter((l) => l.target === d.id).map((l) => l.source), [doc.id]);
+    await svc.save({ id: d.id, title: 'Fluxo novo' });
+    assert.equal(await svc.renameLinks('Fluxo', 'Fluxo novo', d.id), 1);
+    assert.equal(svc.get(doc.id).content, 'antes\n\n![[Fluxo novo]]\n\ne depois, veja [[Fluxo novo]] também', 'o "!" do embed é preservado');
+    assert.equal(svc.get(outra.id).content, '`![[Fluxo]]` em código não conta');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
