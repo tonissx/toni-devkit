@@ -52,12 +52,25 @@ cpSync(path.join(root, 'node_modules', '@excalidraw', 'excalidraw', 'dist', 'pro
   filter: (src) => !/[\\/]Liberation([\\/]|$)/.test(src),
 });
 
+// pdf.js (miniatura da 1ª página de um PDF nas Notes): bundle à parte, minificado, carregado sob demanda
+// (src/notes/pdfthumb.js). O worker vai dentro dele — ver src/notes/pdfthumb-entry.js.
+const pdfThumbOpts = {
+  ...opts,
+  entryPoints: { pdfthumb: path.join(root, 'src', 'notes', 'pdfthumb-entry.js') },
+  minify: true,
+  sourcemap: false,
+  define: { 'process.env.NODE_ENV': '"production"' },
+};
+
 if (process.argv.includes('--watch')) {
   const ctx = await esbuild.context(opts);
   await ctx.watch();
   const ectx = await esbuild.context(excalidrawOpts);
   await ectx.watch();
+  const pctx = await esbuild.context(pdfThumbOpts);
+  await pctx.watch();
 } else {
   await esbuild.build(opts);
   await esbuild.build(excalidrawOpts);
+  await esbuild.build(pdfThumbOpts);
 }

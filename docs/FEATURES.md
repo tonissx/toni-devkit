@@ -551,6 +551,25 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   - Imagem (print com `Win+Shift+S`, "Copiar imagem" do navegador) ou arquivo de imagem arrastado → gravada em
     `Devkit Notes\.assets\` e inserida como `![imagem](.assets/…)`; o preview mostra a imagem e o clique abre no
     visualizador do sistema (PNG/JPG/GIF/WebP até 20 MB)
+  - **Anexos**: qualquer outro arquivo (PDF, zip, planilha…) colado ou arrastado do Explorer vai para o mesmo
+    `.assets\` (até 50 MB) e entra como `[nome.pdf](.assets/…)`; o preview mostra um chip 📎 e o clique abre no
+    programa padrão. Executáveis (`.exe`, `.bat`, `.ps1`, `.lnk`…) pedem confirmação antes de abrir. Anexos
+    sensíveis não devem ir para as notas (use o Vault)
+  - **Limpeza de anexos**: ao **excluir de vez** uma nota (Lixeira → Excluir de vez, ou Esvaziar), os anexos que só ela
+    usava são apagados de `.assets\`; os que outra nota (viva ou na Lixeira) também cita ficam. Mandar para a Lixeira
+    não apaga nada, então Restaurar e Desfazer trazem a nota com os anexos. Tirar o link de um anexo do texto não
+    apaga o arquivo: **Configurações → Anexos → Verificar anexos não usados → Limpar agora** remove o que nenhuma nota
+    usa (anexos de menos de 10 minutos ficam de fora, pois a nota pode ainda não ter sido salva). Versões antigas do
+    histórico não contam como uso: restaurar uma versão que citava um anexo já limpo mostra o link quebrado
+  - **Cartão do anexo**: cada anexo aparece como um cartão com **miniatura** e o nome. Imagem mostra o próprio arquivo;
+    **PDF** mostra a primeira página (pdf.js, funciona em qualquer PC); vídeo e Word/Excel/PowerPoint pedem a miniatura ao
+    Windows, a mesma do Explorer. Quando não há miniatura (ou ela ainda carrega), fica um selo colorido com a extensão e
+    uma cor por tipo: PDF vermelho, imagem azul, vídeo roxo, áudio rosa, Word azul-escuro, planilha verde, slides
+    laranja, zip amarelo, código/JSON verde-água, executável vermelho, demais cinza
+  - **Pré-visualização no app**: clicar numa imagem ou num anexo abre um modal com a imagem ampliada, o **PDF**, o
+    player de **áudio/vídeo** ou o texto (`.txt .md .json .csv .xml .sql .log`… com realce; só os primeiros 512 KB).
+    Outros tipos mostram nome e tamanho. Botões **Abrir** (programa padrão), **Mostrar na pasta** e **Fechar**;
+    `Ctrl`/`Shift`+clique abre direto no programa padrão. Executáveis não são pré-visualizados
   - Células do Excel, resultado do SSMS ou tabela do navegador → **tabela Markdown** alinhada (colunas numéricas à
     direita). URL colada com texto selecionado → `[texto](url)`. `Ctrl+Shift+V` cola sem transformar
   - `Ctrl+B` negrito · `Ctrl+I` itálico · `Ctrl+K` com texto selecionado vira link (sem seleção, abre a palette) ·

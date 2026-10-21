@@ -18,6 +18,7 @@ instalado, ao lado do `LICENSE`).
 | [Geist e Geist Mono](https://vercel.com/font) | Fontes (`renderer/ds/fonts`) | SIL OFL 1.1 | `licenses/LICENSE.geist-OFL-1.1.txt` e `renderer/ds/fonts/OFL.txt` |
 | [marked](https://github.com/markedjs/marked) | Markdown das notas, empacotado no app | MIT | `licenses/LICENSE.marked.txt` |
 | [Excalidraw](https://excalidraw.com) | Quadro de desenho da ferramenta Diagramas, empacotado em `renderer/dist/excalidraw.js` (com o próprio React) e carregado só quando ela é aberta | MIT | `licenses/LICENSE.excalidraw.txt` |
+| [pdf.js](https://mozilla.github.io/pdf.js/) | Miniatura da primeira página de um PDF anexado numa nota, empacotado em `renderer/dist/pdfthumb.js` e carregado só quando uma nota com PDF é aberta | Apache-2.0 | `licenses/LICENSE.pdfjs.txt` |
 | [electron-updater](https://www.electron.build) | Atualização automática | MIT | no `app.asar` |
 | [@anthropic-ai/sdk](https://github.com/anthropics/anthropic-sdk-typescript) | IA opcional na nuvem | MIT | no `app.asar` |
 | [esbuild](https://esbuild.github.io) e [electron-builder](https://www.electron.build) | Build e empacotamento (desenvolvimento) | MIT | — |

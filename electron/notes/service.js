@@ -16,12 +16,17 @@ const { normalize } = require('../../src/commands/search.js');
 const { templateVars, applyTemplate, isTemplateFolder } = require('../../src/notes/templates.js');
 const { buildGraph } = require('../../src/notes/graph.js');
 const { expandDueWords } = require('../../src/notes/edit.js');
+const { isExecutableAsset, previewKind, assetRefs, TEXT_PREVIEW_MAX } = require('../../src/notes/attachments.js');
+const fsp = require('node:fs/promises');
 
 const EDITABLE = ['title', 'content', 'type', 'tags', 'aliases', 'pinned', 'favorite', 'quick', 'source'];
 const VIEWED_MAX = 20;
 const INBOX_TITLE = 'Inbox'; // nota que recebe as tarefas capturadas pela palette (task: …)
 const IMAGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 const IMAGE_MAX = 20 * 1024 * 1024;
+const ATTACHMENT_MAX = 50 * 1024 * 1024;
+const ORPHAN_GRACE_MS = 10 * 60 * 1000; // anexo mais novo que isso não entra na limpeza
+const THUMB_SOURCE_MAX = 30 * 1024 * 1024; // maior que isso o PDF não passa pelo IPC só para virar miniatura
 const LINK_LINE_RE = /\[\[([^[\]\n|]+)(?:\|[^\]\n]+)?\]\]/g;
 
 /** Resumo leve para listas (sem o conteúdo inteiro). */
@@ -41,6 +46,51 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 function createNotesService({ dir, broadcast = () => {}, events = null, historyGapMs = 10 * 60 * 1000, historyMax }) {
   const store = createStore(dir, historyMax ? { historyMax } : undefined);
+
+  /** Nomes (minúsculos: o Windows não distingue caixa) dos anexos citados por qualquer nota viva ou na Lixeira. */
+  async function referencedAssets() {
+    const refs = new Set();
+    const add = (content) => { for (const r of assetRefs(content)) refs.add(r.toLowerCase()); };
+    for (const n of notes.values()) add(n.content);
+    for (const t of await store.listTrash()) add(t.note.content);
+    return refs;
+  }
+
+  /**
+   * Apaga, dos anexos `names` (Set), os que nenhuma nota viva nem a Lixeira cita mais. Chamado depois que uma nota
+   * sai de vez da Lixeira. Um anexo que não apaga (em uso, sem permissão) não impede a exclusão da nota.
+   */
+  async function dropUnreferenced(names) {
+    if (!names.size) return 0;
+    const refs = await referencedAssets();
+    let removed = 0;
+    for (const name of names) {
+      if (refs.has(name.toLowerCase())) continue;
+      try { await store.removeAsset(name); removed++; } catch { /* fica para a limpeza manual */ }
+    }
+    return removed;
+  }
+
+  /** Anexos de .assets\ que nenhuma nota cita e que já têm mais de ORPHAN_GRACE_MS (o recém-colado ainda pode estar sem salvar). */
+  async function findOrphans() {
+    const refs = await referencedAssets();
+    const now = Date.now();
+    return (await store.listAssets())
+      .filter((a) => !refs.has(a.name.toLowerCase()) && now - a.mtimeMs >= ORPHAN_GRACE_MS)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** Grava bytes em .assets\ como AAAA-MM-DD-HHmmss-xxxx.<ext>, tentando outro sufixo se o nome existir. */
+  async function writeNamedAsset(bytes, ext, what) {
+    const d = new Date();
+    const p2 = (n) => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
+    for (let i = 0; i < 8; i++) {
+      const name = `${stamp}-${Math.random().toString(16).slice(2, 6).padEnd(4, '0')}.${ext}`;
+      if (await store.writeAsset(name, bytes)) return { path: '.assets/' + name };
+    }
+    err(`Não foi possível gerar um nome para ${what}.`);
+  }
   const notes = new Map();
   const folderSet = new Set(); // pastas existentes (diretórios reais, inclusive vazias): 'a', 'a/b'
   const folderMeta = new Map(); // pasta → configuração (.folder.json): só pastas que têm algo configurado
@@ -374,26 +424,47 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
       return this.get(n.id);
     },
 
-    /** Apaga de vez um item da lixeira (e o histórico da nota, se ela não existe mais). */
+    /** Apaga de vez um item da lixeira (o histórico da nota, se ela não existe mais, e os anexos que só ela usava). */
     deleteFromTrash(file) {
       return serial(async () => {
         const t = await store.readTrash(file);
         await store.removeTrash(t.file);
         if (!notes.has(t.note.id)) { await store.removeHistory(t.note.id).catch(() => {}); lastSnap.delete(t.note.id); }
+        await dropUnreferenced(assetRefs(t.note.content));
         changed('trash');
         return true;
       });
     },
 
-    /** Esvazia a lixeira (e o histórico das notas que só existiam nela). Devolve quantas notas apagou. */
+    /** Esvazia a lixeira (e o histórico e os anexos das notas que só existiam nela). Devolve quantas notas apagou. */
     emptyTrash() {
       return serial(async () => {
         const items = await store.listTrash();
         await store.emptyTrash();
         for (const t of items) if (!notes.has(t.note.id)) { await store.removeHistory(t.note.id).catch(() => {}); lastSnap.delete(t.note.id); }
         trashed.clear();
+        const names = new Set();
+        for (const t of items) for (const r of assetRefs(t.note.content)) names.add(r);
+        await dropUnreferenced(names);
         changed('trash');
         return items.length;
+      });
+    },
+
+    /** Anexos que nenhuma nota usa: { count, bytes, files: [{ name, size }] } — o que cleanAssets apagaria agora. */
+    async orphanAssets() {
+      const files = await findOrphans();
+      return { count: files.length, bytes: files.reduce((s, f) => s + f.size, 0), files: files.map(({ name, size }) => ({ name, size })) };
+    },
+
+    /** Apaga os anexos que nenhuma nota usa (ver orphanAssets). Devolve { removed, bytes }. */
+    cleanAssets() {
+      return serial(async () => {
+        let removed = 0, bytes = 0;
+        for (const f of await findOrphans()) {
+          try { await store.removeAsset(f.name); removed++; bytes += f.size; } catch { /* em uso: fica para a próxima */ }
+        }
+        return { removed, bytes };
       });
     },
 
@@ -800,14 +871,22 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
       const size = bytes ? bytes.byteLength : 0;
       if (!size) err('Imagem vazia.');
       if (size > IMAGE_MAX) err('Imagem grande demais (máximo 20 MB).');
-      const d = new Date();
-      const p2 = (n) => String(n).padStart(2, '0');
-      const stamp = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
-      for (let i = 0; i < 8; i++) {
-        const name = `${stamp}-${Math.random().toString(16).slice(2, 6).padEnd(4, '0')}.${ext}`;
-        if (await store.writeAsset(name, bytes)) return { path: '.assets/' + name };
-      }
-      err('Não foi possível gerar um nome para a imagem.');
+      return writeNamedAsset(bytes, ext, 'a imagem');
+    },
+
+    /**
+     * Arquivo qualquer anexado à nota (arrastar do Explorer): grava em .assets\ com nome gerado e
+     * devolve { path: '.assets/<nome>', name } — name é o nome original, usado como rótulo do link.
+     * Nenhum tipo é recusado (até 50 MB); quem abre executáveis pede confirmação (isExecutableAsset).
+     */
+    async saveAttachment({ bytes, name } = {}) {
+      const size = bytes ? bytes.byteLength : 0;
+      if (!size) err('Arquivo vazio.');
+      if (size > ATTACHMENT_MAX) err('Arquivo grande demais (máximo 50 MB).');
+      const label = String(name || '').replace(/[\\/]/g, ' ').trim().slice(-120) || 'arquivo';
+      const m = /\.([A-Za-z0-9]{1,10})$/.exec(label);
+      const { path } = await writeNamedAsset(bytes, m ? m[1].toLowerCase() : 'bin', 'o arquivo');
+      return { path, name: label };
     },
 
     /** Caminho absoluto de uma imagem referenciada como ".assets/<nome>" (ou só "<nome>"). */
@@ -815,8 +894,40 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
       return store.assetPath(String(ref || '').replace(/^\.assets\//, ''));
     },
 
+    /**
+     * Dados para a pré-visualização de um anexo: { name, size, kind } e, para texto, o conteúdo em UTF-8
+     * (até TEXT_PREVIEW_MAX bytes; truncated avisa que há mais). Imagem, PDF, áudio e vídeo só informam
+     * tamanho — o arquivo em si chega pelo protocolo devkit-note://. Executáveis nunca são lidos.
+     */
+    async readAsset(ref, { max = TEXT_PREVIEW_MAX } = {}) {
+      const file = this.assetFile(ref);
+      const name = file.split(/[\\/]/).pop();
+      const kind = previewKind(name);
+      let st;
+      try { st = await fsp.stat(file); } catch { err('Anexo não encontrado.'); }
+      const out = { name, size: st.size, kind };
+      if (kind !== 'text') return out;
+      const fh = await fsp.open(file, 'r');
+      try {
+        const buf = Buffer.alloc(Math.min(st.size, max));
+        const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+        out.text = buf.subarray(0, bytesRead).toString('utf8').replace(/^﻿/, '');
+        out.truncated = st.size > bytesRead;
+      } finally { await fh.close(); }
+      return out;
+    },
+
+    /** Bytes de um anexo para o renderer desenhar a miniatura (pdf.js). Acima de `max` devolve null (fica o placeholder). */
+    async assetBytes(ref, { max = THUMB_SOURCE_MAX } = {}) {
+      const file = this.assetFile(ref);
+      let st;
+      try { st = await fsp.stat(file); } catch { err('Anexo não encontrado.'); }
+      if (st.size > max) return null;
+      return new Uint8Array(await fsp.readFile(file));
+    },
+
     flush: () => store.flush(),
   };
 }
 
-module.exports = { createNotesService, summary };
+module.exports = { createNotesService, summary, isExecutableAsset };

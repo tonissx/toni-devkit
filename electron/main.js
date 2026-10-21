@@ -10,7 +10,8 @@ const { createPaster } = require('./paste');
 const { createWinHelper } = require('./winfocus');
 const { UI_BINDABLE_IDS, SELECTION_BIND_IDS } = require('../src/commands/binds.js');
 const { createSelectionCopier } = require('./selection');
-const { createNotesService } = require('./notes/service');
+const { createNotesService, isExecutableAsset } = require('./notes/service');
+const { mimeFor, visualKind, THUMB_KINDS } = require('../src/notes/attachments.js');
 const { createNotesSettings } = require('./notes/settings');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
@@ -413,7 +414,7 @@ function initNotes() {
   notesReady = notes.init().catch((e) => { console.error('[notes]', e); throw e; });
 }
 
-const NOTES_API = ['info', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage', 'backlinks', 'linkRefs', 'renameLinks', 'history', 'version', 'restoreVersion', 'trashList', 'restoreFromTrash', 'deleteFromTrash', 'emptyTrash', 'templates', 'fromTemplate', 'ensureRootFolder', 'graph', 'trashCount',
+const NOTES_API = ['info', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage', 'saveAttachment', 'orphanAssets', 'cleanAssets', 'backlinks', 'linkRefs', 'renameLinks', 'history', 'version', 'restoreVersion', 'trashList', 'restoreFromTrash', 'deleteFromTrash', 'emptyTrash', 'templates', 'fromTemplate', 'ensureRootFolder', 'graph', 'trashCount',
   'setFolderMeta', 'moveFolderOrder', 'folderClash', 'duplicateFolder', 'trashFolders', 'restoreFolderFromTrash', 'folderAbs'];
 for (const fn of NOTES_API) {
   ipcMain.handle('notes:' + fn, async (_e, ...args) => { await notesReady; return notes[fn](...args); });
@@ -437,18 +438,60 @@ ipcMain.handle('notes:pick-dir', async (e) => {
   return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
 });
 ipcMain.handle('notes:relaunch', () => { app.relaunch(); app.quit(); });
-// Clique numa imagem do preview: abre no visualizador do sistema.
-ipcMain.handle('notes:open-asset', async (_e, ref) => { await notesReady; return shell.openPath(notes.assetFile(ref)); });
+// Clique numa imagem/anexo do preview: abre no programa padrão do sistema. Executáveis (.exe, .bat, .ps1…)
+// pedem confirmação antes, já que o arquivo pode ter chegado por sync ou ser de outra pessoa.
+ipcMain.handle('notes:open-asset', async (e, ref) => {
+  await notesReady;
+  const file = notes.assetFile(ref);
+  if (isExecutableAsset(file)) {
+    const r = await dialog.showMessageBox(fromEvent(e), {
+      type: 'warning', buttons: ['Executar', 'Mostrar na pasta', 'Cancelar'], defaultId: 2, cancelId: 2,
+      title: 'Abrir anexo', message: 'Este anexo é um arquivo executável.',
+      detail: `${path.basename(file)}\n\nExecute só se você confia na origem dele.`,
+    });
+    if (r.response === 1) { shell.showItemInFolder(file); return ''; }
+    if (r.response !== 0) return '';
+  }
+  return shell.openPath(file);
+});
+// Pré-visualização de anexos (modal do preview): metadados/texto do arquivo e "Mostrar na pasta".
+ipcMain.handle('notes:read-asset', async (_e, ref) => { await notesReady; return notes.readAsset(ref); });
+// Miniatura do anexo (PDF, vídeo, Word/Excel/PowerPoint) pelo provedor de miniaturas do Windows — o mesmo do
+// Explorer. Devolve um data URL PNG, ou '' quando o sistema não consegue (o renderer mostra um placeholder).
+// Executáveis nunca passam pelo shell. Os anexos são imutáveis (nome único), então o cache vale a sessão toda.
+const assetThumbs = new Map();
+ipcMain.handle('notes:asset-thumb', async (_e, ref) => {
+  await notesReady;
+  const file = notes.assetFile(ref);
+  if (!THUMB_KINDS.has(visualKind(file))) return '';
+  if (assetThumbs.has(file)) return assetThumbs.get(file);
+  let url = '';
+  try {
+    const img = await nativeImage.createThumbnailFromPath(file, { width: 192, height: 192 });
+    if (img && !img.isEmpty()) url = img.toDataURL();
+  } catch { /* sem provedor de miniatura para este arquivo */ }
+  assetThumbs.set(file, url);
+  return url;
+});
+ipcMain.handle('notes:asset-bytes', async (_e, ref) => { await notesReady; return notes.assetBytes(ref); });
+ipcMain.handle('notes:reveal-asset', async (_e, ref) => { await notesReady; shell.showItemInFolder(notes.assetFile(ref)); });
 
 // Imagens das notas (.assets\) chegam ao renderer por devkit-note://asset/<nome> (a CSP libera só este esquema).
-protocol.registerSchemesAsPrivileged([{ scheme: 'devkit-note', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+// stream: <video>/<audio> pedem o arquivo aos pedaços (Range) para poder buscar no meio.
+protocol.registerSchemesAsPrivileged([{ scheme: 'devkit-note', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } }]);
 function registerNotesProtocol() {
   protocol.handle('devkit-note', async (req) => {
     try {
       const u = new URL(req.url);
       if (u.host !== 'asset') return new Response('Not found', { status: 404 });
       await notesReady;
-      return net.fetch(pathToFileURL(notes.assetFile(decodeURIComponent(u.pathname.slice(1)))).toString());
+      const file = notes.assetFile(decodeURIComponent(u.pathname.slice(1)));
+      const res = await net.fetch(pathToFileURL(file).toString(), { headers: req.headers });
+      const mime = mimeFor(file); // o file:// não dá Content-Type para tudo (ex.: m4a, flac)
+      if (!mime || res.headers.get('content-type') === mime) return res;
+      const headers = new Headers(res.headers);
+      headers.set('content-type', mime);
+      return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
     } catch {
       return new Response('Not found', { status: 404 });
     }

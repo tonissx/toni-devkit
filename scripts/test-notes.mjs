@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync, rmSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
@@ -11,7 +11,7 @@ const E = require('../src/notes/edit.js');
 const { serialize, parse } = require('../src/notes/format.js');
 const { searchNotes, withinOne } = require('../src/notes/search.js');
 const { createStore } = require('../electron/notes/store.js');
-const { createNotesService } = require('../electron/notes/service.js');
+const { createNotesService, isExecutableAsset } = require('../electron/notes/service.js');
 
 const tmp = () => mkdtempSync(path.join(tmpdir(), 'devkit-notes-'));
 const titles = (rs) => rs.map((r) => r.title);
@@ -520,6 +520,133 @@ test('service: saveImage writes to .assets (hidden from folders), validates type
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('service: saveAttachment stores any file type in .assets, keeps the original name as label, validates size', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 1, 2]);
+    const a = await svc.saveAttachment({ bytes, name: 'Relatório Março.PDF' });
+    assert.match(a.path, /^\.assets\/\d{4}-\d{2}-\d{2}-\d{6}-[0-9a-f]{4}\.pdf$/);
+    assert.equal(a.name, 'Relatório Março.PDF');
+    assert.deepEqual([...readFileSync(path.join(dir, a.path))], [...bytes]);
+    assert.equal((await svc.saveAttachment({ bytes, name: 'semextensao' })).path.endsWith('.bin'), true);
+    assert.match((await svc.saveAttachment({ bytes, name: 'C:\\x\\run.bat' })).name, /run\.bat$/);
+    await assert.rejects(svc.saveAttachment({ bytes: new Uint8Array(0), name: 'a.zip' }), /vazio/);
+    await assert.rejects(svc.saveAttachment({ bytes: new Uint8Array(50 * 1024 * 1024 + 1), name: 'a.zip' }), /grande demais/);
+    assert.equal(svc.assetFile(a.path), path.join(dir, a.path));
+    assert.equal(isExecutableAsset('x/.assets/a.BAT'), true);
+    assert.equal(isExecutableAsset('a.pdf'), false);
+    await svc.init();
+    assert.deepEqual(svc.folders(), []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('attachments: previewKind classifies by extension; executables never preview as text', () => {
+  const A = require('../src/notes/attachments.js');
+  const kinds = { 'a.PNG': 'image', 'a.pdf': 'pdf', 'a.mp3': 'audio', 'a.mp4': 'video', 'a.json': 'text', 'a.csv': 'text', 'a.md': 'text', 'a.zip': 'other', 'a.bin': 'other', semext: 'other', 'a.bat': 'exec', 'a.js': 'exec', 'a.ps1': 'exec', 'a.lnk': 'exec' };
+  for (const [name, kind] of Object.entries(kinds)) assert.equal(A.previewKind(name), kind, name);
+  const groups = { 'a.pdf': 'pdf', 'a.mp4': 'video', 'a.mp3': 'audio', 'a.PNG': 'image', 'a.docx': 'doc', 'a.xlsx': 'sheet', 'a.csv': 'sheet', 'a.pptx': 'slides', 'a.zip': 'archive', 'a.json': 'code', 'a.txt': 'text', 'a.bat': 'exec', 'a.xyz': 'other' };
+  for (const [name, g] of Object.entries(groups)) assert.equal(A.visualKind(name), g, name);
+  for (const g of new Set(Object.values(groups))) assert.ok(A.KIND_ICON[g], g);
+  assert.deepEqual([...A.THUMB_KINDS].sort(), ['doc', 'pdf', 'sheet', 'slides', 'video']);
+  assert.equal(A.mimeFor('x.pdf'), 'application/pdf');
+  assert.equal(A.mimeFor('x.m4a'), 'audio/mp4');
+  assert.equal(A.mimeFor('x.zip'), '');
+  assert.equal(A.formatSize(512), '512 B');
+  assert.equal(A.formatSize(1536), '1,5 KB');
+  assert.equal(A.formatSize(5 * 1024 * 1024), '5 MB');
+});
+
+test('service: readAsset returns metadata, reads text as UTF-8 (BOM stripped, truncated by max), never reads other kinds', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const txt = await svc.saveAttachment({ bytes: Buffer.from('﻿olá, mundo\nsegunda linha', 'utf8'), name: 'nota.txt' });
+    const r = await svc.readAsset(txt.path);
+    assert.deepEqual({ kind: r.kind, text: r.text, truncated: r.truncated }, { kind: 'text', text: 'olá, mundo\nsegunda linha', truncated: false });
+    assert.match(r.name, /\.txt$/);
+    const cut = await svc.readAsset(txt.path, { max: 5 });
+    assert.equal(cut.truncated, true);
+    assert.equal(cut.text.length > 0 && cut.text.length <= 5, true);
+    const pdf = await svc.saveAttachment({ bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]), name: 'a.pdf' });
+    const p = await svc.readAsset(pdf.path);
+    assert.deepEqual({ kind: p.kind, size: p.size, text: p.text }, { kind: 'pdf', size: 4, text: undefined });
+    const bat = await svc.saveAttachment({ bytes: Buffer.from('echo oi'), name: 'x.bat' });
+    assert.equal((await svc.readAsset(bat.path)).text, undefined);
+    await assert.rejects(svc.readAsset('.assets/2000-01-01-000000-ffff.txt'), /não encontrado/);
+    assert.throws(() => svc.assetFile('.assets/../x.txt'), /inválido/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('attachments: assetRefs finds .assets/<nome> in images, links and code; ignores traversal and other paths', () => {
+  const { assetRefs } = require('../src/notes/attachments.js');
+  const md = '![a](.assets/2026-01-01-000000-aaaa.png) [b](.assets/2026-01-01-000000-bbbb.pdf)\n`.assets/x.zip` ![r](.assets/2026-01-01-000000-aaaa.png)\n![t](.assets/../segredo.png) [c](assets/y.png) ![d](https://a.com/.assets/z.png)';
+  assert.deepEqual([...assetRefs(md)].sort(), ['2026-01-01-000000-aaaa.png', '2026-01-01-000000-bbbb.pdf', 'x.zip', 'z.png']);
+  assert.deepEqual([...assetRefs('')], []);
+  assert.deepEqual([...assetRefs(null)], []);
+});
+
+test('service: orphanAssets/cleanAssets only touch files no live or trashed note uses, and spare the last 10 minutes', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const bytes = Buffer.from('x');
+    const mk = async (name) => (await svc.saveAttachment({ bytes, name })).path;
+    const [used, inTrash, orphan, fresh] = [await mk('a.pdf'), await mk('b.pdf'), await mk('c.pdf'), await mk('d.pdf')];
+    const old = new Date(Date.now() - 60 * 60 * 1000);
+    for (const p of [used, inTrash, orphan]) utimesSync(path.join(dir, p), old, old);
+    await svc.create({ title: 'viva', content: `[a](${used})` });
+    const t = await svc.create({ title: 'apagada', content: `[b](${inTrash})` });
+    await svc.remove(t.id);
+
+    const r = await svc.orphanAssets();
+    assert.deepEqual(r.files.map((f) => '.assets/' + f.name), [orphan]); // a nota viva, a da Lixeira e o arquivo novo ficam
+    assert.equal(r.count, 1);
+    assert.equal(r.bytes, 1);
+    assert.deepEqual(await svc.cleanAssets(), { removed: 1, bytes: 1 });
+    for (const p of [used, inTrash, fresh]) assert.ok(existsSync(path.join(dir, p)), p);
+    assert.ok(!existsSync(path.join(dir, orphan)));
+    assert.equal((await svc.orphanAssets()).count, 0);
+    assert.deepEqual(await svc.cleanAssets(), { removed: 0, bytes: 0 });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('service: deleting a note for good removes its attachments, keeps shared ones; trash and restore keep everything', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir });
+    await svc.init();
+    const bytes = Buffer.from('x');
+    const mk = async (name) => (await svc.saveAttachment({ bytes, name })).path;
+    const [own, shared, own2, shared2] = [await mk('own.pdf'), await mk('shared.pdf'), await mk('own2.png'), await mk('shared2.png')];
+    const has = (p) => existsSync(path.join(dir, p));
+    await svc.create({ title: 'outra viva', content: `[s](${shared}) ![s2](${shared2})` });
+    const x = await svc.create({ title: 'X', content: `[o](${own}) [s](${shared})` });
+
+    await svc.remove(x.id); // só vai para a Lixeira: nada some
+    assert.ok(has(own) && has(shared));
+    const [item] = await svc.trashList();
+    await svc.restoreFromTrash(item.file); // restaurar traz a nota com os anexos
+    assert.ok(has(own) && has(shared));
+
+    await svc.remove(x.id);
+    await svc.deleteFromTrash((await svc.trashList())[0].file); // excluir de vez
+    assert.ok(!has(own), 'anexo só da nota X sai');
+    assert.ok(has(shared), 'anexo usado por outra nota fica');
+
+    const z = await svc.create({ title: 'Z', content: `![o](${own2}) ![s](${shared2})` });
+    await svc.remove(z.id);
+    assert.equal(await svc.emptyTrash(), 1);
+    assert.ok(!has(own2), 'esvaziar a Lixeira também remove');
+    assert.ok(has(shared2));
+    await svc.init();
+    assert.deepEqual(svc.folders(), []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('edit: toggleTaskLines cycles text → open → done → text, also for selections', () => {
   const { toggleTaskLines: tg } = E;
   let r = tg('comprar leite', 3, 3);
@@ -989,6 +1116,20 @@ test('markdown: pasted images (.assets/) render as <img>; other local paths do n
   assert.equal((html.match(/<img/g) || []).length, 1);
   assert.match(html, /<img class="md-img" src="devkit-note:\/\/asset\/2026-09-29-142100-ab12\.png" alt="print" data-asset="2026-09-29-142100-ab12\.png"/);
   assert.match(html, /<a href="https:\/\/a.com\/x.png"[^>]*>🖼 d<\/a>/);
+});
+
+test('markdown: links to .assets/ become attachment chips; other local links stay plain text', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const { html } = renderMarkdown('[Relatório.pdf](.assets/2026-09-29-142100-ab12.pdf) [x](.assets/../x.pdf) [y](C:/x.pdf)');
+  assert.equal((html.match(/class="md-file"/g) || []).length, 1);
+  assert.match(html, /<a class="md-file" href="#" data-asset="2026-09-29-142100-ab12\.pdf" data-kind="pdf" data-thumb="1"[^>]*>/);
+  assert.match(html, /<span class="md-file__ext">PDF<\/span>/);
+  assert.match(html, /<span class="md-file__name">Relatório\.pdf<\/span>/);
+  const z = renderMarkdown('[a.zip](.assets/2026-09-29-142100-ab12.zip) [b.png](.assets/2026-09-29-142100-ab13.png)').html;
+  assert.match(z, /data-kind="archive" title="[^"]*"><span class="md-file__thumb"><span class="md-file__ext">ZIP/); // sem miniatura: fica o selo colorido
+  assert.ok(!/data-kind="archive"[^>]*data-thumb/.test(z));
+  assert.match(z, /data-kind="image" title="[^"]*"><span class="md-file__thumb has-img" style="background-image:url\(devkit-note:\/\/asset\/2026-09-29-142100-ab13\.png\)"/);
+  assert.ok(!/C:\/x\.pdf"/.test(html));
 });
 
 test('markdown: @date and !1..!3 become chips; lookalikes stay text', async () => {

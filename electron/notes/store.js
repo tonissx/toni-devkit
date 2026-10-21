@@ -374,6 +374,23 @@ function createStore(dir, { historyMax = HISTORY_MAX } = {}) {
       return true;
     },
 
+    /** Arquivos de .assets\ (só o primeiro nível; pastas e links simbólicos ficam de fora): [{ name, size, mtimeMs }]. */
+    async listAssets() {
+      let entries;
+      try { entries = await fs.readdir(assetsDir, { withFileTypes: true }); } catch { return []; }
+      const out = [];
+      await Promise.all(entries.map(async (e) => {
+        if (!e.isFile() || e.isSymbolicLink() || !/^[\w-][\w.-]*$/.test(e.name)) return;
+        try { const st = await fs.stat(path.join(assetsDir, e.name)); out.push({ name: e.name, size: st.size, mtimeMs: st.mtimeMs }); } catch { /* sumiu no meio */ }
+      }));
+      return out;
+    },
+
+    /** Apaga um arquivo de .assets\ (nome validado por assetPath). */
+    async removeAsset(name) {
+      await fs.rm(this.assetPath(name), { force: true });
+    },
+
     /** Espera todas as gravações pendentes (usado antes de sair). */
     flush: () => queue.flush(),
 

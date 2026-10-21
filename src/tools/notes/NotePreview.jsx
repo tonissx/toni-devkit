@@ -7,12 +7,27 @@ import { UnlockForm } from '../vault/UnlockForm.jsx';
 import { notesApi } from '../../notes/client.js';
 import { embedThumb, peekThumb } from '../../diagrams/thumb.js';
 import { paintEmbed } from './embedPaint.js';
+import { AttachmentModal } from './AttachmentModal.jsx';
+import { peekAssetThumb, loadAssetThumb } from '../../notes/thumbs.js';
 
 const { Button, Icon, Modal } = DS;
 
+/** Aplica as miniaturas já conhecidas nos cartões de anexo do preview. */
+function paintThumbs(root) {
+  if (!root) return;
+  for (const el of root.querySelectorAll('.md-file[data-thumb]')) {
+    const url = peekAssetThumb(el.dataset.asset);
+    const box = el.querySelector('.md-file__thumb');
+    if (!url || !box || box.classList.contains('has-img')) continue;
+    box.style.backgroundImage = `url("${url}")`;
+    box.classList.add('has-img');
+  }
+}
+
 /**
  * Preview do markdown. Cliques: [[link]] → onOpenLink(título) · "Copiar" num bloco → copia ·
- * checkbox de tarefa → onChange(conteúdo com a tarefa alternada) · imagem → abre no visualizador do sistema.
+ * checkbox de tarefa → onChange(conteúdo com a tarefa alternada) · imagem/anexo → modal de pré-visualização
+ * (Ctrl/Shift+clique abre direto no programa padrão do sistema).
  * Cartão ```secret``` (Vault): Copiar → clipboard protegido pelo processo principal · Desbloquear → modal aqui
  * mesmo · Criar/Vault ↗ → abre a ferramenta Vault.
  * hideCode: não repete os blocos de código (o SnippetCard já os mostra). toast(título, texto, variante) opcional.
@@ -24,6 +39,7 @@ export function NotePreview({ content, hideCode, embeds, resolve, onOpenLink, on
   const names = React.useMemo(() => secretRefs(shown), [shown]);
   const refs = useVaultRefs(names);
   const [unlock, setUnlock] = React.useState(null); // status do cofre enquanto o modal de desbloqueio está aberto
+  const [attachment, setAttachment] = React.useState(null); // { asset, label } enquanto a pré-visualização de um anexo está aberta
   const secret = React.useCallback((name) => {
     if (!refs) return undefined;
     if (refs.locked) return { locked: true, exists: refs.exists };
@@ -89,6 +105,26 @@ export function NotePreview({ content, hideCode, embeds, resolve, onOpenLink, on
     return () => { clearTimeout(timer); off(); };
   }, [embeds]);
 
+  // ── Miniaturas dos anexos (pdf, vídeo, Office) ─────────────────────────────────────────────────────────────────────
+  // Mesmo problema do embed: o HTML é regravado a cada mudança e descarta o que pintamos. Então pinta do cache (síncrono,
+  // sem piscar) e depois busca só as que faltam (src/notes/thumbs.js). '' no cache = sem miniatura (fica o placeholder).
+  React.useLayoutEffect(() => { paintThumbs(previewRef.current); }, [html]);
+  React.useEffect(() => {
+    const root = previewRef.current;
+    if (!root) return undefined;
+    const missing = [...new Set([...root.querySelectorAll('.md-file[data-thumb]')].map((el) => el.dataset.asset))].filter((a) => peekAssetThumb(a) === undefined);
+    if (!missing.length) return undefined;
+    let gone = false;
+    (async () => {
+      for (const a of missing) {
+        await loadAssetThumb(a);
+        if (gone) return;
+        paintThumbs(previewRef.current);
+      }
+    })();
+    return () => { gone = true; };
+  }, [html]);
+
   /** Feedback no próprio botão (e no toast, se houver). */
   const flash = (btn, text, ok = true, detail) => {
     const old = btn.dataset.label || btn.textContent;
@@ -122,8 +158,14 @@ export function NotePreview({ content, hideCode, embeds, resolve, onOpenLink, on
     if (vaultBtn) { onVault(vaultBtn); return; }
     const copy = e.target.closest('.md-code__copy');
     if (copy) { onCopy(blocks[Number(copy.dataset.copy)]); return; }
-    const img = e.target.closest('.md-img');
-    if (img) { window.devkit.notes.openAsset(img.dataset.asset); return; }
+    const img = e.target.closest('.md-img, .md-file');
+    if (img) {
+      e.preventDefault();
+      // Ctrl/Shift+clique pula a pré-visualização e abre direto no programa padrão do sistema.
+      if (e.ctrlKey || e.shiftKey) window.devkit.notes.openAsset(img.dataset.asset);
+      else setAttachment({ asset: img.dataset.asset, label: img.classList.contains('md-file') ? (img.querySelector('.md-file__name') || img).textContent : '' });
+      return;
+    }
     const task = e.target.closest('.md-task');
     if (task && onChange) onChange(toggleTask(content, Number(task.dataset.task)));
   };
@@ -141,6 +183,7 @@ export function NotePreview({ content, hideCode, embeds, resolve, onOpenLink, on
         <UnlockForm status={unlock} onDone={() => setUnlock(null)} />
       </Modal>
     )}
+    {attachment && <AttachmentModal asset={attachment.asset} label={attachment.label} onClose={() => setAttachment(null)} />}
   </>);
 }
 
