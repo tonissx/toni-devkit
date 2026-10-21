@@ -571,6 +571,8 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
     Explorer · Copiar caminho · Excluir. Mover pasta também é arrastando; se já existe uma pasta de mesmo nome no destino
     (ou ao renomear para um nome existente), o Devkit pergunta e **mescla** as duas (nome de nota repetido ganha
     " (2)"; a configuração do destino vence)
+  - **Fixadas separadas do resto**: as pastas fixadas ficam no topo, em "Pastas fixadas", e as notas fixadas em "Pinned";
+    uma linha fina separa cada bloco da árvore normal. Sem nada fixado, não aparece divisão
   - **Configurações da pasta** (`.folder.json` dentro dela, então acompanham a pasta ao renomear/mover): **cor** e
     **ícone** (a cor também pinta a pasta no Grafo) · **template padrão** (nota nova na pasta nasce dele) · **tags
     padrão** (entram em toda nota nova da pasta) · **ordem das notas** (editadas / criadas recentemente / título) ·

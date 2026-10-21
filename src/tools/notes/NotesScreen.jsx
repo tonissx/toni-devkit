@@ -761,20 +761,27 @@ export function NotesScreen({ toast, request }) {
 
             {useTree ? (
               <>
+                {/* Uma linha fina depois de cada bloco fixado separa o que está fixado do resto da árvore. */}
                 {pinnedFolders.length > 0 && (
-                  <div role="group" aria-label="Pastas fixadas">
-                    <div className="tk-menu__heading">📁 Pastas fixadas</div>
-                    {pinnedFolders.map((f) => (
-                      <PinnedFolderRow key={'pf:' + f.path} path={f.path} meta={metaOf(f.path)} onReveal={revealFolder}
-                        onContext={(path, x, y) => setCtxMenu({ x, y, kind: 'folder', path })} />
-                    ))}
-                  </div>
+                  <>
+                    <div role="group" aria-label="Pastas fixadas">
+                      <div className="tk-menu__heading">📁 Pastas fixadas</div>
+                      {pinnedFolders.map((f) => (
+                        <PinnedFolderRow key={'pf:' + f.path} path={f.path} meta={metaOf(f.path)} onReveal={revealFolder}
+                          onContext={(path, x, y) => setCtxMenu({ x, y, kind: 'folder', path })} />
+                      ))}
+                    </div>
+                    <div className="tk-menu__sep nts-list__sep" role="separator" />
+                  </>
                 )}
                 {rows && rows.some((r) => r.pinned) && (
-                  <div role="group" aria-label="Pinned">
-                    <div className="tk-menu__heading">📌 Pinned</div>
-                    {rows.filter((r) => r.pinned).map((r) => noteRow({ ...r, time: r.updated }, 'pin:' + r.id, { nav: 'p' }))}
-                  </div>
+                  <>
+                    <div role="group" aria-label="Pinned">
+                      <div className="tk-menu__heading">📌 Pinned</div>
+                      {rows.filter((r) => r.pinned).map((r) => noteRow({ ...r, time: r.updated }, 'pin:' + r.id, { nav: 'p' }))}
+                    </div>
+                    <div className="tk-menu__sep nts-list__sep" role="separator" />
+                  </>
                 )}
                 <div role="group" aria-label="Pastas e notas">
                   {tree.map((n) => renderFolder(n))}
