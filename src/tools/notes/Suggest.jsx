@@ -14,18 +14,22 @@ const { Icon } = DS;
  *   complete(value, start, pos, item) → { value, start, end } }
  */
 
-/** [[link]]: notas pela busca (vazio = recentes) + "Nova nota: …" quando nada tem o título digitado. */
+/**
+ * [[link]]: notas pela busca (vazio = recentes) + "Nova nota: …" quando nada tem o título digitado.
+ * ![[embed]] (q.embed): só diagramas, e sem "Nova nota" — embutir é desenhar um diagrama que já existe.
+ */
 export const linkSource = (noteId) => ({
   id: 'link',
   label: 'Sugestões de link',
   detect: linkQueryAt,
   load: async (q) => {
-    const rows = await notesApi().search(q.query, { limit: 9 });
+    const rows = await notesApi().search(q.query, { limit: 9, ...(q.embed ? { filter: { type: 'diagram' } } : {}) });
     // Notas de mesmo título em pastas diferentes: o link leva a pasta ([[Pasta/Título]]) para não cair na errada.
     const seen = new Map();
     for (const r of rows) seen.set(normalize(r.title), (seen.get(normalize(r.title)) || 0) + 1);
     const items = rows.filter((r) => r.id !== noteId).slice(0, 8)
-      .map((r) => ({ key: r.id, icon: r.type === 'snippet' ? 'braces' : 'file-text', title: r.title, aside: r.folder, value: r.folder && seen.get(normalize(r.title)) > 1 ? r.folder + '/' + r.title : r.title }));
+      .map((r) => ({ key: r.id, icon: r.type === 'snippet' ? 'braces' : r.type === 'diagram' ? 'workflow' : 'file-text', title: r.title, aside: r.folder, value: r.folder && seen.get(normalize(r.title)) > 1 ? r.folder + '/' + r.title : r.title }));
+    if (q.embed) return items;
     const query = q.query.trim();
     if (query && !items.some((i) => normalize(i.title) === normalize(query))) {
       items.push({ key: 'new', icon: 'file-plus', title: <>Nova nota: <b>{query}</b></>, value: query });

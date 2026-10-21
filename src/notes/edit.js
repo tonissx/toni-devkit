@@ -154,6 +154,7 @@ function insertBlock(value, start, end, text, { blankLines = false } = {}) {
 /**
  * Autocomplete de [[link]]: o cursor está logo depois de "[[texto" (sem "]]", "|" ou quebra de linha)?
  * Devolve { start, query } — start = posição logo após "[[" — ou null (inclusive dentro de código).
+ * Com "!" antes do "[[" (![[diagrama]]: embed) vem também `embed: true`; sem ele o objeto é o mesmo de sempre.
  */
 function linkQueryAt(value, pos) {
   const [ls] = lineBounds(value, pos);
@@ -161,7 +162,8 @@ function linkQueryAt(value, pos) {
   if (!m || inFence(value, pos)) return null;
   // Dentro de `código inline` (crases ímpares antes do "[[") não sugere.
   if ((value.slice(ls, pos - m[0].length).match(/`/g) || []).length % 2) return null;
-  return { start: pos - m[1].length, query: m[1] };
+  const embed = value[pos - m[0].length - 1] === '!';
+  return { start: pos - m[1].length, query: m[1], ...(embed ? { embed: true } : {}) };
 }
 
 /** Completa o link: troca value[start, pos) por "título]]", aproveitando um "]]" que já esteja logo depois. */

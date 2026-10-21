@@ -190,6 +190,17 @@ test('embed conta como link: backlinks, grafo e renomear mantêm o ![[…]] cone
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+/* ─────────────── referência para colar numa nota (src/diagrams/embed.js) ─────────────── */
+const { embedRef } = require('../src/diagrams/embed.js');
+
+test('embedRef: ![[Título]] pronto para colar; título vazio ou com [ ] | quebra de linha vira erro', () => {
+  assert.deepEqual(embedRef('Fluxo de aprovação'), { text: '![[Fluxo de aprovação]]' });
+  assert.deepEqual(embedRef('  Pedidos v2  '), { text: '![[Pedidos v2]]' });
+  for (const bad of ['', '   ', null, undefined]) assert.ok(embedRef(bad).error, 'vazio: ' + bad);
+  for (const bad of ['a [b]', 'a|b', 'a]b', 'a\nb']) assert.ok(embedRef(bad).error, 'inválido: ' + JSON.stringify(bad));
+  assert.ok(!embedRef('Fluxo (v2) - ok!').error, 'parênteses, hífen e ! são aceitos');
+});
+
 /* ─────────────── miniatura (src/diagrams/thumb.js) com o Excalidraw trocado por um duplo ─────────────── */
 async function loadThumb() {
   const esbuild = await import('esbuild');

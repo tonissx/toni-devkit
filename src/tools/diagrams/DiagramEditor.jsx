@@ -1,8 +1,10 @@
 import { DS } from '../../lib/ds.js';
-import { useAutosave, statusLabel, cleanError } from '../../notes/client.js';
+import { useAutosave, statusLabel, cleanError, notesApi } from '../../notes/client.js';
+import { normalize } from '../../commands/search.js';
 import { loadExcalidraw } from '../../diagrams/excalidraw.js';
 import { parseScene, serializeScene } from '../../diagrams/scene.js';
 import { exportDiagram } from '../../diagrams/export.js';
+import { embedRef } from '../../diagrams/embed.js';
 
 const { IconButton, Icon, Button } = DS;
 
@@ -13,7 +15,7 @@ const { IconButton, Icon, Button } = DS;
  */
 export function DiagramEditor({ initial, onSaved, onDelete, toast }) {
   const parsed = React.useMemo(() => parseScene(initial.content), []); // só o conteúdo de quando abriu
-  const { note, update, status, error: saveError } = useAutosave(initial, { onSaved });
+  const { note, update, status, error: saveError, flush } = useAutosave(initial, { onSaved });
   const hostRef = React.useRef(null);
   const handle = React.useRef(null);
   const [loadError, setLoadError] = React.useState('');
@@ -60,6 +62,21 @@ export function DiagramEditor({ initial, onSaved, onDelete, toast }) {
     } catch (e) { toast('Não foi possível exportar', cleanError(e), 'error'); }
   };
 
+  // ![[Título]] para colar numa nota. O embed acha a PRIMEIRA nota com esse título, de qualquer tipo; se houver outra com
+  // o mesmo título, ele pode mostrar a errada — então avisa em vez de copiar em silêncio.
+  const copyRef = async () => {
+    const ref = embedRef(note.title);
+    if (ref.error) { toast('Não foi possível copiar a referência', ref.error, 'error'); return; }
+    try {
+      await flush(); // a referência usa o título já salvo
+      const title = note.title.trim();
+      const clash = (await notesApi().list()).filter((n) => n.id !== note.id && normalize(n.title) === normalize(title));
+      await window.devkit.clipboard.write(ref.text);
+      if (clash.length) toast('Referência copiada, mas o título se repete', `Há outra nota chamada “${title}”: o embed pode mostrar a errada. Renomeie um dos dois.`, 'error');
+      else toast('Referência copiada', `Cole numa nota: ${ref.text}`);
+    } catch (e) { toast('Não foi possível copiar a referência', cleanError(e), 'error'); }
+  };
+
   const ready = !parsed.error && !loadError && !loading;
 
   return (
@@ -74,6 +91,7 @@ export function DiagramEditor({ initial, onSaved, onDelete, toast }) {
           onChange={(e) => update({ title: e.target.value })}
         />
         <span className={'dgm-status' + (status === 'error' ? ' is-error' : '')} title={saveError || ''}>{statusLabel(status)}</span>
+        <IconButton icon="link" label="Copiar referência para embutir numa nota (![[…]])" disabled={!!parsed.error} onClick={copyRef} />
         <Button variant="ghost" size="sm" icon="image" disabled={!ready} onClick={() => doExport('png')}>PNG</Button>
         <Button variant="ghost" size="sm" icon="file-image" disabled={!ready} onClick={() => doExport('svg')}>SVG</Button>
         <Button variant="ghost" size="sm" icon="download" disabled={!ready} onClick={() => doExport('excalidraw')}>.excalidraw</Button>
