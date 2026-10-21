@@ -47,7 +47,7 @@ const pkgs = [...dirs].map((d) => {
 const out = [
   'Licenças das bibliotecas empacotadas junto com o Excalidraw (renderer/dist/excalidraw.js).',
   'Gerado por scripts/gen-excalidraw-licenses.mjs a partir do que o esbuild de fato inclui no bundle; uma seção por pacote.',
-  'As fontes que acompanham o Excalidraw NÃO estão aqui (ver THIRD-PARTY-NOTICES.md).',
+  'As fontes que acompanham o Excalidraw NÃO estão aqui (ver licenses/LICENSE.excalidraw-fonts.txt).',
   '',
 ];
 const semArquivo = [];

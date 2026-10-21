@@ -42,7 +42,15 @@ const opts = {
 const excalidrawOpts = excalidrawOptions(root, opts);
 // Fontes do Excalidraw: sem isto ele as baixa de um CDN (o app é offline). O caminho é window.EXCALIDRAW_ASSET_PATH.
 // (o pacote tem "exports" restrito, então o caminho vem de node_modules e não de require.resolve)
-cpSync(path.join(root, 'node_modules', '@excalidraw', 'excalidraw', 'dist', 'prod', 'fonts'), path.join(vendor, 'excalidraw-assets', 'fonts'), { recursive: true });
+// A Liberation Sans fica de fora de propósito: o Excalidraw só a usa para exportar no servidor, ela não aparece no
+// seletor de fontes e a cópia do pacote é a 1.x, sob GPL + exceção (a OFL só vem na 2.00). Sem ela, a licença some do
+// que distribuímos; um desenho que a peça cai numa fonte sem serifa do sistema. As demais estão em licenses/.
+const excalidrawAssets = path.join(vendor, 'excalidraw-assets');
+rmSync(excalidrawAssets, { recursive: true, force: true }); // senão uma fonte retirada continuaria sendo copiada daqui
+cpSync(path.join(root, 'node_modules', '@excalidraw', 'excalidraw', 'dist', 'prod', 'fonts'), path.join(excalidrawAssets, 'fonts'), {
+  recursive: true,
+  filter: (src) => !/[\\/]Liberation([\\/]|$)/.test(src),
+});
 
 if (process.argv.includes('--watch')) {
   const ctx = await esbuild.context(opts);

@@ -35,9 +35,19 @@ são permissivos: MIT, Apache-2.0, CC0-1.0, 0BSD e MIT AND Zlib. Como ficam dent
 fato inclui (rode de novo ao atualizar o pacote). Os pacotes `@radix-ui/*` não trazem o arquivo no npm; vale o texto
 oficial em `licenses/LICENSE.radix-ui.txt`.
 
-**Pendente:** as fontes que acompanham o Excalidraw (Excalifont, Virgil, Cascadia Code, Comic Shanns, Nunito, Lilita One,
-Liberation Sans, Xiaolai e Assistant) são de terceiros, cada uma com a licença do seu autor, e o pacote não traz esses
-textos. Eles ainda precisam ser conferidos nas origens e reunidos em `licenses/` antes de distribuir o instalador.
+As fontes que acompanham o Excalidraw são de terceiros, cada uma com a licença do seu autor, e o pacote não traz esses
+textos. Eles foram reunidos em `licenses/LICENSE.excalidraw-fonts.txt`, cada um a partir da origem indicada na própria
+seção (repositório do autor ou metadados do arquivo de fonte):
+
+| Fonte | Licença |
+| --- | --- |
+| Assistant, Cascadia Code, Excalifont, Lilita One, Nunito, Virgil, Xiaolai | SIL OFL 1.1 |
+| Comic Shanns | MIT |
+
+A **Liberation Sans não é distribuída**: o Excalidraw só a usa para exportar no servidor, ela não aparece no seletor de
+fontes e a cópia do pacote é a 1.x, sob GPL com exceção para fontes (a OFL só vale a partir da 2.00). O
+`scripts/build-renderer.mjs` a deixa de fora; um desenho que peça essa fonte cai numa fonte sem serifa do sistema. Se
+algum dia ela for incluída de novo, a licença correta precisa vir junto.
 
 O Ollama, usado só quando o usuário escolhe a IA local, é um programa separado, instalado à parte e sob a licença
 dele. A IA na nuvem usa a chave de API do próprio usuário e está sujeita aos termos do serviço escolhido.
