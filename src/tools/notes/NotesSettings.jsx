@@ -9,6 +9,108 @@ export const DEFAULT_PREFS = { autosaveMs: 400, undoSec: 8 };
 const AUTOSAVE = [200, 400, 800, 1500, 3000].map((v) => ({ value: v, label: v < 1000 ? v + ' ms' : v / 1000 + ' s' }));
 const UNDO = [5, 8, 15, 30].map((v) => ({ value: v, label: v + ' segundos' }));
 
+/** "há 3 min" / data, para a última sincronização. */
+function ago(iso) {
+  if (!iso) return 'nunca';
+  const min = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (min < 1) return 'agora há pouco';
+  if (min < 60) return `há ${min} min`;
+  return new Date(iso).toLocaleString('pt-BR');
+}
+
+/**
+ * Sincronização com o Google Drive do próprio usuário (sem servidor do Devkit). As notas ficam na pasta privada
+ * do app no Drive; o login é feito no navegador e o acesso fica cifrado neste computador.
+ */
+function DriveSync({ toast }) {
+  const [st, setSt] = React.useState(null);
+  const [id, setId] = React.useState('');
+  const [secret, setSecret] = React.useState('');
+  const [editing, setEditing] = React.useState(false);
+  const [busy, setBusy] = React.useState(null); // 'connect' | 'now' | 'client' | 'off'
+  const [error, setError] = React.useState(null);
+
+  React.useEffect(() => {
+    let alive = true;
+    notesApi().syncStatus().then((s) => alive && setSt(s)).catch((e) => alive && setError(cleanError(e)));
+    const off = notesApi().onSyncStatus((s) => alive && setSt(s));
+    return () => { alive = false; off(); };
+  }, []);
+
+  const run = (kind, fn, okMsg) => async () => {
+    setBusy(kind); setError(null);
+    try { const r = await fn(); if (r) setSt(r); if (okMsg) toast('Google Drive', okMsg); return true; }
+    catch (e) { setError(cleanError(e)); return false; }
+    finally { setBusy(null); }
+  };
+  const saveClient = run('client', async () => { const s = await notesApi().syncSetClient({ clientId: id, clientSecret: secret }); setEditing(false); setSecret(''); return s; }, 'Credenciais salvas');
+  const connect = run('connect', () => notesApi().syncConnect(), 'Conectado ao Google Drive');
+  const syncNow = (force) => run('now', () => notesApi().syncNow({ force }), 'Sincronização concluída');
+  const disconnect = run('off', () => notesApi().syncDisconnect(), 'Desconectado — suas notas continuam neste computador');
+
+  if (!st) return <section className="nts-fset__sec"><h3>Google Drive</h3><small>{error || 'Carregando…'}</small></section>;
+  const showForm = !st.configured || editing;
+  const r = st.lastResult;
+
+  return (
+    <section className="nts-fset__sec">
+      <h3>Google Drive (sem servidor)</h3>
+      <small>O Devkit sincroniza suas notas, anexos e Lixeira com uma pasta <b>privada do app</b> no seu Google Drive (ela não aparece no site do Drive e o Devkit não vê nenhum outro arquivo seu). Use <b>ou</b> isto <b>ou</b> uma pasta sincronizada por Dropbox/OneDrive, não os dois. O histórico de versões e os links ficam só neste computador.</small>
+
+      {showForm && (
+        <>
+          <small>Para usar sua conta é preciso um <b>cliente OAuth</b> gratuito do Google Cloud (tipo <i>App para computador</i>, com a <i>Google Drive API</i> ativa). Passo a passo em <code>docs/FEATURES.md</code>, seção “Sincronizar pelo Google Drive”.</small>
+          <div className="nts-fset__row">
+            <span className="nts-fset__label">ID do cliente</span>
+            <div className="nts-fset__field"><Input size="sm" value={id} placeholder={st.clientId || 'xxxx.apps.googleusercontent.com'} aria-label="ID do cliente OAuth" onChange={(e) => setId(e.target.value)} /></div>
+          </div>
+          <div className="nts-fset__row">
+            <span className="nts-fset__label">Chave secreta</span>
+            <div className="nts-fset__field"><Input size="sm" type="password" value={secret} aria-label="Chave secreta do cliente OAuth" onChange={(e) => setSecret(e.target.value)} /></div>
+          </div>
+          <div className="nts-fset__actions">
+            <Button size="sm" variant="primary" disabled={!!busy || !id.trim() || !secret.trim()} onClick={saveClient}>Salvar credenciais</Button>
+            {editing && <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancelar</Button>}
+          </div>
+        </>
+      )}
+
+      {st.configured && !st.connected && !editing && (
+        <>
+          {!st.encryptionAvailable && <div className="nts-dialog__warn" role="status"><Icon name="triangle-alert" size={13} /> Este sistema não oferece criptografia para guardar o acesso ao Google. Não dá para conectar.</div>}
+          <div className="nts-fset__actions">
+            <Button size="sm" variant="primary" icon="cloud" disabled={!!busy || !st.encryptionAvailable} onClick={connect}>{busy === 'connect' ? 'Aguardando o login no navegador…' : 'Conectar ao Google Drive'}</Button>
+            <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => setEditing(true)}>Alterar credenciais</Button>
+          </div>
+          <small>Vai abrir o navegador para você entrar na sua conta Google e autorizar. Na primeira sincronização as notas deste computador e as do Drive são <b>somadas</b> — nada é apagado.</small>
+        </>
+      )}
+
+      {st.connected && (
+        <>
+          <div className="nts-fset__path" role="status">
+            <Icon name="cloud" size={13} /> Conectado · {st.syncing ? 'sincronizando…' : <>última sincronização: {ago(st.lastRun)}</>}
+          </div>
+          {r && !st.syncing && <small>Última rodada: {r.uploaded} enviados · {r.downloaded} baixados · {r.deletedLocal + r.deletedRemote} excluídos · {r.conflicts} conflitos{r.errors ? ` · ${r.errors} com erro` : ''}.</small>}
+          <div className="nts-fset__actions">
+            <Button size="sm" variant="secondary" icon="refresh-cw" disabled={!!busy || st.syncing} onClick={syncNow(false)}>Sincronizar agora</Button>
+            <Button size="sm" variant="ghost" icon="log-out" disabled={!!busy} onClick={disconnect}>Desconectar</Button>
+          </div>
+          <small>Sincroniza sozinho ao abrir, a cada 5 minutos e logo depois de você editar. Se dois computadores editarem a mesma nota, a edição mais recente fica na nota e a outra vira uma cópia “… (conflito)”. Desconectar não apaga nada, nem aqui nem no Drive.</small>
+        </>
+      )}
+
+      {st.needsForce && (
+        <div className="nts-dialog__warn" role="alert">
+          <Icon name="triangle-alert" size={13} /> {st.lastError}
+          <Button size="sm" variant="secondary" disabled={!!busy} onClick={syncNow(true)}>Sincronizar mesmo assim</Button>
+        </div>
+      )}
+      {(error || (st.lastError && !st.needsForce)) && <div className="nts-dialog__error" role="alert">{error || st.lastError}</div>}
+    </section>
+  );
+}
+
 /**
  * Configurações de Notes. A pasta das notas e os limites do histórico são do app (processo principal); o tempo
  * do auto-save e a janela de desfazer são só desta tela (`prefs`, no localStorage).
@@ -102,6 +204,8 @@ export function NotesSettingsModal({ prefs, setPrefs, toast, onClose }) {
               <Button size="sm" variant="secondary" icon="refresh-cw" disabled={busy} onClick={reloadDisk}>Recarregar do disco</Button>
             </div>
           </section>
+
+          <DriveSync toast={toast} />
 
           <section className="nts-fset__sec">
             <h3>Histórico de versões</h3>
