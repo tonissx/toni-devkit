@@ -25,6 +25,7 @@ const INBOX_TITLE = 'Inbox'; // nota que recebe as tarefas capturadas pela palet
 const IMAGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 const IMAGE_MAX = 20 * 1024 * 1024;
 const ATTACHMENT_MAX = 50 * 1024 * 1024;
+const THUMB_SOURCE_MAX = 30 * 1024 * 1024; // maior que isso o PDF não passa pelo IPC só para virar miniatura
 const LINK_LINE_RE = /\[\[([^[\]\n|]+)(?:\|[^\]\n]+)?\]\]/g;
 
 /** Resumo leve para listas (sem o conteúdo inteiro). */
@@ -859,6 +860,15 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
         out.truncated = st.size > bytesRead;
       } finally { await fh.close(); }
       return out;
+    },
+
+    /** Bytes de um anexo para o renderer desenhar a miniatura (pdf.js). Acima de `max` devolve null (fica o placeholder). */
+    async assetBytes(ref, { max = THUMB_SOURCE_MAX } = {}) {
+      const file = this.assetFile(ref);
+      let st;
+      try { st = await fsp.stat(file); } catch { err('Anexo não encontrado.'); }
+      if (st.size > max) return null;
+      return new Uint8Array(await fsp.readFile(file));
     },
 
     flush: () => store.flush(),

@@ -555,6 +555,11 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
     `.assets\` (até 50 MB) e entra como `[nome.pdf](.assets/…)`; o preview mostra um chip 📎 e o clique abre no
     programa padrão. Executáveis (`.exe`, `.bat`, `.ps1`, `.lnk`…) pedem confirmação antes de abrir. Anexos
     sensíveis não devem ir para as notas (use o Vault)
+  - **Cartão do anexo**: cada anexo aparece como um cartão com **miniatura** e o nome. Imagem mostra o próprio arquivo;
+    **PDF** mostra a primeira página (pdf.js, funciona em qualquer PC); vídeo e Word/Excel/PowerPoint pedem a miniatura ao
+    Windows, a mesma do Explorer. Quando não há miniatura (ou ela ainda carrega), fica um selo colorido com a extensão e
+    uma cor por tipo: PDF vermelho, imagem azul, vídeo roxo, áudio rosa, Word azul-escuro, planilha verde, slides
+    laranja, zip amarelo, código/JSON verde-água, executável vermelho, demais cinza
   - **Pré-visualização no app**: clicar numa imagem ou num anexo abre um modal com a imagem ampliada, o **PDF**, o
     player de **áudio/vídeo** ou o texto (`.txt .md .json .csv .xml .sql .log`… com realce; só os primeiros 512 KB).
     Outros tipos mostram nome e tamanho. Botões **Abrir** (programa padrão), **Mostrar na pasta** e **Fechar**;

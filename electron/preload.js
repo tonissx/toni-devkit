@@ -185,6 +185,7 @@ contextBridge.exposeInMainWorld('devkit', {
     readAsset: (ref) => ipcRenderer.invoke('notes:read-asset', ref),
     revealAsset: (ref) => ipcRenderer.invoke('notes:reveal-asset', ref),
     assetThumb: (ref) => ipcRenderer.invoke('notes:asset-thumb', ref),
+    assetBytes: (ref) => ipcRenderer.invoke('notes:asset-bytes', ref),
     /** Abre uma nota ({ id } ou { new: true, title? }) na janela principal. */
     open: (payload) => ipcRenderer.send('app:open-note', payload),
     onChanged: (cb) => {

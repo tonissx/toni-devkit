@@ -8,16 +8,15 @@ import { notesApi } from '../../notes/client.js';
 import { embedThumb, peekThumb } from '../../diagrams/thumb.js';
 import { paintEmbed } from './embedPaint.js';
 import { AttachmentModal } from './AttachmentModal.jsx';
+import { peekAssetThumb, loadAssetThumb } from '../../notes/thumbs.js';
 
 const { Button, Icon, Modal } = DS;
-
-const thumbCache = new Map(); // anexo → data URL da miniatura ('' = o Windows não gerou)
 
 /** Aplica as miniaturas já conhecidas nos cartões de anexo do preview. */
 function paintThumbs(root) {
   if (!root) return;
   for (const el of root.querySelectorAll('.md-file[data-thumb]')) {
-    const url = thumbCache.get(el.dataset.asset);
+    const url = peekAssetThumb(el.dataset.asset);
     const box = el.querySelector('.md-file__thumb');
     if (!url || !box || box.classList.contains('has-img')) continue;
     box.style.backgroundImage = `url("${url}")`;
@@ -108,17 +107,17 @@ export function NotePreview({ content, hideCode, embeds, resolve, onOpenLink, on
 
   // ── Miniaturas dos anexos (pdf, vídeo, Office) ─────────────────────────────────────────────────────────────────────
   // Mesmo problema do embed: o HTML é regravado a cada mudança e descarta o que pintamos. Então pinta do cache (síncrono,
-  // sem piscar) e depois pede ao processo principal só as que faltam. '' no cache = sem miniatura (fica o placeholder).
+  // sem piscar) e depois busca só as que faltam (src/notes/thumbs.js). '' no cache = sem miniatura (fica o placeholder).
   React.useLayoutEffect(() => { paintThumbs(previewRef.current); }, [html]);
   React.useEffect(() => {
     const root = previewRef.current;
     if (!root) return undefined;
-    const missing = [...new Set([...root.querySelectorAll('.md-file[data-thumb]')].map((el) => el.dataset.asset))].filter((a) => !thumbCache.has(a));
+    const missing = [...new Set([...root.querySelectorAll('.md-file[data-thumb]')].map((el) => el.dataset.asset))].filter((a) => peekAssetThumb(a) === undefined);
     if (!missing.length) return undefined;
     let gone = false;
     (async () => {
       for (const a of missing) {
-        thumbCache.set(a, await notesApi().assetThumb(a).catch(() => '') || '');
+        await loadAssetThumb(a);
         if (gone) return;
         paintThumbs(previewRef.current);
       }

@@ -473,6 +473,7 @@ ipcMain.handle('notes:asset-thumb', async (_e, ref) => {
   assetThumbs.set(file, url);
   return url;
 });
+ipcMain.handle('notes:asset-bytes', async (_e, ref) => { await notesReady; return notes.assetBytes(ref); });
 ipcMain.handle('notes:reveal-asset', async (_e, ref) => { await notesReady; shell.showItemInFolder(notes.assetFile(ref)); });
 
 // Imagens das notas (.assets\) chegam ao renderer por devkit-note://asset/<nome> (a CSP libera só este esquema).
