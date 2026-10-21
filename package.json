@@ -49,6 +49,7 @@
     "electron-builder": "^26.0.0",
     "esbuild": "^0.25.0",
     "marked": "^16.4.2",
+    "mermaid": "11.12.0",
     "node-sql-parser": "^5.4.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
@@ -83,9 +84,18 @@
       "package.json"
     ],
     "extraFiles": [
-      { "from": "LICENSE", "to": "LICENSE.toni-devkit.txt" },
-      { "from": "THIRD-PARTY-NOTICES.md", "to": "THIRD-PARTY-NOTICES.md" },
-      { "from": "licenses", "to": "licenses" }
+      {
+        "from": "LICENSE",
+        "to": "LICENSE.toni-devkit.txt"
+      },
+      {
+        "from": "THIRD-PARTY-NOTICES.md",
+        "to": "THIRD-PARTY-NOTICES.md"
+      },
+      {
+        "from": "licenses",
+        "to": "licenses"
+      }
     ],
     "asarUnpack": [
       "node_modules/pyodide/**",

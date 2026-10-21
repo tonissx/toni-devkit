@@ -21,3 +21,15 @@ test('diagrama sobrevive ao ciclo serialize → parse com o texto Mermaid intact
   assert.equal(back.content.trim(), ER.trim());
   assert.deepEqual(back.tags, ['er', 'vendas']);
 });
+
+const { themeFromColors } = require('../src/diagrams/theme.js');
+
+test('themeFromColors usa as cores do DS e liga o modo escuro', () => {
+  const t = themeFromColors({ bg: '#000', node: '#111', border: '#222', text: '#fff', dim: '#888', accent: '#0f0', key: '#0ff' });
+  assert.equal(t.darkMode, true);
+  assert.equal(t.background, '#000');
+  assert.equal(t.primaryColor, '#111');
+  assert.equal(t.primaryTextColor, '#fff');
+  assert.equal(t.lineColor, '#888');
+  assert.equal(t.noteBorderColor, '#0f0');
+});

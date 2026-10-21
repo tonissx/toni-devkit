@@ -33,9 +33,20 @@ const opts = {
   logLevel: 'info',
 };
 
+// Mermaid é pesado: bundle à parte, minificado e carregado sob demanda (src/diagrams/render.js).
+const mermaidOpts = {
+  ...opts,
+  entryPoints: { mermaid: path.join(root, 'src', 'diagrams', 'mermaid-entry.js') },
+  minify: true,
+  sourcemap: false,
+};
+
 if (process.argv.includes('--watch')) {
   const ctx = await esbuild.context(opts);
   await ctx.watch();
+  const mctx = await esbuild.context(mermaidOpts);
+  await mctx.watch();
 } else {
   await esbuild.build(opts);
+  await esbuild.build(mermaidOpts);
 }
