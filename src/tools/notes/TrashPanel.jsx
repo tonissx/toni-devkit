@@ -1,6 +1,7 @@
 import { DS } from '../../lib/ds.js';
 import { notesApi, shortTime, cleanError } from '../../notes/client.js';
 import { NotePreview } from './NotePreview.jsx';
+import { DiagramCard } from './DiagramCard.jsx';
 
 const { Button, EmptyState, Spinner, Icon, Modal } = DS;
 
@@ -115,7 +116,9 @@ export function TrashPanel({ onOpen, toast }) {
                 <Button size="sm" variant="primary" icon="rotate-ccw" onClick={() => restore(current)}>Restaurar</Button>
               </div>
               <div className="nts-preview tk-scroll">
-                <NotePreview content={current.content} diagram={current.type === 'diagram'} resolve={() => null} onOpenLink={noop} onCopy={noop} />
+                {current.type === 'diagram'
+                  ? <DiagramCard note={current} readOnly />
+                  : <NotePreview content={current.content} resolve={() => null} onOpenLink={noop} onCopy={noop} />}
               </div>
             </div>
           )}

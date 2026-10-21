@@ -27,7 +27,8 @@ const LINK_LINE_RE = /\[\[([^[\]\n|]+)(?:\|[^\]\n]+)?\]\]/g;
 /** Resumo leve para listas (sem o conteúdo inteiro). */
 function summary(n) {
   const { open, done } = taskStats(n.content);
-  const preview = String(n.content || '').replace(/^(```|~~~).*$/gm, '').split('\n').map(plainLine).filter(Boolean).join(' · ');
+  // Diagrama: o conteúdo é o JSON de um desenho, não texto para ler numa lista.
+  const preview = n.type === 'diagram' ? '' : String(n.content || '').replace(/^(```|~~~).*$/gm, '').split('\n').map(plainLine).filter(Boolean).join(' · ');
   return {
     id: n.id, title: displayTitle(n), rawTitle: n.title, type: n.type, tags: allTags(n),
     pinned: n.pinned, favorite: n.favorite, quick: n.quick, created: n.created, updated: n.updated,

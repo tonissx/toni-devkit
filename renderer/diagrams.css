@@ -43,3 +43,14 @@
 .md-mermaid > pre { margin: 0; text-align: left; font: 12px/1.5 var(--tk-font-mono); color: var(--tk-text-3); white-space: pre-wrap; }
 .md-mermaid.is-error { border-color: var(--tk-danger, #ff6b6b); }
 .md-mermaid.is-error > pre { color: var(--tk-text); }
+
+/* Cartão de diagrama dentro de Notes (src/tools/notes/DiagramCard.jsx) */
+.nts-diagram { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.nts-diagram__bar { display: flex; align-items: center; gap: 8px; }
+.nts-diagram__title { font-weight: 600; font-size: 14px; }
+.nts-diagram__thumb { display: flex; align-items: center; justify-content: center; min-height: 220px; padding: 12px; background: var(--tk-surface-1); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); }
+.nts-diagram__thumb img { max-width: 100%; max-height: 520px; }
+.nts-diagram__hint { font-size: 13px; color: var(--tk-text-3); }
+.nts-diagram__hint.is-error { color: var(--tk-danger, #ff6b6b); }
+.nts-diagram__legacy { font-size: 13px; color: var(--tk-danger, #ff6b6b); }
+.nts-diagram__legacy pre { margin: 8px 0 0; padding: 12px 14px; font: 12.5px/1.55 var(--tk-font-mono); white-space: pre-wrap; color: var(--tk-text-3); background: var(--tk-surface-1); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); }
