@@ -13,6 +13,7 @@ const { createSelectionCopier } = require('./selection');
 const { createNotesService, isExecutableAsset } = require('./notes/service');
 const { mimeFor, visualKind, THUMB_KINDS } = require('../src/notes/attachments.js');
 const { createNotesSettings } = require('./notes/settings');
+const { createWatcher } = require('./notes/watch');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
 const { createUpdaterService } = require('./updater/service');
@@ -408,13 +409,23 @@ const getNotesSettings = () => notesSettings || (notesSettings = createNotesSett
 const defaultNotesDir = () => path.join(app.getPath('documents'), 'Devkit Notes');
 const notesDir = () => process.env.DEVKIT_NOTES_DIR || getNotesSettings().raw().dir || defaultNotesDir();
 
-function initNotes() {
-  const cfg = getNotesSettings().get();
-  notes = createNotesService({ dir: notesDir(), broadcast: broadcastNotes, events: bus, historyGapMs: cfg.historyGapMin * 60 * 1000, historyMax: cfg.historyMax });
-  notesReady = notes.init().catch((e) => { console.error('[notes]', e); throw e; });
+// Pasta sincronizada por outro programa (Dropbox, OneDrive, Syncthing…): vigia a pasta e relê o que mudou por fora.
+let notesWatcher = null;
+function applyNotesSync(on) {
+  if (on && !notesWatcher) notesWatcher = createWatcher({ dir: notes.dir, onChange: () => notes.reload() });
+  if (on) notesWatcher.start(); else if (notesWatcher) notesWatcher.stop();
 }
 
-const NOTES_API = ['info', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage', 'saveAttachment', 'orphanAssets', 'cleanAssets', 'backlinks', 'linkRefs', 'renameLinks', 'history', 'version', 'restoreVersion', 'trashList', 'restoreFromTrash', 'deleteFromTrash', 'emptyTrash', 'templates', 'fromTemplate', 'ensureRootFolder', 'graph', 'trashCount',
+function initNotes() {
+  const cfg = getNotesSettings().get();
+  notes = createNotesService({
+    dir: notesDir(), broadcast: broadcastNotes, events: bus, historyGapMs: cfg.historyGapMin * 60 * 1000, historyMax: cfg.historyMax,
+    stateFile: process.env.DEVKIT_NOTES_DIR ? undefined : path.join(app.getPath('userData'), 'notes-state.json'), syncFolder: cfg.syncFolder,
+  });
+  notesReady = notes.init().then((info) => { applyNotesSync(cfg.syncFolder); return info; }).catch((e) => { console.error('[notes]', e); throw e; });
+}
+
+const NOTES_API = ['info', 'reload', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage', 'saveAttachment', 'orphanAssets', 'cleanAssets', 'backlinks', 'linkRefs', 'renameLinks', 'history', 'version', 'restoreVersion', 'trashList', 'restoreFromTrash', 'deleteFromTrash', 'emptyTrash', 'templates', 'fromTemplate', 'ensureRootFolder', 'graph', 'trashCount',
   'setFolderMeta', 'moveFolderOrder', 'folderClash', 'duplicateFolder', 'trashFolders', 'restoreFolderFromTrash', 'folderAbs'];
 for (const fn of NOTES_API) {
   ipcMain.handle('notes:' + fn, async (_e, ...args) => { await notesReady; return notes[fn](...args); });
@@ -430,7 +441,8 @@ ipcMain.handle('notes:settings', async () => {
 ipcMain.handle('notes:set-settings', async (_e, patch) => {
   await notesReady;
   const cfg = getNotesSettings().set(patch);
-  notes.configure({ historyGapMs: cfg.historyGapMin * 60 * 1000, historyMax: cfg.historyMax });
+  notes.configure({ historyGapMs: cfg.historyGapMin * 60 * 1000, historyMax: cfg.historyMax, syncFolder: cfg.syncFolder });
+  applyNotesSync(cfg.syncFolder);
   return { restart: notesDir() !== notes.dir }; // a pasta nova só vale na próxima abertura
 });
 ipcMain.handle('notes:pick-dir', async (e) => {

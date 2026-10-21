@@ -11,7 +11,8 @@
  * - Nomes que começam com "." (.trash, .devkit, .git…) e links simbólicos são ignorados ao carregar.
  * - Configurações de uma pasta (cor, ícone, template padrão…) ficam em <pasta>\.folder.json (ver foldermeta.js);
  *   o diretório leva o arquivo junto ao renomear/mover.
- * - Estado do app (recentes vistos) fica em .devkit\state.json.
+ * - Estado do app (recentes vistos) fica em .devkit\state.json — ou no arquivo dado em `stateFile` (userData),
+ *   que o app usa para não misturar estado de cada PC com as notas sincronizadas; o antigo ainda é lido uma vez.
  * - Imagens coladas nas notas ficam em .assets\ (referenciadas como "![](.assets/nome.png)").
  * - Versões anteriores de cada nota ficam em .devkit\history\<id>\<AAAAMMDD-HHmmss-SSS>.md (as HISTORY_MAX
  *   mais recentes). O mtime de um arquivo em .trash\ é a hora em que ele foi excluído.
@@ -34,12 +35,14 @@ const dateOfStamp = (s) => new Date(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice
 /** Id → nome de diretório seguro (ids derivados de nome de arquivo podem ter espaço/acento). */
 const idDir = (id) => String(id || '').replace(/[^\w.-]/g, '_').replace(/^\.+/, '_') || '_';
 
-function createStore(dir, { historyMax = HISTORY_MAX } = {}) {
+function createStore(dir, { historyMax = HISTORY_MAX, stateFile: stateOpt } = {}) {
   const root = path.resolve(dir);
   const limits = { historyMax };
   const queue = createQueue(); // gravações por arquivo, em ordem
   const trashDir = path.join(root, '.trash');
-  const stateFile = path.join(root, '.devkit', 'state.json');
+  const legacyStateFile = path.join(root, '.devkit', 'state.json');
+  // Com `stateFile` o estado fica fora da pasta das notas (que pode estar num sync e é compartilhada entre PCs).
+  const stateFile = stateOpt || legacyStateFile;
   const assetsDir = path.join(root, '.assets');
   const historyDir = path.join(root, '.devkit', 'history');
 
@@ -395,7 +398,9 @@ function createStore(dir, { historyMax = HISTORY_MAX } = {}) {
     flush: () => queue.flush(),
 
     async readState() {
-      try { return JSON.parse(await fs.readFile(stateFile, 'utf8')) || {}; } catch { return {}; }
+      try { return JSON.parse(await fs.readFile(stateFile, 'utf8')) || {}; } catch { /* sem estado novo: tenta o antigo */ }
+      if (stateFile === legacyStateFile) return {};
+      try { return JSON.parse(await fs.readFile(legacyStateFile, 'utf8')) || {}; } catch { return {}; } // migração: .devkit\state.json
     },
     writeState(state) {
       return enqueue(stateFile, () => atomicWrite(stateFile, JSON.stringify(state, null, 2)));

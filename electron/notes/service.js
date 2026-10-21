@@ -5,7 +5,10 @@
  * Toda alteração é anunciada via broadcast → as janelas atualizam listas sozinhas.
  *
  * É também o ponto de integração do resto do DevKit: uma ferramenta cria/consulta notas por
- * aqui (IPC notes:create / notes:search). Import/export, sync e templates entrariam neste nível.
+ * aqui (IPC notes:create / notes:search). Import/export e templates entrariam neste nível.
+ *
+ * Sync: o serviço não sincroniza nada sozinho. A pasta das notas pode ficar dentro de um Dropbox/OneDrive/Syncthing
+ * e `reload()` traz para a memória o que o outro PC mudou (o main chama quando um watcher avisa).
  */
 const { createStore } = require('./store.js');
 const { createNote, displayTitle, allTags, plainLine, tasksOf, taskStats, toggleTaskAt, wikiLinks, replaceLinks, maskCode } = require('../../src/notes/note.js');
@@ -26,6 +29,8 @@ const IMAGE_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif',
 const IMAGE_MAX = 20 * 1024 * 1024;
 const ATTACHMENT_MAX = 50 * 1024 * 1024;
 const ORPHAN_GRACE_MS = 10 * 60 * 1000; // anexo mais novo que isso não entra na limpeza
+const SYNC_ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000; // pasta sincronizada: o anexo pode chegar horas antes da nota que o cita
+const CONFLICT_SUFFIX = ' (conflito)';
 const THUMB_SOURCE_MAX = 30 * 1024 * 1024; // maior que isso o PDF não passa pelo IPC só para virar miniatura
 const LINK_LINE_RE = /\[\[([^[\]\n|]+)(?:\|[^\]\n]+)?\]\]/g;
 
@@ -44,8 +49,9 @@ function summary(n) {
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-function createNotesService({ dir, broadcast = () => {}, events = null, historyGapMs = 10 * 60 * 1000, historyMax }) {
-  const store = createStore(dir, historyMax ? { historyMax } : undefined);
+function createNotesService({ dir, broadcast = () => {}, events = null, historyGapMs = 10 * 60 * 1000, historyMax, stateFile, syncFolder = false }) {
+  const store = createStore(dir, { ...(historyMax ? { historyMax } : {}), ...(stateFile ? { stateFile } : {}) });
+  let orphanGrace = syncFolder ? SYNC_ORPHAN_GRACE_MS : ORPHAN_GRACE_MS;
 
   /** Nomes (minúsculos: o Windows não distingue caixa) dos anexos citados por qualquer nota viva ou na Lixeira. */
   async function referencedAssets() {
@@ -71,12 +77,12 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     return removed;
   }
 
-  /** Anexos de .assets\ que nenhuma nota cita e que já têm mais de ORPHAN_GRACE_MS (o recém-colado ainda pode estar sem salvar). */
+  /** Anexos de .assets\ que nenhuma nota cita e que já têm mais que a carência (o recém-colado ainda pode estar sem salvar). */
   async function findOrphans() {
     const refs = await referencedAssets();
     const now = Date.now();
     return (await store.listAssets())
-      .filter((a) => !refs.has(a.name.toLowerCase()) && now - a.mtimeMs >= ORPHAN_GRACE_MS)
+      .filter((a) => !refs.has(a.name.toLowerCase()) && now - a.mtimeMs >= orphanGrace)
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -206,6 +212,31 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
     return to;
   }
 
+  /**
+   * Dois arquivos com o mesmo id (cópia manual, ou "cópia em conflito" de um serviço de sync): o mais recente
+   * continua sendo a nota; os outros viram notas próprias — id novo e título "… (conflito)", regravados no
+   * mesmo arquivo — para o usuário decidir. Nada é descartado. Devolve a lista sem ids repetidos.
+   */
+  async function splitConflicts(list, errors) {
+    const groups = new Map();
+    for (const n of list) { const g = groups.get(n.id); if (g) g.push(n); else groups.set(n.id, [n]); }
+    const out = [];
+    for (const g of groups.values()) {
+      g.sort((a, b) => String(b.updated).localeCompare(String(a.updated)) || String(a.file).localeCompare(String(b.file)));
+      out.push(g[0]);
+      for (const loser of g.slice(1)) {
+        const copy = createNote({ ...loser, id: createNote().id, title: displayTitle(loser) + CONFLICT_SUFFIX });
+        copy.file = loser.file;
+        if (loser.extra) copy.extra = loser.extra;
+        errors.push({ file: loser.file, error: `id duplicado (${loser.id}) — mantido o mais recente; esta cópia virou “${copy.title}”` });
+        try { await store.write(copy); out.push(copy); } catch (e) {
+          errors.push({ file: loser.file, error: 'não foi possível guardar a cópia em conflito: ' + String(e.message || e) });
+        }
+      }
+    }
+    return out;
+  }
+
   return {
     dir,
     store,
@@ -217,19 +248,52 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
       folderMeta.clear();
       for (const f of folders || []) addFolder(f);
       for (const [f, m] of Object.entries(meta || {})) folderMeta.set(f, m);
-      for (const n of list) {
-        const prev = notes.get(n.id);
-        // Dois arquivos com o mesmo id (cópia manual): mantém o mais recente e avisa.
-        if (prev) {
-          loadErrors.push({ file: n.file, error: `id duplicado (${n.id}) — mantido o mais recente` });
-          if (String(prev.updated) >= String(n.updated)) continue;
-        }
+      for (const n of await splitConflicts(list, loadErrors)) {
         notes.set(n.id, n);
         addFolder(folderOf(n.file));
       }
       const st = await store.readState();
       viewed = Array.isArray(st.viewed) ? st.viewed.filter((v) => notes.has(v.id)) : [];
       return this.info();
+    },
+
+    /**
+     * Relê a pasta das notas e aplica o que mudou fora do app (outro PC via Dropbox/OneDrive/Syncthing, edição
+     * manual). Só notifica o que de fato mudou — reler logo depois de uma gravação do próprio app não gera nada.
+     * A versão local que um arquivo de fora sobrescreve vai para o histórico. Devolve { added, updated, removed, folders }.
+     */
+    reload() { return serial(() => this._reload()); },
+
+    async _reload() {
+      await store.flush();
+      const { notes: list, errors, folders, meta } = await store.loadAll();
+      const unique = await splitConflicts(list, errors);
+      loadErrors = errors;
+      const res = { added: 0, updated: 0, removed: 0, folders: false };
+      const seen = new Set();
+      for (const d of unique) {
+        seen.add(d.id);
+        const cur = notes.get(d.id);
+        if (cur && cur.updated === d.updated && cur.file === d.file && cur.title === d.title && cur.content === d.content) continue;
+        if (cur && (cur.content !== d.content || cur.title !== d.title)) await snapshotPrev(cur, true);
+        notes.set(d.id, d);
+        res[cur ? 'updated' : 'added']++;
+        changed('saved', d.id);
+      }
+      for (const id of [...notes.keys()]) {
+        if (seen.has(id)) continue;
+        notes.delete(id); res.removed++;
+        viewed = viewed.filter((v) => v.id !== id);
+        changed('removed', id);
+      }
+      const before = JSON.stringify([[...folderSet].sort(), [...folderMeta].sort()]);
+      folderSet.clear(); folderMeta.clear();
+      for (const f of folders || []) addFolder(f);
+      for (const [f, m] of Object.entries(meta || {})) folderMeta.set(f, m);
+      for (const n of notes.values()) addFolder(folderOf(n.file));
+      if (JSON.stringify([[...folderSet].sort(), [...folderMeta].sort()]) !== before) { res.folders = true; changed('folders'); }
+      if (res.added || res.removed) changed('trash'); // uma nota que sumiu pode ter ido para a Lixeira em outro PC
+      return res;
     },
 
     info: () => ({ dir, count: notes.size, errors: loadErrors }),
@@ -806,9 +870,10 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
       });
     },
 
-    /** Ajusta limites em uso: { historyGapMs (intervalo entre versões), historyMax (versões por nota) }. */
-    configure({ historyGapMs: gap, historyMax: max } = {}) {
+    /** Ajusta limites em uso: { historyGapMs (intervalo entre versões), historyMax (versões por nota), syncFolder (carência maior dos anexos órfãos) }. */
+    configure({ historyGapMs: gap, historyMax: max, syncFolder: sync } = {}) {
       if (Number.isFinite(gap) && gap >= 0) historyGap = gap;
+      if (typeof sync === 'boolean') orphanGrace = sync ? SYNC_ORPHAN_GRACE_MS : ORPHAN_GRACE_MS;
       store.configure({ historyMax: max });
     },
 

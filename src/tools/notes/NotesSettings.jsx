@@ -39,6 +39,16 @@ export function NotesSettingsModal({ prefs, setPrefs, toast, onClose }) {
   const saveHistory = async () => { if (await apply({ historyMax: Number(max), historyGapMin: Number(gap) })) toast('Configurações salvas', 'Histórico atualizado'); };
   const histDirty = cfg && (Number(max) !== cfg.historyMax || Number(gap) !== cfg.historyGapMin);
 
+  const toggleSync = async (on) => { if (await apply({ syncFolder: on })) toast('Configurações salvas', on ? 'Pasta sincronizada: o Devkit vigia mudanças de fora' : 'Vigia da pasta desligado'); };
+  const reloadDisk = async () => {
+    setBusy(true); setError(null);
+    try {
+      const r = await notesApi().reload();
+      const n = r.added + r.updated + r.removed;
+      toast('Notas recarregadas', n ? `${r.added} novas · ${r.updated} alteradas · ${r.removed} removidas` : 'Nada mudou no disco');
+    } catch (e) { setError(cleanError(e)); } finally { setBusy(false); }
+  };
+
   const checkAssets = async () => {
     setBusy(true); setError(null);
     try { setOrphans(await notesApi().orphanAssets()); } catch (e) { setError(cleanError(e)); } finally { setBusy(false); }
@@ -78,6 +88,19 @@ export function NotesSettingsModal({ prefs, setPrefs, toast, onClose }) {
                 )}
               </>
             )}
+          </section>
+
+          <section className="nts-fset__sec">
+            <h3>Sincronização entre computadores</h3>
+            <small>O Devkit não tem servidor: para ter as mesmas notas em dois PCs, aponte a pasta das notas para uma pasta que o Dropbox, OneDrive, Google Drive, iCloud ou Syncthing já sincronize, e use a mesma pasta nos dois.</small>
+            <label className="nts-fset__row">
+              <input type="checkbox" checked={!!cfg.syncFolder} disabled={busy} onChange={(e) => toggleSync(e.target.checked)} />
+              <span>Esta pasta é sincronizada por outro programa</span>
+            </label>
+            <small>Liga a vigia da pasta: o que o outro PC alterar aparece aqui sem reiniciar (a sua versão anterior vai para o histórico). Se os dois PCs editarem a mesma nota ao mesmo tempo, a mais recente vale e a outra é guardada como “… (conflito)”. Anexos sem uso só são apagados depois de 24 h, porque podem chegar antes da nota que os cita. O histórico (<code>.devkit/history</code>) fica na pasta e também sincroniza — pode excluí-lo do sync se preferir.</small>
+            <div className="nts-fset__actions">
+              <Button size="sm" variant="secondary" icon="refresh-cw" disabled={busy} onClick={reloadDisk}>Recarregar do disco</Button>
+            </div>
           </section>
 
           <section className="nts-fset__sec">
