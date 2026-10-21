@@ -3,10 +3,11 @@
 // e copia React UMD para renderer/vendor.
 // React/ReactDOM e o DS são globais (window.React, window.ReactDOM, window.ToniDevkitDesignSystem_*).
 import * as esbuild from 'esbuild';
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, cpSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { excalidrawOptions } from './excalidraw-build.mjs';
 
 const require = createRequire(import.meta.url);
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,12 +42,22 @@ const mermaidOpts = {
   sourcemap: false,
 };
 
+// Excalidraw (Diagramas): bundle à parte com o PRÓPRIO React, minificado, carregado sob demanda (src/diagrams/excalidraw.js).
+// A configuração (stub do mermaid-to-excalidraw, fallback de CDN) fica em scripts/excalidraw-build.mjs.
+const excalidrawOpts = excalidrawOptions(root, opts);
+// Fontes do Excalidraw: sem isto ele as baixa de um CDN (o app é offline). O caminho é window.EXCALIDRAW_ASSET_PATH.
+// (o pacote tem "exports" restrito, então o caminho vem de node_modules e não de require.resolve)
+cpSync(path.join(root, 'node_modules', '@excalidraw', 'excalidraw', 'dist', 'prod', 'fonts'), path.join(vendor, 'excalidraw-assets', 'fonts'), { recursive: true });
+
 if (process.argv.includes('--watch')) {
   const ctx = await esbuild.context(opts);
   await ctx.watch();
   const mctx = await esbuild.context(mermaidOpts);
   await mctx.watch();
+  const ectx = await esbuild.context(excalidrawOpts);
+  await ectx.watch();
 } else {
   await esbuild.build(opts);
   await esbuild.build(mermaidOpts);
+  await esbuild.build(excalidrawOpts);
 }

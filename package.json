@@ -45,6 +45,7 @@
     "tedious": "^20.3.7"
   },
   "devDependencies": {
+    "@excalidraw/excalidraw": "0.18.1",
     "electron": "^44.4.5",
     "electron-builder": "^26.0.0",
     "esbuild": "^0.25.0",
