@@ -524,6 +524,8 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
 - **Links entre notas**: digitar `[[` abre sugestões de notas (↑/↓, `Enter`/`Tab` completa, `Esc` fecha; "Nova nota: …"
   quando nada casa). Abaixo do editor, **Mencionada em (N)** lista as notas que apontam para a aberta (por título ou
   alias), com a linha do link. Ao trocar o título, o Devkit oferece atualizar os `[[links]]` que usavam o nome antigo
+- **Diagrama dentro da nota**: `![[Título do diagrama]]` (com `!`) desenha o diagrama no meio do texto, no preview
+  (**Visualizar** e **Lado a lado**). Digitar `![[` sugere só diagramas. Detalhes na seção [Diagramas](#diagramas)
 - **Grafo** (aba **Grafo** no topo da área principal ou "Grafo de notas" na palette): as notas como pontos e os `[[links]]` como linhas,
   coloridas pela pasta. Arrastar o fundo move, a roda aproxima, clique abre a nota, passar o mouse destaca os
   vizinhos, arrastar um ponto o prende no lugar (duplo clique solta). **Global** ou **Nota atual** (vizinhança da nota
@@ -668,6 +670,17 @@ quando você abre a ferramenta.
 - **Exportar**: **PNG** (2x), **SVG** (com a fonte do desenho embutida) ou o arquivo **`.excalidraw`** (o formato do
   próprio Excalidraw). A imagem sai no tema claro, o padrão do Excalidraw para colar em documentos.
 - **Gerar ER a partir de DDL**: não faz parte desta ferramenta; use o **SQL Visualizer**.
+- **Embutir numa nota**: escreva `![[Título do diagrama]]` onde quiser no texto de uma nota (texto, diagrama, texto), ou
+  `![[Título|legenda]]` para uma legenda sob a imagem. O botão de link no cabeçalho do editor (**Copiar referência**) copia
+  o `![[Título]]` pronto; digitar `![[` na nota sugere só diagramas, sem "Nova nota". No preview o diagrama aparece como
+  imagem (no tema escuro do app); **clicar nela abre o diagrama aqui**, para editar. A imagem acompanha o diagrama: ao
+  editá-lo, a nota atualiza sozinha. Só diagramas podem ser embutidos: um título que não existe, ou que é de uma nota
+  comum, aparece como uma etiqueta inerte (não cria nota). Dentro de bloco de código ou `código`, `![[…]]` fica como texto.
+
+  O embed conta como link: o diagrama passa a constar em **Mencionada em** e no **Grafo**, e renomeá-lo atualiza as
+  referências (o `!` é preservado). O desenho só aparece no editor de Notes; em sticky notes, na lixeira e nas respostas da
+  IA o `![[…]]` continua aparecendo como um link comum. O título não pode ter `[`, `]` nem `|`, e, se outra nota tiver o
+  mesmo título, o embed pode mostrar a errada: o botão de copiar avisa nos dois casos.
 
 Cada diagrama é uma **nota do tipo `diagram`**: um `.md` guardado com as suas Notas, cujo conteúdo é o desenho em JSON.
 Por isso o histórico de versões e a lixeira são os mesmos das Notas (excluir um diagrama o manda para a lixeira de
