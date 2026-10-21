@@ -32,8 +32,9 @@ acompanha o pacote em `node_modules/<pacote>/` dentro do `app.asar`.
 O Excalidraw empacota 82 pacotes, incluindo React e React DOM (radix-ui, roughjs, jotai, pako, perfect-freehand, entre outros). Todos
 são permissivos: MIT, Apache-2.0, CC0-1.0, 0BSD e MIT AND Zlib. Como ficam dentro do bundle, os textos estão em
 `licenses/LICENSE.excalidraw-deps.txt`, gerado por `scripts/gen-excalidraw-licenses.mjs` a partir do que o esbuild de
-fato inclui (rode de novo ao atualizar o pacote). Os pacotes `@radix-ui/*` não trazem o arquivo no npm; vale o texto
-oficial em `licenses/LICENSE.radix-ui.txt`.
+fato inclui (rode de novo ao atualizar o pacote). Os pacotes `@radix-ui/*` e o `react-remove-scroll-bar` não trazem o
+arquivo no npm; valem os textos oficiais dos repositórios, em `licenses/LICENSE.radix-ui.txt` e
+`licenses/LICENSE.react-remove-scroll-bar.txt`.
 
 As fontes que acompanham o Excalidraw são de terceiros, cada uma com a licença do seu autor, e o pacote não traz esses
 textos. Eles foram reunidos em `licenses/LICENSE.excalidraw-fonts.txt`, cada um a partir da origem indicada na própria

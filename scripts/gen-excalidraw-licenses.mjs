@@ -32,12 +32,13 @@ for (const input of Object.keys(result.metafile.inputs)) {
 
 const pkgs = [...dirs].map((d) => {
   const pj = JSON.parse(readFileSync(path.join(d, 'package.json'), 'utf8'));
-  const file = readdirSync(d).find((f) => /^(licen[sc]e|copying)(\.|$)/i.test(f));
+  const file = readdirSync(d).find((f) => /^(licen[sc]e|copying)([.-]|$)/i.test(f)); // LICENSE, LICENSE.md, LICENSE-MIT…
   const license = typeof pj.license === 'string' ? pj.license : pj.license && pj.license.type ? pj.license.type : (pj.licenses || []).map((l) => l.type).join(' OR ') || 'desconhecida';
-  // Os pacotes @radix-ui/* declaram MIT mas o tarball do npm não traz o arquivo; vale o texto oficial do repositório
-  // (licenses/LICENSE.radix-ui.txt, copiado de github.com/radix-ui/primitives).
-  const radix = !file && pj.name.startsWith('@radix-ui/') ? readFileSync(path.join(root, 'licenses', 'LICENSE.radix-ui.txt'), 'utf8').replace(/\r\n/g, '\n').trim() : null;
-  return { name: pj.name, version: pj.version, license, text: file ? readFileSync(path.join(d, file), 'utf8').replace(/\r\n/g, '\n').trim() : radix };
+  // Pacotes que declaram a licença mas o tarball do npm não traz o arquivo: vale o texto oficial do repositório,
+  // guardado em licenses/ (@radix-ui/*: github.com/radix-ui/primitives · react-remove-scroll-bar: github.com/theKashey/react-remove-scroll-bar).
+  const fallback = pj.name.startsWith('@radix-ui/') ? 'LICENSE.radix-ui.txt' : pj.name === 'react-remove-scroll-bar' ? 'LICENSE.react-remove-scroll-bar.txt' : null;
+  const repoText = !file && fallback ? readFileSync(path.join(root, 'licenses', fallback), 'utf8').replace(/\r\n/g, '\n').trim() : null;
+  return { name: pj.name, version: pj.version, license, text: file ? readFileSync(path.join(d, file), 'utf8').replace(/\r\n/g, '\n').trim() : repoText };
 }).filter((p) => p.name !== '@excalidraw/excalidraw') // coberto por licenses/LICENSE.excalidraw.txt
   // o mesmo pacote@versão pode existir em várias pastas aninhadas; um texto basta (fica o que tem arquivo de licença)
   .sort((a, b) => (b.text ? 1 : 0) - (a.text ? 1 : 0))
