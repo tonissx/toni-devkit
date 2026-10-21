@@ -54,3 +54,13 @@
 .nts-diagram__hint.is-error { color: var(--tk-danger, #ff6b6b); }
 .nts-diagram__legacy { font-size: 13px; color: var(--tk-danger, #ff6b6b); }
 .nts-diagram__legacy pre { margin: 8px 0 0; padding: 12px 14px; font: 12.5px/1.55 var(--tk-font-mono); white-space: pre-wrap; color: var(--tk-text-3); background: var(--tk-surface-1); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); }
+
+/* ![[Diagrama]] dentro do texto das notas (NotePreview + src/tools/notes/embedPaint.js) */
+.md-embed { display: block; margin: .85em 0; }
+.md-embed__chip { display: inline-block; padding: 4px 10px; font-size: 12px; color: var(--tk-text-3); background: var(--tk-surface-2); border: 1px dashed var(--tk-border-strong); border-radius: 999px; }
+.md-embed.is-bad .md-embed__chip, .md-embed.is-missing .md-embed__chip, .md-embed.is-error .md-embed__chip { color: var(--tk-danger, #ff6b6b); border-color: var(--tk-danger, #ff6b6b); }
+.md-embed.is-ready, .md-embed.is-empty { cursor: pointer; }
+.md-embed.is-ready { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px; background: var(--tk-surface-1); border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); }
+.md-embed.is-ready:hover { border-color: var(--tk-accent); }
+.md-embed__img { max-width: 100%; max-height: 520px; }
+.md-embed__caption { font-size: 12px; color: var(--tk-text-3); }

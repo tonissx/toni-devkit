@@ -220,6 +220,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
       <NotePreview
         content={note.content}
         hideCode={note.type === 'snippet'}
+        embeds
         resolve={resolve}
         onOpenLink={onOpenLink}
         onCopy={copy}
