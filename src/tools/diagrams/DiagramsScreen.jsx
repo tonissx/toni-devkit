@@ -105,7 +105,7 @@ export function DiagramsScreen({ toast, request }) {
         </aside>
         <main className="dgm__main">
           {current
-            ? <DiagramEditor key={current.id} initial={current} onSaved={refresh} onDelete={remove} />
+            ? <DiagramEditor key={current.id} initial={current} onSaved={refresh} onDelete={remove} toast={toast} />
             : (
               <div className="dgm-empty">
                 <EmptyState

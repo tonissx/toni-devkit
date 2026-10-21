@@ -24,6 +24,37 @@ test('diagrama sobrevive ao ciclo serialize → parse com o texto Mermaid intact
 
 const { themeFromColors } = require('../src/diagrams/theme.js');
 const { TEMPLATES, fromTemplate, diagramKind } = require('../src/diagrams/templates.js');
+const { viewBoxOf, standaloneSvg, safeFileName } = require('../src/diagrams/svg.js');
+
+const MERMAID_SVG = '<svg id="dgm-svg-1" width="100%" xmlns="http://www.w3.org/2000/svg" viewBox="-8 -4 200.5 100" style="max-width: 200.5px;" role="graphics-document"><g/></svg>';
+
+test('viewBoxOf lê origem e tamanho; sem viewBox devolve null', () => {
+  assert.deepEqual(viewBoxOf(MERMAID_SVG), { x: -8, y: -4, w: 200.5, h: 100 });
+  assert.equal(viewBoxOf('<svg></svg>'), null);
+});
+
+test('standaloneSvg: tamanho em px, sem max-width, fundo do tema por baixo de tudo', () => {
+  const out = standaloneSvg(MERMAID_SVG, '#0E0E10');
+  assert.match(out, /^<svg width="201" height="100" id="dgm-svg-1"/);
+  assert.ok(!/width="100%"/.test(out) && !/max-width/.test(out));
+  assert.ok(out.includes('<rect x="-8" y="-4" width="200.5" height="100" fill="#0E0E10"/><g/>'), 'fundo antes do conteúdo');
+  assert.ok(out.endsWith('</svg>'));
+});
+
+test('standaloneSvg: garante xmlns e devolve o original se não for um SVG com viewBox', () => {
+  assert.match(standaloneSvg('<svg viewBox="0 0 10 10"><g/></svg>', null), /^<svg width="10" height="10" xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 10 10">/);
+  assert.equal(standaloneSvg('<svg><g/></svg>', '#000'), '<svg><g/></svg>');
+  assert.equal(standaloneSvg('', '#000'), '');
+});
+
+test('safeFileName tira caracteres proibidos no Windows e cai em "diagrama"', () => {
+  assert.equal(safeFileName('Pedidos: v2? <final>'), 'Pedidos v2 final');
+  assert.equal(safeFileName('  a/b\\c  '), 'a b c');
+  assert.equal(safeFileName('???'), 'diagrama');
+  assert.equal(safeFileName('nome.'), 'nome');
+  assert.equal(safeFileName(''), 'diagrama');
+  assert.equal(safeFileName('x'.repeat(200)).length, 80);
+});
 
 test('todo template vira uma nota de diagrama e começa com um tipo Mermaid reconhecido', () => {
   const ids = TEMPLATES.map((t) => t.id);

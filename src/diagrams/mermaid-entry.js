@@ -6,7 +6,12 @@ let seq = 0;
 
 async function render(source, themeVariables) {
   // Reinicializa a cada render: o tema acompanha as variáveis --tk-* do momento.
-  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'base', themeVariables, fontFamily: themeVariables.fontFamily });
+  // htmlLabels: false → rótulos em <text> puro (sem <foreignObject>): o SVG exportado abre em qualquer ferramenta
+  // e o PNG não "suja" o canvas.
+  mermaid.initialize({
+    startOnLoad: false, securityLevel: 'strict', theme: 'base', themeVariables, fontFamily: themeVariables.fontFamily,
+    flowchart: { htmlLabels: false }, htmlLabels: false,
+  });
   const id = `dgm-svg-${++seq}`;
   try {
     await mermaid.parse(source); // falha cedo e sem deixar nó de erro solto no DOM

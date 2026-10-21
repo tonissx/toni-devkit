@@ -1,10 +1,11 @@
 import { DS } from '../../lib/ds.js';
-import { useAutosave, statusLabel } from '../../notes/client.js';
+import { useAutosave, statusLabel, cleanError } from '../../notes/client.js';
 import { renderDiagram } from '../../diagrams/render.js';
 import { diagramKind } from '../../diagrams/templates.js';
+import { exportDiagram } from '../../diagrams/export.js';
 import { DiagramPreview } from './DiagramPreview.jsx';
 
-const { IconButton, Icon } = DS;
+const { IconButton, Icon, Button } = DS;
 
 const RENDER_DELAY = 300;
 
@@ -12,7 +13,7 @@ const RENDER_DELAY = 300;
  * Editor de um diagrama: texto Mermaid à esquerda, preview ao vivo à direita, auto-save como nas Notas.
  * Monte com key={note.id}. Erro de sintaxe não derruba o preview: o último diagrama válido continua na tela.
  */
-export function DiagramEditor({ initial, onSaved, onDelete }) {
+export function DiagramEditor({ initial, onSaved, onDelete, toast }) {
   const { note, update, status, error: saveError } = useAutosave(initial, { onSaved });
   const [svg, setSvg] = React.useState('');
   const [renderError, setRenderError] = React.useState('');
@@ -42,6 +43,13 @@ export function DiagramEditor({ initial, onSaved, onDelete }) {
 
   const kind = diagramKind(note.content);
 
+  const doExport = async (what) => {
+    try {
+      const r = await exportDiagram(what, { svg, title: note.title, code: note.content });
+      if (r) toast('Diagrama exportado', r.name);
+    } catch (e) { toast('Não foi possível exportar', cleanError(e), 'error'); }
+  };
+
   return (
     <div className="dgm-editor">
       <div className="dgm-editor__head">
@@ -55,6 +63,9 @@ export function DiagramEditor({ initial, onSaved, onDelete }) {
         />
         {kind && <span className="dgm-kind">{kind}</span>}
         <span className={'dgm-status' + (status === 'error' ? ' is-error' : '')} title={saveError || ''}>{statusLabel(status)}</span>
+        <Button variant="ghost" size="sm" icon="image" disabled={!svg} onClick={() => doExport('png')}>PNG</Button>
+        <Button variant="ghost" size="sm" icon="file-image" disabled={!svg} onClick={() => doExport('svg')}>SVG</Button>
+        <Button variant="ghost" size="sm" icon="download" onClick={() => doExport('mmd')}>.mmd</Button>
         <IconButton icon="trash-2" label="Mover para a lixeira" onClick={onDelete} />
       </div>
       <div className="dgm-editor__body">

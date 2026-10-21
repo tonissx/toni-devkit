@@ -1,12 +1,10 @@
 import { DS } from '../../lib/ds.js';
+import { viewBoxOf } from '../../diagrams/svg.js';
 
 const { IconButton, Icon } = DS;
 
-/** Tamanho natural do SVG do Mermaid, pelo viewBox ("minx miny w h"). */
-function svgSize(svg) {
-  const m = /viewBox="[-\d.]+ [-\d.]+ ([\d.]+) ([\d.]+)"/.exec(svg || '');
-  return m ? { w: parseFloat(m[1]), h: parseFloat(m[2]) } : { w: 800, h: 600 };
-}
+/** Tamanho natural do SVG do Mermaid, pelo viewBox. */
+const svgSize = (svg) => viewBoxOf(svg) || { w: 800, h: 600 };
 
 /**
  * Preview do diagrama: pan (arrastar), zoom (roda) e "ajustar à tela".
