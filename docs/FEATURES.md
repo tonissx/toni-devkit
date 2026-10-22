@@ -361,6 +361,8 @@ texto (React/SVG), nunca como HTML. As abas ficam montadas, então o que foi col
   sugeridos** (`MissingIndexes`, com o `CREATE INDEX` para copiar e revisar — nunca aplicado)
 - Painel lateral com as propriedades do operador selecionado e o resumo dos avisos
 
+**IA** (opcional): **Explicar a query** e **Explicar esta coluna** no Lineage, **Documentar o schema** (ou só a tabela selecionada e as vizinhas) no Diagrama ER, **Perguntar ao schema** no Explorador e **Explicar o plano** na aba Plano — ver [IA (opcional)](#ia-opcional)
+
 Testes: `node --test scripts/test-sqlviz-*.mjs` (DDL, metadados, layout, DBML, explorador, lineage com consultas reais, plano com
 `.sqlplan`). **Limitações gerais**: o canvas do Explorador não é salvo sozinho (use *Salvar* num layout); o schema carregado do
 servidor não persiste entre sessões; o Lineage não exporta imagem; a aba Plano mostra um plano por vez.
@@ -385,6 +387,7 @@ ChatGPT — montado localmente, sem outra chamada à IA.
 | JSON Visualizer | **Melhorar nomes** dos tipos gerados (só os nomes mudam; o Devkit aplica no código original) · **Explicar o erro** quando o Consertar não resolve |
 | Diff Checker | **Resumir diferenças** (adicionado, removido, alterado e o que parece arriscado) |
 | Banco | **Por que está lenta** (sessão ou query do top: o que faz, por que pode estar lenta pelas métricas e pela espera, o que conferir e sugestões) · **Explicar** o deadlock (o ciclo, por que acontece, como evitar). O SQL passa antes pelo filtro de segredos |
+| SQL Visualizer | **Lineage**: explicar a query (passo a passo por CTE) ou só a coluna selecionada, a partir das origens que o Devkit já calculou · **Diagrama ER**: documentar o schema (descrição por tabela e FKs prováveis que faltam), só a tabela selecionada e as vizinhas quando há seleção · **Explorador**: perguntar ao schema (o menor caminho de FKs é calculado no app e a IA só redige o SQL) · **Plano**: explicar o plano. Vão só nomes de tabelas, colunas, tipos e chaves — nunca dados; o SQL passa pelo filtro de segredos |
 | Logs | **Explicar** o erro selecionado (o que aconteceu, causa provável, onde olhar, como confirmar — com o contexto do Fluig quando é um log do Fluig) · Problemas → **Resumir** (triagem dos grupos do filtro). O texto passa antes pelo filtro de segredos |
 | Notes | Botão **IA** no editor: **título e tags** (em chips, reaproveitando as tags que já existem), **Resumir** (insere no topo), **Transformar em checklist** (seleção ou nota toda) · **Perguntar às notas**: digite a pergunta na busca |
 | Palette | Comece com **`?`** para perguntar (pode sugerir ações do Devkit) · em Notes, `?` pergunta às notas · **IA: explicar o que está copiado** (SQL, JSON, XML, código ou erro com stack) |

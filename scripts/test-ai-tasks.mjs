@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 const T = require('../src/ai/tasks.js');
 const { TASKS } = T;
 
+const SCHEMA = { tables: [{ id: 'dbo.Cliente', columns: [{ name: 'Id', type: 'int', pk: true }] }, { id: 'dbo.Pedido', columns: [{ name: 'Id', type: 'int', pk: true }, { name: 'ClienteId', type: 'int' }] }], fks: [{ from: 'dbo.Pedido', fromCols: ['ClienteId'], to: 'dbo.Cliente', toCols: ['Id'] }] };
 const patch = 'diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-a\n+b\n';
 
 test('todas as tarefas montam system + user em texto', () => {
@@ -24,6 +25,8 @@ test('todas as tarefas montam system + user em texto', () => {
     aimonPatterns: { sessions: [{ provider: 'claude', prompt: 'faz x', turns: 3, corrections: 1, toolErrors: 0 }, { provider: 'claude', prompt: 'faz y', turns: 2 }, { provider: 'codex', prompt: 'faz z', turns: 9, corrections: 4 }], plans: [{ status: 'rejected', title: 'Plano', reason: 'amplo demais' }] },
     dbQuery: { sql: 'SELECT * FROM t WHERE a = 1', stats: { executions: 10 } },
     dbPlan: { sql: 'select 1', plan: { cost: 1, operators: 1 }, insights: [], operators: [] },
+    sqlLineage: { sql: 'select 1', blocks: [{ kind: 'table', name: 'dbo.T', columns: ['a'] }], warnings: [] },
+    erDescribe: { schema: SCHEMA }, erAsk: { question: 'como chego de a até c?', schema: SCHEMA, path: ['dbo.Pedido(ClienteId) → dbo.Cliente(Id)'] },
     dbDeadlock: { processes: [{ spid: 63, victim: true, sql: 'UPDATE a' }], resources: [{ type: 'keylock', object: 'db.dbo.T', holders: ['58'], waiters: ['63'] }] },
   };
   for (const [id, t] of Object.entries(TASKS)) {
@@ -250,4 +253,28 @@ test('prompt de melhoria: leva o pedido e a resposta, ajusta o papel pela tarefa
   assert.match(buildImprovePrompt({ task: 'sqlModify', answer: 'x' }), /engenheiro de dados/);
   assert.ok(buildImprovePrompt({ task: 'dbPlan', request: 'a'.repeat(20000), answer: 'b'.repeat(20000) }).length < 20000);
   assert.throws(() => buildImprovePrompt({ answer: '  ' }), /Sem resposta/);
+});
+
+test('SQL Visualizer: lineage, documentação e pergunta ao schema', () => {
+  const l = TASKS.sqlLineage.build({ sql: "select 1 where x = 'a@b.com'", column: { name: 'Total', expr: 'SUM(p.Total)', origins: ['dbo.Pedido.Total'] } });
+  assert.match(l.system, /SOMENTE a coluna/);
+  assert.ok(l.user.includes('dbo.Pedido.Total'));
+  assert.throws(() => TASKS.sqlLineage.build({ sql: ' ' }), /Nada para explicar/);
+  const d = TASKS.erDescribe.build({ schema: SCHEMA, partial: 'dbo.Pedido e vizinhas' });
+  assert.ok(d.user.includes('dbo.Pedido(Id int PK, ClienteId int FK→dbo.Cliente.Id)'));
+  assert.match(d.user, /recorte: dbo.Pedido e vizinhas/);
+  assert.throws(() => TASKS.erDescribe.build({ schema: { tables: [], fks: [] } }), /Não há tabelas/);
+  const k = TASKS.erAsk.build({ question: 'como ligo?', schema: SCHEMA, path: ['dbo.Pedido(ClienteId) → dbo.Cliente(Id)'] });
+  assert.match(k.user, /Caminho de FKs já calculado/);
+  assert.throws(() => TASKS.erAsk.build({ question: ' ', schema: SCHEMA }), /Escreva a pergunta/);
+});
+
+test('db/schema: fkPath e mentionedTables', () => {
+  const { fkPath, mentionedTables } = require('../src/db/schema.js');
+  const sc = { tables: [{ id: 'dbo.A', name: 'A' }, { id: 'dbo.B', name: 'B' }, { id: 'dbo.C', name: 'C' }, { id: 'dbo.D', name: 'D' }],
+    fks: [{ from: 'dbo.A', fromCols: ['bid'], to: 'dbo.B', toCols: ['id'] }, { from: 'dbo.C', fromCols: ['bid'], to: 'dbo.B', toCols: ['id'] }] };
+  assert.deepEqual(fkPath(sc, 'dbo.A', 'dbo.C'), ['dbo.A(bid) → dbo.B(id)', 'dbo.C(bid) → dbo.B(id)']);
+  assert.deepEqual(fkPath(sc, 'dbo.A', 'dbo.A'), []);
+  assert.equal(fkPath(sc, 'dbo.A', 'dbo.D'), null);
+  assert.deepEqual(mentionedTables(sc, 'liga a com C'), ['dbo.A', 'dbo.C']);
 });
