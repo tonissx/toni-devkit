@@ -26,7 +26,6 @@ function DriveSync({ toast }) {
   const [st, setSt] = React.useState(null);
   const [id, setId] = React.useState('');
   const [secret, setSecret] = React.useState('');
-  const [editing, setEditing] = React.useState(false);
   const [busy, setBusy] = React.useState(null); // 'connect' | 'now' | 'client' | 'off'
   const [error, setError] = React.useState(null);
 
@@ -43,46 +42,56 @@ function DriveSync({ toast }) {
     catch (e) { setError(cleanError(e)); return false; }
     finally { setBusy(null); }
   };
-  const saveClient = run('client', async () => { const s = await notesApi().syncSetClient({ clientId: id, clientSecret: secret }); setEditing(false); setSecret(''); return s; }, 'Credenciais salvas');
+  const saveClient = run('client', async () => { const s = await notesApi().syncSetClient({ clientId: id, clientSecret: secret }); setId(''); setSecret(''); return s; }, 'Credenciais salvas');
+  const useBuiltin = run('client', () => notesApi().syncClearClient(), 'Voltou às credenciais do Devkit');
   const connect = run('connect', () => notesApi().syncConnect(), 'Conectado ao Google Drive');
   const syncNow = (force) => run('now', () => notesApi().syncNow({ force }), 'Sincronização concluída');
   const disconnect = run('off', () => notesApi().syncDisconnect(), 'Desconectado — suas notas continuam neste computador');
 
   if (!st) return <section className="nts-fset__sec"><h3>Google Drive</h3><small>{error || 'Carregando…'}</small></section>;
-  const showForm = !st.configured || editing;
   const r = st.lastResult;
+  // Formulário das credenciais próprias do Google Cloud: obrigatório quando o app não veio com um cliente; senão fica no "Avançado".
+  const credsForm = (
+    <>
+      <small>Cliente OAuth gratuito do Google Cloud, tipo <i>App para computador</i>, com a <i>Google Drive API</i> ativa. Passo a passo em <code>docs/FEATURES.md</code>, seção “Sincronizar pelo Google Drive”.</small>
+      <div className="nts-fset__row">
+        <span className="nts-fset__label">ID do cliente</span>
+        <div className="nts-fset__field"><Input size="sm" value={id} placeholder={st.clientId || 'xxxx.apps.googleusercontent.com'} aria-label="ID do cliente OAuth" onChange={(e) => setId(e.target.value)} /></div>
+      </div>
+      <div className="nts-fset__row">
+        <span className="nts-fset__label">Chave secreta</span>
+        <div className="nts-fset__field"><Input size="sm" type="password" value={secret} aria-label="Chave secreta do cliente OAuth" onChange={(e) => setSecret(e.target.value)} /></div>
+      </div>
+      <div className="nts-fset__actions">
+        <Button size="sm" variant="primary" disabled={!!busy || !id.trim() || !secret.trim()} onClick={saveClient}>Salvar credenciais</Button>
+        {st.custom && st.builtin && <Button size="sm" variant="ghost" disabled={!!busy} onClick={useBuiltin}>Voltar às credenciais do Devkit</Button>}
+      </div>
+    </>
+  );
 
   return (
     <section className="nts-fset__sec">
       <h3>Google Drive (sem servidor)</h3>
       <small>O Devkit sincroniza suas notas, anexos e Lixeira com uma pasta <b>privada do app</b> no seu Google Drive (ela não aparece no site do Drive e o Devkit não vê nenhum outro arquivo seu). Use <b>ou</b> isto <b>ou</b> uma pasta sincronizada por Dropbox/OneDrive, não os dois. O histórico de versões e os links ficam só neste computador.</small>
 
-      {showForm && (
+      {!st.configured && (
         <>
-          <small>Para usar sua conta é preciso um <b>cliente OAuth</b> gratuito do Google Cloud (tipo <i>App para computador</i>, com a <i>Google Drive API</i> ativa). Passo a passo em <code>docs/FEATURES.md</code>, seção “Sincronizar pelo Google Drive”.</small>
-          <div className="nts-fset__row">
-            <span className="nts-fset__label">ID do cliente</span>
-            <div className="nts-fset__field"><Input size="sm" value={id} placeholder={st.clientId || 'xxxx.apps.googleusercontent.com'} aria-label="ID do cliente OAuth" onChange={(e) => setId(e.target.value)} /></div>
-          </div>
-          <div className="nts-fset__row">
-            <span className="nts-fset__label">Chave secreta</span>
-            <div className="nts-fset__field"><Input size="sm" type="password" value={secret} aria-label="Chave secreta do cliente OAuth" onChange={(e) => setSecret(e.target.value)} /></div>
-          </div>
-          <div className="nts-fset__actions">
-            <Button size="sm" variant="primary" disabled={!!busy || !id.trim() || !secret.trim()} onClick={saveClient}>Salvar credenciais</Button>
-            {editing && <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancelar</Button>}
-          </div>
+          <small>Esta versão do Devkit não veio com um cliente do Google embutido. Para usar sua conta é preciso criar um <b>cliente OAuth</b> próprio:</small>
+          {credsForm}
         </>
       )}
 
-      {st.configured && !st.connected && !editing && (
+      {st.configured && !st.connected && (
         <>
           {!st.encryptionAvailable && <div className="nts-dialog__warn" role="status"><Icon name="triangle-alert" size={13} /> Este sistema não oferece criptografia para guardar o acesso ao Google. Não dá para conectar.</div>}
           <div className="nts-fset__actions">
             <Button size="sm" variant="primary" icon="cloud" disabled={!!busy || !st.encryptionAvailable} onClick={connect}>{busy === 'connect' ? 'Aguardando o login no navegador…' : 'Conectar ao Google Drive'}</Button>
-            <Button size="sm" variant="ghost" disabled={!!busy} onClick={() => setEditing(true)}>Alterar credenciais</Button>
           </div>
-          <small>Vai abrir o navegador para você entrar na sua conta Google e autorizar. Na primeira sincronização as notas deste computador e as do Drive são <b>somadas</b> — nada é apagado.</small>
+          <small>Vai abrir o navegador para você entrar na sua conta Google e autorizar. Se o Google avisar que o app <b>não foi verificado</b>, clique em <b>Avançado → Acessar Devkit</b>: o aviso é esperado, e o acesso é só à pasta privada do app. Na primeira sincronização as notas deste computador e as do Drive são <b>somadas</b> — nada é apagado.</small>
+          <details>
+            <summary>Avançado: {st.custom ? 'usando as suas credenciais do Google Cloud' : 'usar minhas próprias credenciais do Google Cloud'}</summary>
+            {credsForm}
+          </details>
         </>
       )}
 

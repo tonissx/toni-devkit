@@ -29,7 +29,10 @@ function createSyncManager({
   intervalMs = INTERVAL_MS, startDelayMs = START_DELAY_MS, changeDelayMs = CHANGE_DELAY_MS,
 }) {
   const tokens = createTokenStore({ file: files.tokens, cipher });
-  let client = { clientId: defaultClient.clientId || '', clientSecret: defaultClient.clientSecret || '' };
+  // Cliente que veio com o app (build/ambiente). As credenciais próprias do usuário (sync-google.json) mandam sobre ele.
+  const builtin = { clientId: defaultClient.clientId || '', clientSecret: defaultClient.clientSecret || '' };
+  let client = { ...builtin };
+  let custom = false;
   let state = { enabled: false, dir: null, base: {}, lastRun: null };
   let refreshToken = null;
   let access = { token: null, expiresAt: 0 };
@@ -39,7 +42,9 @@ function createSyncManager({
 
   const snapshot = () => ({
     configured: !!(client.clientId && client.clientSecret),
-    clientId: client.clientId,
+    builtin: !!(builtin.clientId && builtin.clientSecret), // o app já vem com um cliente do Google: o usuário só conecta
+    custom, // o usuário informou credenciais próprias
+    clientId: custom ? client.clientId : '',
     encryptionAvailable: tokens.available(),
     connected: !!refreshToken && state.enabled,
     syncing: status.syncing,
@@ -49,7 +54,14 @@ function createSyncManager({
     lastResult: status.lastResult,
   });
   const publish = () => broadcast(snapshot());
-  const saveState = () => atomicWrite(files.state, JSON.stringify(state));
+  // Gravações do estado em fila: o atomicWrite usa o mesmo arquivo temporário por processo, então duas ao mesmo tempo
+  // (fim de uma rodada + desconectar) se atropelariam. O JSON é montado só na hora de gravar, com o estado mais novo.
+  let saving = Promise.resolve();
+  const saveState = () => {
+    const run = saving.then(() => atomicWrite(files.state, JSON.stringify(state)));
+    saving = run.catch(() => {});
+    return run;
+  };
 
   async function getToken(force = false) {
     if (!force && access.token && Date.now() < access.expiresAt - 60_000) return access.token;
@@ -73,7 +85,7 @@ function createSyncManager({
     /** Carrega configuração, token e estado do disco e agenda a primeira rodada. Chamar depois de notes.init(). */
     async start() {
       const c = await readJson(files.client);
-      if (c.clientId) client = { clientId: String(c.clientId), clientSecret: String(c.clientSecret || '') };
+      if (c.clientId) { client = { clientId: String(c.clientId), clientSecret: String(c.clientSecret || '') }; custom = true; }
       state = { enabled: false, dir: null, base: {}, lastRun: null, ...(await readJson(files.state)) };
       refreshToken = await tokens.load();
       if (!refreshToken) state.enabled = false;
@@ -90,11 +102,23 @@ function createSyncManager({
 
     /** Guarda o ID e o secret do cliente OAuth (Google Cloud → Credenciais → ID do cliente OAuth → App para computador). */
     async setClient({ clientId, clientSecret }) {
+      if (refreshToken && state.enabled) throw new Error('Desconecte do Google Drive antes de trocar as credenciais.');
       const id = String(clientId || '').trim(), secret = String(clientSecret || '').trim();
       if (!id || !secret) throw new Error('Informe o ID do cliente e a chave secreta do cliente.');
       if (!/\.apps\.googleusercontent\.com$/.test(id)) throw new Error('O ID do cliente termina em “.apps.googleusercontent.com”.');
       client = { clientId: id, clientSecret: secret };
+      custom = true;
       await atomicWrite(files.client, JSON.stringify(client));
+      publish();
+      return snapshot();
+    },
+
+    /** Esquece as credenciais próprias e volta ao cliente que veio com o app (se houver). */
+    async clearClient() {
+      if (refreshToken && state.enabled) throw new Error('Desconecte do Google Drive antes de trocar as credenciais.');
+      await fs.rm(files.client, { force: true });
+      client = { ...builtin };
+      custom = false;
       publish();
       return snapshot();
     },
@@ -117,9 +141,10 @@ function createSyncManager({
     },
 
     /** Desliga o sync e esquece o acesso. As notas locais e os arquivos que já estão no Drive não são apagados. */
-    async disconnect() {
+    async disconnect({ fromSync = false } = {}) {
       self.stop();
-      refreshToken = null; access = { token: null, expiresAt: 0 };
+      refreshToken = null; access = { token: null, expiresAt: 0 }; // a rodada em andamento (se houver) falha no próximo pedido
+      if (running && !fromSync) await running.catch(() => {}); // espera ela terminar antes de limpar o estado
       await tokens.clear();
       state = { enabled: false, dir: null, base: {}, lastRun: state.lastRun };
       status.lastError = null; status.needsForce = false; status.lastResult = null;
@@ -158,7 +183,7 @@ function createSyncManager({
           return r;
         } catch (e) {
           if (e instanceof engine.GuardError) { status.needsForce = true; status.lastError = e.message; } else if (e && e.code === 'invalid_grant') {
-            await self.disconnect();
+            await self.disconnect({ fromSync: true }); // é esta rodada: esperar por ela aqui travaria
             status.lastError = 'O acesso ao Google expirou ou foi removido. Conecte de novo.';
           } else status.lastError = String((e && e.message) || e);
           throw e;

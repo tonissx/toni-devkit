@@ -683,20 +683,35 @@ O Devkit conversa direto com a API do Google Drive, usando **a sua conta**: não
 notas (`.md`, inclusive as da Lixeira), as configurações de pasta e os anexos vão para a **pasta privada do app** no
 Drive (`appDataFolder`): ela não aparece no site do Drive, e o Devkit só enxerga ela — nenhum outro arquivo seu.
 
-**Uma vez só (quem instala o Devkit)** — criar o acesso no Google Cloud (gratuito, ~15 min):
-1. Em [console.cloud.google.com](https://console.cloud.google.com) crie um projeto (ex.: “Devkit”).
-2. **APIs e serviços → Biblioteca →** *Google Drive API* **→ Ativar**.
-3. **Tela de consentimento OAuth** (Google Auth Platform): tipo **Externo**, nome “Devkit”, seu e-mail de contato;
-   em **Escopos** adicione `…/auth/drive.appdata`; em **Usuários de teste** adicione o(s) seu(s) e-mail(s) Google.
-4. Ainda na tela de consentimento, **publique o app** (“Em produção”). O escopo `drive.appdata` é tratado pelo Google
-   como não sensível, então não passa por revisão. **Sem publicar**, o app fica em modo Teste e o Google invalida o
-   acesso a cada **7 dias** (o Devkit pede para reconectar).
-5. **Credenciais → Criar credenciais → ID do cliente OAuth →** tipo **App para computador**. Copie o *ID do cliente*
-   e a *Chave secreta* (para app de desktop o Google exige a chave, mas ela não é confidencial).
+**Para quem usa o Devkit (instalador oficial):** Configurações de Notes → **Google Drive** → **Conectar ao Google
+Drive** → no navegador, escolha a conta e clique em **Permitir**. Só isso, em cada computador (use a mesma conta). Se o
+Google avisar que o app **não foi verificado**, clique em **Avançado → Acessar Devkit**: o aviso é esperado e o acesso
+é só à pasta privada do app. A política de privacidade está em [`PRIVACY.md`](../PRIVACY.md).
 
-**Em cada computador:** Configurações de Notes → **Google Drive** → cole o ID e a chave → **Salvar credenciais** →
-**Conectar ao Google Drive** (abre o navegador; entre na sua conta e autorize). (Alternativa: variáveis de ambiente
-`DEVKIT_GOOGLE_CLIENT_ID` e `DEVKIT_GOOGLE_CLIENT_SECRET`.)
+**Para quem publica o Devkit (uma vez só)** — criar o cliente do Google e entregá-lo ao build:
+1. Em [console.cloud.google.com](https://console.cloud.google.com) crie um projeto (ex.: “Devkit”) e ative a
+   **Google Drive API** (APIs e serviços → Biblioteca).
+2. **Google Auth Platform**: público **Externo**; em **Branding**, nome, e-mail de suporte, **página inicial** (o
+   repositório) e **política de privacidade** (`PRIVACY.md`) — o Google exige os dois endereços para publicar.
+   **Não envie logotipo**: com logotipo o Google exige verificação do app.
+3. **Acesso a dados**: adicione o escopo `https://www.googleapis.com/auth/drive.appdata`.
+4. **Público-alvo → Publicar app → Em produção.** Sem publicar, o app fica em modo Teste: só entram os e-mails
+   cadastrados em *Usuários de teste* e o Google invalida o acesso a cada **7 dias**.
+5. **Clientes → Criar cliente →** tipo **App para computador**. Copie o *ID do cliente* e a *Chave secreta* (para app
+   de desktop o Google exige a chave, mas ela não é confidencial).
+6. No GitHub: **Settings → Secrets and variables → Actions →** crie os segredos `DEVKIT_GOOGLE_CLIENT_ID` e
+   `DEVKIT_GOOGLE_CLIENT_SECRET`. O workflow `release.yml` roda `scripts/embed-google-client.mjs`, que grava
+   `electron/sync/google-client.generated.json` (fora do git) e o empacota no instalador. Segredo mal copiado
+   **quebra o build** de propósito; sem segredos o build segue e o app pede credenciais próprias.
+   Em desenvolvimento, use as mesmas variáveis de ambiente antes de `npm start`.
+
+A chave secreta de um app de desktop identifica o app, não protege as notas de ninguém: ela fica extraível do
+instalador (como em qualquer app de desktop com login Google). Cada usuário conecta a **própria** conta e o conteúdo
+dele fica no Drive dele. Sem verificação do Google o app aceita até **100 usuários** no total.
+
+**Credenciais próprias (avançado):** em *Google Drive → Avançado* dá para usar um cliente criado por você (passos 1 a 5
+acima) — útil em builds sem cliente embutido ou para não depender do cliente do Devkit. Elas valem sobre as embutidas;
+*Voltar às credenciais do Devkit* as esquece. Só dá para trocar com o Google Drive desconectado.
 
 Como funciona:
 - Sincroniza **ao abrir, a cada 5 min e ~20 s depois de você editar**. **Sincronizar agora** força uma rodada.

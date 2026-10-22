@@ -6,3 +6,6 @@ CLAUDE.md
 .capture-tmp/
 renderer/vendor/excalidraw-assets/
 .superpowers/
+
+# gerado no build a partir dos segredos do repositório (scripts/embed-google-client.mjs)
+electron/sync/google-client.generated.json

@@ -173,10 +173,12 @@ contextBridge.exposeInMainWorld('devkit', {
     folderAbs: (path) => ipcRenderer.invoke('notes:folderAbs', path),
     /** Relê a pasta das notas e aplica o que mudou por fora (sync): { added, updated, removed, folders }. */
     reload: () => ipcRenderer.invoke('notes:reload'),
-    /** Google Drive: status { configured, clientId, encryptionAvailable, connected, syncing, lastRun, lastError, needsForce, lastResult }. */
+    /** Google Drive: status { configured, builtin, custom, clientId, encryptionAvailable, connected, syncing, lastRun, lastError, needsForce, lastResult }. */
     syncStatus: () => ipcRenderer.invoke('notes:sync-status'),
     /** Guarda o cliente OAuth do Google Cloud: { clientId, clientSecret }. */
     syncSetClient: (client) => ipcRenderer.invoke('notes:sync-set-client', client),
+    /** Esquece as credenciais próprias e volta ao cliente que veio com o app. */
+    syncClearClient: () => ipcRenderer.invoke('notes:sync-clear-client'),
     /** Abre o login do Google no navegador; resolve quando o usuário autoriza. */
     syncConnect: () => ipcRenderer.invoke('notes:sync-connect'),
     syncDisconnect: () => ipcRenderer.invoke('notes:sync-disconnect'),

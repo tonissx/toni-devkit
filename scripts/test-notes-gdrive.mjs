@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -16,6 +17,7 @@ const { createSyncManager } = require('../electron/sync/manager.js');
 const { createNotesService } = require('../electron/notes/service.js');
 const { serialize } = require('../src/notes/format.js');
 const { createNote } = require('../src/notes/note.js');
+const { loadDefaultClient } = require('../electron/sync/google-client.js');
 
 const md5 = (b) => crypto.createHash('md5').update(b).digest('hex');
 const tmp = () => mkdtempSync(path.join(tmpdir(), 'devkit-gd-'));
@@ -395,7 +397,7 @@ test('token store: encrypted on disk, unreadable file means "not connected", ref
 });
 
 /* ─────────────── gerenciador + serviço de notas, ponta a ponta ─────────────── */
-async function pc(drive, { clientReady = true, revoke = { on: false } } = {}) {
+async function pc(drive, { clientReady = true, revoke = { on: false }, defaultClient = {}, gate = {} } = {}) {
   const dir = tmp(), data = tmp();
   const events = [];
   const svc = createNotesService({ dir, broadcast: (e) => events.push(e) });
@@ -404,13 +406,16 @@ async function pc(drive, { clientReady = true, revoke = { on: false } } = {}) {
   const openExternal = async (u) => { const x = new URL(u); await fetch(x.searchParams.get('redirect_uri') + '/?code=c&state=' + x.searchParams.get('state')); };
   const mgr = createSyncManager({
     files: { client: path.join(data, 'sync-google.json'), tokens: path.join(data, 'sync-tokens.json'), state: path.join(data, 'sync-state.json') },
-    getService: () => svc, cipher: fakeCipher(), openExternal, broadcast: (s) => statuses.push(s),
-    fetchImpl: (url, init) => (revoke.on && String(url).includes('oauth2') && String(init.body).includes('refresh_token')
-      ? Promise.resolve(new Response(JSON.stringify({ error: 'invalid_grant' }), { status: 400 })) : drive.fetchImpl(url, init)),
+    getService: () => svc, cipher: fakeCipher(), openExternal, broadcast: (s) => statuses.push(s), defaultClient,
+    fetchImpl: async (url, init) => {
+      if (gate.p && String(url).includes('/drive/v3/files')) await gate.p; // segura as chamadas ao Drive até o teste liberar
+      return revoke.on && String(url).includes('oauth2') && String(init.body).includes('refresh_token')
+        ? new Response(JSON.stringify({ error: 'invalid_grant' }), { status: 400 }) : drive.fetchImpl(url, init);
+    },
     intervalMs: 3600_000, startDelayMs: 3600_000, changeDelayMs: 20,
   });
   await mgr.start();
-  if (clientReady) await mgr.setClient({ clientId: 'abc.apps.googleusercontent.com', clientSecret: 'sec' });
+  if (clientReady && !defaultClient.clientId) await mgr.setClient({ clientId: 'abc.apps.googleusercontent.com', clientSecret: 'sec' });
   return { dir, data, svc, mgr, events, statuses, done: () => { mgr.stop(); cleanup(dir, data); } };
 }
 
@@ -532,5 +537,130 @@ test('manager: disconnect forgets the token and the base but leaves notes and Dr
     assert.equal(a.svc.get('k').content, 'fica');
     assert.equal(drive.files.size, remoteBefore);
     await assert.rejects(() => a.mgr.syncNow(), /não está conectado/);
+  } finally { a.done(); }
+});
+
+test('manager: disconnecting in the middle of a round waits for it, never throws, and a reconnect starts a fresh round', async () => {
+  const drive = fakeDrive(), gate = {};
+  const a = await pc(drive, { gate });
+  try {
+    await a.svc.save({ id: 'm', title: 'M', content: 'meio' });
+    let release; gate.p = new Promise((r) => { release = r; });
+    await a.mgr.connect();                                    // a 1ª rodada começa e trava na primeira chamada ao Drive
+    for (let i = 0; i < 40 && !a.mgr.status().syncing; i++) await sleep(5);
+    assert.equal(a.mgr.status().syncing, true);
+
+    let disconnected = false;
+    const off = a.mgr.disconnect().then((s) => { disconnected = true; return s; });
+    await sleep(30);
+    assert.equal(disconnected, false);                        // espera a rodada em andamento…
+    release(); gate.p = null;
+    const s = await off;                                      // …e depois termina sem lançar (antes podia dar ENOENT na gravação)
+    assert.equal(s.connected, false);
+    assert.equal(s.syncing, false);
+    assert.equal(JSON.parse(readFileSync(path.join(a.data, 'sync-state.json'), 'utf8')).enabled, false);
+
+    await a.mgr.connect();                                    // reconectar não reaproveita a rodada antiga
+    await a.mgr.syncNow();
+    assert.ok([...drive.files.values()].some((f) => f.name.endsWith('m.md')));
+    assert.equal(a.mgr.status().connected, true);
+  } finally { a.done(); }
+});
+
+/* ─────────────── cliente OAuth embutido no app ─────────────── */
+const GOOD_ID = 'embutido-123.apps.googleusercontent.com';
+
+test('google-client: env wins over the build file, invalid values are ignored, never throws', () => {
+  const dir = tmp();
+  try {
+    const file = path.join(dir, 'g.json');
+    writeFileSync(file, JSON.stringify({ clientId: GOOD_ID, clientSecret: 'do-build' }));
+    assert.deepEqual(loadDefaultClient({ env: {}, file }), { clientId: GOOD_ID, clientSecret: 'do-build', source: 'build' });
+    const env = { DEVKIT_GOOGLE_CLIENT_ID: ' dev-1.apps.googleusercontent.com ', DEVKIT_GOOGLE_CLIENT_SECRET: ' do-env ' };
+    assert.deepEqual(loadDefaultClient({ env, file }), { clientId: 'dev-1.apps.googleusercontent.com', clientSecret: 'do-env', source: 'env' });
+    // env incompleto ou inválido cai no arquivo
+    assert.equal(loadDefaultClient({ env: { DEVKIT_GOOGLE_CLIENT_ID: GOOD_ID }, file }).source, 'build');
+    assert.equal(loadDefaultClient({ env: { DEVKIT_GOOGLE_CLIENT_ID: 'lixo', DEVKIT_GOOGLE_CLIENT_SECRET: 's' }, file }).source, 'build');
+    // arquivo ausente, quebrado ou com ID inválido → vazio, sem lançar
+    const empty = { clientId: '', clientSecret: '', source: null };
+    assert.deepEqual(loadDefaultClient({ env: {}, file: path.join(dir, 'nao-existe.json') }), empty);
+    writeFileSync(file, '{ quebrado');
+    assert.deepEqual(loadDefaultClient({ env: {}, file }), empty);
+    writeFileSync(file, JSON.stringify({ clientId: 'sem-sufixo', clientSecret: 'x' }));
+    assert.deepEqual(loadDefaultClient({ env: {}, file }), empty);
+  } finally { cleanup(dir); }
+});
+
+test('embed-google-client script: writes the file with valid secrets, stays quiet without them, fails the build on malformed ones', () => {
+  const dir = tmp();
+  try {
+    const out = path.join(dir, 'out.json');
+    const run = (env) => spawnSync(process.execPath, [path.join(import.meta.dirname, 'embed-google-client.mjs'), out], {
+      env: { PATH: process.env.PATH, ...env }, encoding: 'utf8',
+    });
+    const none = run({});
+    assert.equal(none.status, 0);
+    assert.match(none.stdout, /sem cliente embutido/);
+    assert.equal(existsSync(out), false);                       // fork ou build local: nada gravado, o build segue
+
+    const bad = run({ DEVKIT_GOOGLE_CLIENT_ID: 'colou-errado', DEVKIT_GOOGLE_CLIENT_SECRET: 'x' });
+    assert.equal(bad.status, 1);
+    assert.match(bad.stderr, /inválidas/);
+    assert.equal(existsSync(out), false);
+
+    const half = run({ DEVKIT_GOOGLE_CLIENT_ID: GOOD_ID });      // só o ID: segredo esquecido também quebra o build
+    assert.equal(half.status, 1);
+
+    const ok = run({ DEVKIT_GOOGLE_CLIENT_ID: GOOD_ID, DEVKIT_GOOGLE_CLIENT_SECRET: 'segredo' });
+    assert.equal(ok.status, 0);
+    assert.deepEqual(JSON.parse(readFileSync(out, 'utf8')), { clientId: GOOD_ID, clientSecret: 'segredo' });
+    assert.equal(loadDefaultClient({ env: {}, file: out }).source, 'build'); // e o app consegue ler o que o script gravou
+  } finally { cleanup(dir); }
+});
+
+test('manager with a built-in client: the user just connects; own credentials override it and can be dropped', async () => {
+  const drive = fakeDrive();
+  const a = await pc(drive, { defaultClient: { clientId: GOOD_ID, clientSecret: 'embutido' } });
+  try {
+    const s0 = a.mgr.status();
+    assert.deepEqual({ configured: s0.configured, builtin: s0.builtin, custom: s0.custom, clientId: s0.clientId }, { configured: true, builtin: true, custom: false, clientId: '' });
+
+    await a.mgr.connect();                                     // sem setClient: usa o cliente do app
+    assert.equal(drive.tokenCalls[0].client_id, GOOD_ID);
+    assert.equal(drive.tokenCalls[0].client_secret, 'embutido');
+    assert.equal(a.mgr.status().connected, true);
+    await assert.rejects(() => a.mgr.setClient({ clientId: 'meu.apps.googleusercontent.com', clientSecret: 's' }), /Desconecte/);
+    await assert.rejects(() => a.mgr.clearClient(), /Desconecte/);
+    await a.mgr.disconnect();
+
+    const s1 = await a.mgr.setClient({ clientId: 'meu.apps.googleusercontent.com', clientSecret: 'meu-segredo' });
+    assert.deepEqual({ builtin: s1.builtin, custom: s1.custom, clientId: s1.clientId }, { builtin: true, custom: true, clientId: 'meu.apps.googleusercontent.com' });
+    drive.tokenCalls.length = 0;
+    await a.mgr.connect();
+    assert.equal(drive.tokenCalls[0].client_id, 'meu.apps.googleusercontent.com'); // as do usuário mandam
+    await a.mgr.disconnect();
+
+    const s2 = await a.mgr.clearClient();                       // volta ao cliente do app
+    assert.deepEqual({ configured: s2.configured, custom: s2.custom, clientId: s2.clientId }, { configured: true, custom: false, clientId: '' });
+    assert.equal(existsSync(path.join(a.data, 'sync-google.json')), false);
+    drive.tokenCalls.length = 0;
+    await a.mgr.connect();
+    assert.equal(drive.tokenCalls[0].client_id, GOOD_ID);
+  } finally { a.done(); }
+});
+
+test('manager: custom credentials survive a restart and still beat the built-in client', async () => {
+  const drive = fakeDrive();
+  const a = await pc(drive, { defaultClient: { clientId: GOOD_ID, clientSecret: 'embutido' } });
+  try {
+    await a.mgr.setClient({ clientId: 'meu.apps.googleusercontent.com', clientSecret: 'meu-segredo' });
+    const again = createSyncManager({
+      files: { client: path.join(a.data, 'sync-google.json'), tokens: path.join(a.data, 'sync-tokens.json'), state: path.join(a.data, 'sync-state.json') },
+      getService: () => a.svc, cipher: fakeCipher(), openExternal: async () => {}, fetchImpl: drive.fetchImpl,
+      defaultClient: { clientId: GOOD_ID, clientSecret: 'embutido' }, intervalMs: 3600_000, startDelayMs: 3600_000,
+    });
+    const s = await again.start();
+    assert.deepEqual({ builtin: s.builtin, custom: s.custom, clientId: s.clientId }, { builtin: true, custom: true, clientId: 'meu.apps.googleusercontent.com' });
+    again.stop();
   } finally { a.done(); }
 });
