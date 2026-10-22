@@ -7,6 +7,7 @@
  */
 const { prepareDiff, commitMessagePrompt, cleanCommitMessage } = require('./prompts.js');
 const { redact } = require('../logs/redact.js');
+const { fitSteps } = require('../logs/investigation.js');
 
 const PT = 'Responda em português do Brasil.';
 const MD = 'Use markdown simples (títulos curtos, listas, `código`). Seja direto: nada de introdução nem de despedida.';
@@ -106,6 +107,18 @@ const TAG_RE = /^[\p{L}\p{N}][\p{L}\p{N}_-]{0,39}$/u;
 /** [[cmd:id]] na resposta → ids (na ordem, sem repetir). */
 const cmdRefs = (text) => [...new Set([...String(text).matchAll(/\[\[cmd:([\w:.\-/]+)\]\]/g)].map((m) => m[1]))];
 /** [[Título]] na resposta → títulos citados. */
+/** Filtros sugeridos pela IA: linhas dos blocos ```filtro (sem marcador de lista, sem repetir, no máximo 5). */
+function filtersOf(text) {
+  const out = [];
+  for (const m of String(text || '').matchAll(/```filtro[^\n]*\n([\s\S]*?)```/gi)) {
+    for (const raw of m[1].split('\n')) {
+      const f = raw.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, '').trim();
+      if (f && f.length <= 200 && !out.includes(f)) out.push(f);
+    }
+  }
+  return out.slice(0, 5);
+}
+
 const noteRefs = (text) => [...new Set([...String(text).matchAll(/\[\[(?!cmd:)([^\]|]+)(?:\|[^\]]*)?\]\]/g)].map((m) => m[1].trim()))];
 
 const TASKS = {
@@ -399,6 +412,42 @@ const TASKS = {
       };
     },
     clean: tidy,
+  },
+
+  // Modo Investigação dos Logs: a pessoa foi guardando entradas num caso; a IA lê o passo a passo inteiro.
+  // Passos, anotações, hipótese e conclusão passam por redact(); o que não cabe no teto é dito ("N passos omitidos").
+  logInvestigation: {
+    label: 'Analisar a investigação', maxTokens: 1500,
+    build(i) {
+      const steps = Array.isArray(i.steps) ? i.steps : [];
+      if (!steps.length) throw new Error('A investigação ainda não tem passos');
+      const safe = steps.map((s) => ({ ...s, text: redact(s.text || '').text, note: redact(s.note || '').text }));
+      const { kept, omitted } = fitSteps(safe);
+      const fluig = /fluig|totvs|wcm|ecm|jboss|wildfly/i.test(safe.map((s) => s.text + ' ' + (s.log || '')).join(' ').slice(0, 30000));
+      const list = kept.map((s) => [
+        `### Passo ${s.n} · ${s.time || '(sem hora)'} · ${s.level || '?'}${s.delta ? ` · ${s.delta} depois do passo anterior` : ''}${s.tag ? ` · etiqueta: ${s.tag}` : ''}${s.repeat ? ` · a mesma falha aparece ${s.repeat}× no caso` : ''}${s.log ? ` · ${s.log}` : ''}`,
+        s.text,
+        s.note ? `Anotação da pessoa: ${s.note}` : '',
+      ].filter(Boolean).join('\n')).join('\n\n');
+      const q = clip(redact(i.question || '').text.trim(), 1000);
+      return {
+        system: ['Você é um engenheiro de confiabilidade ajudando a investigar um incidente a partir de entradas de log que a pessoa foi guardando, em ordem de hora, com os intervalos entre elas e suas anotações.', PT, MD,
+          fluig ? 'Os logs são de um servidor Fluig (TOTVS) sobre JBoss/WildFly: considere datasets, eventos de formulário/processo, widgets, integrações com o RM e o banco.' : '',
+          q ? 'A pessoa fez uma pergunta: responda a ela primeiro, e só depois complete com o que mais for relevante.' : '',
+          'Responda com: **Linha do tempo** (o que aconteceu, em ordem, citando os passos como "passo N"), **Causa provável** (qual passo sustenta cada afirmação; diga o grau de certeza), **Correlações** (passos que parecem ligados e por quê), **O que falta provar** e **Próximos passos**. Não invente fatos que não estão nos passos; se faltar evidência, diga qual.',
+          'No fim, se ajudar, inclua um bloco ```filtro com até 5 filtros para buscar no log o que falta, um por linha, na sintaxe: texto livre, "frase", -excluir, level:error+, logger:x, thread:"=nome", status:5xx, ms:>500, has:stack.'].filter(Boolean).join('\n'),
+        user: [
+          `Investigação: ${redact(i.title || '(sem título)').text}`,
+          i.hypothesis && String(i.hypothesis).trim() ? `Hipótese da pessoa: ${clip(redact(i.hypothesis).text.trim(), 2000)}` : '',
+          i.conclusion && String(i.conclusion).trim() ? `Conclusão até agora: ${clip(redact(i.conclusion).text.trim(), 2000)}` : '',
+          q ? `Pergunta: ${q}` : '',
+          omitted ? `(${omitted} passo(s) omitido(s) por limite de tamanho — ficaram os etiquetados, o primeiro, o último e o que coube.)` : '',
+          `\nPassos (${steps.length}):\n\n${list}`,
+        ].filter(Boolean).join('\n'),
+      };
+    },
+    clean: tidy,
+    parse: (text) => ({ filters: filtersOf(text) }),
   },
 
   /* ───────── Banco (monitor de SQL Server) ───────── */
