@@ -2233,3 +2233,10 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 
 /* Notas: linha fina entre o que está fixado (pastas e notas) e o resto da árvore */
 .nts-list__sep { margin: 6px 8px; opacity: .7; }
+
+/* Bandeja recolhida: sem rótulos, uma linha fina separa as categorias */
+.tk-sidebar.is-collapsed .tk-sidebar__group + .tk-sidebar__group {
+  border-top: 1px solid var(--tk-border);
+  padding-top: 10px;
+  margin-top: -4px;
+}
