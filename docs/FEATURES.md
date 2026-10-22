@@ -218,7 +218,9 @@ Para achar rápido o que deu errado num log. Abre arquivos de centenas de MB em 
   (**Achados**) lista só os que casaram — clicar leva a lista até a entrada, e `n`/`N` (ou ▲▼) pulam de achado em achado.
   Uma **faixa de marcadores** ao lado da rolagem mostra onde eles estão (cor do pior nível; clique/arraste para ir até lá).
   **± contexto** (0/2/5/10) realça as entradas vizinhas de cada achado, como o `grep -C`; **Só filtrados** volta a mostrar
-  na lista apenas o resultado (com o contexto, se pedido). O painel de baixo e o **Detalhe** (lado direito) são recolhíveis
+  na lista apenas o resultado (com o contexto, se pedido). O painel de baixo e o **Detalhe** (lado direito) têm a borda
+  **arrastável** para ajustar o tamanho (duplo clique alterna padrão/ampliado; setas ajustam; arrastar o painel de baixo até
+  o fim deixa só o cabeçalho) — o tamanho fica lembrado
 - **Fixar**: `m` (ou o alfinete no detalhe) fixa a entrada selecionada — ela ganha um alfinete na lista e entra na aba
   **Fixados** do painel de baixo, para voltar a ela depois. Valem só enquanto o log está aberto
 - **Seguir**: no detalhe, o filtro ao lado de cada campo (thread, ip, caminho, status, ids de correlação do JSON…) e

@@ -17,6 +17,11 @@ import { Hits } from './Hits.jsx';
 import { Marks } from './Marks.jsx';
 import { useSameText, filterTermFor } from './sameText.js';
 import { escapeRe } from '../../logs/query.js';
+import { usePersisted } from '../../lib/store.js';
+import { detailWidth, hitsHeight, DETAIL_DEFAULT, DETAIL_WIDE, DETAIL_MIN, DETAIL_MAX, HITS_DEFAULT, HITS_TALL } from '../../logs/panel.js';
+import { useSplit } from './useSplit.js';
+
+const HITS_HEAD = 31; // altura do cabeçalho do painel de baixo (30 + a linha de cima)
 
 const { Icon, Spinner } = DS;
 
@@ -56,7 +61,7 @@ function Menu({ label, icon, items, title }) {
 export function LogView({ src, state, setState, presets, onPresets, onInfo, onClose, toast, openedAt }) {
   const api = logsApi();
   const id = src.id;
-  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false, mode = 'find', hitsFolded = false, detailFolded = false, ctx = 0, hitsTab = 'hits' } = state;
+  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false, mode = 'find', ctx = 0, hitsTab = 'hits' } = state;
   const set = (patch) => setState((s) => ({ ...s, ...patch }));
   // Filtrando, o log continua inteiro na lista e os achados vão para o painel ('find'); 'only' = a lista mostra só os achados
   // (mais as `ctx` entradas vizinhas de cada um, se pedido).
@@ -69,6 +74,14 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   const [hitK, setHitK] = React.useState(null);        // posição do achado atual entre os achados
   const [hitScroll, setHitScroll] = React.useState(null);
   const hitsRef = React.useRef(null);
+  // Bandejas ajustáveis na mão (arrastar a borda): o Detalhe à direita e Achados/Fixados embaixo. Valem para todos os logs.
+  const [lay, setLay] = usePersisted('logs.layout', { detailW: DETAIL_DEFAULT, hitsH: HITS_DEFAULT });
+  const bodyRef = React.useRef(null);
+  const mainRef = React.useRef(null);
+  const detailSplit = useSplit({ value: lay.detailW, onCommit: (v) => setLay((l) => ({ ...l, detailW: v })), rootRef: bodyRef, axis: 'x',
+    norm: detailWidth, maxOf: (r) => r.width * 0.7, def: DETAIL_DEFAULT, wide: DETAIL_WIDE });
+  const hitsSplit = useSplit({ value: lay.hitsH, onCommit: (v) => setLay((l) => ({ ...l, hitsH: v })), rootRef: mainRef, axis: 'y', offset: HITS_HEAD,
+    norm: hitsHeight, maxOf: (r) => r.height * 0.7, def: HITS_DEFAULT, wide: HITS_TALL });
   // Entradas fixadas (não persistem: o índice de uma entrada muda se o arquivo for rotacionado/reaberto).
   const [pins, setPins] = React.useState([]);          // [{ i, ts, level, text }]
   const pinSet = React.useMemo(() => new Set(pins.map((p) => p.i)), [pins]);
@@ -385,8 +398,8 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
         )}
       </div>
 
-      <div className="lg-body">
-        <div className={'lg-main' + (dimmed && sum ? ' is-loading' : '')}>
+      <div className="lg-body" ref={bodyRef}>
+        <div className={'lg-main' + (dimmed && sum ? ' is-loading' : '')} ref={mainRef}>
           {!sum ? <div className="lg-muted lg-pad"><Spinner size={12} /> Filtrando…</div>
             : tab === 'lines' ? (
               <>
@@ -406,7 +419,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
                 )}
                 </div>
                 {(full || pins.length > 0) && (
-                  <Hits id={id} sum={sum} res={res} http={src.http} k={hitK} folded={hitsFolded} onFold={(v) => set({ hitsFolded: v })}
+                  <Hits id={id} sum={sum} res={res} http={src.http} k={hitK} height={hitsSplit.size} dragging={hitsSplit.dragging} grip={hitsSplit.grip} onOpen={() => setLay((l) => ({ ...l, hitsH: HITS_DEFAULT }))}
                     scrollTo={hitScroll} listRef={hitsRef} onPick={(k, i) => pickHit(k, i)} onStep={nextHit}
                     showHits={full} tab={full ? hitsTab : 'pins'} onTab={(t) => set({ hitsTab: t })}
                     pins={pins} onJumpPin={(i) => jumpToEntry(i)} onUnpin={(i) => setPins((l) => l.filter((p) => p.i !== i))} />
@@ -430,17 +443,16 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
               <Charts id={id} sum={sum} onFilter={(t) => addFilter(t, false) || set({ tab: 'lines' })} onLevels={(lv) => set({ levels: lv, tab: 'lines' })} />
             )}
         </div>
-        {sel && tab !== 'charts' && detailFolded && (
-          <button type="button" className="lg-detail-rail" onClick={() => set({ detailFolded: false })} title="Mostrar o detalhe da entrada" aria-label="Mostrar detalhe" aria-expanded="false">
-            <Icon name="chevron-left" size={14} /><span>Detalhe</span>
-          </button>
-        )}
-        {sel && tab !== 'charts' && !detailFolded && (
-          <Detail id={id} i={sel.i} res={res} http={src.http} toast={toast} onClose={() => setSel(null)} onFold={() => set({ detailFolded: true })}
-            onAddFilter={addFilter} onJump={jumpToEntry} onFollow={follow} pinned={pinSet.has(sel.i)} onPin={togglePin}
-            ai={aiOn(cfg) ? aiErr : null}
-            aiSlot={aiOn(cfg) ? (entry) => <AiButton ai={aiErr} label="Explicar" onClick={() => explain(entry)} title="Explicar o erro com IA (o texto passa pelo filtro de segredos)" /> : null}
-            dbServers={dbServers} />
+        {sel && tab !== 'charts' && (
+          <div className={'lg-side' + (detailSplit.dragging ? ' is-dragging' : '')} style={{ width: detailSplit.size }}>
+            <div className="lg-grip is-v" role="separator" aria-orientation="vertical" aria-label="Largura do detalhe (arraste; duplo clique alterna)"
+              aria-valuemin={DETAIL_MIN} aria-valuemax={DETAIL_MAX} aria-valuenow={detailSplit.size} tabIndex={0} {...detailSplit.grip} />
+            <Detail id={id} i={sel.i} res={res} http={src.http} toast={toast} onClose={() => setSel(null)}
+              onAddFilter={addFilter} onJump={jumpToEntry} onFollow={follow} pinned={pinSet.has(sel.i)} onPin={togglePin}
+              ai={aiOn(cfg) ? aiErr : null}
+              aiSlot={aiOn(cfg) ? (entry) => <AiButton ai={aiErr} label="Explicar" onClick={() => explain(entry)} title="Explicar o erro com IA (o texto passa pelo filtro de segredos)" /> : null}
+              dbServers={dbServers} />
+          </div>
         )}
       </div>
 

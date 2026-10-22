@@ -398,6 +398,21 @@ test('termFor monta o termo para seguir um valor, e a consulta entende', () => {
   assert.equal(c.fields[0].test('default task-70'), false);
 });
 
+test('panel: limites das bandejas (largura do Detalhe, altura de Achados/Fixados)', () => {
+  const W = require('../src/logs/panel.js');
+  assert.equal(W.detailWidth(NaN), W.DETAIL_DEFAULT);
+  assert.equal(W.detailWidth(10), W.DETAIL_MIN);
+  assert.equal(W.detailWidth(5000), W.DETAIL_MAX);
+  assert.equal(W.detailWidth(600.4, 500), 500);       // não passa do espaço disponível
+  assert.equal(W.detailWidth(600, 100), W.DETAIL_MIN); // mas nunca abaixo do mínimo
+  assert.equal(W.hitsHeight(NaN), W.HITS_DEFAULT);
+  assert.equal(W.hitsHeight(10), 0);                  // arrastar até o fim recolhe (só o cabeçalho)
+  assert.equal(W.hitsHeight(W.HITS_SNAP), W.HITS_MIN);
+  assert.equal(W.hitsHeight(120.6), 121);
+  assert.equal(W.hitsHeight(9999), W.HITS_MAX);
+  assert.equal(W.hitsHeight(400, 200), 200);
+});
+
 test('pushRecent: mais novo primeiro, sem repetir nem vazio, limitado', () => {
   const { pushRecent } = require('../src/logs/recent.js');
   assert.deepEqual(pushRecent([], 'a'), ['a']);

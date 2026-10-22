@@ -25,21 +25,23 @@ function Pins({ pins, onJump, onUnpin }) {
 }
 
 /**
- * props: id, sum, res, http, k (achado atual ou null), folded, onFold(bool), scrollTo, listRef, onPick(k, i), onStep(dir),
+ * props: id, sum, res, http, k (achado atual ou null), height (altura do corpo; 0 = só o cabeçalho), dragging, grip (props da
+ * borda arrastável), onOpen() (abre no tamanho padrão), scrollTo, listRef, onPick(k, i), onStep(dir),
  * showHits (há filtro: aba Achados), tab ('hits' | 'pins'), onTab, pins, onJumpPin(i), onUnpin(i)
  */
-export function Hits({ id, sum, res, http, k, folded, onFold, scrollTo, listRef, onPick, onStep, showHits, tab, onTab, pins, onJumpPin, onUnpin }) {
+export function Hits({ id, sum, res, http, k, height, dragging, grip, onOpen, scrollTo, listRef, onPick, onStep, showHits, tab, onTab, pins, onJumpPin, onUnpin }) {
   const total = sum.total;
   const cur = showHits && tab === 'hits' ? 'hits' : 'pins';
+  const open = height > 0;
+  const pick = (t) => { onTab(t); if (!open) onOpen(); };
   return (
-    <section className={'lg-hits' + (folded ? ' is-folded' : '')} aria-label="Achados do filtro e entradas fixadas">
+    <section className={'lg-hits' + (dragging ? ' is-dragging' : '')} aria-label="Achados do filtro e entradas fixadas">
+      <div className="lg-grip is-h" role="separator" aria-orientation="horizontal" aria-label="Altura dos achados (arraste; duplo clique alterna)"
+        aria-valuenow={height} tabIndex={0} {...grip} />
       <header className="lg-hits__head">
-        <button type="button" className="lg-hits__fold" onClick={() => onFold(!folded)} aria-expanded={!folded} title={folded ? 'Mostrar o painel' : 'Esconder o painel'}>
-          <Icon name={folded ? 'chevron-right' : 'chevron-down'} size={13} />
-        </button>
         <div className="lg-hits__tabs" role="tablist">
-          {showHits && <button type="button" role="tab" aria-selected={cur === 'hits'} className={cur === 'hits' ? 'is-on' : ''} onClick={() => { onTab('hits'); if (folded) onFold(false); }}>Achados <small>{fmtNum(total)}</small></button>}
-          <button type="button" role="tab" aria-selected={cur === 'pins'} className={cur === 'pins' ? 'is-on' : ''} onClick={() => { onTab('pins'); if (folded) onFold(false); }}>Fixados <small>{fmtNum(pins.length)}</small></button>
+          {showHits && <button type="button" role="tab" aria-selected={cur === 'hits'} className={cur === 'hits' ? 'is-on' : ''} onClick={() => pick('hits')}>Achados <small>{fmtNum(total)}</small></button>}
+          <button type="button" role="tab" aria-selected={cur === 'pins'} className={cur === 'pins' ? 'is-on' : ''} onClick={() => pick('pins')}>Fixados <small>{fmtNum(pins.length)}</small></button>
         </div>
         {cur === 'hits' && <span className="lg-muted">{k != null && total ? `${fmtNum(k + 1)} de ${fmtNum(total)}` : ''}</span>}
         <span className="lg-grow" />
@@ -50,8 +52,8 @@ export function Hits({ id, sum, res, http, k, folded, onFold, scrollTo, listRef,
           </>
         )}
       </header>
-      {!folded && (
-        <div className="lg-hits__body">
+      {open && (
+        <div className="lg-hits__body" style={{ height }}>
           {cur === 'hits'
             ? (
               <LogList id={id} summary={sum} view="hits" total={total} res={res} http={http} selPos={k} listRef={listRef}
