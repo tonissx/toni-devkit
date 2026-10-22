@@ -209,6 +209,14 @@
 .lg-main { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .lg-main.is-loading .lg-list, .lg-main.is-loading .lg-problems__list { opacity: .75; transition: opacity .15s; }
 
+/* painel dos achados (embaixo da lista do log completo) */
+.lg-hits { flex: 0 0 auto; display: flex; flex-direction: column; border-top: 1px solid var(--tk-border); background: var(--tk-surface); }
+.lg-hits__head { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; font: 12px var(--tk-font-sans); color: var(--tk-text-2); }
+.lg-hits__head .lg-btn { height: 22px; padding: 0 6px; }
+.lg-hits__fold { display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; padding: 0; color: var(--tk-text); font: inherit; cursor: pointer; }
+.lg-hits__body { display: flex; flex-direction: column; height: 190px; min-height: 0; border-top: 1px solid var(--tk-border); }
+.lg-empty.is-small { padding: 12px; }
+
 /* lista */
 .lg-vlist { position: relative; flex: 1; min-height: 0; overflow: auto; outline: none; }
 .lg-vlist__inner { position: relative; width: 100%; }
@@ -223,6 +231,9 @@
 .lg-row.lv-5:not(.is-sel), .lg-row.lv-6:not(.is-sel) { background: color-mix(in srgb, var(--lg-error) 6%, transparent); }
 .lg-row.lv-5:not(.is-sel):hover, .lg-row.lv-6:not(.is-sel):hover { background: color-mix(in srgb, var(--lg-error) 11%, transparent); }
 .lg-row.lv-1, .lg-row.lv-2 { color: var(--tk-text-3); }
+/* achado do filtro dentro do log completo */
+.lg-row.is-hit:not(.is-sel) { background: color-mix(in srgb, var(--tk-accent) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tk-accent) 28%, transparent); color: var(--tk-text); }
+.lg-row.is-hit:not(.is-sel):hover { background: color-mix(in srgb, var(--tk-accent) 18%, transparent); }
 .lg-row.is-loading .lg-row__time { width: 90px; height: 8px; border-radius: 4px; background: var(--tk-surface-3); }
 .lg-row__time { flex-shrink: 0; color: var(--tk-text-3); font-variant-numeric: tabular-nums; }
 .lg-row__status { flex-shrink: 0; width: 30px; font-weight: 600; color: var(--tk-text-2); }

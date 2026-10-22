@@ -89,6 +89,44 @@ test('engine: consulta, linhas, detalhe, contexto, próximo erro, exportar', asy
   assert.equal(ch.loggers.items[0].key, 'com.x');
 });
 
+test('engine: visão "full" mantém o log inteiro e marca os achados; hitNear pula de achado em achado', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  fs.writeFileSync(f, line(1, 'INFO', 'ok') + line(2, 'ERROR', 'falhou id=7') + '\tat com.x.Y.z(Y.java:1)\n' + line(3, 'WARN', 'lento') + line(4, 'ERROR', 'falhou id=8') + line(5, 'INFO', 'fim'));
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  const r = e.call('query', { id: 'a', qid: 1, q: 'falhou', full: true });
+  assert.equal(r.total, 2);
+  assert.equal(r.fullTotal, 5);
+  assert.equal(e.call('query', { id: 'a', qid: 2, q: 'falhou' }).fullTotal, null);
+  e.call('query', { id: 'a', qid: 1, q: 'falhou', full: true });
+  // padrão ('hits') segue igual a antes; 'full' devolve tudo, com hit marcado
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 1, from: 0, count: 10 }).rows.map((x) => x.i), [1, 3]);
+  const all = e.call('rows', { id: 'a', qid: 1, from: 0, count: 10, view: 'full' });
+  assert.equal(all.total, 5);
+  assert.deepEqual(all.rows.map((x) => [x.i, x.hit]), [[0, false], [1, true], [2, false], [3, true], [4, false]]);
+  assert.equal(e.call('rows', { id: 'a', qid: 1, from: 0, count: 10 }).rows[0].hit, undefined);
+  // locate: a posição de um achado na lista completa é a própria entrada
+  assert.deepEqual(e.call('locate', { id: 'a', qid: 1, i: 3, view: 'full' }), { pos: 3, exact: true });
+  assert.deepEqual(e.call('locate', { id: 'a', qid: 1, i: 3 }), { pos: 1, exact: true });
+  // hitNear: de uma entrada qualquer para o achado seguinte/anterior, dando a volta
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: -1, dir: 1 }), { k: 0, i: 1, total: 2 });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: 1, dir: 1 }), { k: 1, i: 3, total: 2 });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: 3, dir: 1 }), { k: 0, i: 1, total: 2 });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: 2, dir: -1 }), { k: 0, i: 1, total: 2 });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: 1, dir: -1 }), { k: 1, i: 3, total: 2 });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: 99, dir: -1 }), { k: 1, i: 3, total: 2 });
+  assert.equal(e.call('hitNear', { id: 'a', qid: 99, i: 0 }).stale, true);
+  // sem achados
+  e.call('query', { id: 'a', qid: 3, q: 'nada-assim', full: true });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 3, i: 0 }), { k: -1, i: -1, total: 0 });
+  // intervalo de tempo continua valendo na visão completa
+  const t3 = e.call('entry', { id: 'a', i: 3 }).ts;
+  const rg = e.call('query', { id: 'a', qid: 4, q: 'falhou', from: t3, to: null, full: true });
+  assert.equal(rg.fullTotal, 2);
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 4, from: 0, count: 10, view: 'full' }).rows.map((x) => x.i), [3, 4]);
+});
+
 test('última linha sem \\n conta quando não está ao vivo', async () => {
   const dir = tmp();
   const f = path.join(dir, 'a.log');

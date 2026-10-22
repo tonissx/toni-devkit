@@ -9,32 +9,32 @@ const { Icon } = DS;
 export const ROW_H = 22;
 const PAGE = 200;
 
-/** Linhas sob demanda. → { get(pos), ensure(first, last) } */
-export function useRows(id, summary) {
-  const cache = React.useRef({ qid: null, pages: new Map(), prev: new Map(), inflight: new Set() });
+/** Linhas sob demanda. view: 'hits' (só o que passou no filtro) | 'full' (o log todo, achados marcados). → { get(pos), ensure(first, last) } */
+export function useRows(id, summary, view = 'hits', total = summary ? summary.total : 0) {
+  const cache = React.useRef({ qid: null, view, pages: new Map(), prev: new Map(), inflight: new Set() });
   const [, bump] = React.useReducer((x) => x + 1, 0);
   const qid = summary ? summary.qid : null;
-  if (cache.current.qid !== qid) {
+  if (cache.current.qid !== qid || cache.current.view !== view) {
     // Consulta nova: as páginas antigas viram reserva até as novas chegarem.
-    cache.current = { qid, pages: new Map(), prev: cache.current.pages.size ? cache.current.pages : cache.current.prev, inflight: new Set() };
+    cache.current = { qid, view, pages: new Map(), prev: cache.current.pages.size ? cache.current.pages : cache.current.prev, inflight: new Set() };
   }
   const ensure = React.useCallback((first, last) => {
     const c = cache.current;
-    if (c.qid == null || !summary || !summary.total) return;
+    if (c.qid == null || !summary || !total) return;
     const p0 = Math.floor(first / PAGE);
     const p1 = Math.floor(Math.max(first, last - 1) / PAGE);
     for (let p = p0; p <= p1; p++) {
       if (c.pages.has(p) || c.inflight.has(p)) continue;
       c.inflight.add(p);
       const myQid = c.qid;
-      logsApi().rows({ id, qid: myQid, from: p * PAGE, count: PAGE }).then((r) => {
+      logsApi().rows({ id, qid: myQid, from: p * PAGE, count: PAGE, view }).then((r) => {
         if (cache.current.qid !== myQid || !r || r.stale) return;
         cache.current.pages.set(p, r.rows);
         cache.current.inflight.delete(p);
         bump();
       }, () => { if (cache.current.qid === myQid) cache.current.inflight.delete(p); });
     }
-  }, [id, qid, summary && summary.total]);
+  }, [id, qid, view, total]);
   const get = (pos) => {
     const c = cache.current;
     const p = Math.floor(pos / PAGE);
@@ -57,7 +57,7 @@ function Row({ row, pos, style, sel, onSelect, res, http, showDate }) {
   if (!row) return <div className="lg-row is-loading" style={style}><span className="lg-row__time" /><span className="lg-row__bar" /></div>;
   const lv = row.level;
   return (
-    <div className={'lg-row lv-' + lv + (sel ? ' is-sel' : '')} style={style} onClick={() => onSelect(pos, row)} role="row" aria-selected={sel}>
+    <div className={'lg-row lv-' + lv + (sel ? ' is-sel' : '') + (row.hit ? ' is-hit' : '')} style={style} onClick={() => onSelect(pos, row)} role="row" aria-selected={sel}>
       <span className="lg-row__bar" />
       <span className="lg-row__time" title={new Date(row.ts).toLocaleString('pt-BR')}>{fmtTime(row.ts, { date: showDate })}</span>
       <LevelBadge level={lv} compact={false} />
@@ -70,11 +70,11 @@ function Row({ row, pos, style, sel, onSelect, res, http, showDate }) {
 }
 
 /**
- * props: id, summary, res, http, selPos, onSelect(pos, row), scrollTo, onAtBottom, listRef, empty
+ * props: id, summary, res, http, selPos, onSelect(pos, row), scrollTo, onAtBottom, listRef, empty,
+ * view ('hits' | 'full') e total (quantas entradas a visão tem; padrão summary.total)
  */
-export function LogList({ id, summary, res, http, selPos, onSelect, scrollTo, onAtBottom, listRef, empty }) {
-  const rows = useRows(id, summary);
-  const total = summary ? summary.total : 0;
+export function LogList({ id, summary, res, http, selPos, onSelect, scrollTo, onAtBottom, listRef, empty, view = 'hits', total = summary ? summary.total : 0 }) {
+  const rows = useRows(id, summary, view, total);
   // Data junto da hora quando o log atravessa dias.
   const showDate = !!(summary && summary.tsMin != null && summary.tsMax != null && !sameDay(summary.tsMin, summary.tsMax));
   if (summary && !total) return empty;

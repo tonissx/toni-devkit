@@ -13,6 +13,7 @@ import { Timeline } from './Timeline.jsx';
 import { Detail } from './Detail.jsx';
 import { Problems } from './Problems.jsx';
 import { Charts } from './Charts.jsx';
+import { Hits } from './Hits.jsx';
 import { useSameText, filterTermFor } from './sameText.js';
 
 const { Icon, Spinner } = DS;
@@ -53,10 +54,16 @@ function Menu({ label, icon, items, title }) {
 export function LogView({ src, state, setState, presets, onPresets, onInfo, onClose, toast, openedAt }) {
   const api = logsApi();
   const id = src.id;
-  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false } = state;
+  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false, mode = 'find', hitsFolded = false } = state;
   const set = (patch) => setState((s) => ({ ...s, ...patch }));
+  // Filtrando, o log continua inteiro na lista e os achados vão para o painel ('find'); 'only' = a lista mostra só os achados.
+  const filtered = !!(q.trim() || (levels && levels.length));
+  const wantFull = mode === 'find' && filtered;
 
   const [sum, setSum] = React.useState(null);
+  const [hitK, setHitK] = React.useState(null);        // posição do achado atual entre os achados
+  const [hitScroll, setHitScroll] = React.useState(null);
+  const hitsRef = React.useRef(null);
   const [loading, setLoading] = React.useState(false);
   const dimmed = useDelayed(loading); // esmaece só se a consulta demorar (> 300 ms)
   const [sel, setSel] = React.useState(null);       // { pos | null, i }
@@ -89,6 +96,10 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   const aiInc = useAiTask('logIncident', cfg);
 
   const goTo = (index, align = 'center') => setScrollTo({ index, align, nonce: Math.random() });
+  const mainOf = (x) => (x.view === 'full' ? x.fullTotal : x.total); // quantas linhas tem a lista principal
+  const full = !!sum && sum.view === 'full';
+  const view = full ? 'full' : 'hits';
+  const mainTotal = sum ? mainOf(sum) : 0;
 
   /* ─────────────── Consulta ─────────────── */
   const run = React.useCallback(async () => {
@@ -99,24 +110,27 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
     // Ao vivo não mostra "carregando": as linhas novas só aparecem (sem esmaecer a tela a cada gravação).
     if (!wasAppend) setLoading(true);
     try {
-      const r = await api.query({ id, qid, q, levels, from: range ? range.from : null, to: range ? range.to : null, buckets: 120 });
+      const r = await api.query({ id, qid, q, levels, from: range ? range.from : null, to: range ? range.to : null, buckets: 120, full: wantFull });
       if (latest.current !== qid) return;
       const prev = sumRef.current;
-      setSum({ ...r, viaAppend: wasAppend });
+      const cur = { ...r, viaAppend: wasAppend, view: wantFull ? 'full' : 'hits' };
+      setSum(cur);
+      const tot = mainOf(cur);
       if (first.current) {
         first.current = false;
-        if (src.live && r.total) goTo(r.total - 1, 'end'); // como o tail -f: começa no fim
-      } else if (wasAppend && prev && r.total > prev.total) {
-        if (atBottomRef.current) goTo(r.total - 1, 'end');
-        else setNewCount((n) => n + (r.total - prev.total));
+        if (src.live && tot) goTo(tot - 1, 'end'); // como o tail -f: começa no fim
+      } else if (wasAppend && prev && tot > mainOf(prev)) {
+        if (atBottomRef.current) goTo(tot - 1, 'end');
+        else setNewCount((n) => n + (tot - mainOf(prev)));
       }
     } catch (e) {
       if (latest.current === qid) toast('Não foi possível filtrar', errText(e), 'error');
     } finally { if (latest.current === qid) setLoading(false); }
-  }, [id, q, levels && levels.join(','), range && range.from, range && range.to]);
+  }, [id, q, levels && levels.join(','), range && range.from, range && range.to, wantFull]);
   const runRef = React.useRef(run);
   runRef.current = run;
   React.useEffect(() => { run(); }, [run]);
+  React.useEffect(() => { setHitK(null); }, [q, levels && levels.join(',')]);
 
   // Eventos do serviço: cresceu, reaberto (rotação/truncado), erro.
   React.useEffect(() => {
@@ -145,7 +159,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   React.useEffect(() => {
     if (!sum || !sel) return;
     // Atualização ao vivo (viaAppend) não rola de volta para a seleção; só mudança de filtro recentraliza.
-    api.locate({ id, qid: sum.qid, i: sel.i }).then((r) => {
+    api.locate({ id, qid: sum.qid, i: sel.i, view }).then((r) => {
       if (!r || r.stale) return;
       if (r.exact) { setSel((s) => (s && s.i === sel.i ? { ...s, pos: r.pos } : s)); if (!sum.viaAppend) goTo(r.pos); } else setSel((s) => (s && s.i === sel.i ? { ...s, pos: null } : s));
     }, () => {});
@@ -156,19 +170,34 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
 
   /* ─────────────── Ações ─────────────── */
   const selectPos = async (pos) => {
-    if (!sum || pos < 0 || pos >= sum.total) return;
-    const r = await api.rows({ id, qid: sum.qid, from: pos, count: 1 });
+    if (!sum || pos < 0 || pos >= mainTotal) return;
+    const r = await api.rows({ id, qid: sum.qid, from: pos, count: 1, view });
     if (r && r.rows && r.rows[0]) { setSel({ pos, i: r.rows[0].i }); goTo(pos, 'nearest'); }
+  };
+  // Próximo/anterior achado do filtro (dá a volta no fim); o log completo vai até a posição dele.
+  const nextHit = async (dir) => {
+    if (!sum) return;
+    const r = await api.hitNear({ id, qid: sum.qid, i: sel ? sel.i : dir > 0 ? -1 : sum.n, dir });
+    if (!r || r.stale) return;
+    if (r.i < 0) { toast('Nenhum achado', 'Nada no log casa com o filtro.', 'ok'); return; }
+    if (tab !== 'lines') set({ tab: 'lines' });
+    pickHit(r.k, r.i);
+  };
+  const pickHit = (k, i) => {
+    setHitK(k);
+    setHitScroll({ index: k, align: 'nearest', nonce: Math.random() });
+    jumpToEntry(i);
   };
   const nextLevel = async (dir, minLevel = 5) => {
     if (!sum) return;
-    const from = sel && sel.pos != null ? sel.pos : dir > 0 ? -1 : sum.total;
-    const r = await api.next({ id, qid: sum.qid, pos: from, dir, minLevel });
+    if (full && minLevel === 5) return nextHit(dir); // com filtro, n/N andam pelos achados
+    const from = sel && sel.pos != null ? sel.pos : dir > 0 ? -1 : mainTotal;
+    const r = await api.next({ id, qid: sum.qid, pos: from, dir, minLevel, view });
     if (r && r.pos >= 0) { if (tab !== 'lines') set({ tab: 'lines' }); selectPos(r.pos).then(() => goTo(r.pos)); } else toast(dir > 0 ? 'Nenhum erro depois daqui' : 'Nenhum erro antes daqui', '', 'ok');
   };
   const seek = async (t) => {
     if (!sum) return;
-    const r = await api.seekTime({ id, qid: sum.qid, t });
+    const r = await api.seekTime({ id, qid: sum.qid, t, view });
     if (r && r.pos != null) { if (tab !== 'lines') set({ tab: 'lines' }); goTo(r.pos); selectPos(r.pos); }
   };
   const addFilter = (term, replace) => {
@@ -178,7 +207,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   const jumpToEntry = async (i) => {
     setSel({ pos: null, i });
     if (!sum) return;
-    const r = await api.locate({ id, qid: sum.qid, i });
+    const r = await api.locate({ id, qid: sum.qid, i, view });
     if (r && r.exact) { setSel({ pos: r.pos, i }); goTo(r.pos); }
   };
   const toggleLive = async () => {
@@ -199,7 +228,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   };
   const copyFiltered = async () => {
     if (!sum) return;
-    const r = await api.textOf({ id, qid: sum.qid, from: sel && sel.pos != null ? sel.pos : 0, count: 200 });
+    const r = await api.textOf({ id, qid: sum.qid, from: !full && sel && sel.pos != null ? sel.pos : 0, count: 200 });
     if (r && r.text) copyText(r.text, toast, `${r.count} entradas copiadas${r.more ? ' (até 200)' : ''}`);
   };
 
@@ -234,7 +263,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
     else if (e.key === 'n') { e.preventDefault(); nextLevel(1); }
     else if (e.key === 'N') { e.preventDefault(); nextLevel(-1); }
     else if (e.key === 'w') { e.preventDefault(); nextLevel(1, 4); }
-    else if (e.key === 'End') { e.preventDefault(); goTo(sum.total - 1, 'end'); }
+    else if (e.key === 'End') { e.preventDefault(); goTo(mainTotal - 1, 'end'); }
     else if (e.key === 'Home') { e.preventDefault(); goTo(0, 'nearest'); }
   };
 
@@ -302,10 +331,16 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
           </button>
         ))}
         <span className="lg-grow" />
+        {tab === 'lines' && filtered && (
+          <button type="button" className={'lg-btn' + (mode === 'only' ? ' is-accent' : '')} aria-pressed={mode === 'only'} onClick={() => set({ mode: mode === 'only' ? 'find' : 'only' })}
+            title={mode === 'only' ? 'Mostrando só os filtrados — clique para ver o log completo com os achados marcados' : 'Mostrar só os filtrados na lista (esconde o resto do log)'}>
+            <Icon name="filter" size={13} /><span>Só filtrados</span>
+          </button>
+        )}
         {tab === 'lines' && sum && sum.total > 0 && (
           <span className="lg-navs">
-            <button type="button" className="lg-btn" onClick={() => nextLevel(-1)} title="Erro anterior (N)"><Icon name="chevron-up" size={13} /><span>Erro</span></button>
-            <button type="button" className="lg-btn" onClick={() => nextLevel(1)} title="Próximo erro (n)"><Icon name="chevron-down" size={13} /><span>Erro</span></button>
+            <button type="button" className="lg-btn" onClick={() => nextLevel(-1)} title={full ? 'Achado anterior (N)' : 'Erro anterior (N)'}><Icon name="chevron-up" size={13} /><span>{full ? 'Achado' : 'Erro'}</span></button>
+            <button type="button" className="lg-btn" onClick={() => nextLevel(1)} title={full ? 'Próximo achado (n)' : 'Próximo erro (n)'}><Icon name="chevron-down" size={13} /><span>{full ? 'Achado' : 'Erro'}</span></button>
           </span>
         )}
       </div>
@@ -315,7 +350,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
           {!sum ? <div className="lg-muted lg-pad"><Spinner size={12} /> Filtrando…</div>
             : tab === 'lines' ? (
               <>
-                <LogList id={id} summary={sum} res={res} http={src.http} selPos={sel ? sel.pos : null} listRef={listRef}
+                <LogList id={id} summary={sum} view={view} total={mainTotal} res={res} http={src.http} selPos={sel ? sel.pos : null} listRef={listRef}
                   onSelect={(pos, row) => setSel({ pos, i: row.i })} scrollTo={scrollTo} onAtBottom={setAtBottom}
                   empty={(
                     <div className="lg-empty">
@@ -325,8 +360,12 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
                       {(q || levels || range) && <button type="button" className="lg-btn is-accent" onClick={() => set({ q: '', levels: null, range: null })}><Icon name="filter-x" size={13} /><span>Limpar filtros</span></button>}
                     </div>
                   )} />
+                {full && (
+                  <Hits id={id} sum={sum} res={res} http={src.http} k={hitK} folded={hitsFolded} onFold={(v) => set({ hitsFolded: v })}
+                    scrollTo={hitScroll} listRef={hitsRef} onPick={(k, i) => pickHit(k, i)} onStep={nextHit} />
+                )}
                 {newCount > 0 && !atBottom && (
-                  <button type="button" className="lg-newlines" onClick={() => { goTo(sum.total - 1, 'end'); setNewCount(0); }}>
+                  <button type="button" className="lg-newlines" onClick={() => { goTo(mainTotal - 1, 'end'); setNewCount(0); }}>
                     <Icon name="arrow-down" size={13} /> {fmtNum(newCount)} nova{newCount === 1 ? '' : 's'}
                   </button>
                 )}
@@ -354,7 +393,9 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
       </div>
 
       <footer className="lg-status">
-        {sum ? <span>{fmtNum(sum.total)} de {fmtNum(sum.n)} entradas{sum.total !== sum.n ? ' (filtro)' : ''}</span> : <span>…</span>}
+        {sum ? (full
+          ? <span>{fmtNum(sum.total)} achado{sum.total === 1 ? '' : 's'} em {fmtNum(mainTotal)} entradas</span>
+          : <span>{fmtNum(sum.total)} de {fmtNum(sum.n)} entradas{sum.total !== sum.n ? ' (filtro)' : ''}</span>) : <span>…</span>}
         {dimmed && <Spinner size={11} />}
         {sum && sum.tsMin != null && <span className="lg-muted">{fmtTime(sum.tsMin, { date: true, millis: false })} → {fmtTime(sum.tsMax, { date: true, millis: false })}</span>}
         <span className="lg-grow" />
