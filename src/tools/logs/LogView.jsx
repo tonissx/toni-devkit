@@ -425,7 +425,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
                     pins={pins} onJumpPin={(i) => jumpToEntry(i)} onUnpin={(i) => setPins((l) => l.filter((p) => p.i !== i))} />
                 )}
                 {newCount > 0 && !atBottom && (
-                  <button type="button" className="lg-newlines" onClick={() => { goTo(mainTotal - 1, 'end'); setNewCount(0); }}>
+                  <button type="button" className="lg-newlines" style={full || pins.length > 0 ? { bottom: hitsSplit.size + HITS_HEAD + 14 } : undefined} onClick={() => { goTo(mainTotal - 1, 'end'); setNewCount(0); }}>
                     <Icon name="arrow-down" size={13} /> {fmtNum(newCount)} nova{newCount === 1 ? '' : 's'}
                   </button>
                 )}
