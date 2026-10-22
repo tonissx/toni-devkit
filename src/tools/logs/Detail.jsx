@@ -5,6 +5,7 @@ import { redact } from '../../logs/redact.js';
 import { AiPanel } from '../../ai/ui.jsx';
 import { logsApi, errText, LevelBadge, Highlight, fmtDateTime, fmtTime, fmtMs, fmtNum, copyText } from './shared.jsx';
 import { displayText } from './LogList.jsx';
+import { termFor } from '../../logs/query.js';
 
 const { Icon, Spinner } = DS;
 
@@ -33,7 +34,7 @@ function Stack({ text, res }) {
   return <div className="lg-stack">{out}</div>;
 }
 
-function Fields({ entry }) {
+function Fields({ entry, onFollow }) {
   const p = entry.parsed;
   const rows = [];
   if (p.logger) rows.push(['logger', p.logger]);
@@ -58,7 +59,18 @@ function Fields({ entry }) {
   if (!rows.length) return null;
   return (
     <table className="lg-fields"><tbody>
-      {rows.map(([k, v]) => <tr key={k}><th>{k}</th><td>{v}</td></tr>)}
+      {rows.map(([k, v]) => {
+        const term = onFollow ? termFor(k, v) : '';
+        return (
+          <tr key={k}>
+            <th>{k}</th>
+            <td>
+              {v}
+              {term && <button type="button" className="lg-follow" onClick={() => onFollow(term)} title={`Seguir: filtrar por ${term}`} aria-label={`Filtrar por ${k}`}><Icon name="filter" size={11} /></button>}
+            </td>
+          </tr>
+        );
+      })}
     </tbody></table>
   );
 }
@@ -93,7 +105,7 @@ function Context({ id, i, res, onJump, http }) {
 // Erro que fala de banco: vale perguntar ao Banco o que estava acontecendo naquela hora.
 const DB_HINT = /\b(sql|jdbc|timeout|deadlock|lock request|database|banco|connection|conex[aã]o|ORA-\d|SQLException|SQLTimeout|tedious|sqlserver|mssql)/i;
 
-export function Detail({ id, i, res, http, onClose, onFold, onAddFilter, onJump, toast, aiSlot, ai, dbServers }) {
+export function Detail({ id, i, res, http, onClose, onFold, pinned, onPin, onFollow, onAddFilter, onJump, toast, aiSlot, ai, dbServers }) {
   const [entry, setEntry] = React.useState(null);
   const [error, setError] = React.useState(null);
   const [tab, setTab] = React.useState('entry');
@@ -132,6 +144,7 @@ export function Detail({ id, i, res, http, onClose, onFold, onAddFilter, onJump,
         <span className="lg-detail__when" title={entry.segment}>{fmtDateTime(entry.ts)}{Number.isFinite(entry.ts) && <small>.{String(new Date(entry.ts).getMilliseconds()).padStart(3, '0')}</small>}</span>
         <span className="lg-detail__file" title={entry.segment}><Icon name="file-text" size={11} /> {entry.segment}</span>
         <span className="lg-grow" />
+        {onPin && <button type="button" className={'lg-icon' + (pinned ? ' is-on' : '')} onClick={() => onPin(entry)} aria-pressed={!!pinned} title={pinned ? 'Soltar esta entrada (m)' : 'Fixar esta entrada para voltar depois (m)'} aria-label={pinned ? 'Soltar entrada' : 'Fixar entrada'}><Icon name="pin" size={14} /></button>}
         {onFold && <button type="button" className="lg-icon" onClick={onFold} title="Recolher o detalhe" aria-label="Recolher detalhe"><Icon name="chevron-right" size={14} /></button>}
         <button type="button" className="lg-icon" onClick={onClose} title="Fechar (Esc)" aria-label="Fechar detalhe"><Icon name="x" size={14} /></button>
       </div>
@@ -139,6 +152,9 @@ export function Detail({ id, i, res, http, onClose, onFold, onAddFilter, onJump,
         <button type="button" className="lg-btn" onClick={() => copyText(entry.text, toast, 'Entrada copiada')}><Icon name="copy" size={13} /><span>Copiar</span></button>
         <button type="button" className="lg-btn" onClick={() => { const r = redact(entry.text); copyText(r.text, toast, r.count ? `Copiado sem ${r.count} segredo(s)` : 'Copiado (nada para esconder)'); }} title="Troca senhas, tokens, e-mails e CPFs por ‹oculto›"><Icon name="shield" size={13} /><span>Copiar sem segredos</span></button>
         <button type="button" className="lg-btn" onClick={toNotes}><Icon name="notebook-pen" size={13} /><span>Notes</span></button>
+        {onFollow && p.thread && termFor('thread', p.thread) && (
+          <button type="button" className="lg-btn" onClick={() => onFollow(termFor('thread', p.thread))} title={`Filtrar por ${termFor('thread', p.thread)} — vê tudo o que essa thread fez`}><Icon name="route" size={13} /><span>Seguir thread</span></button>
+        )}
         {aiSlot && aiSlot(entry)}
         {dbServers > 0 && Number.isFinite(entry.ts) && DB_HINT.test(entry.text.slice(0, 20000)) && (
           <button type="button" className="lg-btn" title="Abre o histórico do Banco (monitor de SQL Server) neste horário"
@@ -169,7 +185,7 @@ export function Detail({ id, i, res, http, onClose, onFold, onAddFilter, onJump,
         {tab === 'entry' && (
           <>
             <div className="lg-msg"><Highlight text={msg} res={res} /></div>
-            <Fields entry={entry} />
+            <Fields entry={entry} onFollow={onFollow} />
             {p.stack && <Stack text={p.stack} res={res} />}
             {entry.cut && <div className="lg-muted">Entrada muito grande: mostrando os primeiros 2 MB.</div>}
           </>

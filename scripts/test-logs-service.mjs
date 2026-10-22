@@ -127,6 +127,42 @@ test('engine: visão "full" mantém o log inteiro e marca os achados; hitNear pu
   assert.deepEqual(e.call('rows', { id: 'a', qid: 4, from: 0, count: 10, view: 'full' }).rows.map((x) => x.i), [3, 4]);
 });
 
+test('engine: contexto ao redor dos achados (visão ctx) e marcadores', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  let txt = '';
+  for (let k = 0; k < 10; k++) txt += line(k, k === 2 || k === 7 ? 'ERROR' : 'INFO', k === 2 || k === 7 ? 'falhou' : 'ok ' + k);
+  fs.writeFileSync(f, txt);
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  // sem contexto: ctx == só os achados
+  let r = e.call('query', { id: 'a', qid: 1, q: 'falhou', full: true });
+  assert.equal(r.ctxTotal, 2);
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 1, from: 0, count: 20, view: 'ctx' }).rows.map((x) => x.i), [2, 7]);
+  // ± 1: achados 2 e 7 trazem 1,3 e 6,8
+  r = e.call('query', { id: 'a', qid: 2, q: 'falhou', full: true, ctx: 1 });
+  assert.equal(r.total, 2);
+  assert.equal(r.ctxTotal, 6);
+  const c = e.call('rows', { id: 'a', qid: 2, from: 0, count: 20, view: 'ctx' }).rows;
+  assert.deepEqual(c.map((x) => x.i), [1, 2, 3, 6, 7, 8]);
+  assert.deepEqual(c.map((x) => [!!x.hit, !!x.near]), [[false, true], [true, false], [false, true], [false, true], [true, false], [false, true]]);
+  // a visão de achados (painel) não muda; a completa marca os vizinhos
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 2, from: 0, count: 20 }).rows.map((x) => x.i), [2, 7]);
+  const full = e.call('rows', { id: 'a', qid: 2, from: 0, count: 20, view: 'full' }).rows;
+  assert.deepEqual(full.filter((x) => x.near).map((x) => x.i), [1, 3, 6, 8]);
+  // borda do arquivo: achado na primeira/última entrada não estoura
+  r = e.call('query', { id: 'a', qid: 4, q: '"ok 9"', full: true, ctx: 3 });
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 4, from: 0, count: 20, view: 'ctx' }).rows.map((x) => x.i), [6, 7, 8, 9]);
+  // marcadores: 10 entradas em 5 faixas → achados 2 e 7 caem nas faixas 1 e 3; o pior nível é ERROR
+  e.call('query', { id: 'a', qid: 5, q: 'falhou', full: true });
+  const m = e.call('marks', { id: 'a', qid: 5, view: 'full', buckets: 5, pins: [0, 9, 99] });
+  assert.equal(m.total, 10);
+  assert.deepEqual(m.hits, [0, 1, 0, 1, 0]);
+  assert.deepEqual(m.worst, [0, 5, 0, 5, 0]);
+  assert.deepEqual(m.pins, [0, 4]);
+  assert.equal(e.call('marks', { id: 'a', qid: 99, view: 'full' }).stale, true);
+});
+
 test('última linha sem \\n conta quando não está ao vivo', async () => {
   const dir = tmp();
   const f = path.join(dir, 'a.log');

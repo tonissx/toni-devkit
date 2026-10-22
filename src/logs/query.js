@@ -257,4 +257,20 @@ function suggestions(prefix, knownFields = []) {
   return [...new Set(all)].filter((s) => s.toLowerCase().startsWith(p) && s.toLowerCase() !== p).slice(0, 12);
 }
 
-module.exports = { tokenize, compile, matchFields, fieldValue, levelSet, statusTest, numTest, suggestions, escapeRe };
+const EXACT_KEYS = new Set(['thread', 'logger', 'ip', 'method']);
+
+/**
+ * Termo de filtro para "seguir" um valor visto no detalhe (thread, ip, id de correlação…). Valor exato, entre aspas.
+ * '' quando não dá para montar (vazio, enorme ou com aspas, que a mini-linguagem não escapa).
+ */
+function termFor(key, value) {
+  const k = String(key || '').trim();
+  const v = String(value == null ? '' : value).trim();
+  if (!k || !v || v.length > 200 || v.includes('"')) return '';
+  if (k === 'status') return /^\d{3}$/.test(v) ? 'status:' + v : '';
+  const name = k === 'requisição' || k === 'path' ? 'path' : k === 'usuário' ? 'user' : k === 'user agent' ? 'ua' : k;
+  if (/\s/.test(name) || name.includes(':')) return '';
+  return `${name}:"=${v}"`;
+}
+
+module.exports = { tokenize, compile, matchFields, fieldValue, levelSet, statusTest, numTest, suggestions, escapeRe, termFor, EXACT_KEYS };

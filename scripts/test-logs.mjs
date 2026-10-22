@@ -378,3 +378,34 @@ test('redact esconde senhas, tokens, e-mails e CPF', () => {
   assert.equal(text, 'Authorization: ‹oculto› password=‹oculto› {"token":"‹oculto›"} jdbc://sa:‹oculto›@db email ‹oculto› cpf ‹oculto› ok');
   assert.equal(count, 6);
 });
+
+test('termFor monta o termo para seguir um valor, e a consulta entende', () => {
+  assert.equal(Q.termFor('thread', 'default task-7'), 'thread:"=default task-7"');
+  assert.equal(Q.termFor('requisição', '/api/x?a=1'), 'path:"=/api/x?a=1"');
+  assert.equal(Q.termFor('status', '503'), 'status:503');
+  assert.equal(Q.termFor('usuário', 'ana'), 'user:"=ana"');
+  assert.equal(Q.termFor('correlationId', 'abc-123'), 'correlationId:"=abc-123"');
+  assert.equal(Q.termFor('thread', ''), '');
+  assert.equal(Q.termFor('msg', 'ele disse "oi"'), '');
+  assert.equal(Q.termFor('user agent', 'Mozilla'), 'ua:"=Mozilla"');
+  assert.equal(Q.termFor('status', 'abc'), '');
+  // o termo volta a ser um único filtro de campo com valor exato
+  const c = Q.compile(Q.termFor('thread', 'default task-7'));
+  assert.equal(c.error, null);
+  assert.equal(c.fields.length, 1);
+  assert.equal(c.fields[0].key, 'thread');
+  assert.equal(c.fields[0].test('default task-7'), true);
+  assert.equal(c.fields[0].test('default task-70'), false);
+});
+
+test('pushRecent: mais novo primeiro, sem repetir nem vazio, limitado', () => {
+  const { pushRecent } = require('../src/logs/recent.js');
+  assert.deepEqual(pushRecent([], 'a'), ['a']);
+  assert.deepEqual(pushRecent(['a', 'b'], 'b'), ['b', 'a']);
+  const same = ['a'];
+  assert.equal(pushRecent(same, '  a '), same);
+  assert.equal(pushRecent(same, '   '), same);
+  assert.deepEqual(pushRecent(null, 'x'), ['x']);
+  assert.equal(pushRecent(Array.from({ length: 10 }, (_, i) => 'q' + i), 'novo').length, 10);
+  assert.equal(pushRecent(Array.from({ length: 10 }, (_, i) => 'q' + i), 'novo')[0], 'novo');
+});

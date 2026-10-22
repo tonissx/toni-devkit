@@ -956,7 +956,7 @@ for (const fn of LOGS_SVC_API) {
   ipcMain.handle('logs:' + fn, async (_e, ...args) => { await logsReady; return logsSvc[fn](...args); });
 }
 // Consultas: vão direto ao worker (args: { id, qid, ... }).
-const LOGS_WORKER_API = ['query', 'rows', 'entry', 'context', 'locate', 'seekTime', 'next', 'hitNear', 'sparks', 'charts', 'textOf', 'info'];
+const LOGS_WORKER_API = ['query', 'rows', 'entry', 'context', 'locate', 'seekTime', 'next', 'hitNear', 'marks', 'sparks', 'charts', 'textOf', 'info'];
 for (const op of LOGS_WORKER_API) {
   ipcMain.handle('logs:' + op, (_e, args) => callLogs(op, args && typeof args === 'object' ? args : {}));
 }

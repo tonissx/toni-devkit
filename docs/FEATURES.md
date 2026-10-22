@@ -212,7 +212,17 @@ Para achar rápido o que deu errado num log. Abre arquivos de centenas de MB em 
 - **Filtros**: chips de nível com contagem (Ctrl+clique = só este; **Problemas** = avisos e erros) e uma busca com
   regras simples, todas precisando casar: `timeout`, `"frase exata"`, `/regex/i`, `-esconder`, `level:error+`,
   `logger:fluig`, `thread:task-12`, `status:5xx`, `ms:>500`, `path:/api/*`, `user.id:42` (campos do JSON ou
-  `chave=valor`), `has:stack`, `exception:NullPointer`. **Filtros salvos** com nome. `Ctrl+F` foca a busca
+  `chave=valor`), `has:stack`, `exception:NullPointer`. **Filtros salvos** com nome. `Ctrl+F` foca a busca. Com o
+  campo vazio, ele lista os **últimos filtros usados** (↑↓ + Enter, ou clique)
+- **Filtrar não esconde o log**: a lista continua com o log inteiro e os **achados vêm marcados**; um painel embaixo
+  (**Achados**) lista só os que casaram — clicar leva a lista até a entrada, e `n`/`N` (ou ▲▼) pulam de achado em achado.
+  Uma **faixa de marcadores** ao lado da rolagem mostra onde eles estão (cor do pior nível; clique/arraste para ir até lá).
+  **± contexto** (0/2/5/10) realça as entradas vizinhas de cada achado, como o `grep -C`; **Só filtrados** volta a mostrar
+  na lista apenas o resultado (com o contexto, se pedido). O painel de baixo e o **Detalhe** (lado direito) são recolhíveis
+- **Fixar**: `m` (ou o alfinete no detalhe) fixa a entrada selecionada — ela ganha um alfinete na lista e entra na aba
+  **Fixados** do painel de baixo, para voltar a ela depois. Valem só enquanto o log está aberto
+- **Seguir**: no detalhe, o filtro ao lado de cada campo (thread, ip, caminho, status, ids de correlação do JSON…) e
+  **Seguir thread** filtram por aquele valor exato, trocando o filtro anterior da mesma chave
 - **Linha do tempo**: colunas empilhadas por nível (os erros na base), com os **picos de erro** marcados. Passar o mouse
   mostra o horário e a contagem de cada nível **no cabeçalho do gráfico** (nada cobre as barras); **arrastar** escolhe um
   intervalo, mostrando antes de soltar quantas entradas e erros ele tem (vira filtro); **clicar** leva a lista até aquele

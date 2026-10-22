@@ -53,12 +53,13 @@ export function displayText(row, http) {
   return row.text.replace(TS_PREFIX, '').replace(LV_PREFIX, '');
 }
 
-function Row({ row, pos, style, sel, onSelect, res, http, showDate }) {
+function Row({ row, pos, style, sel, onSelect, res, http, showDate, pinned }) {
   if (!row) return <div className="lg-row is-loading" style={style}><span className="lg-row__time" /><span className="lg-row__bar" /></div>;
   const lv = row.level;
   return (
-    <div className={'lg-row lv-' + lv + (sel ? ' is-sel' : '') + (row.hit ? ' is-hit' : '')} style={style} onClick={() => onSelect(pos, row)} role="row" aria-selected={sel}>
+    <div className={'lg-row lv-' + lv + (sel ? ' is-sel' : '') + (row.hit ? ' is-hit' : '') + (row.near ? ' is-near' : '')} style={style} onClick={() => onSelect(pos, row)} role="row" aria-selected={sel}>
       <span className="lg-row__bar" />
+      {pinned && <span className="lg-row__pin" title="Fixada (m solta)"><Icon name="pin" size={11} /></span>}
       <span className="lg-row__time" title={new Date(row.ts).toLocaleString('pt-BR')}>{fmtTime(row.ts, { date: showDate })}</span>
       <LevelBadge level={lv} compact={false} />
       {http && <span className={'lg-row__status s' + String(row.status || 0)[0]}>{row.status || '—'}</span>}
@@ -71,9 +72,9 @@ function Row({ row, pos, style, sel, onSelect, res, http, showDate }) {
 
 /**
  * props: id, summary, res, http, selPos, onSelect(pos, row), scrollTo, onAtBottom, listRef, empty,
- * view ('hits' | 'full') e total (quantas entradas a visão tem; padrão summary.total)
+ * view ('hits' | 'full' | 'ctx'), total (quantas entradas a visão tem; padrão summary.total) e pins (Set de índices fixados)
  */
-export function LogList({ id, summary, res, http, selPos, onSelect, scrollTo, onAtBottom, listRef, empty, view = 'hits', total = summary ? summary.total : 0 }) {
+export function LogList({ id, summary, res, http, selPos, onSelect, scrollTo, onAtBottom, listRef, empty, view = 'hits', total = summary ? summary.total : 0, pins = null }) {
   const rows = useRows(id, summary, view, total);
   // Data junto da hora quando o log atravessa dias.
   const showDate = !!(summary && summary.tsMin != null && summary.tsMax != null && !sameDay(summary.tsMin, summary.tsMax));
@@ -87,7 +88,7 @@ export function LogList({ id, summary, res, http, selPos, onSelect, scrollTo, on
       onRange={rows.ensure}
       onAtBottom={onAtBottom}
       scrollTo={scrollTo}
-      renderRow={(i, style) => <Row key={i} pos={i} row={rows.get(i)} style={style} sel={i === selPos} onSelect={onSelect} res={res} http={http} showDate={showDate} />}
+      renderRow={(i, style) => <Row key={i} pos={i} row={rows.get(i)} style={style} sel={i === selPos} onSelect={onSelect} res={res} http={http} showDate={showDate} pinned={!!(pins && (rows.get(i)) && pins.has(rows.get(i).i))} />}
     />
   );
 }

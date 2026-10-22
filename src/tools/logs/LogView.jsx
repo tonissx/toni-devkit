@@ -14,7 +14,9 @@ import { Detail } from './Detail.jsx';
 import { Problems } from './Problems.jsx';
 import { Charts } from './Charts.jsx';
 import { Hits } from './Hits.jsx';
+import { Marks } from './Marks.jsx';
 import { useSameText, filterTermFor } from './sameText.js';
+import { escapeRe } from '../../logs/query.js';
 
 const { Icon, Spinner } = DS;
 
@@ -54,16 +56,23 @@ function Menu({ label, icon, items, title }) {
 export function LogView({ src, state, setState, presets, onPresets, onInfo, onClose, toast, openedAt }) {
   const api = logsApi();
   const id = src.id;
-  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false, mode = 'find', hitsFolded = false, detailFolded = false } = state;
+  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false, mode = 'find', hitsFolded = false, detailFolded = false, ctx = 0, hitsTab = 'hits' } = state;
   const set = (patch) => setState((s) => ({ ...s, ...patch }));
-  // Filtrando, o log continua inteiro na lista e os achados vão para o painel ('find'); 'only' = a lista mostra só os achados.
+  // Filtrando, o log continua inteiro na lista e os achados vão para o painel ('find'); 'only' = a lista mostra só os achados
+  // (mais as `ctx` entradas vizinhas de cada um, se pedido).
   const filtered = !!(q.trim() || (levels && levels.length));
   const wantFull = mode === 'find' && filtered;
+  const ctxN = filtered ? ctx : 0;
+  const wantView = wantFull ? 'full' : ctxN > 0 ? 'ctx' : 'hits';
 
   const [sum, setSum] = React.useState(null);
   const [hitK, setHitK] = React.useState(null);        // posição do achado atual entre os achados
   const [hitScroll, setHitScroll] = React.useState(null);
   const hitsRef = React.useRef(null);
+  // Entradas fixadas (não persistem: o índice de uma entrada muda se o arquivo for rotacionado/reaberto).
+  const [pins, setPins] = React.useState([]);          // [{ i, ts, level, text }]
+  const pinSet = React.useMemo(() => new Set(pins.map((p) => p.i)), [pins]);
+  const [markData, setMarkData] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const dimmed = useDelayed(loading); // esmaece só se a consulta demorar (> 300 ms)
   const [sel, setSel] = React.useState(null);       // { pos | null, i }
@@ -96,10 +105,11 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   const aiInc = useAiTask('logIncident', cfg);
 
   const goTo = (index, align = 'center') => setScrollTo({ index, align, nonce: Math.random() });
-  const mainOf = (x) => (x.view === 'full' ? x.fullTotal : x.total); // quantas linhas tem a lista principal
+  const mainOf = (x) => (x.view === 'full' ? x.fullTotal : x.view === 'ctx' ? x.ctxTotal : x.total); // quantas linhas tem a lista principal
   const full = !!sum && sum.view === 'full';
-  const view = full ? 'full' : 'hits';
+  const view = sum ? sum.view : 'hits'; // 'full' (log inteiro) | 'ctx' (achados + vizinhos) | 'hits' (só achados)
   const mainTotal = sum ? mainOf(sum) : 0;
+  const marked = !!sum && sum.view !== 'hits'; // a lista principal traz achados marcados (hit/near)
 
   /* ─────────────── Consulta ─────────────── */
   const run = React.useCallback(async () => {
@@ -110,10 +120,10 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
     // Ao vivo não mostra "carregando": as linhas novas só aparecem (sem esmaecer a tela a cada gravação).
     if (!wasAppend) setLoading(true);
     try {
-      const r = await api.query({ id, qid, q, levels, from: range ? range.from : null, to: range ? range.to : null, buckets: 120, full: wantFull });
+      const r = await api.query({ id, qid, q, levels, from: range ? range.from : null, to: range ? range.to : null, buckets: 120, full: wantFull, ctx: ctxN });
       if (latest.current !== qid) return;
       const prev = sumRef.current;
-      const cur = { ...r, viaAppend: wasAppend, view: wantFull ? 'full' : 'hits' };
+      const cur = { ...r, viaAppend: wasAppend, view: wantView };
       setSum(cur);
       const tot = mainOf(cur);
       if (first.current) {
@@ -126,7 +136,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
     } catch (e) {
       if (latest.current === qid) toast('Não foi possível filtrar', errText(e), 'error');
     } finally { if (latest.current === qid) setLoading(false); }
-  }, [id, q, levels && levels.join(','), range && range.from, range && range.to, wantFull]);
+  }, [id, q, levels && levels.join(','), range && range.from, range && range.to, wantFull, ctxN]);
   const runRef = React.useRef(run);
   runRef.current = run;
   React.useEffect(() => { run(); }, [run]);
@@ -143,6 +153,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
       } else if (evt.type === 'reset') {
         if (evt.info) onInfo(evt.info);
         setSel(null);
+        setPins([]);
         first.current = true;
         runRef.current();
         toast(evt.reason === 'rotated' ? 'Arquivo rotacionado' : 'Arquivo foi zerado', 'O log foi reaberto do começo do arquivo novo.', 'ok');
@@ -204,12 +215,35 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
     const next = replace ? term : (q.split(/\s+/).includes(term) ? q : (q + ' ' + term).trim());
     set({ q: next, ...(replace ? { tab: 'lines' } : {}) });
   };
+  // "Seguir" um valor (thread, ip, id…): troca o termo da mesma chave, em vez de empilhar (dois thread:"=…" nunca casam).
+  const follow = (term) => {
+    const key = term.slice(0, term.indexOf(':'));
+    const re = new RegExp('(^|\\s)-?' + escapeRe(key) + ':(?:"[^"]*"|\\S+)', 'gi');
+    const rest = q.replace(re, '$1').replace(/\s+/g, ' ').trim();
+    set({ q: (rest + ' ' + term).trim(), tab: 'lines' });
+  };
   const jumpToEntry = async (i) => {
     setSel({ pos: null, i });
     if (!sum) return;
     const r = await api.locate({ id, qid: sum.qid, i, view });
-    if (r && r.exact) { setSel({ pos: r.pos, i }); goTo(r.pos); }
+    if (r && r.exact) { setSel({ pos: r.pos, i }); goTo(r.pos); } else if (r && !r.stale) toast('Fora do filtro atual', 'Essa entrada não aparece na lista com o filtro/contexto de agora.', 'ok');
   };
+  // Fixar / soltar a entrada (a selecionada, ou a que vier em `entry`).
+  const togglePin = async (entry) => {
+    const i = entry ? entry.i : sel ? sel.i : null;
+    if (i == null) return;
+    if (pinSet.has(i)) { setPins((l) => l.filter((p) => p.i !== i)); return; }
+    let e = entry;
+    if (!e || e.text == null) { try { e = await api.entry({ id, i }); } catch { return; } }
+    setPins((l) => (l.some((p) => p.i === i) ? l : [...l, { i, ts: e.ts, level: e.level, text: String(e.text).split('\n')[0].slice(0, 140) }].sort((a, b) => a.i - b.i)));
+  };
+  // Faixa de marcadores ao lado da rolagem: onde estão os achados e os fixados.
+  React.useEffect(() => {
+    if (!sum || !marked || tab !== 'lines') { setMarkData(null); return undefined; }
+    let alive = true;
+    api.marks({ id, qid: sum.qid, view, buckets: 160, pins: pins.map((p) => p.i) }).then((m) => { if (alive && m && !m.stale) setMarkData(m); }, () => {});
+    return () => { alive = false; };
+  }, [sum && sum.qid, view, pins, tab]);
   const toggleLive = async () => {
     try { const on = await api.setLive(id, !live); setLive(on); toast(on ? 'Acompanhando ao vivo' : 'Parou de acompanhar', on ? 'Linhas novas entram sozinhas.' : 'O log fica como está agora.', 'ok'); } catch (e) { toast('Não foi possível', errText(e), 'error'); }
   };
@@ -260,6 +294,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
     if (tab !== 'lines' || !sum) return;
     if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); selectPos(sel && sel.pos != null ? sel.pos + 1 : 0); }
     else if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); selectPos(sel && sel.pos != null ? sel.pos - 1 : 0); }
+    else if (e.key === 'm' && sel) { e.preventDefault(); togglePin(null); }
     else if (e.key === 'n') { e.preventDefault(); nextLevel(1); }
     else if (e.key === 'N') { e.preventDefault(); nextLevel(-1); }
     else if (e.key === 'w') { e.preventDefault(); nextLevel(1, 4); }
@@ -332,6 +367,11 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
         ))}
         <span className="lg-grow" />
         {tab === 'lines' && filtered && (
+          <select className="lg-select" value={ctx} onChange={(e) => set({ ctx: Number(e.target.value) })} title="Mostrar também as entradas vizinhas de cada achado (como o grep -C)" aria-label="Linhas de contexto">
+            {[0, 2, 5, 10].map((n) => <option key={n} value={n}>{n ? `± ${n} de contexto` : 'Sem contexto'}</option>)}
+          </select>
+        )}
+        {tab === 'lines' && filtered && (
           <button type="button" className={'lg-btn' + (mode === 'only' ? ' is-accent' : '')} aria-pressed={mode === 'only'} onClick={() => set({ mode: mode === 'only' ? 'find' : 'only' })}
             title={mode === 'only' ? 'Mostrando só os filtrados — clique para ver o log completo com os achados marcados' : 'Mostrar só os filtrados na lista (esconde o resto do log)'}>
             <Icon name="filter" size={13} /><span>Só filtrados</span>
@@ -350,7 +390,8 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
           {!sum ? <div className="lg-muted lg-pad"><Spinner size={12} /> Filtrando…</div>
             : tab === 'lines' ? (
               <>
-                <LogList id={id} summary={sum} view={view} total={mainTotal} res={res} http={src.http} selPos={sel ? sel.pos : null} listRef={listRef}
+                <div className="lg-listwrap">
+                <LogList id={id} summary={sum} view={view} total={mainTotal} res={res} http={src.http} selPos={sel ? sel.pos : null} listRef={listRef} pins={pinSet}
                   onSelect={(pos, row) => setSel({ pos, i: row.i })} scrollTo={scrollTo} onAtBottom={setAtBottom}
                   empty={(
                     <div className="lg-empty">
@@ -360,9 +401,15 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
                       {(q || levels || range) && <button type="button" className="lg-btn is-accent" onClick={() => set({ q: '', levels: null, range: null })}><Icon name="filter-x" size={13} /><span>Limpar filtros</span></button>}
                     </div>
                   )} />
-                {full && (
+                {markData && mainTotal > 0 && (
+                  <Marks data={markData} pos={sel && sel.pos != null ? sel.pos : null} total={mainTotal} onGo={(p) => goTo(p)} />
+                )}
+                </div>
+                {(full || pins.length > 0) && (
                   <Hits id={id} sum={sum} res={res} http={src.http} k={hitK} folded={hitsFolded} onFold={(v) => set({ hitsFolded: v })}
-                    scrollTo={hitScroll} listRef={hitsRef} onPick={(k, i) => pickHit(k, i)} onStep={nextHit} />
+                    scrollTo={hitScroll} listRef={hitsRef} onPick={(k, i) => pickHit(k, i)} onStep={nextHit}
+                    showHits={full} tab={full ? hitsTab : 'pins'} onTab={(t) => set({ hitsTab: t })}
+                    pins={pins} onJumpPin={(i) => jumpToEntry(i)} onUnpin={(i) => setPins((l) => l.filter((p) => p.i !== i))} />
                 )}
                 {newCount > 0 && !atBottom && (
                   <button type="button" className="lg-newlines" onClick={() => { goTo(mainTotal - 1, 'end'); setNewCount(0); }}>
@@ -390,7 +437,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
         )}
         {sel && tab !== 'charts' && !detailFolded && (
           <Detail id={id} i={sel.i} res={res} http={src.http} toast={toast} onClose={() => setSel(null)} onFold={() => set({ detailFolded: true })}
-            onAddFilter={addFilter} onJump={jumpToEntry}
+            onAddFilter={addFilter} onJump={jumpToEntry} onFollow={follow} pinned={pinSet.has(sel.i)} onPin={togglePin}
             ai={aiOn(cfg) ? aiErr : null}
             aiSlot={aiOn(cfg) ? (entry) => <AiButton ai={aiErr} label="Explicar" onClick={() => explain(entry)} title="Explicar o erro com IA (o texto passa pelo filtro de segredos)" /> : null}
             dbServers={dbServers} />
@@ -414,7 +461,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
             </button>
           </span>
         )}
-        <span className="lg-muted lg-keys">↑↓ navegar · n/N erro · w aviso · End fim · Ctrl+F buscar</span>
+        <span className="lg-muted lg-keys">↑↓ navegar · n/N erro · w aviso · m fixar · End fim · Ctrl+F buscar</span>
         <span className="lg-muted">{src.formatLabel} · {src.encoding}</span>
       </footer>
     </div>

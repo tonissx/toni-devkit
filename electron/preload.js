@@ -437,6 +437,7 @@ contextBridge.exposeInMainWorld('devkit', {
     seekTime: (args) => ipcRenderer.invoke('logs:seekTime', args),
     next: (args) => ipcRenderer.invoke('logs:next', args),
     hitNear: (args) => ipcRenderer.invoke('logs:hitNear', args),
+    marks: (args) => ipcRenderer.invoke('logs:marks', args),
     sparks: (args) => ipcRenderer.invoke('logs:sparks', args),
     charts: (args) => ipcRenderer.invoke('logs:charts', args),
     textOf: (args) => ipcRenderer.invoke('logs:textOf', args),
