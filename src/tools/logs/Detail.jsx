@@ -6,6 +6,7 @@ import { AiPanel } from '../../ai/ui.jsx';
 import { logsApi, errText, LevelBadge, Highlight, fmtDateTime, fmtTime, fmtMs, fmtNum, copyText } from './shared.jsx';
 import { displayText } from './LogList.jsx';
 import { termFor } from '../../logs/query.js';
+import { dbHint } from '../../logs/investigation.js'; // erro que fala de banco: vale perguntar ao Banco o que acontecia naquela hora
 
 const { Icon, Spinner } = DS;
 
@@ -102,10 +103,8 @@ function Context({ id, i, res, onJump, http }) {
 /**
  * props: id, i (entrada), res, http, onClose, onAddFilter(term), onJump(i), toast, aiSlot(entry) (botão/painel da IA)
  */
-// Erro que fala de banco: vale perguntar ao Banco o que estava acontecendo naquela hora.
-const DB_HINT = /\b(sql|jdbc|timeout|deadlock|lock request|database|banco|connection|conex[aã]o|ORA-\d|SQLException|SQLTimeout|tedious|sqlserver|mssql)/i;
 
-export function Detail({ id, i, res, http, onClose, pinned, onPin, onFollow, onAddFilter, onJump, toast, aiSlot, ai, dbServers }) {
+export function Detail({ id, i, res, http, onClose, pinned, onPin, inCase, onCase, onFollow, onAddFilter, onJump, toast, aiSlot, ai, dbServers }) {
   const [entry, setEntry] = React.useState(null);
   const [error, setError] = React.useState(null);
   const [tab, setTab] = React.useState('entry');
@@ -150,12 +149,18 @@ export function Detail({ id, i, res, http, onClose, pinned, onPin, onFollow, onA
       <div className="lg-detail__actions">
         <button type="button" className="lg-btn" onClick={() => copyText(entry.text, toast, 'Entrada copiada')}><Icon name="copy" size={13} /><span>Copiar</span></button>
         <button type="button" className="lg-btn" onClick={() => { const r = redact(entry.text); copyText(r.text, toast, r.count ? `Copiado sem ${r.count} segredo(s)` : 'Copiado (nada para esconder)'); }} title="Troca senhas, tokens, e-mails e CPFs por ‹oculto›"><Icon name="shield" size={13} /><span>Copiar sem segredos</span></button>
+        {onCase && (
+          <button type="button" className={'lg-btn' + (inCase ? ' is-accent' : '')} aria-pressed={!!inCase} onClick={() => onCase(entry)}
+            title={inCase ? 'Já está na investigação — clique para tirar (i)' : 'Guardar esta entrada na investigação ativa para revisar o passo a passo depois (i)'}>
+            <Icon name={inCase ? 'clipboard-check' : 'clipboard-plus'} size={13} /><span>{inCase ? 'Na investigação' : 'Investigar'}</span>
+          </button>
+        )}
         <button type="button" className="lg-btn" onClick={toNotes}><Icon name="notebook-pen" size={13} /><span>Notes</span></button>
         {onFollow && p.thread && termFor('thread', p.thread) && (
           <button type="button" className="lg-btn" onClick={() => onFollow(termFor('thread', p.thread))} title={`Filtrar por ${termFor('thread', p.thread)} — vê tudo o que essa thread fez`}><Icon name="route" size={13} /><span>Thread</span></button>
         )}
         {aiSlot && aiSlot(entry)}
-        {dbServers > 0 && Number.isFinite(entry.ts) && DB_HINT.test(entry.text.slice(0, 20000)) && (
+        {dbServers > 0 && Number.isFinite(entry.ts) && dbHint(entry.text) && (
           <button type="button" className="lg-btn" title="Abre o histórico do Banco (monitor de SQL Server) neste horário"
             onClick={() => window.devkit.app.command({ type: 'go', route: 'db', params: { at: entry.ts } })}>
             <Icon name="database-zap" size={13} /><span>O que o banco fazia?</span>

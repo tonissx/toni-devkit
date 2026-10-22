@@ -15,6 +15,8 @@ import { Problems } from './Problems.jsx';
 import { Charts } from './Charts.jsx';
 import { Hits } from './Hits.jsx';
 import { Marks } from './Marks.jsx';
+import { Investigation } from './Investigation.jsx';
+import { normalizeCase, addItem, removeItem, MAX_ITEMS } from '../../logs/investigation.js';
 import { useSameText, filterTermFor } from './sameText.js';
 import { escapeRe } from '../../logs/query.js';
 import { usePersisted } from '../../lib/store.js';
@@ -58,7 +60,7 @@ function Menu({ label, icon, items, title }) {
  * props: src (info do log aberto), state/setState (filtro e aba, guardados por caminho), presets/onPresets,
  * onInfo(info) (reaberto/novo formato), onClose, toast, openedAt
  */
-export function LogView({ src, state, setState, presets, onPresets, onInfo, onClose, toast, openedAt }) {
+export function LogView({ src, state, setState, presets, onPresets, cases = [], onCases = () => {}, activeCase = null, onActiveCase = () => {}, onInfo, onClose, toast, openedAt }) {
   const api = logsApi();
   const id = src.id;
   const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false, mode = 'find', ctx = 0, hitsTab = 'hits' } = state;
@@ -250,6 +252,36 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
     if (!e || e.text == null) { try { e = await api.entry({ id, i }); } catch { return; } }
     setPins((l) => (l.some((p) => p.i === i) ? l : [...l, { i, ts: e.ts, level: e.level, text: String(e.text).split('\n')[0].slice(0, 140) }].sort((a, b) => a.i - b.i)));
   };
+  /* ─────────────── Investigação ─────────────── */
+  // Identifica o log nos casos (o mesmo arquivo/pasta, mesmo reaberto): "Ir ao log" só vale para passos deste log.
+  const logKey = (src.spec && src.spec.path ? src.spec.path : src.name) + (src.spec && src.spec.family ? '|' + src.spec.family : '');
+  const caseObj = cases.find((x) => x.id === activeCase) || null;
+  const inCase = (i) => !!caseObj && caseObj.items.some((x) => x.path === logKey && x.i === i);
+  // Guarda / tira a entrada (a selecionada, ou a que vier em `entry`) da investigação ativa; sem caso, cria um.
+  const toggleCase = async (entry) => {
+    const i = entry ? entry.i : sel ? sel.i : null;
+    if (i == null) return;
+    let e = entry;
+    if (!e || e.text == null) { try { e = await api.entry({ id, i }); } catch { return; } }
+    let target = caseObj;
+    if (!target) {
+      target = normalizeCase({ title: `Investigação — ${src.name} ${new Date().toLocaleDateString('pt-BR')}` });
+      onCases((l) => [...l, target]);
+      onActiveCase(target.id);
+    }
+    const existing = target.items.find((x) => x.path === logKey && x.i === i);
+    if (existing) {
+      onCases((l) => l.map((c) => (c.id === target.id ? { ...c, items: removeItem(c.items, existing.id), updatedAt: Date.now() } : c)));
+      toast('Tirado da investigação', target.title, 'ok');
+      return;
+    }
+    const raw = { i, ts: e.ts, level: e.level, text: e.text, log: src.name, path: logKey, group: e.group && e.group.key ? e.group.key : null };
+    const r = addItem(target.items, raw);
+    if (r.full) { toast('Investigação cheia', `O limite é de ${MAX_ITEMS} passos por investigação.`, 'error'); return; }
+    onCases((l) => l.map((c) => (c.id === target.id ? { ...c, items: addItem(c.items, raw).items, updatedAt: Date.now() } : c)));
+    toast(`Guardado na investigação (${r.items.length})`, target.title, 'ok');
+  };
+  const jumpFromCase = (item) => { set({ tab: 'lines' }); jumpToEntry(item.i); };
   // Faixa de marcadores ao lado da rolagem: onde estão os achados e os fixados.
   React.useEffect(() => {
     if (!sum || !marked || tab !== 'lines') { setMarkData(null); return undefined; }
@@ -308,6 +340,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
     if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); selectPos(sel && sel.pos != null ? sel.pos + 1 : 0); }
     else if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); selectPos(sel && sel.pos != null ? sel.pos - 1 : 0); }
     else if (e.key === 'm' && sel) { e.preventDefault(); togglePin(null); }
+    else if (e.key === 'i' && sel) { e.preventDefault(); toggleCase(null); }
     else if (e.key === 'n') { e.preventDefault(); nextLevel(1); }
     else if (e.key === 'N') { e.preventDefault(); nextLevel(-1); }
     else if (e.key === 'w') { e.preventDefault(); nextLevel(1, 4); }
@@ -373,6 +406,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
           { v: 'lines', label: 'Linhas', icon: 'list', n: sum ? sum.total : null },
           { v: 'problems', label: 'Problemas', icon: 'flame', n: sum ? sum.groupsTotal : null },
           { v: 'charts', label: 'Gráficos', icon: 'chart-column' },
+          { v: 'case', label: 'Investigação', icon: 'clipboard-list', n: caseObj ? caseObj.items.length : null },
         ].map((t) => (
           <button key={t.v} type="button" role="tab" aria-selected={tab === t.v} className={tab === t.v ? 'is-on' : ''} onClick={() => set({ tab: t.v })}>
             <Icon name={t.icon} size={14} /><span>{t.label}</span>{t.n != null && <small>{fmtNum(t.n)}</small>}
@@ -439,16 +473,19 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
                   </>
                 ) : null}
                 aiPanel={aiOn(cfg) ? <AiPanel ai={aiInc} className="lg-ai" /> : null} />
+            ) : tab === 'case' ? (
+              <Investigation cases={cases} activeId={activeCase} onActive={onActiveCase} onCases={onCases} logKey={logKey} openId={id} cfg={cfg}
+                dbServers={dbServers} onJump={jumpFromCase} onFilter={(f) => set({ q: f, tab: 'lines' })} toast={toast} />
             ) : (
               <Charts id={id} sum={sum} onFilter={(t) => addFilter(t, false) || set({ tab: 'lines' })} onLevels={(lv) => set({ levels: lv, tab: 'lines' })} />
             )}
         </div>
-        {sel && tab !== 'charts' && (
+        {sel && (tab === 'lines' || tab === 'problems') && (
           <div className={'lg-side' + (detailSplit.dragging ? ' is-dragging' : '')} style={{ width: detailSplit.size }}>
             <div className="lg-grip is-v" role="separator" aria-orientation="vertical" aria-label="Largura do detalhe (arraste; duplo clique alterna)"
               aria-valuemin={DETAIL_MIN} aria-valuemax={DETAIL_MAX} aria-valuenow={detailSplit.size} tabIndex={0} {...detailSplit.grip} />
             <Detail id={id} i={sel.i} res={res} http={src.http} toast={toast} onClose={() => setSel(null)}
-              onAddFilter={addFilter} onJump={jumpToEntry} onFollow={follow} pinned={pinSet.has(sel.i)} onPin={togglePin}
+              onAddFilter={addFilter} onJump={jumpToEntry} onFollow={follow} pinned={pinSet.has(sel.i)} onPin={togglePin} inCase={inCase(sel.i)} onCase={toggleCase}
               ai={aiOn(cfg) ? aiErr : null}
               aiSlot={aiOn(cfg) ? (entry) => <AiButton ai={aiErr} label="Explicar" onClick={() => explain(entry)} title="Explicar o erro com IA (o texto passa pelo filtro de segredos)" /> : null}
               dbServers={dbServers} />
@@ -473,7 +510,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
             </button>
           </span>
         )}
-        <span className="lg-muted lg-keys">↑↓ navegar · n/N erro · w aviso · m fixar · End fim · Ctrl+F buscar</span>
+        <span className="lg-muted lg-keys">↑↓ navegar · n/N erro · w aviso · m fixar · i investigar · End fim · Ctrl+F buscar</span>
         <span className="lg-muted">{src.formatLabel} · {src.encoding}</span>
       </footer>
     </div>

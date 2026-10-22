@@ -68,6 +68,20 @@ export function LogsScreen({ toast, request }) {
   const [views, setViews] = usePersisted('logs.views', {}); // chave do caminho → { q, levels, range, tab, tlMode }
   const [recents, setRecents] = React.useState([]);
   const [presets, setPresets] = React.useState([]);
+  // Investigações (modo Investigação): a lista inteira é salva com um pequeno atraso, por causa das anotações digitadas.
+  const [cases, setCases] = React.useState([]);
+  const [caseUi, setCaseUi] = usePersisted('logs.case', { active: null });
+  const casesRef = React.useRef([]);
+  const saveT = React.useRef(null);
+  const saveCases = () => { clearTimeout(saveT.current); saveT.current = null; api.saveInvestigations(casesRef.current).catch((e) => toast('Não foi possível salvar a investigação', errText(e), 'error')); };
+  const updateCases = (fn) => {
+    const next = typeof fn === 'function' ? fn(casesRef.current) : fn;
+    casesRef.current = next;
+    setCases(next);
+    clearTimeout(saveT.current);
+    saveT.current = setTimeout(saveCases, 400);
+  };
+  React.useEffect(() => () => { if (saveT.current) saveCases(); }, []);
   const [opening, setOpening] = React.useState({}); // id → { name, done, total }
   const [busy, setBusy] = React.useState(false);
   const [drag, setDrag] = React.useState(false);
@@ -97,6 +111,7 @@ export function LogsScreen({ toast, request }) {
     })();
     refreshRecents();
     api.presets().then(setPresets, () => {});
+    api.investigations().then((l) => { if (!saveT.current) { casesRef.current = l; setCases(l); } }, () => {});
     const off = api.onChanged((evt) => {
       if (!evt) return;
       if (evt.type === 'opening') setOpening((o) => ({ ...o, [evt.id]: { name: evt.name, done: 0, total: 0 } }));
@@ -191,6 +206,7 @@ export function LogsScreen({ toast, request }) {
                 state={views[keyOf(active.spec)] || {}}
                 setState={(fn) => setViews((v) => { const k = keyOf(active.spec); const cur = v[k] || {}; const next = typeof fn === 'function' ? fn(cur) : fn; return { ...v, [k]: { ...next, range: next.range || null } }; })}
                 presets={presets} onPresets={savePresets}
+                cases={cases} onCases={updateCases} activeCase={caseUi.active} onActiveCase={(id) => setCaseUi({ ...caseUi, active: id })}
                 onInfo={(info) => setSources((list) => list.map((x) => (x.id === info.id ? { ...x, ...info } : x)))}
                 onClose={() => close(active.id)} />
             </Boundary>
