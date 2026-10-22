@@ -266,6 +266,34 @@ test('teto de memória: lê só o final e avisa', async () => {
   assert.match(rows.at(-1).text, /linha 49$/);
 });
 
+test('investigações persistem em logs.json, sem lixo e com limites', async () => {
+  const { dir, svc } = setup();
+  assert.deepEqual(svc.investigations(), []);
+  const saved = await svc.saveInvestigations([
+    { id: 'c1', title: ' Fila travada ', hypothesis: 'pool', items: [{ id: 'a', text: 'ERROR x', ts: 10, level: 5, tag: 'causa', note: 'n', path: 'p' }, { text: '' }, null] },
+    'lixo', null, { title: '' },
+  ]);
+  assert.equal(saved.length, 2);
+  assert.equal(saved[0].title, 'Fila travada');
+  assert.equal(saved[0].items.length, 1);
+  assert.equal(saved[0].items[0].tag, 'causa');
+  assert.equal(saved[1].title, 'Investigação');
+  await svc.flush();
+  const raw = JSON.parse(fs.readFileSync(path.join(dir, 'logs.json'), 'utf8'));
+  assert.equal(raw.investigations[0].id, 'c1');
+  // app reaberto: lê de volta
+  const s2 = setup();
+  const svc2 = createLogsService({ file: path.join(dir, 'logs.json'), callWorker: async (op, a) => s2.engine.call(op, a), watch: () => ({ close() {} }), pollMs: 3600e3 });
+  await svc2.init();
+  assert.equal(svc2.investigations()[0].items[0].text, 'ERROR x');
+  // arquivo antigo, sem a chave, continua abrindo
+  fs.writeFileSync(path.join(dir, 'logs.json'), JSON.stringify({ recents: [], presets: [] }));
+  const svc3 = createLogsService({ file: path.join(dir, 'logs.json'), callWorker: async (op, a) => s2.engine.call(op, a), watch: () => ({ close() {} }), pollMs: 3600e3 });
+  await svc3.init();
+  assert.deepEqual(svc3.investigations(), []);
+  svc.unwatch();
+});
+
 test('formato escolhido à mão é lembrado; recentes e filtros salvos persistem', async () => {
   const { dir, svc } = setup();
   const f = path.join(dir, 'x.log');

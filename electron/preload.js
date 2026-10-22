@@ -427,6 +427,8 @@ contextBridge.exposeInMainWorld('devkit', {
     forgetRecent: (p) => ipcRenderer.invoke('logs:forgetRecent', p),
     presets: () => ipcRenderer.invoke('logs:presets'),
     savePresets: (list) => ipcRenderer.invoke('logs:savePresets', list),
+    investigations: () => ipcRenderer.invoke('logs:investigations'),
+    saveInvestigations: (list) => ipcRenderer.invoke('logs:saveInvestigations', list),
     scanFolder: (dir) => ipcRenderer.invoke('logs:scanFolder', dir),
     info: (args) => ipcRenderer.invoke('logs:info', args),
     query: (args) => ipcRenderer.invoke('logs:query', args),

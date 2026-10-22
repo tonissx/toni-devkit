@@ -398,6 +398,123 @@ test('termFor monta o termo para seguir um valor, e a consulta entende', () => {
   assert.equal(c.fields[0].test('default task-70'), false);
 });
 
+test('investigation: normalização, limites e sem duplicar', () => {
+  const V = require('../src/logs/investigation.js');
+  assert.equal(V.normalizeItem(null), null);
+  assert.equal(V.normalizeItem({ text: '   ' }), null);
+  const it = V.normalizeItem({ text: 'ERROR x', level: 9, i: 3.5, ts: 'abc', tag: 'invalida', note: 'n'.repeat(5000), group: '' });
+  assert.equal(it.level, 0);
+  assert.equal(it.i, null);
+  assert.equal(it.ts, null);
+  assert.equal(it.tag, '');
+  assert.equal(it.note.length, V.MAX_NOTE);
+  assert.equal(it.group, null);
+  assert.equal(V.normalizeItem({ text: 'x'.repeat(9000) }).text.length, V.MAX_TEXT);
+  assert.equal(V.normalizeCase({ title: '  ' }).title, 'Investigação');
+  assert.equal(V.normalizeCase('lixo'), null);
+  assert.equal(V.normalizeCases(Array.from({ length: 60 }, () => ({}))).length, V.MAX_CASES);
+  assert.equal(V.normalizeCase({ items: Array.from({ length: 300 }, (_, k) => ({ text: 't' + k })) }).items.length, V.MAX_ITEMS);
+  // não repete a mesma entrada do mesmo log; o mesmo índice em outro log é outra entrada
+  let items = [];
+  let r = V.addItem(items, { text: 'a', i: 1, path: 'C:\\s.log', ts: 10 });
+  assert.equal(r.added, true);
+  items = r.items;
+  r = V.addItem(items, { text: 'a', i: 1, path: 'C:\\s.log', ts: 10 });
+  assert.equal(r.added, false);
+  assert.equal(r.item.id, items[0].id);
+  assert.equal(V.addItem(items, { text: 'a', i: 1, path: 'C:\\outro.log', ts: 10 }).added, true);
+  assert.equal(V.addItem(items, { text: '' }).added, false);
+  // sem índice: vale hora + texto
+  items = V.addItem([], { text: 'b', ts: 5, path: 'p' }).items;
+  assert.equal(V.addItem(items, { text: 'b', ts: 5, path: 'p' }).added, false);
+  assert.equal(V.addItem(items, { text: 'b', ts: 6, path: 'p' }).added, true);
+  // teto de itens
+  const full = Array.from({ length: V.MAX_ITEMS }, (_, k) => V.normalizeItem({ text: 't' + k, i: k, path: 'p' }));
+  assert.equal(V.addItem(full, { text: 'novo', i: 999, path: 'p' }).full, true);
+  // patch mantém o id e não aceita lixo; remover e mover
+  const a = V.normalizeItem({ text: 'a', id: 'A' }); const b = V.normalizeItem({ text: 'b', id: 'B' }); const c = V.normalizeItem({ text: 'c', id: 'C' });
+  assert.equal(V.patchItem([a], 'A', { tag: 'causa', note: 'x' })[0].tag, 'causa');
+  assert.equal(V.patchItem([a], 'A', { tag: 'nada' })[0].tag, '');
+  assert.deepEqual(V.removeItem([a, b], 'A').map((x) => x.id), ['B']);
+  assert.deepEqual(V.moveItem([a, b, c], 'C', -1).map((x) => x.id), ['A', 'C', 'B']);
+  assert.deepEqual(V.moveItem([a, b, c], 'A', -1).map((x) => x.id), ['A', 'B', 'C']);
+  assert.deepEqual(V.moveItem([a, b, c], 'C', 1).map((x) => x.id), ['A', 'B', 'C']);
+});
+
+test('investigation: ordem, intervalos, repetidos e resumo', () => {
+  const V = require('../src/logs/investigation.js');
+  const t0 = new Date(2026, 9, 22, 10, 0, 0, 0).getTime();
+  const mk = (id, dt, level, group, extra = {}) => V.normalizeItem({ id, text: id + ' falhou', ts: dt == null ? null : t0 + dt, level, group, ...extra });
+  const items = [mk('C', 5000, 5, 'g1'), mk('A', 0, 3, null), mk('B', 1200, 5, 'g1'), mk('Z', null, 4, null)];
+  assert.deepEqual(V.ordered(items, 'time').map((x) => x.id), ['A', 'B', 'C', 'Z']);        // sem hora vai para o fim
+  assert.deepEqual(V.ordered(items, 'added').map((x) => x.id), ['C', 'A', 'B', 'Z']);       // ordem de coleta
+  const s = V.steps(items, 'time');
+  assert.deepEqual(s.list.map((x) => x.delta), [null, 1200, 3800, null]);
+  assert.deepEqual(s.list.map((x) => x.repeat), [0, 2, 2, 0]);
+  assert.equal(s.span, 5000);
+  assert.equal(s.errors, 2);
+  assert.equal(s.repeated, 2);
+  assert.equal(V.steps(items, 'added').list[1].delta, -5000);                                 // fora de ordem fica negativo
+  assert.equal(V.summary(items), '4 passos · 5 s · 2 erros · 2 repetidos');
+  assert.equal(V.summary([items[1]]), '1 passo');
+  assert.equal(V.fmtDelta(450), '+450 ms');
+  assert.equal(V.fmtDelta(-450), '−450 ms');
+  assert.equal(V.fmtDelta(3200), '+3,2 s');
+  assert.equal(V.fmtDelta(125000), '+2 min 5 s');
+  assert.equal(V.fmtDelta(120000), '+2 min');
+  assert.equal(V.fmtDelta(1000), '+1 s');
+  assert.equal(V.fmtDelta(59999), '+1 min');
+  assert.equal(V.fmtDelta(3600000 + 5 * 60000), '+1 h 5 min');
+  assert.equal(V.fmtDelta(null), '');
+  assert.equal(V.fmtSpan(252000), '4 min 12 s');
+});
+
+test('investigation: relatório em Markdown, com e sem redação', () => {
+  const V = require('../src/logs/investigation.js');
+  const t0 = new Date(2026, 9, 22, 10, 0, 3, 638).getTime();
+  const c = V.normalizeCase({
+    id: 'c1', title: 'Fila travada', hypothesis: 'Pool esgotado', conclusion: 'Aumentar o pool',
+    items: [
+      { id: 'a', text: 'ERROR timeout senha=abc123\n\tat x.Y.z(Y.java:1)', ts: t0, level: 5, tag: 'causa', note: 'primeiro sinal', log: 'server.log', group: 'g' },
+      { id: 'b', text: 'WARN lento ```', ts: t0 + 2000, level: 4 },
+    ],
+  });
+  const md = V.toMarkdown(c);
+  assert.match(md, /^# Fila travada\n\n> 2 passos · 2 s · 1 erro\n/);
+  assert.match(md, /## Hipótese\n\nPool esgotado/);
+  assert.match(md, /### 1\. 2026-10-22 10:00:03,638 · ERROR · \*\*Causa\*\*\n/);
+  assert.match(md, /### 2\. 2026-10-22 10:00:05,638 · WARN · \+2 s\n/);
+  assert.match(md, /_server\.log_/);
+  assert.match(md, /> primeiro sinal/);
+  assert.match(md, /## Conclusão\n\nAumentar o pool\n$/);
+  assert.match(md, /WARN lento '''/);                                  // não quebra a cerca do Markdown
+  assert.match(md, /senha=abc123/);
+  const { redact } = require('../src/logs/redact.js');
+  const safe = V.toMarkdown(c, { redact: (t) => redact(t).text });
+  assert.doesNotMatch(safe, /abc123/);
+  // ordem de coleta
+  assert.ok(V.toMarkdown(c, { mode: 'added' }).indexOf('ERROR') < V.toMarkdown(c, { mode: 'added' }).indexOf('WARN'));
+  assert.equal(V.dbHint('java.sql.SQLException: timeout'), true);
+  assert.equal(V.dbHint('tudo certo'), false);
+});
+
+test('investigation: fitSteps corta cada passo e, no aperto, guarda os etiquetados, o primeiro e o último', () => {
+  const V = require('../src/logs/investigation.js');
+  const small = [{ text: 'a', tag: '' }, { text: 'b', tag: '' }];
+  assert.deepEqual(V.fitSteps(small), { kept: small, omitted: 0 });
+  const big = V.fitSteps([{ text: 'x'.repeat(5000), tag: '' }]);
+  assert.ok(big.kept[0].text.length < 1600 && /cortado/.test(big.kept[0].text));
+  const many = Array.from({ length: 40 }, (_, k) => ({ text: 'passo-' + k + ' ' + 'y'.repeat(900), tag: k === 20 ? 'causa' : '' }));
+  const fit = V.fitSteps(many, { budget: 8000, per: 1500 });
+  assert.ok(fit.omitted > 0);
+  assert.equal(fit.kept.length + fit.omitted, 40);
+  const texts = fit.kept.map((s) => s.text);
+  assert.ok(texts.some((t) => t.startsWith('passo-0 ')));
+  assert.ok(texts.some((t) => t.startsWith('passo-39 ')));
+  assert.ok(texts.some((t) => t.startsWith('passo-20 ')));           // o etiquetado
+  assert.deepEqual(fit.kept.map((s) => s.text), texts.slice().sort((a, b) => Number(a.slice(6).split(' ')[0]) - Number(b.slice(6).split(' ')[0])));
+});
+
 test('panel: limites das bandejas (largura do Detalhe, altura de Achados/Fixados)', () => {
   const W = require('../src/logs/panel.js');
   assert.equal(W.detailWidth(NaN), W.DETAIL_DEFAULT);
