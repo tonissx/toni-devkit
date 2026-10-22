@@ -1,7 +1,8 @@
 import { DS } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { VirtualList } from '../../lib/VirtualList.jsx';
-import { parseSchemaInput, neighbors, expand, subset } from '../../db/schema.js';
+import { parseSchemaInput, neighbors, expand, subset, fkPath, mentionedTables } from '../../db/schema.js';
+import { useAiMode, useAiTask, aiOn, AiPanel } from '../../ai/ui.jsx';
 import { ER, heightOf } from '../../db/erlayout.js';
 import * as X from '../../db/explorer.js';
 import { ErCanvas } from './ErCanvas.jsx';
@@ -17,6 +18,7 @@ const GROUPS = [
   { value: 'letters', label: 'Primeiras letras' },
 ];
 const DEPTHS = [{ value: 1, label: '1 nível' }, { value: 2, label: '2 níveis' }];
+const AI_MAX_TABLES = 40; // teto de tabelas no contexto da pergunta (o resto não cabe no modelo local)
 const title = (t) => (t.schema && t.schema !== 'dbo' ? `${t.schema}.${t.name}` : t.name);
 
 /**
@@ -42,6 +44,10 @@ export function Explorer({ toast, source, setSource }) {
   const [store, setStore] = usePersisted('sqlviz.layouts', {});
   const [layoutName, setLayoutName] = React.useState('');
   const [saveName, setSaveName] = React.useState('');
+  const [question, setQuestion] = React.useState('');
+  const cfg = useAiMode();
+  const ask = useAiTask('erAsk', cfg);
+  React.useEffect(() => { ask.close(); }, [schema]);
 
   const byId = React.useMemo(() => new Map((schema ? schema.tables : []).map((t) => [t.id, t])), [schema]);
   const key = schema ? X.schemaKey(source.label, schema) : '';
@@ -168,6 +174,17 @@ export function Explorer({ toast, source, setSource }) {
     );
   };
 
+  // Contexto da pergunta: as tabelas citadas (ou, sem citação, as do canvas) e as vizinhas por FK. Com duas ou mais
+  // citadas, o menor caminho de FKs entre as duas primeiras é calculado aqui e mandado como fato.
+  const askAi = () => ask.start(() => {
+    const named = mentionedTables(schema, question).slice(0, 6);
+    const base = named.length ? named : ids.slice(0, 6);
+    const picked = [...expand(schema, base, 1)].slice(0, AI_MAX_TABLES);
+    const path = named.length > 1 ? fkPath(schema, named[0], named[1]) : null;
+    const withPath = path ? new Set([...picked, ...path.flatMap((s) => s.match(/[^s(),→]+(?=()/g) || [])]) : new Set(picked);
+    return { question, schema: subset(schema, withPath), path: path || [] };
+  });
+
   return (
     <div className="sqv__exp">
       <aside className="sqv__side">
@@ -216,6 +233,13 @@ export function Explorer({ toast, source, setSource }) {
             <Badge size="sm" variant="neutral">{ids.length} no canvas</Badge>
           </div>
         )}
+        {schema && aiOn(cfg) && (
+          <form className="sqv__ask" onSubmit={(e) => { e.preventDefault(); if (question.trim() && !ask.busy) askAi(); }}>
+            <Input size="sm" icon="sparkles" placeholder="Pergunte ao schema: como chego de Pedido até Cliente?" value={question} onChange={(e) => setQuestion(e.target.value)} />
+            <Button variant="secondary" size="sm" icon={ask.busy ? 'square' : 'sparkles'} type={ask.busy ? 'button' : 'submit'} onClick={ask.busy ? ask.cancel : undefined} disabled={!ask.busy && !question.trim()}>{ask.busy ? 'Parar' : 'Perguntar'}</Button>
+          </form>
+        )}
+        {schema && aiOn(cfg) && <AiPanel ai={ask} className="lg-ai" />}
         <div className="sqv__stage">
           {schema && ids.length > 0 ? (
             <ErCanvas

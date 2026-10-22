@@ -84,4 +84,34 @@ function subset(schema, ids) {
   return { ...schema, tables: schema.tables.filter((t) => set.has(t.id)), fks: schema.fks.filter((f) => set.has(f.from) && set.has(f.to)) };
 }
 
-module.exports = { fromMetadata, parseSchemaInput, neighbors, expand, subset };
+/** Menor caminho de FKs entre duas tabelas (BFS, nos dois sentidos) → passos em texto, ou null se não houver. */
+function fkPath(schema, a, b) {
+  if (a === b) return [];
+  const prev = new Map([[a, null]]);
+  let frontier = [a];
+  while (frontier.length && !prev.has(b)) {
+    const next = [];
+    for (const id of frontier) {
+      for (const f of schema.fks) {
+        const other = f.from === id ? f.to : f.to === id ? f.from : null;
+        if (other && !prev.has(other)) { prev.set(other, { id, f }); next.push(other); }
+      }
+    }
+    frontier = next;
+  }
+  if (!prev.has(b)) return null;
+  const steps = [];
+  for (let cur = b; prev.get(cur); cur = prev.get(cur).id) {
+    const { f } = prev.get(cur);
+    steps.unshift(`${f.from}(${(f.fromCols || []).join(', ')}) → ${f.to}(${(f.toCols || []).join(', ')})`);
+  }
+  return steps;
+}
+
+/** Tabelas do schema cujo nome (completo ou só a parte final) aparece na pergunta, sem diferenciar maiúsculas. */
+function mentionedTables(schema, question) {
+  const q = String(question || '').toLowerCase();
+  return schema.tables.filter((t) => q.includes(t.name.toLowerCase()) || q.includes(t.id.toLowerCase())).map((t) => t.id);
+}
+
+module.exports = { fromMetadata, parseSchemaInput, neighbors, expand, subset, fkPath, mentionedTables };

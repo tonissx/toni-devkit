@@ -1,6 +1,7 @@
 import { DS } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
-import { parseSchemaInput, expand } from '../../db/schema.js';
+import { parseSchemaInput, expand, subset } from '../../db/schema.js';
+import { useAiMode, useAiTask, aiOn, AiButton, AiPanel } from '../../ai/ui.jsx';
 import { layoutEr, toDbml } from '../../db/erlayout.js';
 import { SCHEMA_QUERY } from '../../db/queries.js';
 import { svgToPng } from '../json-visualizer/exportImage.js';
@@ -77,6 +78,14 @@ export function ErDiagram({ toast }) {
 
   const related = React.useMemo(() => (schema && selected ? expand(schema, selected, 1) : null), [schema, selected]);
 
+  const cfg = useAiMode();
+  const ai = useAiTask('erDescribe', cfg);
+  React.useEffect(() => { ai.close(); }, [schema]);
+  // Com uma tabela selecionada, só ela e as vizinhas diretas vão para a IA; sem seleção, o schema todo (cortado no limite).
+  const describe = () => ai.start(() => (selected && related
+    ? { schema: subset(schema, related), partial: `${selected} e as tabelas ligadas a ela por FK` }
+    : { schema }));
+
   const goToMatch = () => {
     if (!matches || !matches.size) return;
     const list = [...matches];
@@ -145,6 +154,7 @@ export function ErDiagram({ toast }) {
       {schema && schema.warnings.length > 0 && (
         <Alert variant="warn" title={`${schema.warnings.length} aviso(s)`}>{schema.warnings.slice(0, 3).join(' · ')}{schema.warnings.length > 3 ? ' …' : ''}</Alert>
       )}
+      {aiOn(cfg) && <AiPanel ai={ai} className="lg-ai" />}
       <SplitView
         leftTitle="Schema"
         leftMeta={schema ? `${schema.tables.length} tabela(s) · ${schema.fks.length} FK(s)` : null}
@@ -155,6 +165,7 @@ export function ErDiagram({ toast }) {
         onClear={() => setInput('')}
         rightTitle="Diagrama"
         rightActions={schema ? <>
+          {aiOn(cfg) && <AiButton ai={ai} label={selected ? 'Documentar a tabela' : 'Documentar o schema'} onClick={describe} />}
           <Button variant="ghost" size="sm" icon="image" onClick={() => exportImage('png')}>PNG</Button>
           <Button variant="ghost" size="sm" icon="file-image" onClick={() => exportImage('svg')}>SVG</Button>
           <Button variant="ghost" size="sm" icon="file-text" onClick={() => save(toDbml(schema), baseName() + '.dbml')}>DBML</Button>
