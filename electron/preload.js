@@ -173,6 +173,20 @@ contextBridge.exposeInMainWorld('devkit', {
     folderAbs: (path) => ipcRenderer.invoke('notes:folderAbs', path),
     /** Relê a pasta das notas e aplica o que mudou por fora (sync): { added, updated, removed, folders }. */
     reload: () => ipcRenderer.invoke('notes:reload'),
+    /** Google Drive: status { configured, clientId, encryptionAvailable, connected, syncing, lastRun, lastError, needsForce, lastResult }. */
+    syncStatus: () => ipcRenderer.invoke('notes:sync-status'),
+    /** Guarda o cliente OAuth do Google Cloud: { clientId, clientSecret }. */
+    syncSetClient: (client) => ipcRenderer.invoke('notes:sync-set-client', client),
+    /** Abre o login do Google no navegador; resolve quando o usuário autoriza. */
+    syncConnect: () => ipcRenderer.invoke('notes:sync-connect'),
+    syncDisconnect: () => ipcRenderer.invoke('notes:sync-disconnect'),
+    /** Sincroniza agora; `{ force: true }` ignora a trava de exclusões em massa. Resolve com o status. */
+    syncNow: (opts) => ipcRenderer.invoke('notes:sync-now', opts),
+    onSyncStatus: (cb) => {
+      const h = (_e, s) => cb(s);
+      ipcRenderer.on('notes:sync-status', h);
+      return () => ipcRenderer.removeListener('notes:sync-status', h);
+    },
     /** Configurações de Notes: { historyMax, historyGapMin, syncFolder, dir, defaultDir, envLocked, customDir }. */
     settings: () => ipcRenderer.invoke('notes:settings'),
     /** Patch { historyMax, historyGapMin, syncFolder, dir } (null volta ao padrão) → { restart } (a pasta nova só vale após reiniciar). */

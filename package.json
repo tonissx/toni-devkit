@@ -18,7 +18,7 @@
     "test:json": "node --test scripts/test-json.mjs",
     "test:palette": "node --test scripts/test-palette.mjs",
     "test:diagrams": "node --test scripts/test-diagrams.mjs",
-    "test:notes": "node --test scripts/test-notes.mjs scripts/test-notes-folders.mjs scripts/test-notes-calendar.mjs scripts/test-notes-sync.mjs",
+    "test:notes": "node --test scripts/test-notes.mjs scripts/test-notes-folders.mjs scripts/test-notes-calendar.mjs scripts/test-notes-sync.mjs scripts/test-notes-gdrive.mjs",
     "test:devcore": "node --test scripts/test-devcore.mjs scripts/test-devcore-map.mjs scripts/test-devcore-singularity.mjs",
     "test:links": "node --test scripts/test-links.mjs",
     "test:home": "node --test scripts/test-home.mjs",

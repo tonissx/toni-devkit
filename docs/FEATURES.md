@@ -608,7 +608,8 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
     pasta Templates nunca entram no contexto
 - **Configurações de Notes** (engrenagem no topo): pasta das notas (vale depois de reiniciar; as notas atuais não são
   movidas) · **pasta sincronizada** por Dropbox/OneDrive/Syncthing (vigia a pasta, trata conflitos; ver
-  *Sincronizar entre computadores*) e **Recarregar do disco** · quantas versões guardar e o intervalo entre elas · tempo do auto-save · tempo do "Desfazer" após excluir
+  *Sincronizar entre computadores*) e **Recarregar do disco** · **Google Drive**: conectar a conta e sincronizar sem
+  nenhum programa extra (ver *Sincronizar pelo Google Drive*) · quantas versões guardar e o intervalo entre elas · tempo do auto-save · tempo do "Desfazer" após excluir
 - **Tarefas** (`- [ ] texto`), sem digitar a sintaxe à mão:
   - No editor, `Enter` numa tarefa continua a lista (em tarefa vazia, sai dela) · `Ctrl+L` alterna a linha (ou as
     linhas selecionadas) entre texto → `- [ ]` → `- [x]` → texto · `[]` ou `todo` + espaço no começo da linha vira `- [ ] `
@@ -675,6 +676,45 @@ O que muda com a opção ligada:
 
 Limites: duas pessoas/PCs editando a mesma nota **ao mesmo tempo** gera conflito, não mescla; e o app não sabe se o
 serviço de nuvem já terminou de baixar um arquivo — nota ilegível aparece em erros e volta no próximo recarregamento.
+
+### Sincronizar pelo Google Drive (sem instalar nada)
+
+O Devkit conversa direto com a API do Google Drive, usando **a sua conta**: não há servidor do Devkit no meio. As
+notas (`.md`, inclusive as da Lixeira), as configurações de pasta e os anexos vão para a **pasta privada do app** no
+Drive (`appDataFolder`): ela não aparece no site do Drive, e o Devkit só enxerga ela — nenhum outro arquivo seu.
+
+**Uma vez só (quem instala o Devkit)** — criar o acesso no Google Cloud (gratuito, ~15 min):
+1. Em [console.cloud.google.com](https://console.cloud.google.com) crie um projeto (ex.: “Devkit”).
+2. **APIs e serviços → Biblioteca →** *Google Drive API* **→ Ativar**.
+3. **Tela de consentimento OAuth** (Google Auth Platform): tipo **Externo**, nome “Devkit”, seu e-mail de contato;
+   em **Escopos** adicione `…/auth/drive.appdata`; em **Usuários de teste** adicione o(s) seu(s) e-mail(s) Google.
+4. Ainda na tela de consentimento, **publique o app** (“Em produção”). O escopo `drive.appdata` é tratado pelo Google
+   como não sensível, então não passa por revisão. **Sem publicar**, o app fica em modo Teste e o Google invalida o
+   acesso a cada **7 dias** (o Devkit pede para reconectar).
+5. **Credenciais → Criar credenciais → ID do cliente OAuth →** tipo **App para computador**. Copie o *ID do cliente*
+   e a *Chave secreta* (para app de desktop o Google exige a chave, mas ela não é confidencial).
+
+**Em cada computador:** Configurações de Notes → **Google Drive** → cole o ID e a chave → **Salvar credenciais** →
+**Conectar ao Google Drive** (abre o navegador; entre na sua conta e autorize). (Alternativa: variáveis de ambiente
+`DEVKIT_GOOGLE_CLIENT_ID` e `DEVKIT_GOOGLE_CLIENT_SECRET`.)
+
+Como funciona:
+- Sincroniza **ao abrir, a cada 5 min e ~20 s depois de você editar**. **Sincronizar agora** força uma rodada.
+- Compara três coisas — o disco, o Drive e o que os dois tinham na última vez (hash de cada arquivo): quem mudou
+  sobe/baixa; **excluir** em um PC exclui no outro (a nota vai para a Lixeira, que também sincroniza).
+- **Primeira conexão** num PC que já tem notas: as dos dois lados são **somadas**; só se o mesmo arquivo existir nos
+  dois com conteúdos diferentes é que vira conflito.
+- **Conflito** (a mesma nota editada nos dois PCs antes de sincronizar): nenhuma versão se perde — a do Drive é
+  guardada ao lado e, ao reler, a edição mais recente continua sendo a nota e a outra vira “Título (conflito)”.
+- **Trava de segurança**: se uma rodada fosse apagar muitos arquivos de uma vez (ex.: o Drive voltou vazio), nada é
+  alterado e a tela oferece **Sincronizar mesmo assim**.
+- Uma nota que você está digitando enquanto o arquivo remoto chega **não é sobrescrita**: a rodada seguinte resolve.
+- O acesso (refresh token) fica **cifrado** pelo sistema (`safeStorage`) em `sync-tokens.json`, na pasta de dados do
+  app — nunca na pasta das notas. **Desconectar** apaga o acesso e não apaga nenhuma nota, aqui ou no Drive.
+
+Limites: o histórico de versões (`.devkit`) e os links ficam só em cada PC; **pastas vazias** não sincronizam (a
+pasta aparece no outro PC quando tem uma nota); anexos maiores que 50 MB não são aceitos pelo app de qualquer forma;
+e é uma ou outra forma de sync — não use o Drive do Devkit e uma pasta de Dropbox/OneDrive ao mesmo tempo.
 
 ```md
 ---

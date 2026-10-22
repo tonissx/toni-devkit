@@ -257,6 +257,9 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
       return this.info();
     },
 
+    /** Roda `fn` na fila das mutações: nenhuma gravação do app acontece enquanto ela executa (o sync escreve no disco aqui). */
+    exclusive(fn) { return serial(async () => { await store.flush(); return fn(); }); },
+
     /**
      * Relê a pasta das notas e aplica o que mudou fora do app (outro PC via Dropbox/OneDrive/Syncthing, edição
      * manual). Só notifica o que de fato mudou — reler logo depois de uma gravação do próprio app não gera nada.

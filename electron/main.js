@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, globalShortcut, Tray, Menu, nativeImage, protocol, net, powerMonitor, screen, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, clipboard, shell, nativeTheme, globalShortcut, Tray, Menu, nativeImage, protocol, net, powerMonitor, screen, Notification, safeStorage } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const fs = require('node:fs/promises');
@@ -14,6 +14,7 @@ const { createNotesService, isExecutableAsset } = require('./notes/service');
 const { mimeFor, visualKind, THUMB_KINDS } = require('../src/notes/attachments.js');
 const { createNotesSettings } = require('./notes/settings');
 const { createWatcher } = require('./notes/watch');
+const { createSyncManager } = require('./sync/manager');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
 const { createUpdaterService } = require('./updater/service');
@@ -398,9 +399,11 @@ ipcMain.handle('devcore:items', async () => { await devcoreReady; return devcore
 // Um .md por nota em Documentos\Devkit Notes (DEVKIT_NOTES_DIR sobrescreve — usado nos testes).
 let notes = null;
 let notesReady = null;
+let notesSync = null;
 const broadcastNotes = (evt) => {
   for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:changed', evt);
   if (evt && evt.type === 'removed' && stickies) stickies.noteRemoved(evt.id); // nota excluída sai da tela
+  if (notesSync) notesSync.touch(); // mudou algo: o sync com o Drive (se conectado) roda daqui a pouco
 };
 
 // Pasta das notas: DEVKIT_NOTES_DIR > escolhida em Configurações (vale após reiniciar) > Documentos\Devkit Notes.
@@ -423,7 +426,26 @@ function initNotes() {
     stateFile: process.env.DEVKIT_NOTES_DIR ? undefined : path.join(app.getPath('userData'), 'notes-state.json'), syncFolder: cfg.syncFolder,
   });
   notesReady = notes.init().then((info) => { applyNotesSync(cfg.syncFolder); return info; }).catch((e) => { console.error('[notes]', e); throw e; });
+
+  // Sincronização com o Google Drive do próprio usuário (sem servidor nosso). Tokens cifrados com safeStorage.
+  const ud = app.getPath('userData');
+  notesSync = createSyncManager({
+    files: { client: path.join(ud, 'sync-google.json'), tokens: path.join(ud, 'sync-tokens.json'), state: path.join(ud, 'sync-state.json') },
+    getService: () => notes,
+    cipher: { available: () => safeStorage.isEncryptionAvailable(), encrypt: (s) => safeStorage.encryptString(s), decrypt: (b) => safeStorage.decryptString(b) },
+    openExternal: (url) => shell.openExternal(url),
+    broadcast: (status) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:sync-status', status); },
+    defaultClient: { clientId: process.env.DEVKIT_GOOGLE_CLIENT_ID, clientSecret: process.env.DEVKIT_GOOGLE_CLIENT_SECRET },
+  });
+  notesReady.then(() => notesSync.start()).catch((e) => console.error('[notes-sync]', e));
 }
+
+// Google Drive: status, cliente OAuth, conectar/desconectar e sincronizar agora (ver electron/sync/manager.js).
+ipcMain.handle('notes:sync-status', async () => { await notesReady; return notesSync.status(); });
+ipcMain.handle('notes:sync-set-client', async (_e, c) => { await notesReady; return notesSync.setClient(c); });
+ipcMain.handle('notes:sync-connect', async () => { await notesReady; return notesSync.connect(); });
+ipcMain.handle('notes:sync-disconnect', async () => { await notesReady; return notesSync.disconnect(); });
+ipcMain.handle('notes:sync-now', async (_e, opts) => { await notesReady; await notesSync.syncNow(opts); return notesSync.status(); });
 
 const NOTES_API = ['info', 'reload', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage', 'saveAttachment', 'orphanAssets', 'cleanAssets', 'backlinks', 'linkRefs', 'renameLinks', 'history', 'version', 'restoreVersion', 'trashList', 'restoreFromTrash', 'deleteFromTrash', 'emptyTrash', 'templates', 'fromTemplate', 'ensureRootFolder', 'graph', 'trashCount',
   'setFolderMeta', 'moveFolderOrder', 'folderClash', 'duplicateFolder', 'trashFolders', 'restoreFolderFromTrash', 'folderAbs'];
