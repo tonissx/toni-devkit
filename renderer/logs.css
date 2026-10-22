@@ -258,6 +258,9 @@
 
 /* detalhe */
 .lg-detail { width: clamp(360px, 40%, 620px); flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--tk-border); background: var(--tk-surface-1); }
+.lg-detail-rail { flex-shrink: 0; width: 28px; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 10px 0; border: 0; border-left: 1px solid var(--tk-border); background: var(--tk-surface-1); color: var(--tk-text-3); cursor: pointer; }
+.lg-detail-rail:hover { background: var(--tk-surface-3); color: var(--tk-text); }
+.lg-detail-rail span { writing-mode: vertical-rl; font: 500 11px var(--tk-font-sans); }
 .lg-detail__head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
 .lg-detail__when { font: 12px var(--tk-font-mono); color: var(--tk-text); font-variant-numeric: tabular-nums; }
 .lg-detail__when small { color: var(--tk-text-3); }

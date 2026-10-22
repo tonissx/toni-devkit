@@ -54,7 +54,7 @@ function Menu({ label, icon, items, title }) {
 export function LogView({ src, state, setState, presets, onPresets, onInfo, onClose, toast, openedAt }) {
   const api = logsApi();
   const id = src.id;
-  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false, mode = 'find', hitsFolded = false } = state;
+  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false, mode = 'find', hitsFolded = false, detailFolded = false } = state;
   const set = (patch) => setState((s) => ({ ...s, ...patch }));
   // Filtrando, o log continua inteiro na lista e os achados vão para o painel ('find'); 'only' = a lista mostra só os achados.
   const filtered = !!(q.trim() || (levels && levels.length));
@@ -383,8 +383,13 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
               <Charts id={id} sum={sum} onFilter={(t) => addFilter(t, false) || set({ tab: 'lines' })} onLevels={(lv) => set({ levels: lv, tab: 'lines' })} />
             )}
         </div>
-        {sel && tab !== 'charts' && (
-          <Detail id={id} i={sel.i} res={res} http={src.http} toast={toast} onClose={() => setSel(null)}
+        {sel && tab !== 'charts' && detailFolded && (
+          <button type="button" className="lg-detail-rail" onClick={() => set({ detailFolded: false })} title="Mostrar o detalhe da entrada" aria-label="Mostrar detalhe" aria-expanded="false">
+            <Icon name="chevron-left" size={14} /><span>Detalhe</span>
+          </button>
+        )}
+        {sel && tab !== 'charts' && !detailFolded && (
+          <Detail id={id} i={sel.i} res={res} http={src.http} toast={toast} onClose={() => setSel(null)} onFold={() => set({ detailFolded: true })}
             onAddFilter={addFilter} onJump={jumpToEntry}
             ai={aiOn(cfg) ? aiErr : null}
             aiSlot={aiOn(cfg) ? (entry) => <AiButton ai={aiErr} label="Explicar" onClick={() => explain(entry)} title="Explicar o erro com IA (o texto passa pelo filtro de segredos)" /> : null}

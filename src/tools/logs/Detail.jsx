@@ -93,7 +93,7 @@ function Context({ id, i, res, onJump, http }) {
 // Erro que fala de banco: vale perguntar ao Banco o que estava acontecendo naquela hora.
 const DB_HINT = /\b(sql|jdbc|timeout|deadlock|lock request|database|banco|connection|conex[aã]o|ORA-\d|SQLException|SQLTimeout|tedious|sqlserver|mssql)/i;
 
-export function Detail({ id, i, res, http, onClose, onAddFilter, onJump, toast, aiSlot, ai, dbServers }) {
+export function Detail({ id, i, res, http, onClose, onFold, onAddFilter, onJump, toast, aiSlot, ai, dbServers }) {
   const [entry, setEntry] = React.useState(null);
   const [error, setError] = React.useState(null);
   const [tab, setTab] = React.useState('entry');
@@ -132,6 +132,7 @@ export function Detail({ id, i, res, http, onClose, onAddFilter, onJump, toast, 
         <span className="lg-detail__when" title={entry.segment}>{fmtDateTime(entry.ts)}{Number.isFinite(entry.ts) && <small>.{String(new Date(entry.ts).getMilliseconds()).padStart(3, '0')}</small>}</span>
         <span className="lg-detail__file" title={entry.segment}><Icon name="file-text" size={11} /> {entry.segment}</span>
         <span className="lg-grow" />
+        {onFold && <button type="button" className="lg-icon" onClick={onFold} title="Recolher o detalhe" aria-label="Recolher detalhe"><Icon name="chevron-right" size={14} /></button>}
         <button type="button" className="lg-icon" onClick={onClose} title="Fechar (Esc)" aria-label="Fechar detalhe"><Icon name="x" size={14} /></button>
       </div>
       <div className="lg-detail__actions">
