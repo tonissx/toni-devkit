@@ -26,6 +26,19 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/compute-version.mjs >> "$GITHUB_OUTPUT"
+      # Cria a release (e a tag) uma única vez, antes dos builds. Sem isso, os jobs em paralelo — e, no Windows, os dois
+      # alvos (nsis e portable) — disputam a criação e o perdedor leva 422 already_exists, deixando a release sem
+      # latest.yml (o que o auto-update lê). Os builds só anexam arquivos a uma release que já existe.
+      - name: Cria a release se ainda não existir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: v${{ steps.compute.outputs.version }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "A release $TAG já existe."
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+          fi
 
   build:
     needs: version
