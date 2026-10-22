@@ -6,6 +6,10 @@ const { Modal, Input, Button, Icon, Select } = DS;
 
 export const DEFAULT_PREFS = { autosaveMs: 400, undoSec: 8 };
 
+// Seção "Sincronização entre computadores" (pasta sincronizada por Dropbox/OneDrive…) escondida da tela por enquanto.
+// Só a interface: a vigia da pasta, o "Recarregar do disco" e a opção `syncFolder` continuam existindo no app.
+const SHOW_FOLDER_SYNC = false;
+
 const AUTOSAVE = [200, 400, 800, 1500, 3000].map((v) => ({ value: v, label: v < 1000 ? v + ' ms' : v / 1000 + ' s' }));
 const UNDO = [5, 8, 15, 30].map((v) => ({ value: v, label: v + ' segundos' }));
 
@@ -201,7 +205,7 @@ export function NotesSettingsModal({ prefs, setPrefs, toast, onClose }) {
             )}
           </section>
 
-          <section className="nts-fset__sec">
+          {SHOW_FOLDER_SYNC && <section className="nts-fset__sec">
             <h3>Sincronização entre computadores</h3>
             <small>O Devkit não tem servidor: para ter as mesmas notas em dois PCs, aponte a pasta das notas para uma pasta que o Dropbox, OneDrive, Google Drive, iCloud ou Syncthing já sincronize, e use a mesma pasta nos dois.</small>
             <label className="nts-fset__row">
@@ -212,7 +216,7 @@ export function NotesSettingsModal({ prefs, setPrefs, toast, onClose }) {
             <div className="nts-fset__actions">
               <Button size="sm" variant="secondary" icon="refresh-cw" disabled={busy} onClick={reloadDisk}>Recarregar do disco</Button>
             </div>
-          </section>
+          </section>}
 
           <DriveSync toast={toast} />
 
