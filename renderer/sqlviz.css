@@ -128,3 +128,8 @@
 .sqv__linfo.is-filter .sqv__ltag, .sqv__linfo.is-filter .sqv__ltext { fill: var(--tk-amber); }
 .sqv__linfo.is-join .sqv__ltag { fill: #7aa2f7; }
 .sqv__linfo.is-agg .sqv__ltag, .sqv__linfo.is-agg .sqv__ltext { fill: #b58cf0; }
+
+/* IA: painel de resposta acima da área principal sem espremer o canvas */
+.sqv__er > .ai-panel, .sqv__main > .ai-panel { flex: none; max-height: 42%; margin: 0; }
+.sqv__ask { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--tk-border); }
+.sqv__ask > :first-child { flex: 1; }

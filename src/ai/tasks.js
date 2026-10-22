@@ -20,6 +20,18 @@ function clip(text, max) {
 
 const tidy = (t) => String(t || '').replace(/\r\n/g, '\n').trim();
 
+/** Esquema ({ tables, fks }) em texto compacto, uma tabela por linha: `dbo.Pedido(Id int PK, ClienteId int FK→dbo.Cliente.Id)`. */
+function schemaText(schema, max) {
+  if (!schema || !Array.isArray(schema.tables) || !schema.tables.length) return '';
+  const fk = new Map();
+  for (const f of schema.fks || []) (f.fromCols || []).forEach((c, k) => fk.set(`${f.from}.${c}`, `${f.to}.${(f.toCols || [])[k] || '?'}`));
+  const lines = schema.tables.map((t) => `${t.id}(${t.columns.map((c) => {
+    const to = fk.get(`${t.id}.${c.name}`);
+    return `${c.name}${c.type ? ' ' + c.type : ''}${c.pk ? ' PK' : ''}${to ? ' FK→' + to : ''}`;
+  }).join(', ')})`);
+  return clip(lines.join('\n'), max);
+}
+
 /** Último bloco cercado (```), ou null. */
 function lastFence(text) {
   const re = /```[\w+#.-]*\n([\s\S]*?)```/g;
@@ -262,6 +274,61 @@ const TASKS = {
     },
     clean: tidy,
     parse: (text) => tidy(lastFence(text) != null ? lastFence(text) : text.replace(/^sql\s*\n/i, '')),
+  },
+
+  /* ───────── SQL Visualizer ───────── */
+  // Os fatos (blocos, origens das colunas, avisos do parser) vêm do lineage.js: a IA só explica, não recalcula.
+  sqlLineage: {
+    label: 'Explicar a query', maxTokens: 1300,
+    build(i) {
+      const sql = redact(i.sql || '').text;
+      if (!sql.trim()) throw new Error('Nada para explicar');
+      const blocks = (i.blocks || []).slice(0, 30).map((b) => `- ${b.kind} ${b.name}${b.columns && b.columns.length ? `: ${b.columns.slice(0, 20).join(', ')}` : ''}`).join('\n');
+      const col = i.column ? `${i.column.name}${i.column.expr ? ` = ${clip(i.column.expr, 300)}` : ''} ← ${(i.column.origins || []).length ? i.column.origins.slice(0, 20).join(', ') : 'sem origem em tabela'}` : '';
+      const msgs = (i.warnings || []).slice(0, 8).map((w) => `- ${w}`).join('\n');
+      return {
+        system: ['Você explica a linhagem de dados de uma consulta T-SQL para quem vai mantê-la.', PT, MD,
+          'Os blocos, as origens das colunas e os avisos abaixo foram calculados pelo Devkit: use-os como fatos e não invente tabelas ou colunas que não estão na consulta.',
+          i.column
+            ? 'Explique SOMENTE a coluna indicada: de onde vem, por quais transformações (junções, filtros, agregações, expressões) e o que pode alterar o valor dela.'
+            : 'Estrutura: **Em uma frase** (o que a consulta devolve), **Passo a passo** (cada CTE/subconsulta, na ordem em que alimentam o resultado) e **O que o Devkit não cobriu** (use os avisos; omita se não houver).'].join('\n'),
+        user: [col ? `Coluna: ${col}` : '', blocks ? `Blocos:\n${blocks}` : '', msgs ? `Avisos do analisador:\n${msgs}` : '', `Consulta:\n\`\`\`sql\n${clip(sql, 12000)}\n\`\`\``].filter(Boolean).join('\n\n'),
+      };
+    },
+    clean: tidy,
+  },
+
+  // Só nomes, tipos e chaves — nunca dados. `schema` já vem reduzido pela tela (tabela escolhida + vizinhas).
+  erDescribe: {
+    label: 'Documentar o schema', maxTokens: 1600,
+    build(i) {
+      const text = schemaText(i.schema, 9000);
+      if (!text) throw new Error('Não há tabelas para documentar');
+      return {
+        system: ['Você documenta esquemas de banco de dados para quem vai mantê-los.', PT, MD,
+          'Use SOMENTE as tabelas e colunas listadas; não invente nomes. Os nomes podem estar em qualquer idioma.',
+          'Estrutura: **Visão geral** (1–2 frases), **Tabelas** (uma linha por tabela: o que ela provavelmente guarda; marque com "(provável)" o que é palpite pelo nome) e **Relações que parecem faltar** (colunas como `ClienteId` sem FK declarada, dizendo a tabela de destino provável; omita se não houver).'].join('\n'),
+        user: `Esquema${i.partial ? ` (recorte: ${i.partial})` : ''}:\n${text}`,
+      };
+    },
+    clean: tidy,
+  },
+
+  // O caminho de FKs (quando há) é calculado em código (db/schema.js); a IA só redige.
+  erAsk: {
+    label: 'Perguntar ao schema', maxTokens: 1100, cloudHint: true,
+    build(i) {
+      if (!String(i.question || '').trim()) throw new Error('Escreva a pergunta');
+      const text = schemaText(i.schema, 9000);
+      if (!text) throw new Error('Nenhuma tabela do schema parece ter relação com a pergunta');
+      const path = (i.path || []).length ? `Caminho de FKs já calculado pelo Devkit:\n${i.path.map((s) => `- ${s}`).join('\n')}` : '';
+      return {
+        system: ['Você responde perguntas sobre um esquema de banco de dados.', PT, MD,
+          'Use SOMENTE as tabelas e colunas listadas e, quando houver, o caminho de FKs informado (ele é fato: não o contradiga). Se a pergunta pedir uma consulta, responda com o SQL num bloco ```sql, usando esses nomes. Se o esquema não responde, diga isso em uma frase.'].join('\n'),
+        user: [`Esquema:\n${text}`, path, `Pergunta: ${clip(i.question, 1000)}`].filter(Boolean).join('\n\n'),
+      };
+    },
+    clean: tidy,
   },
 
   jsonNames: {

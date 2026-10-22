@@ -1,6 +1,7 @@
 import { DS } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { analyze, layoutLineage, upstream, LIMITATIONS } from '../../db/lineage.js';
+import { useAiMode, useAiTask, aiOn, AiButton, AiPanel } from '../../ai/ui.jsx';
 import { LineageCanvas } from './LineageCanvas.jsx';
 
 const { SplitView, CodeEditor, Button, Alert, EmptyState, Badge, Modal } = DS;
@@ -84,11 +85,23 @@ export function LineageTab({ toast, source }) {
   }
 
   const msgs = graph ? [...graph.warnings, ...graph.notes] : [];
+
+  const cfg = useAiMode();
+  const ai = useAiTask('sqlLineage', cfg);
+  React.useEffect(() => { ai.close(); }, [graph]);
+  const explain = (onlyColumn) => ai.start(() => ({
+    sql: text,
+    blocks: graph.nodes.map((n) => ({ kind: n.kind, name: n.name, columns: n.columns.map((c) => c.name) })),
+    warnings: msgs,
+    column: onlyColumn && selInfo ? selInfo : null,
+  }));
+
   return (
     <div className="sqv__er">
       {msgs.length > 0 && (
         <Alert variant="warn" title={`${msgs.length} aviso(s)`}>{msgs.slice(0, 3).join(' · ')}{msgs.length > 3 ? ` … (+${msgs.length - 3})` : ''}</Alert>
       )}
+      {aiOn(cfg) && <AiPanel ai={ai} className="lg-ai" />}
       <SplitView
         leftTitle="Query (T-SQL)"
         leftMeta={graph ? `${graph.nodes.length} bloco(s) · ${graph.colEdges.length} ligação(ões) de coluna` : null}
@@ -100,6 +113,8 @@ export function LineageTab({ toast, source }) {
             </label>
           )}
           <Button variant="ghost" size="sm" icon="info" onClick={() => setLimits(true)}>Limitações</Button>
+          {aiOn(cfg) && <AiButton ai={ai} label="Explicar a query" onClick={() => explain(false)} disabled={!graph} reason="Cole uma query" />}
+          {aiOn(cfg) && selInfo && !ai.busy && <AiButton ai={ai} label="Explicar esta coluna" onClick={() => explain(true)} />}
         </>}
         onClear={() => setDraft({ ...draft, input: '' })}
         rightTitle="Linhagem"
