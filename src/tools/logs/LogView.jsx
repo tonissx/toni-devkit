@@ -13,7 +13,17 @@ import { Timeline } from './Timeline.jsx';
 import { Detail } from './Detail.jsx';
 import { Problems } from './Problems.jsx';
 import { Charts } from './Charts.jsx';
+import { Hits } from './Hits.jsx';
+import { Marks } from './Marks.jsx';
+import { Investigation } from './Investigation.jsx';
+import { normalizeCase, addItem, removeItem, MAX_ITEMS } from '../../logs/investigation.js';
 import { useSameText, filterTermFor } from './sameText.js';
+import { escapeRe } from '../../logs/query.js';
+import { usePersisted } from '../../lib/store.js';
+import { detailWidth, hitsHeight, DETAIL_DEFAULT, DETAIL_WIDE, DETAIL_MIN, DETAIL_MAX, HITS_DEFAULT, HITS_TALL } from '../../logs/panel.js';
+import { useSplit } from './useSplit.js';
+
+const HITS_HEAD = 31; // altura do cabeçalho do painel de baixo (30 + a linha de cima)
 
 const { Icon, Spinner } = DS;
 
@@ -50,13 +60,34 @@ function Menu({ label, icon, items, title }) {
  * props: src (info do log aberto), state/setState (filtro e aba, guardados por caminho), presets/onPresets,
  * onInfo(info) (reaberto/novo formato), onClose, toast, openedAt
  */
-export function LogView({ src, state, setState, presets, onPresets, onInfo, onClose, toast, openedAt }) {
+export function LogView({ src, state, setState, presets, onPresets, cases = [], onCases = () => {}, activeCase = null, onActiveCase = () => {}, onInfo, onClose, toast, openedAt }) {
   const api = logsApi();
   const id = src.id;
-  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false } = state;
+  const { q = '', levels = null, range = null, tab = 'lines', tlMode = 'all', tlFolded = false, mode = 'find', ctx = 0, hitsTab = 'hits' } = state;
   const set = (patch) => setState((s) => ({ ...s, ...patch }));
+  // Filtrando, o log continua inteiro na lista e os achados vão para o painel ('find'); 'only' = a lista mostra só os achados
+  // (mais as `ctx` entradas vizinhas de cada um, se pedido).
+  const filtered = !!(q.trim() || (levels && levels.length));
+  const wantFull = mode === 'find' && filtered;
+  const ctxN = filtered ? ctx : 0;
+  const wantView = wantFull ? 'full' : ctxN > 0 ? 'ctx' : 'hits';
 
   const [sum, setSum] = React.useState(null);
+  const [hitK, setHitK] = React.useState(null);        // posição do achado atual entre os achados
+  const [hitScroll, setHitScroll] = React.useState(null);
+  const hitsRef = React.useRef(null);
+  // Bandejas ajustáveis na mão (arrastar a borda): o Detalhe à direita e Achados/Fixados embaixo. Valem para todos os logs.
+  const [lay, setLay] = usePersisted('logs.layout', { detailW: DETAIL_DEFAULT, hitsH: HITS_DEFAULT });
+  const bodyRef = React.useRef(null);
+  const mainRef = React.useRef(null);
+  const detailSplit = useSplit({ value: lay.detailW, onCommit: (v) => setLay((l) => ({ ...l, detailW: v })), rootRef: bodyRef, axis: 'x',
+    norm: detailWidth, maxOf: (r) => r.width * 0.7, def: DETAIL_DEFAULT, wide: DETAIL_WIDE });
+  const hitsSplit = useSplit({ value: lay.hitsH, onCommit: (v) => setLay((l) => ({ ...l, hitsH: v })), rootRef: mainRef, axis: 'y', offset: HITS_HEAD,
+    norm: hitsHeight, maxOf: (r) => r.height * 0.7, def: HITS_DEFAULT, wide: HITS_TALL });
+  // Entradas fixadas (não persistem: o índice de uma entrada muda se o arquivo for rotacionado/reaberto).
+  const [pins, setPins] = React.useState([]);          // [{ i, ts, level, text }]
+  const pinSet = React.useMemo(() => new Set(pins.map((p) => p.i)), [pins]);
+  const [markData, setMarkData] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const dimmed = useDelayed(loading); // esmaece só se a consulta demorar (> 300 ms)
   const [sel, setSel] = React.useState(null);       // { pos | null, i }
@@ -89,6 +120,11 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   const aiInc = useAiTask('logIncident', cfg);
 
   const goTo = (index, align = 'center') => setScrollTo({ index, align, nonce: Math.random() });
+  const mainOf = (x) => (x.view === 'full' ? x.fullTotal : x.view === 'ctx' ? x.ctxTotal : x.total); // quantas linhas tem a lista principal
+  const full = !!sum && sum.view === 'full';
+  const view = sum ? sum.view : 'hits'; // 'full' (log inteiro) | 'ctx' (achados + vizinhos) | 'hits' (só achados)
+  const mainTotal = sum ? mainOf(sum) : 0;
+  const marked = !!sum && sum.view !== 'hits'; // a lista principal traz achados marcados (hit/near)
 
   /* ─────────────── Consulta ─────────────── */
   const run = React.useCallback(async () => {
@@ -99,24 +135,27 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
     // Ao vivo não mostra "carregando": as linhas novas só aparecem (sem esmaecer a tela a cada gravação).
     if (!wasAppend) setLoading(true);
     try {
-      const r = await api.query({ id, qid, q, levels, from: range ? range.from : null, to: range ? range.to : null, buckets: 120 });
+      const r = await api.query({ id, qid, q, levels, from: range ? range.from : null, to: range ? range.to : null, buckets: 120, full: wantFull, ctx: ctxN });
       if (latest.current !== qid) return;
       const prev = sumRef.current;
-      setSum({ ...r, viaAppend: wasAppend });
+      const cur = { ...r, viaAppend: wasAppend, view: wantView };
+      setSum(cur);
+      const tot = mainOf(cur);
       if (first.current) {
         first.current = false;
-        if (src.live && r.total) goTo(r.total - 1, 'end'); // como o tail -f: começa no fim
-      } else if (wasAppend && prev && r.total > prev.total) {
-        if (atBottomRef.current) goTo(r.total - 1, 'end');
-        else setNewCount((n) => n + (r.total - prev.total));
+        if (src.live && tot) goTo(tot - 1, 'end'); // como o tail -f: começa no fim
+      } else if (wasAppend && prev && tot > mainOf(prev)) {
+        if (atBottomRef.current) goTo(tot - 1, 'end');
+        else setNewCount((n) => n + (tot - mainOf(prev)));
       }
     } catch (e) {
       if (latest.current === qid) toast('Não foi possível filtrar', errText(e), 'error');
     } finally { if (latest.current === qid) setLoading(false); }
-  }, [id, q, levels && levels.join(','), range && range.from, range && range.to]);
+  }, [id, q, levels && levels.join(','), range && range.from, range && range.to, wantFull, ctxN]);
   const runRef = React.useRef(run);
   runRef.current = run;
   React.useEffect(() => { run(); }, [run]);
+  React.useEffect(() => { setHitK(null); }, [q, levels && levels.join(',')]);
 
   // Eventos do serviço: cresceu, reaberto (rotação/truncado), erro.
   React.useEffect(() => {
@@ -129,6 +168,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
       } else if (evt.type === 'reset') {
         if (evt.info) onInfo(evt.info);
         setSel(null);
+        setPins([]);
         first.current = true;
         runRef.current();
         toast(evt.reason === 'rotated' ? 'Arquivo rotacionado' : 'Arquivo foi zerado', 'O log foi reaberto do começo do arquivo novo.', 'ok');
@@ -145,7 +185,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   React.useEffect(() => {
     if (!sum || !sel) return;
     // Atualização ao vivo (viaAppend) não rola de volta para a seleção; só mudança de filtro recentraliza.
-    api.locate({ id, qid: sum.qid, i: sel.i }).then((r) => {
+    api.locate({ id, qid: sum.qid, i: sel.i, view }).then((r) => {
       if (!r || r.stale) return;
       if (r.exact) { setSel((s) => (s && s.i === sel.i ? { ...s, pos: r.pos } : s)); if (!sum.viaAppend) goTo(r.pos); } else setSel((s) => (s && s.i === sel.i ? { ...s, pos: null } : s));
     }, () => {});
@@ -156,31 +196,99 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
 
   /* ─────────────── Ações ─────────────── */
   const selectPos = async (pos) => {
-    if (!sum || pos < 0 || pos >= sum.total) return;
-    const r = await api.rows({ id, qid: sum.qid, from: pos, count: 1 });
+    if (!sum || pos < 0 || pos >= mainTotal) return;
+    const r = await api.rows({ id, qid: sum.qid, from: pos, count: 1, view });
     if (r && r.rows && r.rows[0]) { setSel({ pos, i: r.rows[0].i }); goTo(pos, 'nearest'); }
+  };
+  // Próximo/anterior achado do filtro (dá a volta no fim); o log completo vai até a posição dele.
+  const nextHit = async (dir) => {
+    if (!sum) return;
+    const r = await api.hitNear({ id, qid: sum.qid, i: sel ? sel.i : dir > 0 ? -1 : sum.n, dir });
+    if (!r || r.stale) return;
+    if (r.i < 0) { toast('Nenhum achado', 'Nada no log casa com o filtro.', 'ok'); return; }
+    if (tab !== 'lines') set({ tab: 'lines' });
+    pickHit(r.k, r.i);
+  };
+  const pickHit = (k, i) => {
+    setHitK(k);
+    setHitScroll({ index: k, align: 'nearest', nonce: Math.random() });
+    jumpToEntry(i);
   };
   const nextLevel = async (dir, minLevel = 5) => {
     if (!sum) return;
-    const from = sel && sel.pos != null ? sel.pos : dir > 0 ? -1 : sum.total;
-    const r = await api.next({ id, qid: sum.qid, pos: from, dir, minLevel });
+    if (full && minLevel === 5) return nextHit(dir); // com filtro, n/N andam pelos achados
+    const from = sel && sel.pos != null ? sel.pos : dir > 0 ? -1 : mainTotal;
+    const r = await api.next({ id, qid: sum.qid, pos: from, dir, minLevel, view });
     if (r && r.pos >= 0) { if (tab !== 'lines') set({ tab: 'lines' }); selectPos(r.pos).then(() => goTo(r.pos)); } else toast(dir > 0 ? 'Nenhum erro depois daqui' : 'Nenhum erro antes daqui', '', 'ok');
   };
   const seek = async (t) => {
     if (!sum) return;
-    const r = await api.seekTime({ id, qid: sum.qid, t });
+    const r = await api.seekTime({ id, qid: sum.qid, t, view });
     if (r && r.pos != null) { if (tab !== 'lines') set({ tab: 'lines' }); goTo(r.pos); selectPos(r.pos); }
   };
   const addFilter = (term, replace) => {
     const next = replace ? term : (q.split(/\s+/).includes(term) ? q : (q + ' ' + term).trim());
     set({ q: next, ...(replace ? { tab: 'lines' } : {}) });
   };
+  // "Seguir" um valor (thread, ip, id…): troca o termo da mesma chave, em vez de empilhar (dois thread:"=…" nunca casam).
+  const follow = (term) => {
+    const key = term.slice(0, term.indexOf(':'));
+    const re = new RegExp('(^|\\s)-?' + escapeRe(key) + ':(?:"[^"]*"|\\S+)', 'gi');
+    const rest = q.replace(re, '$1').replace(/\s+/g, ' ').trim();
+    set({ q: (rest + ' ' + term).trim(), tab: 'lines' });
+  };
   const jumpToEntry = async (i) => {
     setSel({ pos: null, i });
     if (!sum) return;
-    const r = await api.locate({ id, qid: sum.qid, i });
-    if (r && r.exact) { setSel({ pos: r.pos, i }); goTo(r.pos); }
+    const r = await api.locate({ id, qid: sum.qid, i, view });
+    if (r && r.exact) { setSel({ pos: r.pos, i }); goTo(r.pos); } else if (r && !r.stale) toast('Fora do filtro atual', 'Essa entrada não aparece na lista com o filtro/contexto de agora.', 'ok');
   };
+  // Fixar / soltar a entrada (a selecionada, ou a que vier em `entry`).
+  const togglePin = async (entry) => {
+    const i = entry ? entry.i : sel ? sel.i : null;
+    if (i == null) return;
+    if (pinSet.has(i)) { setPins((l) => l.filter((p) => p.i !== i)); return; }
+    let e = entry;
+    if (!e || e.text == null) { try { e = await api.entry({ id, i }); } catch { return; } }
+    setPins((l) => (l.some((p) => p.i === i) ? l : [...l, { i, ts: e.ts, level: e.level, text: String(e.text).split('\n')[0].slice(0, 140) }].sort((a, b) => a.i - b.i)));
+  };
+  /* ─────────────── Investigação ─────────────── */
+  // Identifica o log nos casos (o mesmo arquivo/pasta, mesmo reaberto): "Ir ao log" só vale para passos deste log.
+  const logKey = (src.spec && src.spec.path ? src.spec.path : src.name) + (src.spec && src.spec.family ? '|' + src.spec.family : '');
+  const caseObj = cases.find((x) => x.id === activeCase) || null;
+  const inCase = (i) => !!caseObj && caseObj.items.some((x) => x.path === logKey && x.i === i);
+  // Guarda / tira a entrada (a selecionada, ou a que vier em `entry`) da investigação ativa; sem caso, cria um.
+  const toggleCase = async (entry) => {
+    const i = entry ? entry.i : sel ? sel.i : null;
+    if (i == null) return;
+    let e = entry;
+    if (!e || e.text == null) { try { e = await api.entry({ id, i }); } catch { return; } }
+    let target = caseObj;
+    if (!target) {
+      target = normalizeCase({ title: `Investigação — ${src.name} ${new Date().toLocaleDateString('pt-BR')}` });
+      onCases((l) => [...l, target]);
+      onActiveCase(target.id);
+    }
+    const existing = target.items.find((x) => x.path === logKey && x.i === i);
+    if (existing) {
+      onCases((l) => l.map((c) => (c.id === target.id ? { ...c, items: removeItem(c.items, existing.id), updatedAt: Date.now() } : c)));
+      toast('Tirado da investigação', target.title, 'ok');
+      return;
+    }
+    const raw = { i, ts: e.ts, level: e.level, text: e.text, log: src.name, path: logKey, group: e.group && e.group.key ? e.group.key : null };
+    const r = addItem(target.items, raw);
+    if (r.full) { toast('Investigação cheia', `O limite é de ${MAX_ITEMS} passos por investigação.`, 'error'); return; }
+    onCases((l) => l.map((c) => (c.id === target.id ? { ...c, items: addItem(c.items, raw).items, updatedAt: Date.now() } : c)));
+    toast(`Guardado na investigação (${r.items.length})`, target.title, 'ok');
+  };
+  const jumpFromCase = (item) => { set({ tab: 'lines' }); jumpToEntry(item.i); };
+  // Faixa de marcadores ao lado da rolagem: onde estão os achados e os fixados.
+  React.useEffect(() => {
+    if (!sum || !marked || tab !== 'lines') { setMarkData(null); return undefined; }
+    let alive = true;
+    api.marks({ id, qid: sum.qid, view, buckets: 160, pins: pins.map((p) => p.i) }).then((m) => { if (alive && m && !m.stale) setMarkData(m); }, () => {});
+    return () => { alive = false; };
+  }, [sum && sum.qid, view, pins, tab]);
   const toggleLive = async () => {
     try { const on = await api.setLive(id, !live); setLive(on); toast(on ? 'Acompanhando ao vivo' : 'Parou de acompanhar', on ? 'Linhas novas entram sozinhas.' : 'O log fica como está agora.', 'ok'); } catch (e) { toast('Não foi possível', errText(e), 'error'); }
   };
@@ -199,7 +307,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
   };
   const copyFiltered = async () => {
     if (!sum) return;
-    const r = await api.textOf({ id, qid: sum.qid, from: sel && sel.pos != null ? sel.pos : 0, count: 200 });
+    const r = await api.textOf({ id, qid: sum.qid, from: !full && sel && sel.pos != null ? sel.pos : 0, count: 200 });
     if (r && r.text) copyText(r.text, toast, `${r.count} entradas copiadas${r.more ? ' (até 200)' : ''}`);
   };
 
@@ -231,10 +339,12 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
     if (tab !== 'lines' || !sum) return;
     if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); selectPos(sel && sel.pos != null ? sel.pos + 1 : 0); }
     else if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); selectPos(sel && sel.pos != null ? sel.pos - 1 : 0); }
+    else if (e.key === 'm' && sel) { e.preventDefault(); togglePin(null); }
+    else if (e.key === 'i' && sel) { e.preventDefault(); toggleCase(null); }
     else if (e.key === 'n') { e.preventDefault(); nextLevel(1); }
     else if (e.key === 'N') { e.preventDefault(); nextLevel(-1); }
     else if (e.key === 'w') { e.preventDefault(); nextLevel(1, 4); }
-    else if (e.key === 'End') { e.preventDefault(); goTo(sum.total - 1, 'end'); }
+    else if (e.key === 'End') { e.preventDefault(); goTo(mainTotal - 1, 'end'); }
     else if (e.key === 'Home') { e.preventDefault(); goTo(0, 'nearest'); }
   };
 
@@ -296,26 +406,39 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
           { v: 'lines', label: 'Linhas', icon: 'list', n: sum ? sum.total : null },
           { v: 'problems', label: 'Problemas', icon: 'flame', n: sum ? sum.groupsTotal : null },
           { v: 'charts', label: 'Gráficos', icon: 'chart-column' },
+          { v: 'case', label: 'Investigação', icon: 'clipboard-list', n: caseObj ? caseObj.items.length : null },
         ].map((t) => (
           <button key={t.v} type="button" role="tab" aria-selected={tab === t.v} className={tab === t.v ? 'is-on' : ''} onClick={() => set({ tab: t.v })}>
             <Icon name={t.icon} size={14} /><span>{t.label}</span>{t.n != null && <small>{fmtNum(t.n)}</small>}
           </button>
         ))}
         <span className="lg-grow" />
+        {tab === 'lines' && filtered && (
+          <select className="lg-select" value={ctx} onChange={(e) => set({ ctx: Number(e.target.value) })} title="Mostrar também as entradas vizinhas de cada achado (como o grep -C)" aria-label="Linhas de contexto">
+            {[0, 2, 5, 10].map((n) => <option key={n} value={n}>{n ? `± ${n} de contexto` : 'Sem contexto'}</option>)}
+          </select>
+        )}
+        {tab === 'lines' && filtered && (
+          <button type="button" className={'lg-btn' + (mode === 'only' ? ' is-accent' : '')} aria-pressed={mode === 'only'} onClick={() => set({ mode: mode === 'only' ? 'find' : 'only' })}
+            title={mode === 'only' ? 'Mostrando só os filtrados — clique para ver o log completo com os achados marcados' : 'Mostrar só os filtrados na lista (esconde o resto do log)'}>
+            <Icon name="filter" size={13} /><span>Só filtrados</span>
+          </button>
+        )}
         {tab === 'lines' && sum && sum.total > 0 && (
           <span className="lg-navs">
-            <button type="button" className="lg-btn" onClick={() => nextLevel(-1)} title="Erro anterior (N)"><Icon name="chevron-up" size={13} /><span>Erro</span></button>
-            <button type="button" className="lg-btn" onClick={() => nextLevel(1)} title="Próximo erro (n)"><Icon name="chevron-down" size={13} /><span>Erro</span></button>
+            <button type="button" className="lg-btn" onClick={() => nextLevel(-1)} title={full ? 'Achado anterior (N)' : 'Erro anterior (N)'}><Icon name="chevron-up" size={13} /><span>{full ? 'Achado' : 'Erro'}</span></button>
+            <button type="button" className="lg-btn" onClick={() => nextLevel(1)} title={full ? 'Próximo achado (n)' : 'Próximo erro (n)'}><Icon name="chevron-down" size={13} /><span>{full ? 'Achado' : 'Erro'}</span></button>
           </span>
         )}
       </div>
 
-      <div className="lg-body">
-        <div className={'lg-main' + (dimmed && sum ? ' is-loading' : '')}>
+      <div className="lg-body" ref={bodyRef}>
+        <div className={'lg-main' + (dimmed && sum ? ' is-loading' : '')} ref={mainRef}>
           {!sum ? <div className="lg-muted lg-pad"><Spinner size={12} /> Filtrando…</div>
             : tab === 'lines' ? (
               <>
-                <LogList id={id} summary={sum} res={res} http={src.http} selPos={sel ? sel.pos : null} listRef={listRef}
+                <div className="lg-listwrap">
+                <LogList id={id} summary={sum} view={view} total={mainTotal} res={res} http={src.http} selPos={sel ? sel.pos : null} listRef={listRef} pins={pinSet}
                   onSelect={(pos, row) => setSel({ pos, i: row.i })} scrollTo={scrollTo} onAtBottom={setAtBottom}
                   empty={(
                     <div className="lg-empty">
@@ -325,8 +448,18 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
                       {(q || levels || range) && <button type="button" className="lg-btn is-accent" onClick={() => set({ q: '', levels: null, range: null })}><Icon name="filter-x" size={13} /><span>Limpar filtros</span></button>}
                     </div>
                   )} />
+                {markData && mainTotal > 0 && (
+                  <Marks data={markData} pos={sel && sel.pos != null ? sel.pos : null} total={mainTotal} onGo={(p) => goTo(p)} />
+                )}
+                </div>
+                {(full || pins.length > 0) && (
+                  <Hits id={id} sum={sum} res={res} http={src.http} k={hitK} height={hitsSplit.size} dragging={hitsSplit.dragging} grip={hitsSplit.grip} onOpen={() => setLay((l) => ({ ...l, hitsH: HITS_DEFAULT }))}
+                    scrollTo={hitScroll} listRef={hitsRef} onPick={(k, i) => pickHit(k, i)} onStep={nextHit}
+                    showHits={full} tab={full ? hitsTab : 'pins'} onTab={(t) => set({ hitsTab: t })}
+                    pins={pins} onJumpPin={(i) => jumpToEntry(i)} onUnpin={(i) => setPins((l) => l.filter((p) => p.i !== i))} />
+                )}
                 {newCount > 0 && !atBottom && (
-                  <button type="button" className="lg-newlines" onClick={() => { goTo(sum.total - 1, 'end'); setNewCount(0); }}>
+                  <button type="button" className="lg-newlines" style={full || pins.length > 0 ? { bottom: hitsSplit.size + HITS_HEAD + 14 } : undefined} onClick={() => { goTo(mainTotal - 1, 'end'); setNewCount(0); }}>
                     <Icon name="arrow-down" size={13} /> {fmtNum(newCount)} nova{newCount === 1 ? '' : 's'}
                   </button>
                 )}
@@ -340,21 +473,30 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
                   </>
                 ) : null}
                 aiPanel={aiOn(cfg) ? <AiPanel ai={aiInc} className="lg-ai" /> : null} />
+            ) : tab === 'case' ? (
+              <Investigation cases={cases} activeId={activeCase} onActive={onActiveCase} onCases={onCases} logKey={logKey} openId={id} cfg={cfg}
+                dbServers={dbServers} onJump={jumpFromCase} onFilter={(f) => set({ q: f, tab: 'lines' })} toast={toast} />
             ) : (
               <Charts id={id} sum={sum} onFilter={(t) => addFilter(t, false) || set({ tab: 'lines' })} onLevels={(lv) => set({ levels: lv, tab: 'lines' })} />
             )}
         </div>
-        {sel && tab !== 'charts' && (
-          <Detail id={id} i={sel.i} res={res} http={src.http} toast={toast} onClose={() => setSel(null)}
-            onAddFilter={addFilter} onJump={jumpToEntry}
-            ai={aiOn(cfg) ? aiErr : null}
-            aiSlot={aiOn(cfg) ? (entry) => <AiButton ai={aiErr} label="Explicar" onClick={() => explain(entry)} title="Explicar o erro com IA (o texto passa pelo filtro de segredos)" /> : null}
-            dbServers={dbServers} />
+        {sel && (tab === 'lines' || tab === 'problems') && (
+          <div className={'lg-side' + (detailSplit.dragging ? ' is-dragging' : '')} style={{ width: detailSplit.size }}>
+            <div className="lg-grip is-v" role="separator" aria-orientation="vertical" aria-label="Largura do detalhe (arraste; duplo clique alterna)"
+              aria-valuemin={DETAIL_MIN} aria-valuemax={DETAIL_MAX} aria-valuenow={detailSplit.size} tabIndex={0} {...detailSplit.grip} />
+            <Detail id={id} i={sel.i} res={res} http={src.http} toast={toast} onClose={() => setSel(null)}
+              onAddFilter={addFilter} onJump={jumpToEntry} onFollow={follow} pinned={pinSet.has(sel.i)} onPin={togglePin} inCase={inCase(sel.i)} onCase={toggleCase}
+              ai={aiOn(cfg) ? aiErr : null}
+              aiSlot={aiOn(cfg) ? (entry) => <AiButton ai={aiErr} label="Explicar" onClick={() => explain(entry)} title="Explicar o erro com IA (o texto passa pelo filtro de segredos)" /> : null}
+              dbServers={dbServers} />
+          </div>
         )}
       </div>
 
       <footer className="lg-status">
-        {sum ? <span>{fmtNum(sum.total)} de {fmtNum(sum.n)} entradas{sum.total !== sum.n ? ' (filtro)' : ''}</span> : <span>…</span>}
+        {sum ? (full
+          ? <span>{fmtNum(sum.total)} achado{sum.total === 1 ? '' : 's'} em {fmtNum(mainTotal)} entradas</span>
+          : <span>{fmtNum(sum.total)} de {fmtNum(sum.n)} entradas{sum.total !== sum.n ? ' (filtro)' : ''}</span>) : <span>…</span>}
         {dimmed && <Spinner size={11} />}
         {sum && sum.tsMin != null && <span className="lg-muted">{fmtTime(sum.tsMin, { date: true, millis: false })} → {fmtTime(sum.tsMax, { date: true, millis: false })}</span>}
         <span className="lg-grow" />
@@ -368,7 +510,7 @@ export function LogView({ src, state, setState, presets, onPresets, onInfo, onCl
             </button>
           </span>
         )}
-        <span className="lg-muted lg-keys">↑↓ navegar · n/N erro · w aviso · End fim · Ctrl+F buscar</span>
+        <span className="lg-muted lg-keys">↑↓ navegar · n/N erro · w aviso · m fixar · i investigar · End fim · Ctrl+F buscar</span>
         <span className="lg-muted">{src.formatLabel} · {src.encoding}</span>
       </footer>
     </div>

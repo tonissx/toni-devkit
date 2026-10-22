@@ -951,12 +951,12 @@ ipcMain.handle('aimon:lanes', (_e, opts) => aimon().lanes(opts && typeof opts ==
 ipcMain.handle('aimon:timeline', (_e, key, opts) => aimon().timeline(String(key || ''), opts && typeof opts === 'object' ? opts : {}));
 
 // Serviço (abrir, ao vivo, recentes, filtros salvos).
-const LOGS_SVC_API = ['open', 'reformat', 'switchFamily', 'setLive', 'close', 'list', 'summaries', 'markSeen', 'recents', 'forgetRecent', 'presets', 'savePresets', 'scanFolder'];
+const LOGS_SVC_API = ['open', 'reformat', 'switchFamily', 'setLive', 'close', 'list', 'summaries', 'markSeen', 'recents', 'forgetRecent', 'presets', 'savePresets', 'investigations', 'saveInvestigations', 'scanFolder'];
 for (const fn of LOGS_SVC_API) {
   ipcMain.handle('logs:' + fn, async (_e, ...args) => { await logsReady; return logsSvc[fn](...args); });
 }
 // Consultas: vão direto ao worker (args: { id, qid, ... }).
-const LOGS_WORKER_API = ['query', 'rows', 'entry', 'context', 'locate', 'seekTime', 'next', 'sparks', 'charts', 'textOf', 'info'];
+const LOGS_WORKER_API = ['query', 'rows', 'entry', 'context', 'locate', 'seekTime', 'next', 'hitNear', 'marks', 'sparks', 'charts', 'textOf', 'info'];
 for (const op of LOGS_WORKER_API) {
   ipcMain.handle('logs:' + op, (_e, args) => callLogs(op, args && typeof args === 'object' ? args : {}));
 }

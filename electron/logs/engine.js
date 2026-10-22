@@ -216,22 +216,24 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
 
   /**
    * Roda a consulta. opts: { q, levels: [n] | null, from, to, buckets }. Guarda o resultado para rows/next/charts.
-   * → { qid, total, counts, hist, groups (do resultado, top 300), error, highlight, n, levelTotals }
+   * full: true também prepara a visão 'full' (o log todo no intervalo) e devolve fullTotal.
+   * ctx: quantas entradas vizinhas de cada achado entram na visão 'ctx' (devolve ctxTotal).
+   * → { qid, total, fullTotal, counts, hist, groups (do resultado, top 300), error, highlight, n, levelTotals }
    */
-  function query({ id, qid, q = '', levels = null, from = null, to = null, buckets = 120 }) {
+  function query({ id, qid, q = '', levels = null, from = null, to = null, buckets = 120, full = false, ctx = 0 }) {
     const s = get(id);
     const ix = s.index;
     const c = compile(q);
     const lv = levels && levels.length < 7 ? new Set(levels.filter((l) => !c.levels || c.levels.has(l))) : c.levels;
     const M = ix.mask(c);
     const sum = ix.summarize(M, { levels: lv, from, to, buckets });
-    s.last = { qid, c, sum, opts: { q, levels, from, to, buckets } };
+    s.last = { qid, c, sum, opts: { q, levels, from, to, buckets, ctx: Math.max(0, Math.min(50, ctx | 0)) } };
     const groups = [...sum.gcount.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 300)
       .map(([g, count]) => groupOut(ix, ix.groups[g], count));
     return {
-      qid, total: sum.total, counts: sum.counts, n: ix.n, levelTotals: ix.levelTotalsNow(),
+      qid, total: sum.total, fullTotal: full ? resultOf(s, s.last, 'full').length : null, ctxTotal: resultOf(s, s.last, 'ctx').length, counts: sum.counts, n: ix.n, levelTotals: ix.levelTotalsNow(),
       hist: sum.hist ? { start: sum.hist.start, step: sum.hist.step, buckets: sum.hist.buckets, data: toArr(sum.hist.data) } : null,
       spikes: A.spikes(sum.hist),
       groups, groupsTotal: sum.gcount.size,
@@ -253,12 +255,71 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
     return s.last;
   };
 
-  /** Linhas para a lista: posições [from, from+count) do resultado. */
-  function rows({ id, qid, from = 0, count = 100 }) {
+  /**
+   * Entradas de uma visão da consulta: 'hits' (padrão) = só as que passaram no filtro; 'full' = o log todo dentro do
+   * intervalo de tempo (texto e nível não escondem nada — rows marca os achados).
+   */
+  function resultOf(s, L, view) {
+    if (view === 'ctx') {
+      // 'ctx' = achados + as N entradas vizinhas de cada um (dentro do intervalo de tempo); sem contexto, só os achados.
+      if (!L.opts.ctx) return L.sum.result;
+      if (!L.ctxRes) {
+        const M = hitMaskOf(s, L);
+        const ix = s.index;
+        const { from, to } = L.opts;
+        const lo = from == null ? -Infinity : from;
+        const hi = to == null ? Infinity : to;
+        const out = [];
+        for (let i = 0; i < ix.n; i++) if (M[i] && ix.ts[i] >= lo && ix.ts[i] <= hi) out.push(i);
+        L.ctxRes = Int32Array.from(out);
+      }
+      return L.ctxRes;
+    }
+    if (view !== 'full') return L.sum.result;
+    if (!L.full) {
+      const ix = s.index;
+      const { from, to } = L.opts;
+      if (from == null && to == null) {
+        L.full = new Int32Array(ix.n);
+        for (let i = 0; i < ix.n; i++) L.full[i] = i;
+      } else {
+        const lo = from == null ? -Infinity : from;
+        const hi = to == null ? Infinity : to;
+        const out = [];
+        for (let i = 0; i < ix.n; i++) { const t = ix.ts[i]; if (t >= lo && t <= hi) out.push(i); }
+        L.full = Int32Array.from(out);
+      }
+    }
+    return L.full;
+  }
+  /** 1 = achado, 2 = vizinho de um achado (só com contexto), 0 = o resto. */
+  function hitMaskOf(s, L) {
+    if (!L.hitMask) {
+      const n = s.index.n;
+      const M = new Uint8Array(n);
+      const h = L.sum.result;
+      for (let k = 0; k < h.length; k++) M[h[k]] = 1;
+      const N = L.opts.ctx || 0;
+      if (N) {
+        for (let k = 0; k < h.length; k++) {
+          for (let d = 1; d <= N; d++) {
+            if (h[k] - d >= 0 && !M[h[k] - d]) M[h[k] - d] = 2;
+            if (h[k] + d < n && !M[h[k] + d]) M[h[k] + d] = 2;
+          }
+        }
+      }
+      L.hitMask = M;
+    }
+    return L.hitMask;
+  }
+
+  /** Linhas para a lista: posições [from, from+count) do resultado (view: 'hits' | 'full'). */
+  function rows({ id, qid, from = 0, count = 100, view = 'hits' }) {
     const s = get(id);
     const L = lastOf(s, qid);
     if (!L) return { stale: true };
-    const r = L.sum.result;
+    const r = resultOf(s, L, view);
+    const mask = view === 'hits' ? null : hitMaskOf(s, L);
     const out = [];
     const end = Math.min(r.length, from + count);
     const ix = s.index;
@@ -273,6 +334,7 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
         const p = ix.parse(r[k], 1);
         if (p.http) row.display = `${p.http.method} ${p.http.path}${p.http.query ? '?' + p.http.query : ''}  · ${p.http.ip}${p.http.user ? ' (' + p.http.user + ')' : ''}`;
       }
+      if (mask) { row.hit = mask[r[k]] === 1; if (mask[r[k]] === 2) row.near = true; }
       out.push(row);
     }
     return { from, rows: out, total: r.length };
@@ -308,21 +370,22 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
   }
 
   /** Posição de uma entrada no resultado (ou a mais próxima depois dela). */
-  function locate({ id, qid, i }) {
-    const L = lastOf(get(id), qid);
+  function locate({ id, qid, i, view = 'hits' }) {
+    const s = get(id);
+    const L = lastOf(s, qid);
     if (!L) return { stale: true };
-    const r = L.sum.result;
+    const r = resultOf(s, L, view);
     let lo = 0; let hi = r.length;
     while (lo < hi) { const mid = (lo + hi) >> 1; if (r[mid] < i) lo = mid + 1; else hi = mid; }
     return { pos: Math.min(lo, Math.max(0, r.length - 1)), exact: r[lo] === i };
   }
 
   /** Primeira posição do resultado com hora ≥ t. */
-  function seekTime({ id, qid, t }) {
+  function seekTime({ id, qid, t, view = 'hits' }) {
     const s = get(id);
     const L = lastOf(s, qid);
     if (!L) return { stale: true };
-    const r = L.sum.result;
+    const r = resultOf(s, L, view);
     for (let k = 0; k < r.length; k++) if (s.index.ts[r[k]] >= t) return { pos: k };
     return { pos: Math.max(0, r.length - 1) };
   }
@@ -335,6 +398,54 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
     const r = L.sum.result;
     for (let k = pos + dir; k >= 0 && k < r.length; k += dir) if (s.index.level[r[k]] >= minLevel) return { pos: k };
     return { pos: -1 };
+  }
+
+  /**
+   * O achado seguinte (dir 1) / anterior (-1) a partir de uma entrada do log, dando a volta no fim.
+   * → { k, i, total } (k = posição entre os achados; i = índice da entrada no log; i -1 se não há achados).
+   */
+  function hitNear({ id, qid, i, dir = 1 }) {
+    const s = get(id);
+    const L = lastOf(s, qid);
+    if (!L) return { stale: true };
+    const r = L.sum.result;
+    if (!r.length) return { k: -1, i: -1, total: 0 };
+    let lo = 0; let hi = r.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (r[mid] < i) lo = mid + 1; else hi = mid; }
+    // lo = primeiro achado com índice ≥ i
+    let k;
+    if (dir > 0) { k = lo < r.length && r[lo] === i ? lo + 1 : lo; if (k >= r.length) k = 0; } else { k = lo - 1; if (k < 0) k = r.length - 1; }
+    return { k, i: r[k], total: r.length };
+  }
+
+  /**
+   * Onde estão os achados (e as entradas fixadas) ao longo da lista, em `buckets` faixas — para a faixa de marcadores
+   * ao lado da rolagem. view: 'full' | 'ctx'. → { total, hits: [n por faixa], worst: [maior nível por faixa], pins: [faixa] }
+   */
+  function marks({ id, qid, view = 'full', buckets = 160, pins = [] }) {
+    const s = get(id);
+    const L = lastOf(s, qid);
+    if (!L) return { stale: true };
+    const r = resultOf(s, L, view);
+    const M = hitMaskOf(s, L);
+    const len = r.length;
+    const B = Math.max(1, Math.min(buckets | 0, len || 1));
+    const hits = new Array(B).fill(0);
+    const worst = new Array(B).fill(0);
+    for (let k = 0; k < len; k++) {
+      if (M[r[k]] !== 1) continue;
+      const b = Math.min(B - 1, Math.floor((k * B) / len));
+      hits[b]++;
+      const lv = s.index.level[r[k]];
+      if (lv > worst[b]) worst[b] = lv;
+    }
+    const out = [];
+    for (const i of pins) {
+      let lo = 0; let hi = len;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (r[mid] < i) lo = mid + 1; else hi = mid; }
+      if (lo < len && r[lo] === i) out.push(Math.min(B - 1, Math.floor((lo * B) / len)));
+    }
+    return { total: len, hits, worst, pins: out };
   }
 
   /** Sparklines dos grupos no resultado atual. */
@@ -394,7 +505,7 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
 
   function close({ id }) { sources.delete(id); return true; }
 
-  const OPS = { open, grow, info: ({ id }) => info(id), query, rows, entry, context, locate, seekTime, next, sparks, charts, exportTo, textOf, close };
+  const OPS = { open, grow, info: ({ id }) => info(id), query, rows, entry, context, locate, seekTime, next, hitNear, marks, sparks, charts, exportTo, textOf, close };
   return {
     call(op, args) {
       const fn = OPS[op];

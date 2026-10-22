@@ -89,6 +89,80 @@ test('engine: consulta, linhas, detalhe, contexto, próximo erro, exportar', asy
   assert.equal(ch.loggers.items[0].key, 'com.x');
 });
 
+test('engine: visão "full" mantém o log inteiro e marca os achados; hitNear pula de achado em achado', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  fs.writeFileSync(f, line(1, 'INFO', 'ok') + line(2, 'ERROR', 'falhou id=7') + '\tat com.x.Y.z(Y.java:1)\n' + line(3, 'WARN', 'lento') + line(4, 'ERROR', 'falhou id=8') + line(5, 'INFO', 'fim'));
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  const r = e.call('query', { id: 'a', qid: 1, q: 'falhou', full: true });
+  assert.equal(r.total, 2);
+  assert.equal(r.fullTotal, 5);
+  assert.equal(e.call('query', { id: 'a', qid: 2, q: 'falhou' }).fullTotal, null);
+  e.call('query', { id: 'a', qid: 1, q: 'falhou', full: true });
+  // padrão ('hits') segue igual a antes; 'full' devolve tudo, com hit marcado
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 1, from: 0, count: 10 }).rows.map((x) => x.i), [1, 3]);
+  const all = e.call('rows', { id: 'a', qid: 1, from: 0, count: 10, view: 'full' });
+  assert.equal(all.total, 5);
+  assert.deepEqual(all.rows.map((x) => [x.i, x.hit]), [[0, false], [1, true], [2, false], [3, true], [4, false]]);
+  assert.equal(e.call('rows', { id: 'a', qid: 1, from: 0, count: 10 }).rows[0].hit, undefined);
+  // locate: a posição de um achado na lista completa é a própria entrada
+  assert.deepEqual(e.call('locate', { id: 'a', qid: 1, i: 3, view: 'full' }), { pos: 3, exact: true });
+  assert.deepEqual(e.call('locate', { id: 'a', qid: 1, i: 3 }), { pos: 1, exact: true });
+  // hitNear: de uma entrada qualquer para o achado seguinte/anterior, dando a volta
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: -1, dir: 1 }), { k: 0, i: 1, total: 2 });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: 1, dir: 1 }), { k: 1, i: 3, total: 2 });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: 3, dir: 1 }), { k: 0, i: 1, total: 2 });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: 2, dir: -1 }), { k: 0, i: 1, total: 2 });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: 1, dir: -1 }), { k: 1, i: 3, total: 2 });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: 99, dir: -1 }), { k: 1, i: 3, total: 2 });
+  assert.equal(e.call('hitNear', { id: 'a', qid: 99, i: 0 }).stale, true);
+  // sem achados
+  e.call('query', { id: 'a', qid: 3, q: 'nada-assim', full: true });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 3, i: 0 }), { k: -1, i: -1, total: 0 });
+  // intervalo de tempo continua valendo na visão completa
+  const t3 = e.call('entry', { id: 'a', i: 3 }).ts;
+  const rg = e.call('query', { id: 'a', qid: 4, q: 'falhou', from: t3, to: null, full: true });
+  assert.equal(rg.fullTotal, 2);
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 4, from: 0, count: 10, view: 'full' }).rows.map((x) => x.i), [3, 4]);
+});
+
+test('engine: contexto ao redor dos achados (visão ctx) e marcadores', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  let txt = '';
+  for (let k = 0; k < 10; k++) txt += line(k, k === 2 || k === 7 ? 'ERROR' : 'INFO', k === 2 || k === 7 ? 'falhou' : 'ok ' + k);
+  fs.writeFileSync(f, txt);
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  // sem contexto: ctx == só os achados
+  let r = e.call('query', { id: 'a', qid: 1, q: 'falhou', full: true });
+  assert.equal(r.ctxTotal, 2);
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 1, from: 0, count: 20, view: 'ctx' }).rows.map((x) => x.i), [2, 7]);
+  // ± 1: achados 2 e 7 trazem 1,3 e 6,8
+  r = e.call('query', { id: 'a', qid: 2, q: 'falhou', full: true, ctx: 1 });
+  assert.equal(r.total, 2);
+  assert.equal(r.ctxTotal, 6);
+  const c = e.call('rows', { id: 'a', qid: 2, from: 0, count: 20, view: 'ctx' }).rows;
+  assert.deepEqual(c.map((x) => x.i), [1, 2, 3, 6, 7, 8]);
+  assert.deepEqual(c.map((x) => [!!x.hit, !!x.near]), [[false, true], [true, false], [false, true], [false, true], [true, false], [false, true]]);
+  // a visão de achados (painel) não muda; a completa marca os vizinhos
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 2, from: 0, count: 20 }).rows.map((x) => x.i), [2, 7]);
+  const full = e.call('rows', { id: 'a', qid: 2, from: 0, count: 20, view: 'full' }).rows;
+  assert.deepEqual(full.filter((x) => x.near).map((x) => x.i), [1, 3, 6, 8]);
+  // borda do arquivo: achado na primeira/última entrada não estoura
+  r = e.call('query', { id: 'a', qid: 4, q: '"ok 9"', full: true, ctx: 3 });
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 4, from: 0, count: 20, view: 'ctx' }).rows.map((x) => x.i), [6, 7, 8, 9]);
+  // marcadores: 10 entradas em 5 faixas → achados 2 e 7 caem nas faixas 1 e 3; o pior nível é ERROR
+  e.call('query', { id: 'a', qid: 5, q: 'falhou', full: true });
+  const m = e.call('marks', { id: 'a', qid: 5, view: 'full', buckets: 5, pins: [0, 9, 99] });
+  assert.equal(m.total, 10);
+  assert.deepEqual(m.hits, [0, 1, 0, 1, 0]);
+  assert.deepEqual(m.worst, [0, 5, 0, 5, 0]);
+  assert.deepEqual(m.pins, [0, 4]);
+  assert.equal(e.call('marks', { id: 'a', qid: 99, view: 'full' }).stale, true);
+});
+
 test('última linha sem \\n conta quando não está ao vivo', async () => {
   const dir = tmp();
   const f = path.join(dir, 'a.log');
@@ -190,6 +264,34 @@ test('teto de memória: lê só o final e avisa', async () => {
   assert.ok(rows.length > 0 && rows.length < 50);
   assert.match(rows[0].text, /^2026-10-11/); // começou numa linha inteira
   assert.match(rows.at(-1).text, /linha 49$/);
+});
+
+test('investigações persistem em logs.json, sem lixo e com limites', async () => {
+  const { dir, svc } = setup();
+  assert.deepEqual(svc.investigations(), []);
+  const saved = await svc.saveInvestigations([
+    { id: 'c1', title: ' Fila travada ', hypothesis: 'pool', items: [{ id: 'a', text: 'ERROR x', ts: 10, level: 5, tag: 'causa', note: 'n', path: 'p' }, { text: '' }, null] },
+    'lixo', null, { title: '' },
+  ]);
+  assert.equal(saved.length, 2);
+  assert.equal(saved[0].title, 'Fila travada');
+  assert.equal(saved[0].items.length, 1);
+  assert.equal(saved[0].items[0].tag, 'causa');
+  assert.equal(saved[1].title, 'Investigação');
+  await svc.flush();
+  const raw = JSON.parse(fs.readFileSync(path.join(dir, 'logs.json'), 'utf8'));
+  assert.equal(raw.investigations[0].id, 'c1');
+  // app reaberto: lê de volta
+  const s2 = setup();
+  const svc2 = createLogsService({ file: path.join(dir, 'logs.json'), callWorker: async (op, a) => s2.engine.call(op, a), watch: () => ({ close() {} }), pollMs: 3600e3 });
+  await svc2.init();
+  assert.equal(svc2.investigations()[0].items[0].text, 'ERROR x');
+  // arquivo antigo, sem a chave, continua abrindo
+  fs.writeFileSync(path.join(dir, 'logs.json'), JSON.stringify({ recents: [], presets: [] }));
+  const svc3 = createLogsService({ file: path.join(dir, 'logs.json'), callWorker: async (op, a) => s2.engine.call(op, a), watch: () => ({ close() {} }), pollMs: 3600e3 });
+  await svc3.init();
+  assert.deepEqual(svc3.investigations(), []);
+  svc.unwatch();
 });
 
 test('formato escolhido à mão é lembrado; recentes e filtros salvos persistem', async () => {

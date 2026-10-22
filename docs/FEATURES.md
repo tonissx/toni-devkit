@@ -212,7 +212,26 @@ Para achar rápido o que deu errado num log. Abre arquivos de centenas de MB em 
 - **Filtros**: chips de nível com contagem (Ctrl+clique = só este; **Problemas** = avisos e erros) e uma busca com
   regras simples, todas precisando casar: `timeout`, `"frase exata"`, `/regex/i`, `-esconder`, `level:error+`,
   `logger:fluig`, `thread:task-12`, `status:5xx`, `ms:>500`, `path:/api/*`, `user.id:42` (campos do JSON ou
-  `chave=valor`), `has:stack`, `exception:NullPointer`. **Filtros salvos** com nome. `Ctrl+F` foca a busca
+  `chave=valor`), `has:stack`, `exception:NullPointer`. **Filtros salvos** com nome. `Ctrl+F` foca a busca. Com o
+  campo vazio, ele lista os **últimos filtros usados** (↑↓ + Enter, ou clique)
+- **Filtrar não esconde o log**: a lista continua com o log inteiro e os **achados vêm marcados**; um painel embaixo
+  (**Achados**) lista só os que casaram — clicar leva a lista até a entrada, e `n`/`N` (ou ▲▼) pulam de achado em achado.
+  Uma **faixa de marcadores** ao lado da rolagem mostra onde eles estão (cor do pior nível; clique/arraste para ir até lá).
+  **± contexto** (0/2/5/10) realça as entradas vizinhas de cada achado, como o `grep -C`; **Só filtrados** volta a mostrar
+  na lista apenas o resultado (com o contexto, se pedido). O painel de baixo e o **Detalhe** (lado direito) têm a borda
+  **arrastável** para ajustar o tamanho (duplo clique alterna padrão/ampliado; setas ajustam; arrastar o painel de baixo até
+  o fim deixa só o cabeçalho) — o tamanho fica lembrado
+- **Fixar**: `m` (ou o alfinete no detalhe) fixa a entrada selecionada — ela ganha um alfinete na lista e entra na aba
+  **Fixados** do painel de baixo, para voltar a ela depois. Valem só enquanto o log está aberto
+- **Investigação** (aba própria): `i` (ou **Investigar** no detalhe) guarda a entrada selecionada num **caso**; a aba mostra o
+  **passo a passo** — hora, o **intervalo desde o passo anterior** (+3,2 s), nível, etiqueta (**Suspeita / Causa / Efeito /
+  Ruído**), anotação e "mesma falha ×N" quando o grupo se repete. Ordem **cronológica** ou **de coleta** (reordenável),
+  **± contexto** (traz as vizinhas de um passo), **Ir ao log**, **O que o banco fazia?** nos passos de banco, **hipótese** e
+  **conclusão**. Exporta para Markdown (com ou sem segredos) ou para o **Notes**. A **IA** lê o caso inteiro: linha do tempo,
+  causa provável (citando os passos), correlações, o que falta provar, próximos passos e **filtros prontos** para aplicar no
+  log; dá para **perguntar** algo sobre o caso. Os casos ficam salvos (com cópia do texto) mesmo se o log rotacionar
+- **Seguir**: no detalhe, o filtro ao lado de cada campo (thread, ip, caminho, status, ids de correlação do JSON…) e
+  o botão **Thread** filtram por aquele valor exato, trocando o filtro anterior da mesma chave
 - **Linha do tempo**: colunas empilhadas por nível (os erros na base), com os **picos de erro** marcados. Passar o mouse
   mostra o horário e a contagem de cada nível **no cabeçalho do gráfico** (nada cobre as barras); **arrastar** escolhe um
   intervalo, mostrando antes de soltar quantas entradas e erros ele tem (vira filtro); **clicar** leva a lista até aquele
@@ -388,7 +407,7 @@ ChatGPT — montado localmente, sem outra chamada à IA.
 | Diff Checker | **Resumir diferenças** (adicionado, removido, alterado e o que parece arriscado) |
 | Banco | **Por que está lenta** (sessão ou query do top: o que faz, por que pode estar lenta pelas métricas e pela espera, o que conferir e sugestões) · **Explicar** o deadlock (o ciclo, por que acontece, como evitar). O SQL passa antes pelo filtro de segredos |
 | SQL Visualizer | **Lineage**: explicar a query (passo a passo por CTE) ou só a coluna selecionada, a partir das origens que o Devkit já calculou · **Diagrama ER**: documentar o schema (descrição por tabela e FKs prováveis que faltam), só a tabela selecionada e as vizinhas quando há seleção · **Explorador**: perguntar ao schema (o menor caminho de FKs é calculado no app e a IA só redige o SQL) · **Plano**: explicar o plano. Vão só nomes de tabelas, colunas, tipos e chaves — nunca dados; o SQL passa pelo filtro de segredos |
-| Logs | **Explicar** o erro selecionado (o que aconteceu, causa provável, onde olhar, como confirmar — com o contexto do Fluig quando é um log do Fluig) · Problemas → **Resumir** (triagem dos grupos do filtro). O texto passa antes pelo filtro de segredos |
+| Logs | **Explicar** o erro selecionado (o que aconteceu, causa provável, onde olhar, como confirmar — com o contexto do Fluig quando é um log do Fluig) · Problemas → **Resumir** (triagem dos grupos do filtro) · Investigação → **Analisar** o passo a passo guardado (e perguntar sobre ele). O texto passa antes pelo filtro de segredos |
 | Notes | Botão **IA** no editor: **título e tags** (em chips, reaproveitando as tags que já existem), **Resumir** (insere no topo), **Transformar em checklist** (seleção ou nota toda) · **Perguntar às notas**: digite a pergunta na busca |
 | Palette | Comece com **`?`** para perguntar (pode sugerir ações do Devkit) · em Notes, `?` pergunta às notas · **IA: explicar o que está copiado** (SQL, JSON, XML, código ou erro com stack) |
 

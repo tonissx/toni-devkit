@@ -19,6 +19,7 @@ test('todas as tarefas montam system + user em texto', () => {
     paletteAsk: { question: 'q', commands: [{ id: 'go:git', name: 'Git' }] }, clipExplain: { text: 'select 1', kind: 'sql' },
     logError: { text: 'ERROR x\n\tat a.B.c(B.java:1)', format: 'jboss' },
     logIncident: { groups: [{ level: 'ERROR', count: 3, title: 'x', first: '10:00', last: '10:05' }], total: 10 },
+    logInvestigation: { title: 'Fila travada', steps: [{ n: 1, time: '2026-10-22 10:00:03,638', level: 'ERROR', text: 'ERROR timeout' }] },
     aimonSummary: { title: 'Sessão', prompts: ['faz X'], answers: ['feito'] }, aimonReview: { diff: patch, goal: 'ajustar a' }, aimonBrief: { title: 'Sessão', prompts: ['faz X'] },
     aimonDiary: { date: '2026-10-19', sessions: [{ title: 'Sessão', prompts: ['faz X'] }], totals: { workMs: 3600e3 } },
     aimonPr: { title: 'Sessão', branch: 'feat/x', plan: '# Plano\n- passo', commits: [{ hash: 'abcdef1', subject: 'faz x' }], files: ['src/a.js'] },
@@ -45,6 +46,47 @@ test('entradas vazias viram erro em português', () => {
   assert.throws(() => TASKS.clipExplain.build({ text: '' }), /vazia/);
   assert.throws(() => TASKS.logError.build({ text: ' ' }), /vazia/);
   assert.throws(() => TASKS.logIncident.build({ groups: [] }), /Nenhum problema/);
+  assert.throws(() => TASKS.logInvestigation.build({ steps: [] }), /ainda não tem passos/);
+});
+
+test('investigação: passos vão sem segredos, na ordem, com intervalos, etiquetas e a pergunta', () => {
+  const r = TASKS.logInvestigation.build({
+    title: 'Fila travada de joao@x.com', hypothesis: 'pool esgotado', conclusion: '', question: 'Foi o banco?',
+    steps: [
+      { n: 1, time: '10:00:03', level: 'WARN', text: 'WARN lento', delta: '', tag: '', log: 'server.log' },
+      { n: 2, time: '10:00:05', level: 'ERROR', text: 'ERROR com.fluig.X timeout senha=abc123\n\tat a.B.c(B.java:1)', delta: '+2 s', tag: 'Causa', repeat: 3, note: 'token: zzz999', log: 'server.log' },
+    ],
+  });
+  assert.doesNotMatch(r.system + r.user, /abc123|joao@x\.com|zzz999/);
+  assert.match(r.user, /Investigação: Fila travada de ‹oculto›/);
+  assert.match(r.user, /Hipótese da pessoa: pool esgotado/);
+  assert.match(r.user, /Pergunta: Foi o banco\?/);
+  assert.match(r.user, /### Passo 2 · 10:00:05 · ERROR · \+2 s depois do passo anterior · etiqueta: Causa · a mesma falha aparece 3× no caso · server\.log/);
+  assert.ok(r.user.indexOf('### Passo 1') < r.user.indexOf('### Passo 2'));
+  assert.match(r.user, /Anotação da pessoa: /);
+  assert.match(r.system, /responda a ela primeiro/);
+  assert.match(r.system, /Fluig/);                                     // o texto fala de com.fluig
+  assert.doesNotMatch(TASKS.logInvestigation.build({ steps: [{ n: 1, text: 'Error: boom' }] }).system, /Fluig|responda a ela primeiro/);
+});
+
+test('investigação: no aperto avisa o que foi omitido e mantém etiquetados, primeiro e último', () => {
+  const steps = Array.from({ length: 60 }, (_, k) => ({ n: k + 1, time: 't' + k, level: 'ERROR', text: 'passo' + k + ' ' + 'z'.repeat(1400), tag: k === 30 ? 'Causa' : '' }));
+  const r = TASKS.logInvestigation.build({ title: 'x', steps });
+  assert.match(r.user, /\(\d+ passo\(s\) omitido\(s\)/);
+  assert.match(r.user, /### Passo 1 /);
+  assert.match(r.user, /### Passo 31 /);
+  assert.match(r.user, /### Passo 60 /);
+  assert.ok(r.user.length < 30000);
+  assert.match(r.user, /Passos \(60\)/);
+});
+
+test('investigação: os filtros sugeridos saem do bloco ```filtro', () => {
+  const p = TASKS.logInvestigation.parse;
+  const txt = 'Análise...\n```filtro\nlevel:error+ thread:"=default task-7"\n- "Connection timed out"\n2. level:error+ thread:"=default task-7"\n\n```\nfim\n```filtro\nms:>500\n```';
+  assert.deepEqual(p(txt).filters, ['level:error+ thread:"=default task-7"', '"Connection timed out"', 'ms:>500']);
+  assert.deepEqual(p('sem bloco').filters, []);
+  assert.equal(p('```filtro\n' + Array.from({ length: 9 }, (_, k) => 'f' + k).join('\n') + '\n```').filters.length, 5);
+  assert.equal(p('```filtro\n' + 'x'.repeat(300) + '\n```').filters.length, 0);
 });
 
 test('banco: query e deadlock vão sem segredos e com as métricas', () => {

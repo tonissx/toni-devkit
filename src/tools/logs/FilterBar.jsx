@@ -2,6 +2,8 @@
 // intervalo de tempo escolhido no gráfico e filtros salvos. Uma linha só, acima de tudo o que ela filtra.
 import { DS } from '../../lib/ds.js';
 import { suggestions } from '../../logs/query.js';
+import { pushRecent } from '../../logs/recent.js';
+import { usePersisted } from '../../lib/store.js';
 import { LEVEL_META, levelColor, fmtTime, fmtCompact, sameDay } from './shared.jsx';
 
 const { Icon } = DS;
@@ -70,10 +72,16 @@ export function SearchBox({ value, onChange, error, fields, inputRef }) {
   useOutside(helpRef, () => setHelp(false), help);
   React.useEffect(() => { setText(value); }, [value]);
   const t = React.useRef(null);
-  const commit = (v) => { clearTimeout(t.current); onChange(v); };
+  // Últimos filtros usados (valem para qualquer log): aparecem quando o campo está vazio e em foco.
+  const [recent, setRecent] = usePersisted('logs.recent', { list: [] });
+  const remember = (v) => setRecent((r) => { const list = pushRecent(r.list, v); return list === r.list ? r : { list }; });
+  const showRecent = () => { if (recent.list.length) setSug({ list: recent.list, i: -1, recent: true }); };
+  const commit = (v) => { clearTimeout(t.current); remember(v); onChange(v); };
+  const pickRecent = (s) => { setText(s); setSug({ list: [], i: 0 }); commit(s); if (inputRef && inputRef.current) inputRef.current.focus(); };
   const lastWord = (v) => { const m = /(?:^|\s)-?([\w.@()-]*)$/.exec(v); return m ? m[1] : ''; };
   const change = (v) => {
     setText(v);
+    if (!v.trim()) { showRecent(); clearTimeout(t.current); t.current = setTimeout(() => onChange(v), 280); return; }
     const w = lastWord(v);
     setSug({ list: w.length >= 1 ? suggestions(w, fields || []) : [], i: 0 });
     clearTimeout(t.current);
@@ -87,7 +95,12 @@ export function SearchBox({ value, onChange, error, fields, inputRef }) {
     if (inputRef && inputRef.current) inputRef.current.focus();
   };
   const onKey = (e) => {
-    if (sug.list.length) {
+    if (sug.recent && sug.list.length) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSug((s) => ({ ...s, i: Math.min(s.list.length - 1, s.i + 1) })); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSug((s) => ({ ...s, i: Math.max(-1, s.i - 1) })); return; }
+      if (e.key === 'Enter' && sug.i >= 0) { e.preventDefault(); pickRecent(sug.list[sug.i]); return; }
+      if (e.key === 'Escape') { e.stopPropagation(); setSug({ list: [], i: 0 }); return; }
+    } else if (sug.list.length) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setSug((s) => ({ ...s, i: (s.i + 1) % s.list.length })); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setSug((s) => ({ ...s, i: (s.i - 1 + s.list.length) % s.list.length })); return; }
       if (e.key === 'Tab') { e.preventDefault(); accept(sug.list[sug.i]); return; }
@@ -99,7 +112,7 @@ export function SearchBox({ value, onChange, error, fields, inputRef }) {
   return (
     <div className={'lg-search' + (error ? ' has-error' : '')}>
       <Icon name="search" size={14} />
-      <input ref={inputRef} value={text} onChange={(e) => change(e.target.value)} onKeyDown={onKey} onBlur={() => setTimeout(() => setSug({ list: [], i: 0 }), 150)}
+      <input ref={inputRef} value={text} onChange={(e) => change(e.target.value)} onKeyDown={onKey} onFocus={() => { if (!text.trim()) showRecent(); }} onBlur={() => { remember(text); setTimeout(() => setSug({ list: [], i: 0 }), 150); }}
         placeholder='Buscar: timeout -heartbeat level:error+ logger:fluig status:5xx "frase" /regex/' spellCheck={false} aria-label="Filtro" />
       {text && <button type="button" className="lg-search__x" onClick={() => { setText(''); commit(''); }} title="Limpar (Esc)"><Icon name="x" size={13} /></button>}
       <div className="lg-pop-wrap" ref={helpRef}>
@@ -112,7 +125,14 @@ export function SearchBox({ value, onChange, error, fields, inputRef }) {
           </div>
         )}
       </div>
-      {sug.list.length > 0 && (
+      {sug.recent && sug.list.length > 0 && (
+        <div className="lg-pop lg-sug lg-recent" role="listbox" aria-label="Filtros recentes">
+          <small className="lg-recent__title">Recentes</small>
+          {sug.list.map((s, i) => <button key={s} type="button" role="option" aria-selected={i === sug.i} className={i === sug.i ? 'is-sel' : ''} onMouseDown={(e) => { e.preventDefault(); pickRecent(s); }} title={s}>{s}</button>)}
+          <button type="button" className="lg-recent__clear" onMouseDown={(e) => { e.preventDefault(); setRecent({ list: [] }); setSug({ list: [], i: 0 }); }}>Limpar histórico</button>
+        </div>
+      )}
+      {!sug.recent && sug.list.length > 0 && (
         <div className="lg-pop lg-sug" role="listbox">
           {sug.list.map((s, i) => <button key={s} type="button" role="option" aria-selected={i === sug.i} className={i === sug.i ? 'is-sel' : ''} onMouseDown={(e) => { e.preventDefault(); accept(s); }}>{s}</button>)}
         </div>

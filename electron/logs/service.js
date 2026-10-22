@@ -14,12 +14,13 @@ const fss = require('node:fs');
 const path = require('node:path');
 const { atomicWrite, createQueue } = require('../lib/fsx');
 const { families } = require('../../src/logs/rotate.js');
+const { normalizeCases } = require('../../src/logs/investigation.js');
 
 const MAX_RECENTS = 15;
 const MAX_PRESETS = 40;
 
 function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss.watch, pollMs = 1000, now = () => Date.now() }) {
-  let state = { recents: [], presets: [], overrides: {} };
+  let state = { recents: [], presets: [], investigations: [], overrides: {} };
   const queue = createQueue();
   const open = new Map(); // id → { id, spec, name, files, live, watcher, timer, ino, busy, seenErrors, errors }
   let seq = 0;
@@ -30,6 +31,7 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
       state = {
         recents: Array.isArray(raw.recents) ? raw.recents : [],
         presets: Array.isArray(raw.presets) ? raw.presets : [],
+        investigations: normalizeCases(raw.investigations),
         overrides: raw.overrides && typeof raw.overrides === 'object' ? raw.overrides : {},
       };
     } catch { /* primeira vez */ }
@@ -236,6 +238,13 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
         .map((p) => ({ id: String(p.id || Math.random().toString(36).slice(2, 10)), name: p.name.trim().slice(0, 60), q: String(p.q || '').slice(0, 2000), levels: Array.isArray(p.levels) ? p.levels.filter((l) => Number.isInteger(l) && l >= 0 && l <= 6) : null }));
       await persist();
       return state.presets;
+    },
+    /** Casos do modo Investigação (entradas guardadas, anotações, hipótese e conclusão). */
+    investigations: () => state.investigations,
+    async saveInvestigations(list) {
+      state.investigations = normalizeCases(list);
+      await persist();
+      return state.investigations;
     },
     /** Famílias de logs numa pasta (para escolher antes de abrir). */
     async scanFolder(dir) { const r = await resolve({ kind: 'folder', path: dir }); return r.families; },
