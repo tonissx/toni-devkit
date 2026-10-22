@@ -152,7 +152,7 @@ export function Detail({ id, i, res, http, onClose, pinned, onPin, onFollow, onA
         <button type="button" className="lg-btn" onClick={() => { const r = redact(entry.text); copyText(r.text, toast, r.count ? `Copiado sem ${r.count} segredo(s)` : 'Copiado (nada para esconder)'); }} title="Troca senhas, tokens, e-mails e CPFs por ‹oculto›"><Icon name="shield" size={13} /><span>Copiar sem segredos</span></button>
         <button type="button" className="lg-btn" onClick={toNotes}><Icon name="notebook-pen" size={13} /><span>Notes</span></button>
         {onFollow && p.thread && termFor('thread', p.thread) && (
-          <button type="button" className="lg-btn" onClick={() => onFollow(termFor('thread', p.thread))} title={`Filtrar por ${termFor('thread', p.thread)} — vê tudo o que essa thread fez`}><Icon name="route" size={13} /><span>Seguir thread</span></button>
+          <button type="button" className="lg-btn" onClick={() => onFollow(termFor('thread', p.thread))} title={`Filtrar por ${termFor('thread', p.thread)} — vê tudo o que essa thread fez`}><Icon name="route" size={13} /><span>Thread</span></button>
         )}
         {aiSlot && aiSlot(entry)}
         {dbServers > 0 && Number.isFinite(entry.ts) && DB_HINT.test(entry.text.slice(0, 20000)) && (

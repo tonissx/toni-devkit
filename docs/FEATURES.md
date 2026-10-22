@@ -224,7 +224,7 @@ Para achar rápido o que deu errado num log. Abre arquivos de centenas de MB em 
 - **Fixar**: `m` (ou o alfinete no detalhe) fixa a entrada selecionada — ela ganha um alfinete na lista e entra na aba
   **Fixados** do painel de baixo, para voltar a ela depois. Valem só enquanto o log está aberto
 - **Seguir**: no detalhe, o filtro ao lado de cada campo (thread, ip, caminho, status, ids de correlação do JSON…) e
-  **Seguir thread** filtram por aquele valor exato, trocando o filtro anterior da mesma chave
+  o botão **Thread** filtram por aquele valor exato, trocando o filtro anterior da mesma chave
 - **Linha do tempo**: colunas empilhadas por nível (os erros na base), com os **picos de erro** marcados. Passar o mouse
   mostra o horário e a contagem de cada nível **no cabeçalho do gráfico** (nada cobre as barras); **arrastar** escolhe um
   intervalo, mostrando antes de soltar quantas entradas e erros ele tem (vira filtro); **clicar** leva a lista até aquele
