@@ -181,7 +181,7 @@ export function Explorer({ toast, source, setSource }) {
     const base = named.length ? named : ids.slice(0, 6);
     const picked = [...expand(schema, base, 1)].slice(0, AI_MAX_TABLES);
     const path = named.length > 1 ? fkPath(schema, named[0], named[1]) : null;
-    const withPath = path ? new Set([...picked, ...path.flatMap((s) => s.match(/[^s(),→]+(?=()/g) || [])]) : new Set(picked);
+    const withPath = path ? new Set([...picked, ...path.flatMap((s) => s.split(' → ').map((p) => p.slice(0, p.indexOf('('))))]) : new Set(picked);
     return { question, schema: subset(schema, withPath), path: path || [] };
   });
 
