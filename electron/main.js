@@ -15,6 +15,7 @@ const { mimeFor, visualKind, THUMB_KINDS } = require('../src/notes/attachments.j
 const { createNotesSettings } = require('./notes/settings');
 const { createWatcher } = require('./notes/watch');
 const { createSyncManager } = require('./sync/manager');
+const { loadDefaultClient } = require('./sync/google-client');
 const { createBus } = require('./events');
 const { createDevCoreService } = require('./devcore/service');
 const { createUpdaterService } = require('./updater/service');
@@ -435,7 +436,7 @@ function initNotes() {
     cipher: { available: () => safeStorage.isEncryptionAvailable(), encrypt: (s) => safeStorage.encryptString(s), decrypt: (b) => safeStorage.decryptString(b) },
     openExternal: (url) => shell.openExternal(url),
     broadcast: (status) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notes:sync-status', status); },
-    defaultClient: { clientId: process.env.DEVKIT_GOOGLE_CLIENT_ID, clientSecret: process.env.DEVKIT_GOOGLE_CLIENT_SECRET },
+    defaultClient: loadDefaultClient(), // cliente OAuth embutido no build (ou por variável de ambiente); vazio = pede as credenciais
   });
   notesReady.then(() => notesSync.start()).catch((e) => console.error('[notes-sync]', e));
 }
@@ -443,6 +444,7 @@ function initNotes() {
 // Google Drive: status, cliente OAuth, conectar/desconectar e sincronizar agora (ver electron/sync/manager.js).
 ipcMain.handle('notes:sync-status', async () => { await notesReady; return notesSync.status(); });
 ipcMain.handle('notes:sync-set-client', async (_e, c) => { await notesReady; return notesSync.setClient(c); });
+ipcMain.handle('notes:sync-clear-client', async () => { await notesReady; return notesSync.clearClient(); });
 ipcMain.handle('notes:sync-connect', async () => { await notesReady; return notesSync.connect(); });
 ipcMain.handle('notes:sync-disconnect', async () => { await notesReady; return notesSync.disconnect(); });
 ipcMain.handle('notes:sync-now', async (_e, opts) => { await notesReady; await notesSync.syncNow(opts); return notesSync.status(); });

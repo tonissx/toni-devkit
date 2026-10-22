@@ -51,6 +51,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      # Cliente OAuth do Google (sincronização com o Drive): segredos do repositório → arquivo gerado, empacotado no
+      # instalador. Sem os segredos o passo só avisa e o app pede ao usuário as credenciais dele.
+      - name: Embute o cliente OAuth do Google
+        env:
+          DEVKIT_GOOGLE_CLIENT_ID: ${{ secrets.DEVKIT_GOOGLE_CLIENT_ID }}
+          DEVKIT_GOOGLE_CLIENT_SECRET: ${{ secrets.DEVKIT_GOOGLE_CLIENT_SECRET }}
+        run: node scripts/embed-google-client.mjs
       - run: npx electron-builder ${{ matrix.args }} --publish always --config.extraMetadata.version=${{ needs.version.outputs.version }}
 
   # Checksums + atestado de procedência (SLSA) dos instaladores, para quem quiser verificar o download.
