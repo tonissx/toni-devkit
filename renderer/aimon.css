@@ -366,9 +366,9 @@ button.am-sr__item:hover { background: var(--tk-surface-3); }
 .am-flow__step + .am-flow__step { margin-left: 30px; }
 .am-flow__step + .am-flow__step::before { content: ''; position: absolute; left: -26px; top: 12px; width: 22px; border-top: 2px solid var(--tk-border-strong, var(--tk-text-3)); }
 .am-flow__step.is-wait::before, .am-flow__step.is-off::before { border-top-style: dashed; }
-.am-flow__step.is-ok::before, .am-flow__step.is-done::before { border-top-color: var(--tk-accent); }
+.am-flow__step.is-ok::before, .am-flow__step.is-done::before { border-top-color: var(--lg-ok); }
 .am-flow__dot { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--tk-border-strong, var(--tk-text-3)); color: var(--tk-text-3); background: var(--tk-surface-2); }
-.am-flow__step.is-done .am-flow__dot { border-color: var(--tk-accent); background: var(--tk-accent); color: #fff; }
+.am-flow__step.is-done .am-flow__dot { border-color: var(--lg-ok); background: var(--lg-ok); color: #fff; }
 .am-flow__step.is-ok .am-flow__dot { border-color: var(--lg-ok); background: var(--lg-ok); color: #fff; }
 .am-flow__step.is-no .am-flow__dot { border-color: var(--lg-error); background: var(--lg-error); color: #fff; }
 .am-flow__step.is-wait .am-flow__dot { border-style: dashed; border-color: var(--tk-amber); color: var(--tk-amber); animation: am-breathe 2.4s ease-in-out infinite; }
