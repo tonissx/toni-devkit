@@ -204,4 +204,26 @@ function expandDueWords(text, now = new Date()) {
   return String(text || '').replace(/(^|\s)@(hoje|amanha|amanhã)(?=\s|$)/gi, (_, sp, w) => `${sp}@${isoDate(now, /^h/i.test(w) ? 0 : 1)}`);
 }
 
-module.exports = { continueList, expandDueWords, toggleTaskLines, expandOnSpace, isoDate, insertBlock, linkQueryAt, completeLink, inFence, varQueryAt, completeVar };
+/**
+ * Alt+↑/↓ (como no VS Code): move a(s) linha(s) da seleção — ou a linha do cursor — uma linha para cima (dir -1)
+ * ou para baixo (dir 1), levando a seleção junto. `null` = já está na borda do texto.
+ */
+function moveLines(value, start, end, dir) {
+  const [ls] = lineBounds(value, start);
+  const [, le] = lineBounds(value, end > start && value[end - 1] === '\n' ? end - 1 : end);
+  const block = value.slice(ls, le);
+  if (dir < 0) {
+    if (ls === 0) return null;
+    const [ps] = lineBounds(value, ls - 1);
+    const prev = value.slice(ps, ls - 1);
+    const d = -(prev.length + 1);
+    return { value: value.slice(0, ps) + block + '\n' + prev + value.slice(le), start: start + d, end: end + d };
+  }
+  if (le >= value.length) return null;
+  const [, ne] = lineBounds(value, le + 1);
+  const next = value.slice(le + 1, ne);
+  const d = next.length + 1;
+  return { value: value.slice(0, ls) + next + '\n' + block + value.slice(ne), start: start + d, end: end + d };
+}
+
+module.exports = { moveLines, continueList, expandDueWords, toggleTaskLines, expandOnSpace, isoDate, insertBlock, linkQueryAt, completeLink, inFence, varQueryAt, completeVar };

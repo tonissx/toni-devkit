@@ -232,6 +232,8 @@ formatação de SQL/XML direto da área de transferência.
 | `Ctrl+Alt+Space` | Abre a palette de qualquer lugar |
 | `Ctrl+K` | Palette dentro do app |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Próxima / ferramenta anterior |
+| `Ctrl+P` | Notes: abrir nota pelo nome |
+| `Alt+↑` / `Alt+↓` | Notes (editor): mover linha / seleção |
 | `Ctrl+Enter` | Formatar / comparar |
 | `Ctrl+,` | Configurações |
 
