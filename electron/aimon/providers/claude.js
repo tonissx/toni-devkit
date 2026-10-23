@@ -176,15 +176,19 @@ async function live(dir = sessionsDir(), alive = pidAlive) {
   return out;
 }
 
-/** Encerramento pedido (sem /F e sem SIGKILL: o Claude Code fecha direito). No Windows `taskkill /T` leva os filhos (shell, MCP). */
-function killPid(pid) {
-  return new Promise((resolve, reject) => {
-    if (process.platform === 'win32') {
-      require('node:child_process').execFile('taskkill', ['/PID', String(pid), '/T'], { windowsHide: true }, (err) => (err ? reject(err) : resolve()));
-    } else {
-      try { process.kill(pid, 'SIGTERM'); resolve(); } catch (e) { reject(e); }
-    }
-  });
+const runTaskkill = (args) => new Promise((resolve, reject) => {
+  require('node:child_process').execFile('taskkill', args, { windowsHide: true }, (err) => (err ? reject(err) : resolve()));
+});
+
+/**
+ * Encerra o processo. Primeiro o pedido educado (SIGTERM; no Windows `taskkill /T`, que leva os filhos: shell, MCP). O Claude Code
+ * roda como processo de console, sem janela para receber o pedido, então o Windows recusa ("só pode ser forçada") e o jeito é `/F`.
+ * É seguro: o transcript é gravado a cada linha, e quem pediu foi a própria pessoa (com confirmação se estava trabalhando).
+ */
+async function killPid(pid, { platform = process.platform, run = runTaskkill } = {}) {
+  if (platform !== 'win32') { process.kill(pid, 'SIGTERM'); return; }
+  try { await run(['/PID', String(pid), '/T']); return; } catch { /* sem janela: tenta forçar */ }
+  try { await run(['/PID', String(pid), '/T', '/F']); } catch { throw new Error('O Windows não deixou encerrar o processo (ele pode já ter fechado, ou pertencer a outro usuário e exigir administrador).'); }
 }
 
 /**
@@ -209,4 +213,4 @@ async function close(sessionId, expect = {}, { dir = sessionsDir(), alive = pidA
   return { ok: true, pid: found.pid };
 }
 
-module.exports = { id, name: 'Claude Code', icon: 'sparkles', root, parseLine, listSessions, live, close };
+module.exports = { id, name: 'Claude Code', icon: 'sparkles', root, parseLine, listSessions, live, close, killPid };
