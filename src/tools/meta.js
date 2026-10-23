@@ -108,6 +108,14 @@ const TOOL_META = [
     keywords: ['agente', 'agentes', 'subagente', 'claude', 'prompt', 'skill', 'especialista', 'revisor', 'criar agente', 'permissões'],
   },
   {
+    id: 'automations',
+    name: 'Automações',
+    icon: 'workflow',
+    group: 'Texto & código',
+    desc: 'Gatilho + passos em sequência: passos fixos e confiáveis, com agentes de IA só onde há julgamento. Histórico por passo',
+    keywords: ['automação', 'automações', 'automatizar', 'rotina', 'rotinas', 'agendar', 'agendamento', 'horário', 'workflow', 'fluxo', 'n8n', 'zapier', 'passos', 'gatilho', 'cron'],
+  },
+  {
     id: 'devcore',
     name: 'DevCore',
     icon: 'cpu',

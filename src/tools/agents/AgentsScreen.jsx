@@ -2,7 +2,6 @@
 // (formato nativo da ferramenta: funciona também no terminal). Cada um declara o que pode fazer; a tela mostra isso em palavras.
 import { DS } from '../../lib/ds.js';
 import { errText } from '../../lib/fmt.jsx';
-import { RoutinesPanel } from './RoutinesPanel.jsx';
 import { MODELS, PRESETS, TEMPLATES, TOOL_CHOICES, describePermissions, draftOf, permissions, presetOf, sameDraft, toolsForPreset } from './agentForm.js';
 
 const { PageHeader, Button, Input, Field, Textarea, Select, SegmentedControl, Modal, EmptyState, Badge, Icon, Spinner, Alert, Checkbox } = DS;
@@ -16,8 +15,7 @@ function PermBadge({ perms }) {
   return <Badge size="sm" variant={TONE_VARIANT[d.tone]} title={d.text}>{d.title}</Badge>;
 }
 
-export function AgentsScreen({ toast, request }) {
-  const [tab, setTab] = React.useState('agents');
+export function AgentsScreen({ toast }) {
   const [rows, setRows] = React.useState(null);
   const [dir, setDir] = React.useState('');
   const [sel, setSel] = React.useState(null);      // nome salvo em edição, ou null
@@ -27,7 +25,6 @@ export function AgentsScreen({ toast, request }) {
   const [confirmDel, setConfirmDel] = React.useState(false);
   const [filter, setFilter] = React.useState('');
 
-  React.useEffect(() => { if (request && request.tab === 'routines') setTab('routines'); }, [request && request.nonce]);
   const fail = (title) => (e) => toast(title, errText(e), 'error');
   const reload = React.useCallback(() => api().list().then(setRows, fail('Não foi possível listar os agentes')), []);
   React.useEffect(() => { reload(); api().dir().then(setDir, () => {}); }, []);
@@ -68,11 +65,8 @@ export function AgentsScreen({ toast, request }) {
   return (
     <div className="ag">
       <PageHeader icon="sparkles" title="Agentes" subtitle={rows ? `${rows.length} agente(s) em ${dir || '~/.claude/agents'}` : 'Carregando…'}
-        actions={<>
-          <SegmentedControl size="sm" options={[{ value: 'agents', label: 'Agentes' }, { value: 'routines', label: 'Rotinas' }]} value={tab} onChange={(v) => { if (v === 'agents' || guard()) setTab(v); }} />
-          {tab === 'agents' && <Button variant="primary" icon="plus" onClick={() => startNew()}>Novo agente</Button>}
-        </>} />
-      {tab === 'routines' ? <RoutinesPanel toast={toast} agents={rows || []} request={request} /> : !rows ?<div className="ag-center"><Spinner size={18} /></div> : (
+        actions={<Button variant="primary" icon="plus" onClick={() => startNew()}>Novo agente</Button>} />
+      {!rows ? <div className="ag-center"><Spinner size={18} /></div> : (
         <div className="ag-body">
           <aside className="ag-side">
             <div className="ag-side__search"><Input size="sm" type="search" placeholder="Buscar agente…" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
