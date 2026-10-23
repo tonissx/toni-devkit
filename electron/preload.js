@@ -340,6 +340,18 @@ contextBridge.exposeInMainWorld('devkit', {
       return () => ipcRenderer.removeListener('git:changed', h);
     },
   },
+  /** Agentes (ver electron/agents): subagentes do Claude Code, um .md por agente em ~/.claude/agents. */
+  agents: {
+    list: () => ipcRenderer.invoke('agents:list'),
+    get: (name) => ipcRenderer.invoke('agents:get', name),
+    /** Cria ou atualiza; `previous` = nome anterior quando a pessoa renomeou. */
+    save: (agent, previous) => ipcRenderer.invoke('agents:save', agent, previous),
+    remove: (name) => ipcRenderer.invoke('agents:remove', name),
+    duplicate: (name) => ipcRenderer.invoke('agents:duplicate', name),
+    dir: () => ipcRenderer.invoke('agents:dir'),
+    /** Abre um terminal já com o agente; sem `cwd`, pergunta a pasta → { launched, cwd?, terminal? }. */
+    launch: (name, cwd) => ipcRenderer.invoke('agents:launch', name, cwd),
+  },
   /** Monitor de IA (ver electron/aimon): sessões recentes de Claude Code, Codex… — somente leitura. */
   aimon: {
     providers: () => ipcRenderer.invoke('aimon:providers'),

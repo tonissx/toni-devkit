@@ -10,20 +10,23 @@ const { spawn } = require('node:child_process');
 
 const BIN = { claude: 'claude', codex: 'codex' };
 const ID = /^[0-9A-Za-z][0-9A-Za-z-]{7,79}$/;
+const AGENT = /^[a-z0-9][a-z0-9-]{0,63}$/; // mesmo formato dos nomes em electron/agents/store.js
 // Caracteres que não passam por um terminal sem escape (aspas, ; do wt, quebras de linha, & e % do cmd…).
 const UNSAFE_CWD = /["'`;&|<>^%$!\r\n\0]/;
 
 /** → { bin, args, cwd } ou lança Error com o motivo (em português). */
-function plan({ provider, sessionId, cwd, mode = 'resume' }) {
+function plan({ provider, sessionId, cwd, mode = 'resume', agent }) {
   const bin = BIN[provider];
   if (!bin) throw new Error('Ferramenta de IA desconhecida');
-  if (mode !== 'resume' && mode !== 'new') throw new Error('Modo inválido');
+  if (mode !== 'resume' && mode !== 'new' && mode !== 'agent') throw new Error('Modo inválido');
+  if (mode === 'agent' && (provider !== 'claude' || typeof agent !== 'string' || !AGENT.test(agent))) throw new Error('Agente inválido');
   if (typeof cwd !== 'string' || !cwd || !path.isAbsolute(cwd)) throw new Error('A pasta da sessão não é conhecida');
   if (UNSAFE_CWD.test(cwd)) throw new Error('O caminho da pasta tem caracteres que não dá para abrir com segurança no terminal');
   let st = null;
   try { st = fs.statSync(cwd); } catch { /* some abaixo */ }
   if (!st || !st.isDirectory()) throw new Error('A pasta desta sessão não existe mais');
   if (mode === 'new') return { bin, args: [], cwd };
+  if (mode === 'agent') return { bin, args: ['--agent', agent], cwd };
   if (typeof sessionId !== 'string' || !ID.test(sessionId)) throw new Error('Identificador de sessão inválido');
   return { bin, args: provider === 'codex' ? ['resume', sessionId] : ['--resume', sessionId], cwd };
 }
