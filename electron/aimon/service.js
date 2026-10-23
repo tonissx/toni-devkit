@@ -560,6 +560,18 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
       return { date: dayKey(now()), sessions: sessions.slice(-12) };
     },
     /** Dados de uma sessão acompanhada, para abrir um terminal nela. */
+    /** Encerra o processo de uma sessão principal viva. Usa o que o monitor leu (pid + início do processo), não o que a tela mandou. */
+    async closeSession(key) {
+      const t = tracked.get(key);
+      if (!t) throw new Error('Sessão desconhecida.');
+      if (t.meta.parentId) throw new Error('Subagente não se encerra sozinho: encerre a sessão principal.');
+      const prov = byId.get(t.meta.provider);
+      const info = liveBy.get(key);
+      if (!prov || typeof prov.close !== 'function' || !info) throw new Error('Esta sessão não está aberta (ou o agente não permite encerrar).');
+      const r = await prov.close(t.meta.sessionId, { pid: info.pid, procStart: info.procStart });
+      dirty = true;
+      return r;
+    },
     sessionInfo(key) { const t = tracked.get(key); return t ? { provider: t.meta.provider, sessionId: t.meta.sessionId, cwd: t.st.cwd } : null; },
     /**
      * Atividade por repositório principal, para a tela do Git: só olha o que o acompanhamento já leu (nunca liga o

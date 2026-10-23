@@ -169,11 +169,44 @@ async function live(dir = sessionsDir(), alive = pidAlive) {
     let o;
     try { o = JSON.parse(await fs.readFile(path.join(dir, n), 'utf8')); } catch { continue; }
     if (!o || typeof o.sessionId !== 'string' || !Number.isFinite(o.pid) || !alive(o.pid)) continue;
-    const info = { status: String(o.status || ''), waitingFor: waitingText(o.waitingFor), statusUpdatedAt: Number.isFinite(o.statusUpdatedAt) ? o.statusUpdatedAt : null, pid: o.pid, updatedAt: Number.isFinite(o.updatedAt) ? o.updatedAt : 0 };
+    const info = { status: String(o.status || ''), waitingFor: waitingText(o.waitingFor), statusUpdatedAt: Number.isFinite(o.statusUpdatedAt) ? o.statusUpdatedAt : null, pid: o.pid, procStart: o.procStart == null ? null : String(o.procStart), updatedAt: Number.isFinite(o.updatedAt) ? o.updatedAt : 0 };
     const prev = out.get(o.sessionId);
     if (!prev || info.updatedAt >= prev.updatedAt) out.set(o.sessionId, info); // sessão retomada em outro processo: vale o mais recente
   }
   return out;
 }
 
-module.exports = { id, name: 'Claude Code', icon: 'sparkles', root, parseLine, listSessions, live };
+/** Encerramento pedido (sem /F e sem SIGKILL: o Claude Code fecha direito). No Windows `taskkill /T` leva os filhos (shell, MCP). */
+function killPid(pid) {
+  return new Promise((resolve, reject) => {
+    if (process.platform === 'win32') {
+      require('node:child_process').execFile('taskkill', ['/PID', String(pid), '/T'], { windowsHide: true }, (err) => (err ? reject(err) : resolve()));
+    } else {
+      try { process.kill(pid, 'SIGTERM'); resolve(); } catch (e) { reject(e); }
+    }
+  });
+}
+
+/**
+ * Encerra o processo de uma sessão viva. Relê ~/.claude/sessions antes de matar: o pid só vale se o arquivo ainda é desta
+ * sessão e do mesmo início de processo (`procStart`) — o Windows reaproveita pid. `expect.procStart` é o que o monitor viu.
+ * → { ok: true, pid } ; lança Error com motivo se a sessão não está mais viva ou o processo mudou.
+ */
+async function close(sessionId, expect = {}, { dir = sessionsDir(), alive = pidAlive, kill = killPid } = {}) {
+  let names;
+  try { names = await fs.readdir(dir); } catch { names = []; }
+  let found = null;
+  for (const n of names) {
+    if (!n.endsWith('.json')) continue;
+    const o = await readJson(path.join(dir, n));
+    if (!o || o.sessionId !== sessionId || !Number.isFinite(o.pid) || !alive(o.pid)) continue;
+    if (!found || (Number(o.updatedAt) || 0) >= (Number(found.updatedAt) || 0)) found = o;
+  }
+  if (!found) throw new Error('A sessão não está mais aberta.');
+  if (expect.pid != null && found.pid !== expect.pid) throw new Error('A sessão agora roda em outro processo; atualize a lista.');
+  if (expect.procStart != null && String(found.procStart) !== String(expect.procStart)) throw new Error('O processo mudou desde a leitura; atualize a lista.');
+  await kill(found.pid);
+  return { ok: true, pid: found.pid };
+}
+
+module.exports = { id, name: 'Claude Code', icon: 'sparkles', root, parseLine, listSessions, live, close };

@@ -5,7 +5,7 @@ import { DS } from '../../lib/ds.js';
 import { useAiMode, useAiTask, AiButton, AiPanel, aiOn, aiCopy } from '../../ai/ui.jsx';
 import { errText } from '../../lib/fmt.jsx';
 
-const { Icon } = DS;
+const { Icon, Button, Modal } = DS;
 const api = () => window.devkit.aimon;
 
 const offReason = (cfg) => (aiOn(cfg) ? null : 'IA desligada');
@@ -50,6 +50,17 @@ export function SessionAi({ session, events, toast, slot }) {
       toast('Terminal aberto', o.command, 'ok');
     } catch (e) { toast('Não foi possível abrir o terminal', errText(e), 'error'); }
   };
+  // Encerrar: fecha o processo da sessão viva (o terminal fica aberto no prompt). O processo é conferido de novo no momento de encerrar
+  // (electron/aimon/providers/claude.js close). Com a sessão trabalhando, pede confirmação: o turno em andamento é interrompido.
+  const [confirmClose, setConfirmClose] = React.useState(false);
+  const canClose = !session.parentId && !!session.canClose;
+  const doClose = async () => {
+    setConfirmClose(false);
+    try {
+      await api().close(session.key);
+      toast('Sessão encerrada', 'O processo do Claude Code foi fechado.', 'ok');
+    } catch (e) { toast('Não foi possível encerrar', errText(e), 'error'); }
+  };
   const openWithBrief = async () => {
     const text = brief.st && brief.st.text;
     if (!text) return;
@@ -65,6 +76,10 @@ export function SessionAi({ session, events, toast, slot }) {
         title={canResume ? `Abre um terminal em ${session.cwd} e retoma esta sessão (${session.provider === 'codex' ? 'codex resume' : 'claude --resume'}), com todo o contexto dela` : 'Só sessões principais com pasta conhecida podem ser retomadas'}>
         <Icon name="square-terminal" size={12} /><span>Retomar</span>
       </button>
+      <button type="button" className="lg-btn" disabled={!canClose} onClick={() => (session.status === 'working' ? setConfirmClose(true) : doClose())}
+        title={canClose ? 'Fecha o processo do Claude Code desta sessão (o terminal continua aberto no prompt)' : 'Só sessões principais abertas agora podem ser encerradas'}>
+        <Icon name="power" size={12} /><span>Encerrar</span>
+      </button>
       <AiButton ai={summary} label="Resumir" disabled={!!reason} onClick={() => summary.start(() => api().digest(session.key))}
         title={tip('Resume a sessão em até 6 tópicos')} />
       <AiButton ai={brief} label="Briefing" disabled={!!reason} onClick={() => brief.start(gatherBrief)}
@@ -78,6 +93,15 @@ export function SessionAi({ session, events, toast, slot }) {
   return (
     <>
       {slot === undefined ? <div className="am-ai"><div className="am-ai__bar">{buttons}</div></div> : slot ? ReactDOM.createPortal(buttons, slot) : null}
+      {confirmClose && (
+        <Modal open onClose={() => setConfirmClose(false)} icon="power" width={440}
+          title="Encerrar sessão em andamento?"
+          description="A sessão está trabalhando agora. Encerrar interrompe o turno em andamento; o que já foi gravado fica no histórico e dá para retomar depois."
+          footer={<>
+            <Button variant="ghost" onClick={() => setConfirmClose(false)}>Cancelar</Button>
+            <Button variant="primary" icon="power" onClick={doClose}>Encerrar</Button>
+          </>} />
+      )}
       {anyPanel && (
         <div className="am-ai">
           <div className="am-priv"><AiPanel ai={summary} /></div>

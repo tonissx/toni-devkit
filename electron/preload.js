@@ -380,6 +380,8 @@ contextBridge.exposeInMainWorld('devkit', {
     dayDigest: () => ipcRenderer.invoke('aimon:dayDigest'),
     /** Abre um terminal na pasta da sessão e retoma ({ key } ou { provider, sessionId, cwd }, mode: 'resume' | 'new'). */
     resume: (req) => ipcRenderer.invoke('aimon:resume', req),
+    /** Encerra o processo de uma sessão viva (key da lista). */
+    close: (key) => ipcRenderer.invoke('aimon:close', key),
     /** Atividade de IA por repositório principal ({} se o acompanhamento não está ligado). Só consulta; nunca liga nada. */
     repoActivity: () => ipcRenderer.invoke('aimon:repoActivity'),
     /** Git (só leitura) da pasta de uma sessão: alterações não comitadas e o diff de um arquivo delas. */
