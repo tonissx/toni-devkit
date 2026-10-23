@@ -805,6 +805,52 @@ ipcMain.handle('agents:save', (_e, agent, previous) => agents().save(agent, prev
 ipcMain.handle('agents:remove', (_e, name) => agents().remove(String(name || '')));
 ipcMain.handle('agents:duplicate', (_e, name) => agents().duplicate(String(name || '')));
 ipcMain.handle('agents:dir', () => agents().dir);
+// Automações (gatilho + passos; só rodam com o devkit aberto; ver electron/automations). O estado fica em automations.json e automations-runs.json.
+// As Rotinas antigas (agents-schedule.json) são importadas na primeira abertura.
+let autoEngine = null;
+const autoToasts = new Set();
+const automations = () => autoEngine || (autoEngine = require('./automations/engine').createEngine({
+  file: path.join(app.getPath('userData'), 'automations.json'),
+  runsFile: path.join(app.getPath('userData'), 'automations-runs.json'),
+  legacyFile: path.join(app.getPath('userData'), 'agents-schedule.json'),
+  agents: agents(),
+  broadcast: (evt) => { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('automations:changed', evt); },
+  notify: (title, body) => {
+    if (!Notification.isSupported()) return;
+    const n = new Notification({ title: String(title).slice(0, 120), body: String(body).replace(/\s+/g, ' ').slice(0, 240) });
+    autoToasts.add(n);
+    const done = () => autoToasts.delete(n);
+    n.on('click', () => { done(); showMain('automations'); });
+    n.on('close', done);
+    n.on('failed', done);
+    n.show();
+  },
+  onFinish: (run, a) => {
+    if (!a || !a.notify || run.status === 'canceled' || !Notification.isSupported()) return;
+    const ok = run.status === 'ok';
+    const last = run.steps.filter((s) => s.status === 'ok').pop();
+    const n = new Notification({ title: ok ? `Automação concluída: ${run.name}` : `Automação com problema: ${run.name}`, body: ok ? ((last && last.output) || 'Sem texto de resposta.').replace(/\s+/g, ' ').slice(0, 160) : (run.error || 'Veja o histórico.').slice(0, 160) });
+    autoToasts.add(n);
+    const done = () => autoToasts.delete(n);
+    n.on('click', () => { done(); showMain('automations', { run: run.id }); });
+    n.on('close', done);
+    n.on('failed', done);
+    n.show();
+  },
+}));
+function initAutomations() { automations().init().then(() => automations().start()).catch((e) => console.error('[automations]', e)); }
+ipcMain.handle('automations:list', () => automations().list());
+ipcMain.handle('automations:save', (_e, a) => automations().save(a));
+ipcMain.handle('automations:remove', (_e, id) => automations().remove(String(id || '')));
+ipcMain.handle('automations:enabled', (_e, id, on) => automations().setEnabled(String(id || ''), !!on));
+ipcMain.handle('automations:runNow', (_e, id) => automations().runNow(String(id || '')));
+ipcMain.handle('automations:runCancel', (_e, id) => automations().cancel(String(id || '')));
+ipcMain.handle('automations:run', (_e, id) => automations().run(String(id || '')));
+ipcMain.handle('automations:historyClear', () => automations().clearHistory());
+ipcMain.handle('agents:pickDir', async () => {
+  const r = await dialog.showOpenDialog(mainWin && !mainWin.isDestroyed() ? mainWin : undefined, { title: 'Pasta de trabalho', properties: ['openDirectory'] });
+  return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
+});
 // Abre um terminal numa pasta que a pessoa escolhe, já com o agente (`claude --agent <nome>`).
 ipcMain.handle('agents:launch', async (_e, name, cwd) => {
   let dir = typeof cwd === 'string' && cwd ? cwd : '';
@@ -1169,6 +1215,7 @@ if (!app.requestSingleInstanceLock()) {
     initGit();
     initLogs();
     initAimon();
+    initAutomations();
     initDb();
     initAi();
     initVault();
@@ -1207,6 +1254,7 @@ if (!app.requestSingleInstanceLock()) {
       if (gitSvc) { gitSvc.unwatch(); await gitSvc.flush().catch(() => {}); }
       if (logsSvc) { logsSvc.unwatch(); await logsSvc.flush().catch(() => {}); }
       if (dbSvc) { dbSvc.stopAll(); await dbSvc.flush().catch(() => {}); }
+      if (autoEngine) await autoEngine.stop().catch(() => {});
       if (aimonSvc) aimonSvc.stop();
       if (aimonRev) aimonRev.stop();
       if (aimonPrefs) await aimonPrefs.flush().catch(() => {});

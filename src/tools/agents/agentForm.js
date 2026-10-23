@@ -47,6 +47,27 @@ function permissions(tools) {
   return { level: exec.length ? 'exec' : edit.length || other.length ? 'edit' : 'read', all: false, edit, exec, other };
 }
 
+const RUN_MODES = [
+  { value: 'read', label: 'Só leitura', hint: 'Mesmo que o agente possa mais, esta rotina só lê, busca e pesquisa. Recomendado.' },
+  { value: 'agent', label: 'Como o agente', hint: 'Usa as ferramentas que o agente declara (editar arquivos, rodar comandos). Sem ninguém olhando.' },
+];
+
+/**
+ * O que uma rotina pode fazer sem ninguém olhando. Nada é perguntado em segundo plano: o que não está liberado aqui é negado.
+ * `agent`: { tools } do agente. → { ok, problem?, tools, permissionMode, perms }
+ */
+function runPolicy(agent, mode) {
+  const own = agent && Array.isArray(agent.tools) && agent.tools.length ? agent.tools : null;
+  if (mode === 'agent') {
+    if (!own) return { ok: false, problem: 'Este agente herda todas as ferramentas. Para agendá-lo “como o agente”, defina na aba Agentes quais ferramentas ele pode usar.' };
+    const perms = permissions(own);
+    return { ok: true, tools: own, permissionMode: perms.edit.length ? 'acceptEdits' : 'dontAsk', perms };
+  }
+  const tools = own ? own.filter((t) => READ.includes(t)) : [...READ];
+  if (!tools.length) return { ok: false, problem: 'O agente não tem nenhuma ferramenta de leitura, então não há o que rodar em modo “Só leitura”.' };
+  return { ok: true, tools, permissionMode: 'dontAsk', perms: permissions(tools) };
+}
+
 const same = (a, b) => a.length === b.length && a.every((t) => b.includes(t));
 
 /** Qual preset descreve esta lista de ferramentas (null = herda tudo). */
@@ -99,4 +120,4 @@ const TEMPLATES = [
 const draftOf = (a) => ({ name: a.name || '', description: a.description || '', model: a.model || '', tools: Array.isArray(a.tools) ? [...a.tools] : null, extra: a.extra || '', prompt: a.prompt || '' });
 const sameDraft = (a, b) => JSON.stringify(draftOf(a)) === JSON.stringify(draftOf(b));
 
-module.exports = { permissions, READ, EDIT, TOOL_CHOICES, PRESETS, MODELS, TEMPLATES, presetOf, toolsForPreset, describePermissions, draftOf, sameDraft };
+module.exports = { permissions, runPolicy, RUN_MODES, READ, EDIT, TOOL_CHOICES, PRESETS, MODELS, TEMPLATES, presetOf, toolsForPreset, describePermissions, draftOf, sameDraft };

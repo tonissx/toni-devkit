@@ -351,6 +351,21 @@ contextBridge.exposeInMainWorld('devkit', {
     dir: () => ipcRenderer.invoke('agents:dir'),
     /** Abre um terminal já com o agente; sem `cwd`, pergunta a pasta → { launched, cwd?, terminal? }. */
     launch: (name, cwd) => ipcRenderer.invoke('agents:launch', name, cwd),
+    pickDir: () => ipcRenderer.invoke('agents:pickDir'),
+  },
+  /** Automações (ver electron/automations): gatilho + passos em sequência; só rodam com o devkit aberto. list → { automations, runs }; o detalhe de uma execução vem de run(id). */
+  automations: {
+    list: () => ipcRenderer.invoke('automations:list'),
+    save: (a) => ipcRenderer.invoke('automations:save', a),
+    remove: (id) => ipcRenderer.invoke('automations:remove', id),
+    enabled: (id, on) => ipcRenderer.invoke('automations:enabled', id, on),
+    /** "Rodar agora": ignora o horário. */
+    runNow: (id) => ipcRenderer.invoke('automations:runNow', id),
+    runCancel: (runId) => ipcRenderer.invoke('automations:runCancel', runId),
+    run: (runId) => ipcRenderer.invoke('automations:run', runId),
+    historyClear: () => ipcRenderer.invoke('automations:historyClear'),
+    /** Avisa quando automações ou execuções mudam; devolve a função que cancela. */
+    onChanged: (cb) => { const h = (_e, evt) => cb(evt); ipcRenderer.on('automations:changed', h); return () => ipcRenderer.removeListener('automations:changed', h); },
   },
   /** Monitor de IA (ver electron/aimon): sessões recentes de Claude Code, Codex… — somente leitura. */
   aimon: {
