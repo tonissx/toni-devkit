@@ -1401,3 +1401,40 @@ test('sideWidth (bandeja lateral): respeita mínimo, máximo e o espaço dispon�
   assert.equal(sideWidth(600, 100), SIDE_MIN);
   assert.equal(sideWidth(undefined), SIDE_DEFAULT);
 });
+
+/* ─── Alt+↑/↓ e Ctrl+P ─── */
+
+test('edit: moveLines moves the cursor line or the whole selection, keeps the selection, null at the edges', () => {
+  const { moveLines: mv } = E;
+  const v = 'a\nbb\nccc\nd';
+  // sem seleção: só a linha do cursor
+  assert.deepEqual(mv(v, 3, 3, 1), { value: 'a\nccc\nbb\nd', start: 7, end: 7 });
+  assert.deepEqual(mv(v, 3, 3, -1), { value: 'bb\na\nccc\nd', start: 1, end: 1 });
+  // seleção de várias linhas: o bloco inteiro troca com a vizinha
+  assert.deepEqual(mv(v, 2, 6, 1), { value: 'a\nd\nbb\nccc', start: 4, end: 8 });
+  assert.deepEqual(mv(v, 2, 6, -1), { value: 'bb\nccc\na\nd', start: 0, end: 4 });
+  // bordas
+  assert.equal(mv(v, 0, 0, -1), null);
+  assert.equal(mv(v, v.length, v.length, 1), null);
+  // última linha sem "\n" final sobe
+  assert.equal(mv('x\ny', 3, 3, -1).value, 'y\nx');
+  // seleção que termina no início de uma linha não leva essa linha
+  assert.equal(mv('a\nb\nc', 0, 2, 1).value, 'b\na\nc');
+});
+
+test('quickopen: empty query lists recents first; query matches title (accent-insensitive), folder and tags', () => {
+  const { rankNotes } = require('../src/notes/quickopen.js');
+  const rows = [
+    { id: '1', title: 'Reunião semanal', folder: 'Trabalho', tags: [], updated: 1 },
+    { id: '2', title: 'Receitas', folder: 'Casa/Cozinha', tags: ['comida'], updated: 3 },
+    { id: '3', title: 'Ideias', folder: '', tags: [], updated: 2 },
+  ];
+  assert.deepEqual(rankNotes(rows, '', { recentIds: ['1'] }).map((r) => r.note.id), ['1', '2', '3']);
+  const q = rankNotes(rows, 'reuniao');
+  assert.deepEqual(q.map((r) => r.note.id), ['1']);
+  assert.ok(q[0].idx.length > 0);
+  assert.deepEqual(rankNotes(rows, 'cozinha').map((r) => r.note.id), ['2']);
+  assert.deepEqual(rankNotes(rows, 'comida').map((r) => r.note.id), ['2']);
+  assert.deepEqual(rankNotes(rows, 'rec cozinha').map((r) => r.note.id), ['2']);
+  assert.deepEqual(rankNotes(rows, 'zzz'), []);
+});
