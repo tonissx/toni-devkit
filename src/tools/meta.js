@@ -100,6 +100,14 @@ const TOOL_META = [
     keywords: ['ia', 'ai', 'claude', 'codex', 'agente', 'agentes', 'subagente', 'sessão', 'sessões', 'monitor', 'timeline', 'tokens', 'transcript'],
   },
   {
+    id: 'agents',
+    name: 'Agentes',
+    icon: 'sparkles',
+    group: 'Texto & código',
+    desc: 'Monte e gerencie agentes do Claude Code: prompt, ferramentas e permissões por agente, sem editar arquivo na mão',
+    keywords: ['agente', 'agentes', 'subagente', 'claude', 'prompt', 'skill', 'especialista', 'revisor', 'criar agente', 'permissões'],
+  },
+  {
     id: 'devcore',
     name: 'DevCore',
     icon: 'cpu',

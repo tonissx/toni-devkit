@@ -15,8 +15,9 @@ import { LogsScreen } from './logs/LogsScreen.jsx';
 import { DbScreen } from './db/DbScreen.jsx';
 import { SqlViz } from './sqlviz/SqlViz.jsx';
 import { AIMonitor } from './aimon/AIMonitor.jsx';
+import { AgentsScreen } from './agents/AgentsScreen.jsx';
 
-const COMPONENTS = { sql: SqlFormatter, xml: XmlFormatter, diff: DiffChecker, json: JsonVisualizer, git: GitScreen, logs: LogsScreen, db: DbScreen, sqlviz: SqlViz, notes: NotesScreen, diagrams: DiagramsScreen, vault: VaultScreen, devcore: DevCoreScreen, aimon: AIMonitor };
+const COMPONENTS = { sql: SqlFormatter, xml: XmlFormatter, diff: DiffChecker, json: JsonVisualizer, git: GitScreen, logs: LogsScreen, db: DbScreen, sqlviz: SqlViz, notes: NotesScreen, diagrams: DiagramsScreen, vault: VaultScreen, devcore: DevCoreScreen, aimon: AIMonitor, agents: AgentsScreen };
 
 export const TOOLS = TOOL_META.map((t) => ({ ...t, component: COMPONENTS[t.id] }));
 
