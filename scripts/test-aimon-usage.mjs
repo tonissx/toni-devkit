@@ -108,6 +108,66 @@ test('métricas: gravar por máximo (reler não conta em dobro, leitura parcial 
   assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).days[day], undefined);
 });
 
+test('mapa de calor: horas entram por máximo, somam por dia da semana × hora e dado antigo sem horas não quebra', async () => {
+  const file = path.join(tmp(), 'aimon-usage.json');
+  const today = Date.now();
+  const day = dayKey(today);
+  const dow = (new Date(today).getDay() + 6) % 7; // seg = 0
+  const hours = (h, v) => { const a = new Array(24).fill(0); a[h] = v; return a; };
+  const base = { project: 'p', agent: false, tokens: { input: 1 }, byModel: {}, workMs: 1, waitMs: 0, waitCount: 0 };
+  let store = await createUsageStore({ file, now: () => today }).init();
+  store.merge({ [day]: { a: { ...base, hours: hours(14, 100) }, old: { ...base } } }); // "old": gravado antes das horas existirem
+  store.merge({ [day]: { a: { ...base, hours: hours(14, 100) } } });                    // reler não dobra
+  store.merge({ [day]: { a: { ...base, hours: hours(14, 40) } } });                     // leitura parcial não diminui
+  store.merge({ [day]: { a: { ...base, hours: hours(9, 30) }, ag: { ...base, agent: true, hours: hours(14, 20) } } }); // subagente também é consumo
+  await store.persist(); await store.flush();
+  store = await createUsageStore({ file, now: () => today }).init();
+  const { heat } = store.range(7);
+  assert.equal(heat.grid.length, 7);
+  assert.ok(heat.grid.every((r) => r.length === 24));
+  assert.equal(heat.grid[dow][14], 120);   // 100 da sessão + 20 do subagente
+  assert.equal(heat.grid[dow][9], 30);
+  assert.equal(heat.total, 150);
+  assert.equal(heat.max, 120);
+  assert.deepEqual(heat.peak, { dow, hour: 14 });
+  assert.deepEqual(store.range(1).heat.grid[dow], heat.grid[dow]);
+  // sem nada: grade zerada e sem pico
+  const empty = await createUsageStore({ file: path.join(tmp(), 'v.json') }).init();
+  assert.deepEqual([empty.range(7).heat.max, empty.range(7).heat.peak], [0, null]);
+});
+
+test('métricas no serviço: tokens por hora alimentam o mapa de calor e o card ganha o pulso dos últimos minutos', async () => {
+  const usageLine = asstLine([{ type: 'text', text: 'feito' }], { message: { usage: { input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 10000, cache_creation_input_tokens: 0 } } });
+  const base = mkBase({ h1: userLine('oi') + usageLine });
+  const store = await createUsageStore({ file: path.join(tmp(), 'aimon-usage.json') }).init();
+  const svc = createAimonService({ providers: [mkProvider(base)], windowMs: 3600e3, usage: store });
+  await svc._tick();
+  const r = await svc.usage(7, []);
+  assert.equal(r.heat.total, 1500);        // entrada + saída (leitura de cache não conta)
+  assert.equal(r.heat.grid[r.heat.peak.dow][r.heat.peak.hour], 1500);
+  const row = svc.list()[0];
+  assert.equal(row.pulse.length, 30);
+  assert.ok(row.pulse.some((v) => v > 0));
+  svc.stop();
+  const idle = createAimonService({ providers: [mkProvider(mkBase({ h2: userLine('oi') }))], windowMs: 3600e3 });
+  await idle._tick();
+  assert.equal(idle.list()[0].pulse, null); // sem consumo na janela: nada a desenhar
+});
+
+test('pulso: janela de 30 min, suavizada, vazio vira null', () => {
+  const { pulse } = require('../electron/aimon/vitals.js');
+  const now = 100 * 60000;
+  const m = new Map([[100, 400], [99, 0], [70, 800], [60, 5000]]); // 60 está fora da janela (71…100)
+  const p = pulse(m, now, 30);
+  assert.equal(p.length, 30);
+  assert.equal(p[29], 300);   // (0 + 2*400 + 400) / 4: a ponta repete o último valor
+  assert.equal(p[28], 100);   // (0 + 0 + 400) / 4
+  assert.equal(p[0], 0);      // o 800 do minuto 70 não entra: fora da janela
+  assert.equal(pulse(new Map([[1, 9]]), now, 30), null); // só consumo antigo
+  assert.equal(pulse(new Map(), now), null);
+  assert.equal(pulse(null, now), null);
+});
+
 test('métricas: arquivo estragado começa vazio e não guarda texto de prompt', async () => {
   const file = path.join(tmp(), 'u.json');
   fs.writeFileSync(file, '{lixo');

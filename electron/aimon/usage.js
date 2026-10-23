@@ -42,13 +42,20 @@ const maxStats = (a, b) => { const out = { ...(a || {}) }; for (const [k, v] of 
 const addStat = (a, b) => (b ? { n: (a.n || 0) + (b.n || 0), errors: (a.errors || 0) + (b.errors || 0), ms: (a.ms || 0) + (b.ms || 0), timed: (a.timed || 0) + (b.timed || 0), max: Math.max(a.max || 0, b.max || 0) } : a);
 const addStats = (into, tools) => { for (const [k, v] of Object.entries(tools || {})) into[k] = addStat(into[k] || {}, v); };
 
+/** Tokens por hora do dia (24 posições, hora local) → sempre 24 números; dado ausente ou ruim vira zeros. */
+const normHours = (h) => Array.from({ length: 24 }, (_, i) => (Array.isArray(h) && Number.isFinite(h[i]) && h[i] > 0 ? h[i] : 0));
+const maxHours = (a, b) => normHours(a).map((v, i) => Math.max(v, normHours(b)[i]));
+
 function mergeEntry(prev, next) {
-  if (!prev) return { project: next.project || '', agent: !!next.agent, tokens: { ...zero(), ...next.tokens }, byModel: JSON.parse(JSON.stringify(next.byModel || {})), workMs: next.workMs || 0, waitMs: next.waitMs || 0, waitCount: next.waitCount || 0, tools: maxStats({}, next.tools), turn: maxStat({}, next.turn || {}) };
+  if (!prev) return { project: next.project || '', agent: !!next.agent, tokens: { ...zero(), ...next.tokens }, byModel: JSON.parse(JSON.stringify(next.byModel || {})), hours: normHours(next.hours), workMs: next.workMs || 0, waitMs: next.waitMs || 0, waitCount: next.waitCount || 0, tools: maxStats({}, next.tools), turn: maxStat({}, next.turn || {}) };
   const byModel = { ...prev.byModel };
   for (const [m, t] of Object.entries(next.byModel || {})) byModel[m] = maxTokens(byModel[m] || {}, t);
-  return { project: next.project || prev.project, agent: prev.agent, tokens: maxTokens(prev.tokens, next.tokens || {}), byModel, workMs: Math.max(prev.workMs, next.workMs || 0), waitMs: Math.max(prev.waitMs, next.waitMs || 0), waitCount: Math.max(prev.waitCount, next.waitCount || 0),
+  return { project: next.project || prev.project, agent: prev.agent, tokens: maxTokens(prev.tokens, next.tokens || {}), byModel, hours: maxHours(prev.hours, next.hours), workMs: Math.max(prev.workMs, next.workMs || 0), waitMs: Math.max(prev.waitMs, next.waitMs || 0), waitCount: Math.max(prev.waitCount, next.waitCount || 0),
     tools: maxStats(prev.tools, next.tools), turn: maxStat(prev.turn || {}, next.turn || {}) };
 }
+
+/** Dia "AAAA-MM-DD" → 0 (segunda) … 6 (domingo). */
+const weekdayOf = (day) => { const [y, m, d] = day.split('-').map(Number); return (new Date(y, m - 1, d).getDay() + 6) % 7; };
 
 const MAX_HITS = 20;
 const HIT_GAP = 30 * 60_000; // dois avisos de limite com menos que isso entre si são o mesmo limite
@@ -115,12 +122,15 @@ function createUsageStore({ file, now = () => Date.now() }) {
       const totals = { tokens: zero(), workMs: 0, waitMs: 0, waitCount: 0 };
       const toolStats = {}; let turnStat = {};
       const modelTokens = {}; const projects = {}; const seen = new Set(); const seenAgents = new Set();
+      const grid = Array.from({ length: 7 }, () => new Array(24).fill(0)); // mapa de calor: dia da semana × hora
       const outDays = list.map((day) => {
         const d = data.days[day];
         const row = { day, tokens: 0, cost: 0, workMs: 0, waitMs: 0, sessions: 0 };
         if (!d) return row;
         const byModelDay = {};
+        const wd = weekdayOf(day);
         for (const [key, e] of Object.entries(d.sessions)) {
+          normHours(e.hours).forEach((v, h) => { grid[wd][h] += v; }); // sessões e subagentes: é consumo de tokens
           const tot = sumTokens(zero(), e.tokens);
           row.tokens += tot.input + tot.output + tot.cacheRead + tot.cacheWrite;
           totals.tokens = sumTokens(totals.tokens, e.tokens);
@@ -155,9 +165,14 @@ function createUsageStore({ file, now = () => Date.now() }) {
       const turns = { n: turnStat.n || 0, avgMs: turnStat.timed ? turnStat.ms / turnStat.timed : null, maxMs: turnStat.max || 0 };
       const since = dayStart(list[0]);
       const inRange = (plans || []).filter((p) => p && p.ts >= since);
+      const heatMax = Math.max(0, ...grid.flat());
+      const heatTotal = grid.flat().reduce((a, b) => a + b, 0);
+      let peak = null;
+      if (heatMax > 0) for (let dow = 0; dow < 7 && !peak; dow++) { const hour = grid[dow].indexOf(heatMax); if (hour >= 0) peak = { dow, hour }; }
       return {
         days: n,
         series: outDays,
+        heat: { grid, max: heatMax, total: heatTotal, peak },
         totals: { ...totals, total: totals.tokens.input + totals.tokens.output + totals.tokens.cacheRead + totals.tokens.cacheWrite, cost: priced.cost, savings: priced.savings, sessions: seen.size, agents: seenAgents.size,
           waitShare: totals.workMs + totals.waitMs > 0 ? totals.waitMs / (totals.workMs + totals.waitMs) : 0 },
         byModel, byProject, byTool, turns, unpriced: priced.unpriced,

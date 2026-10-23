@@ -42,4 +42,18 @@ function isCollapsed(sum, map, key) {
   return !sum.working && !sum.waiting && !sum.error; // algo ativo ou com erro fica aberto
 }
 
-module.exports = { summarizeAgents, agentParts, isCollapsed };
+/**
+ * Janela do grupo de subagentes para a mini-linha do tempo de cada um: do início do primeiro ao fim do último (agora, se algum
+ * ainda trabalha ou espera). → { from, to, span } ; null sem subagente com horário.
+ */
+function agentWindow(kids, now = Date.now()) {
+  let from = Infinity; let to = 0;
+  for (const k of kids || []) {
+    if (!k || !k.firstTs) continue;
+    from = Math.min(from, k.firstTs);
+    to = Math.max(to, k.status === 'working' || k.status === 'waiting' ? now : k.lastTs || k.firstTs);
+  }
+  return Number.isFinite(from) && to >= from ? { from, to, span: to - from } : null;
+}
+
+module.exports = { summarizeAgents, agentParts, isCollapsed, agentWindow };

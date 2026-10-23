@@ -961,7 +961,19 @@ ipcMain.handle('aimon:gitDiff', (_e, key, p, area) => aimon().gitDiff(String(key
 ipcMain.handle('aimon:digest', (_e, key) => aimon().digest(String(key || '')));
 ipcMain.handle('aimon:gitAiInput', (_e, key) => aimon().gitAiInput(String(key || '')));
 ipcMain.handle('aimon:resolveRepo', (_e, cwd) => aimon().resolveRepo(cwd));
-ipcMain.handle('aimon:lanes', (_e, opts) => aimon().lanes(opts && typeof opts === 'object' ? opts : {}));
+// Raias + bandeiras dos planos (pedido de aprovação: aprovado, recusado ou sem resposta) nas raias das sessões principais.
+ipcMain.handle('aimon:lanes', async (_e, opts) => {
+  const r = aimon().lanes(opts && typeof opts === 'object' ? opts : {});
+  const a = await plans().catch(() => null);
+  if (!a) return r;
+  const bySession = new Map();
+  for (const p of a.list({})) {
+    if (!p.sessionId || p.ts < r.since) continue;
+    (bySession.get(p.sessionId) || bySession.set(p.sessionId, []).get(p.sessionId)).push({ id: p.id, ts: p.ts, status: p.status, title: p.title });
+  }
+  for (const l of r.lanes) l.plans = l.parentId ? [] : bySession.get(l.sessionId) || [];
+  return r;
+});
 ipcMain.handle('aimon:timeline', (_e, key, opts) => aimon().timeline(String(key || ''), opts && typeof opts === 'object' ? opts : {}));
 
 // Serviço (abrir, ao vivo, recentes, filtros salvos).

@@ -4,6 +4,7 @@
 import { DS } from '../../lib/ds.js';
 import { AiMarkdown } from '../../ai/ui.jsx';
 import { errText, ago, fmtDateTime, copyText } from '../../lib/fmt.jsx';
+import { dur } from './Lanes.jsx';
 
 const { Icon, Spinner, EmptyState, SegmentedControl, Modal, Button } = DS;
 
@@ -24,6 +25,38 @@ const FILTERS = [
 function PlanStatus({ s }) {
   const st = STATUS[s] || STATUS.pending;
   return <span className={'am-pstatus is-' + st.tone}><Icon name={st.icon} size={12} />{st.label}</span>;
+}
+
+/**
+ * A vida de um plano em três passos: pedido → resposta → commits. Etapa feita fica cheia; a que ainda espera, tracejada.
+ * O horário da resposta só existe para planos vistos depois que o Monitor passou a guardá-lo (answeredAt).
+ */
+function PlanFlow({ plan, commits }) {
+  const answered = plan.status !== 'pending';
+  const ok = plan.status === 'approved';
+  const wait = plan.answeredAt && plan.ts ? dur(plan.answeredAt - plan.ts) : null;
+  const n = commits == null ? null : commits.length;
+  const steps = [
+    { icon: 'file-text', label: 'Plano pedido', sub: ago(plan.ts), state: 'done', title: fmtDateTime(plan.ts) },
+    answered
+      ? { icon: ok ? 'circle-check' : 'circle-x', label: ok ? 'Aprovado' : 'Recusado', sub: wait ? `em ${wait}` : plan.answeredAt ? ago(plan.answeredAt) : '', state: ok ? 'ok' : 'no', title: plan.answeredAt ? fmtDateTime(plan.answeredAt) : '' }
+      : { icon: 'hourglass', label: 'Aguardando você', sub: 'sem resposta', state: 'wait', title: 'O Claude Code ainda espera a sua resposta a este plano' },
+    !ok
+      ? { icon: 'git-commit-horizontal', label: 'Commits', sub: answered ? 'não executado' : '', state: 'off', title: answered ? 'Um plano recusado não vira commits' : 'Só depois da aprovação' }
+      : n == null ? { icon: 'git-commit-horizontal', label: 'Commits', sub: '…', state: 'wait', title: '' }
+        : n > 0 ? { icon: 'git-commit-horizontal', label: 'Commits', sub: `${n} depois do plano`, state: 'done', title: '' }
+          : { icon: 'git-commit-horizontal', label: 'Commits', sub: 'nenhum ainda', state: 'wait', title: 'A sessão ainda não fez commits depois deste plano' },
+  ];
+  return (
+    <ol className="am-flow" aria-label="Etapas do plano">
+      {steps.map((s, i) => (
+        <li key={i} className={'am-flow__step is-' + s.state} title={s.title || undefined}>
+          <span className="am-flow__dot"><Icon name={s.icon} size={13} /></span>
+          <span className="am-flow__txt"><b>{s.label}</b>{s.sub && <small>{s.sub}</small>}</span>
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 export function Plans({ sessions, onOpenSession, onOpenCommit, toast }) {
@@ -132,6 +165,7 @@ export function Plans({ sessions, onOpenSession, onOpenCommit, toast }) {
               </div>
             </div>
             <div className="am-plans__body tk-scroll">
+              <PlanFlow plan={detail || current} commits={detail ? detail.commits || [] : null} />
               {current.status === 'rejected' && (
                 <div className="am-plans__reason">
                   <Icon name="message-square" size={13} />

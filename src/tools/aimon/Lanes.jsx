@@ -17,6 +17,11 @@ const STATE = {
   working: { label: 'Trabalhando', icon: 'loader' },
   waiting: { label: 'Esperando você', icon: 'hand' },
 };
+const PLAN_FLAG = {
+  approved: { label: 'aprovado', icon: 'circle-check' },
+  rejected: { label: 'recusado', icon: 'circle-x' },
+  pending: { label: 'sem resposta', icon: 'circle-dashed' },
+};
 const ROW_H = 26;
 const LABEL_W = 210;
 
@@ -68,6 +73,10 @@ export function Lanes({ provider, scale, onScale, sel, onPick, onCommit, rev, to
     const r = e.currentTarget.ownerSVGElement.getBoundingClientRect();
     setTip({ lane, commit, left: Math.min(Math.max(4, e.clientX - r.left - 70), plotW - 190) });
   };
+  const showPlan = (e, lane, plan) => {
+    const r = e.currentTarget.ownerSVGElement.getBoundingClientRect();
+    setTip({ lane, plan, left: Math.min(Math.max(4, e.clientX - r.left - 70), plotW - 190) });
+  };
   const showError = (e, lane, error) => {
     const r = e.currentTarget.ownerSVGElement.getBoundingClientRect();
     setTip({ lane, error, left: Math.min(Math.max(4, e.clientX - r.left - 70), plotW - 190) });
@@ -89,6 +98,8 @@ export function Lanes({ provider, scale, onScale, sel, onPick, onCommit, rev, to
           <span className="am-legend"><span className="am-key is-working" /><Icon name="loader" size={12} />Trabalhando</span>
           <span className="am-legend"><span className="am-key is-waiting" /><Icon name="hand" size={12} />Esperando você (heurística)</span>
           <span className="am-legend"><span className="am-key is-error" /><Icon name="circle-alert" size={12} />Erro</span>
+          <span className="am-legend"><span className="am-key is-tick" />Ferramenta</span>
+          <span className="am-legend"><Icon name="flag" size={12} />Plano</span>
           <SegmentedControl size="sm" options={SCALES.map(({ value, label }) => ({ value, label }))} value={scale} onChange={onScale} />
         </div>
       </div>
@@ -126,6 +137,10 @@ export function Lanes({ provider, scale, onScale, sel, onPick, onCommit, rev, to
                         <rect width="6" height="6" className="am-stripe__bg" />
                         <rect width="3" height="6" className="am-stripe__fg" />
                       </pattern>
+                      <linearGradient id="am-work" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0" style={{ stopColor: 'var(--tk-accent)' }} />
+                        <stop offset="1" style={{ stopColor: 'var(--tk-accent)', stopOpacity: 0.7 }} />
+                      </linearGradient>
                     </defs>
                     {ticks.map((t) => <line key={t} x1={x(t) + 0.5} x2={x(t) + 0.5} y1={0} y2={ROW_H} className="lg-grid" />)}
                     {up > 0 && (
@@ -137,14 +152,26 @@ export function Lanes({ provider, scale, onScale, sel, onPick, onCommit, rev, to
                     {lane.segments.map((s, i) => (
                       <rect key={i} x={x(s.from)} y={4} width={Math.max(2, x(s.to) - x(s.from))} height={ROW_H - 8} rx={3}
                         className={'am-seg is-' + s.state + (s.state === 'working' && s.to >= data.now - 1 ? ' is-live' : '')} fill={s.state === 'waiting' ? 'url(#am-stripe)' : undefined}
+                        style={s.state === 'working' ? { fill: 'url(#am-work)' } : undefined}
                         onPointerMove={(e) => showTip(e, lane, s)} onClick={() => onPick(lane.key)} />
                     ))}
+                    {/* Uma marca fina por chamada de ferramenta: o miolo do bloco mostra se o agente estava a todo vapor ou parado num passo longo. */}
+                    {(lane.tools || []).length > 0 && (
+                      <path className="am-ticks" aria-hidden="true" d={lane.tools.filter((t) => t >= data.since && t <= data.now).map((t) => `M${(x(t) + 0.5).toFixed(1)} ${ROW_H - 10}v4`).join('')} />
+                    )}
                     <line x1={plotW - 0.5} x2={plotW - 0.5} y1={0} y2={ROW_H} className="am-nowline" />
                     {(lane.errors || []).map((er) => (
                       <g key={'e' + er.ts} className="am-emark" onPointerMove={(e) => showError(e, lane, er)} onClick={() => onPick(lane.key)}>
                         <rect x={x(er.ts) - 8} y={ROW_H / 2 - 8} width={16} height={16} />
                         <line x1={x(er.ts) - 4.5} y1={ROW_H / 2 - 4.5} x2={x(er.ts) + 4.5} y2={ROW_H / 2 + 4.5} />
                         <line x1={x(er.ts) + 4.5} y1={ROW_H / 2 - 4.5} x2={x(er.ts) - 4.5} y2={ROW_H / 2 + 4.5} />
+                      </g>
+                    ))}
+                    {(lane.plans || []).map((p) => (
+                      <g key={p.id} className={'am-flag is-' + p.status} onPointerMove={(e) => showPlan(e, lane, p)} onClick={() => onPick(lane.key)}>
+                        <rect x={x(p.ts) - 5} y={0} width={14} height={14} fill="transparent" />
+                        <line x1={x(p.ts) + 0.5} x2={x(p.ts) + 0.5} y1={1} y2={13} />
+                        <path d={`M${x(p.ts) + 0.5} 1 h7 l-2.5 3 l2.5 3 h-7 Z`} />
                       </g>
                     ))}
                     {(lane.commits || []).map((c) => (
@@ -156,6 +183,12 @@ export function Lanes({ provider, scale, onScale, sel, onPick, onCommit, rev, to
                     <div className="lg-tip am-tip" style={{ left: tip.left, top: ROW_H }}>
                       <div className="lg-tip__when"><Icon name="circle-alert" size={11} /> Erro · {fmtTime(tip.error.ts, { millis: false })}</div>
                       <div className="lg-tip__row"><span className="am-priv">{tip.error.message}</span></div>
+                    </div>
+                  )}
+                  {tip && tip.lane === lane && tip.plan && (
+                    <div className="lg-tip am-tip" style={{ left: tip.left, top: ROW_H }}>
+                      <div className="lg-tip__when"><Icon name={PLAN_FLAG[tip.plan.status].icon} size={11} /> Plano · {PLAN_FLAG[tip.plan.status].label} · {fmtTime(tip.plan.ts, { millis: false })}</div>
+                      <div className="lg-tip__row"><span className="am-priv">{tip.plan.title}</span></div>
                     </div>
                   )}
                   {tip && tip.lane === lane && tip.commit && (

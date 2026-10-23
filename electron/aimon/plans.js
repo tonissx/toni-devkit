@@ -68,14 +68,15 @@ function extractPlans(text, _opts) {
         uses.set(b.id, { id: b.id, ts: Number.isFinite(t) ? t : 0, status: 'pending', title: titleOf(b.input.plan), plan: b.input.plan, planFile: b.input.planFilePath || null, cwd: o.cwd || null, branch: o.gitBranch || null });
       } else if (b.type === 'tool_result' && b.tool_use_id && !results.has(b.tool_use_id)) {
         const r = parseResult(b, o.toolUseResult);
-        if (r) results.set(b.tool_use_id, r);
+        const at = Date.parse(o.timestamp);
+        if (r) results.set(b.tool_use_id, { ...r, ...(Number.isFinite(at) ? { answeredAt: at } : {}) }); // quando o usuário respondeu (a linha do resultado)
       }
     }
   }
   const plans = [];
   for (const [id, p] of uses) {
     const r = results.get(id);
-    if (r) { p.status = r.status; if (r.reason) p.reason = r.reason; if (r.plan) { p.plan = r.plan; p.title = titleOf(r.plan); } }
+    if (r) { p.status = r.status; if (r.answeredAt) p.answeredAt = r.answeredAt; if (r.reason) p.reason = r.reason; if (r.plan) { p.plan = r.plan; p.title = titleOf(r.plan); } }
     plans.push(p);
   }
   for (const [id, r] of results) if (!uses.has(id)) plans.push({ id, resultOnly: true, ...r });
@@ -129,7 +130,7 @@ function createPlansArchive({ file, listFiles, readChunk, now = () => Date.now()
       const cur = state.plans[p.id];
       if (p.resultOnly) {
         if (!cur) continue; // resposta sem pedido conhecido: nada a guardar
-        const next = { ...cur, status: p.status, ...(p.reason ? { reason: p.reason } : {}), ...(p.plan ? { plan: p.plan, title: titleOf(p.plan) } : {}) };
+        const next = { ...cur, status: p.status, ...(p.answeredAt ? { answeredAt: p.answeredAt } : {}), ...(p.reason ? { reason: p.reason } : {}), ...(p.plan ? { plan: p.plan, title: titleOf(p.plan) } : {}) };
         if (JSON.stringify(next) !== JSON.stringify(cur)) { state.plans[p.id] = next; changed = true; }
         continue;
       }
@@ -187,7 +188,7 @@ function createPlansArchive({ file, listFiles, readChunk, now = () => Date.now()
       const i = body.toLowerCase().indexOf(q);
       if (i >= 0) snippet = (i > 50 ? '…' : '') + body.slice(Math.max(0, i - 50), i + 110).trim() + '…';
     }
-    return { id: p.id, ts: p.ts, status: p.status, reason: p.reason || null, title: p.title, project: base(p.cwd) || p.project || '', cwd: p.cwd, branch: p.branch, sessionTitle: p.sessionTitle || null, sessionId: p.sessionId || null, orphan: !!p.orphan, snippet };
+    return { id: p.id, ts: p.ts, answeredAt: p.answeredAt || null, status: p.status, reason: p.reason || null, title: p.title, project: base(p.cwd) || p.project || '', cwd: p.cwd, branch: p.branch, sessionTitle: p.sessionTitle || null, sessionId: p.sessionId || null, orphan: !!p.orphan, snippet };
   };
 
   return {

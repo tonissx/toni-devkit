@@ -16,11 +16,13 @@ const { zero, sumTokens, costByModel } = require('./pricing');
 const { searchSessions } = require('./search');
 const { summarize: summarizeCtx, suggest: suggestCtx } = require('./context');
 const { createGitInfo } = require('./gitinfo');
+const { pulse } = require('./vitals');
 const { redact } = require('../../src/logs/redact.js');
 const { sessionDigest } = require('../../src/tools/aimon/aiInput.js');
 
 const WINDOW_MS = 24 * 3600e3;
 const MAX_EVENTS = 3000;     // por sessão, na memória
+const MAX_LANE_TOOLS = 600;  // ticks de ferramenta por raia
 const FIRST_READ_MAX = 6 * 1024 * 1024; // arquivo maior que isso: lê só o final (a contagem de turnos/tokens fica parcial)
 const USAGE_FLUSH_MS = 30_000;         // de quanto em quanto tempo as métricas diárias vão para o disco
 const CONFLICT_MS = 30 * 60_000;       // dois agentes no mesmo arquivo: só conta edição dessa janela
@@ -120,10 +122,12 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
   function addDaily(t, ev) {
     if (!ev.ts) return;
     const day = dayKey(ev.ts);
-    const d = t.daily[day] || (t.daily[day] = { tokens: zero(), byModel: {} });
+    const d = t.daily[day] || (t.daily[day] = { tokens: zero(), byModel: {}, hours: new Array(24).fill(0) });
     d.tokens = sumTokens(d.tokens, ev.tokens || {});
     const minute = Math.floor(ev.ts / 60000);
-    t.minutes.set(minute, (t.minutes.get(minute) || 0) + countable(ev.tokens));
+    const used = countable(ev.tokens);
+    t.minutes.set(minute, (t.minutes.get(minute) || 0) + used);
+    d.hours[new Date(ev.ts).getHours()] += used; // hora local, como o dia (mapa de calor da aba Uso)
     if (ev.model) d.byModel[ev.model] = sumTokens(d.byModel[ev.model] || zero(), ev.tokens || {});
   }
 
@@ -139,13 +143,13 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
       const split = agent ? {} : splitByDay(overlayWaiting(segments(t.events, at, { from: 0 }), waits.get(key), 0, at));
       const project = projectOf(t);
       for (const day of new Set([...Object.keys(t.daily), ...Object.keys(split), ...Object.keys(t.st.toolDaily), ...Object.keys(t.st.turnDaily)])) {
-        const d = t.daily[day] || { tokens: zero(), byModel: {} };
+        const d = t.daily[day] || { tokens: zero(), byModel: {}, hours: null };
         const sp = split[day] || { workMs: 0, waitMs: 0, waitCount: 0 };
         const tools = t.st.toolDaily[day] || {};
         const turn = (t.st.turnDaily[day] || {}).turn || null;
         const tok = d.tokens.input + d.tokens.output + d.tokens.cacheRead + d.tokens.cacheWrite;
         if (!tok && !sp.workMs && !sp.waitMs && !Object.keys(tools).length && !turn) continue;
-        (out[day] || (out[day] = {}))[key] = { project, agent, tokens: d.tokens, byModel: d.byModel, workMs: sp.workMs, waitMs: sp.waitMs, waitCount: sp.waitCount, tools, turn };
+        (out[day] || (out[day] = {}))[key] = { project, agent, tokens: d.tokens, byModel: d.byModel, hours: d.hours, workMs: sp.workMs, waitMs: sp.waitMs, waitCount: sp.waitCount, tools, turn };
       }
     }
     return out;
@@ -397,6 +401,7 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
     dirty: dirtyOf(t),
     conflicts: conflictMap.get(keyOf(t.meta)) || [],
     review: t.meta.parentId ? null : getReview(keyOf(t.meta)),
+    pulse: pulse(t.minutes, now()), // tokens por minuto nos últimos 30 min (o desenho do card); null sem consumo na janela
   });
 
   /** Arquivos alterados na pasta: das sessões em andamento e da sessão principal mais recente de cada pasta (parada com alterações). */
@@ -479,7 +484,8 @@ function createAimonService({ providers, broadcast = () => {}, now = () => Date.
         if (!segs.length && !errors.length) continue;
         const r = row(t);
         const commits = t.events.filter((e) => e.kind === 'commit' && e.ts >= since).map((e) => ({ ts: e.ts, hash: e.hash, branch: e.branch, subject: e.summary }));
-        out.push({ key: r.key, provider: r.provider, sessionId: r.sessionId, parentId: r.parentId, label: r.label, title: r.title, project: r.project, cwd: r.cwd, status: r.status, partial: r.partial, repo: r.repo, commits, errors, segments: segs });
+        const tools = t.events.filter((e) => e.kind === 'tool_use' && e.ts >= since).map((e) => e.ts).slice(-MAX_LANE_TOOLS); // ticks de ferramenta (só o instante)
+        out.push({ key: r.key, provider: r.provider, sessionId: r.sessionId, parentId: r.parentId, label: r.label, title: r.title, project: r.project, cwd: r.cwd, status: r.status, partial: r.partial, repo: r.repo, commits, errors, tools, segments: segs });
       }
       return { now: at, since, lanes: out, stats: lanesStats(out, at) };
     },

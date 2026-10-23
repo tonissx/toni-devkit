@@ -6,6 +6,7 @@ import { Stat, useWidth, niceTicks } from '../../lib/charts.jsx';
 import { errText, fmtCompact, fmtNum } from '../../lib/fmt.jsx';
 import { useAiMode, useAiTask, AiButton, AiPanel, aiOn } from '../../ai/ui.jsx';
 import { dur } from './Lanes.jsx';
+import { Heatmap } from './Heatmap.jsx';
 import { diaryInput } from './aiInput.js';
 
 const { Icon, Spinner, EmptyState, SegmentedControl } = DS;
@@ -310,6 +311,11 @@ export function Usage({ rev, toast }) {
               <SegmentedControl size="sm" options={METRICS} value={metric} onChange={setMetric} />
             </header>
             <DayBars series={data.series} metric={metric} />
+          </section>
+
+          <section className="lg-card am-us__card">
+            <header className="lg-card__head"><div><h3>Quando você usa</h3><small>dia da semana × hora · tokens · {data.series.length} dias</small></div></header>
+            <Heatmap heat={data.heat} />
           </section>
 
           <div className="am-us__cols">
