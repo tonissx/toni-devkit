@@ -922,6 +922,8 @@ ipcMain.handle('aimon:resume', async (_e, req) => {
   const known = typeof r.key === 'string' ? aimon().sessionInfo(r.key) : null; // sessão acompanhada: usa o que o monitor leu, não o que a tela mandou
   return require('./aimon/resume').open({ provider: known ? known.provider : r.provider, sessionId: known ? known.sessionId : r.sessionId, cwd: known ? known.cwd : r.cwd, mode: r.mode });
 });
+// Encerra o processo da sessão viva (pid e início conferidos de novo no momento de matar; ver providers/claude.js close).
+ipcMain.handle('aimon:close', (_e, key) => aimon().closeSession(String(key || '')));
 // Só consulta o que o acompanhamento já leu; nunca o liga (sem segundo plano nem tela aberta, volta vazio).
 ipcMain.handle('aimon:repoActivity', () => (aimonSvc ? aimonSvc.repoActivity() : {}));
 // Planos aprovados/recusados das sessões, guardados em %APPDATA%Toni Devkitaimon-plans.json (ver electron/aimon/plans.js).

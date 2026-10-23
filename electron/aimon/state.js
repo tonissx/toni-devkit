@@ -150,7 +150,7 @@ function statusOf(s, now, live) {
 function summary(s, now, live) {
   const known = !!live && ['waiting', 'busy', 'idle', 'shell'].includes(live.status);
   return {
-    status: statusOf(s, now, live), statusSource: known ? 'live' : 'transcript', waitingFor: known && live.status === 'waiting' ? live.waitingFor || null : null, title: s.title, cwd: s.cwd, branch: s.branch, lastTs: s.lastTs, lastTool: s.lastTool, lastText: s.lastText,
+    status: statusOf(s, now, live), statusSource: known ? 'live' : 'transcript', canClose: known && Number.isFinite(live.pid),waitingFor: known && live.status === 'waiting' ? live.waitingFor || null : null, title: s.title, cwd: s.cwd, branch: s.branch, lastTs: s.lastTs, lastTool: s.lastTool, lastText: s.lastText,
     tokens: { ...s.tokens }, model: s.model, turns: s.turns, tools: s.tools, pending: s.pending.size,
     error: s.error ? { ...s.error } : null, lastToolFailed: !!s.lastToolFailed,
     failStreak: s.failStreak ? { ...s.failStreak } : null, context: contextOf(s),

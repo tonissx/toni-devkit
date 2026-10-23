@@ -39,6 +39,57 @@ test('live: lê só processo vivo, ignora lixo e arquivos .key, e vale o mais re
   assert.equal((await claude.live(path.join(dir, 'nao-existe'), alive)).size, 0);
 });
 
+/* ─────────────── encerrar sessão ─────────────── */
+
+test('close: só encerra se o pid está vivo e o início do processo confere; nunca lê os .key', async () => {
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, '10.json'), JSON.stringify({ pid: 10, sessionId: 's1', procStart: '111', updatedAt: 1 }));
+  fs.writeFileSync(path.join(dir, '11.json'), JSON.stringify({ pid: 11, sessionId: 's-morto', procStart: '5' }));
+  fs.writeFileSync(path.join(dir, '10.abc.key'), 'SEGREDO');
+  const killed = [];
+  const o = { dir, alive: (pid) => pid !== 11, kill: async (pid) => { killed.push(pid); } };
+  assert.deepEqual(await claude.close('s1', { pid: 10, procStart: '111' }, o), { ok: true, pid: 10 });
+  assert.deepEqual(killed, [10]);
+  await assert.rejects(claude.close('s1', { pid: 10, procStart: '999' }, o), /processo mudou/); // pid reaproveitado
+  await assert.rejects(claude.close('s1', { pid: 77, procStart: '111' }, o), /outro processo/);
+  await assert.rejects(claude.close('s-morto', {}, o), /não está mais aberta/);
+  await assert.rejects(claude.close('nao-existe', {}, o), /não está mais aberta/);
+  await assert.rejects(claude.close('s1', {}, { ...o, dir: path.join(dir, 'x') }), /não está mais aberta/);
+  assert.deepEqual(killed, [10]); // as recusas não mataram nada
+});
+
+test('serviço: closeSession usa o pid que o monitor leu, recusa subagente e sessão que não está viva', async () => {
+  const base = tmp();
+  const nowIso = new Date().toISOString();
+  mkSession(base, 'main1', nowIso);
+  const sub = path.join(base, 'proj', 'main1', 'subagents');
+  fs.mkdirSync(sub, { recursive: true });
+  fs.writeFileSync(path.join(sub, 'agent-a1.jsonl'), j({ type: 'user', timestamp: nowIso, message: { role: 'user', content: 'sub' } }));
+  const calls = [];
+  const provider = {
+    ...claude, listSessions: (since) => claude.listSessions(since, base),
+    live: async () => new Map([['main1', { status: 'idle', pid: 42, procStart: 'P', updatedAt: 1 }]]),
+    close: async (sid, expect) => { calls.push([sid, expect]); return { ok: true, pid: expect.pid }; },
+  };
+  const svc = createAimonService({ providers: [provider], windowMs: 3600e3 });
+  await svc._tick();
+  const rows = svc.list();
+  const main = rows.find((r) => !r.parentId);
+  assert.equal(main.canClose, true);
+  assert.equal(rows.find((r) => r.parentId).canClose, false);
+  assert.deepEqual(await svc.closeSession(main.key), { ok: true, pid: 42 });
+  assert.deepEqual(calls, [['main1', { pid: 42, procStart: 'P' }]]);
+  await assert.rejects(svc.closeSession(rows.find((r) => r.parentId).key), /Subagente/);
+  await assert.rejects(svc.closeSession('claude:nao-existe'), /desconhecida/);
+
+  const off = createAimonService({ providers: [{ ...provider, live: async () => new Map() }], windowMs: 3600e3 });
+  await off._tick();
+  const offMain = off.list().find((r) => !r.parentId);
+  assert.equal(offMain.canClose, false);
+  await assert.rejects(off.closeSession(offMain.key), /não está aberta/);
+  assert.equal(calls.length, 1);
+});
+
 /* ─────────────── estado: o sinal do agente vale mais que a estimativa ─────────────── */
 
 const openTurn = (lastTs = T0) => { const s = state.createSessionState(); state.apply(s, { ts: lastTs, kind: 'prompt' }); state.apply(s, { ts: lastTs, kind: 'text', summary: 'x' }); return s; };
