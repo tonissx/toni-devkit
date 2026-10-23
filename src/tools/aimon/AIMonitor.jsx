@@ -4,7 +4,8 @@
 import { DS } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { errText, fmtCompact, fmtNum, ago } from '../../lib/fmt.jsx';
-import { Lanes, SCALES } from './Lanes.jsx';
+import { Lanes, SCALES, dur } from './Lanes.jsx';
+import { Pulse, ContextRing } from './Vitals.jsx';
 import { Plans } from './Plans.jsx';
 import { Changes } from './Changes.jsx';
 import { SessionAi } from './SessionAi.jsx';
@@ -14,7 +15,7 @@ import { Context } from './Context.jsx';
 import { Compare } from './Compare.jsx';
 import { reviewBadge } from './Review.jsx';
 import { gitAlerts, sessionAlerts } from './alerts.js';
-import { summarizeAgents, agentParts, isCollapsed } from './agents.js';
+import { summarizeAgents, agentParts, isCollapsed, agentWindow } from './agents.js';
 
 const { Icon, Spinner, EmptyState, SegmentedControl } = DS;
 
@@ -54,9 +55,14 @@ function StatusBadge({ s }) {
 }
 
 /** Subagente: uma linha compacta (estado com ícone + palavra, nome, quando, tokens). O que já está no pai não se repete. */
-function AgentRow({ s, sel, onPick, tick, last }) {
+function AgentRow({ s, sel, onPick, tick, last, win }) {
   const st = STATUS[s.status] || STATUS.idle;
   const title = s.label || s.title || s.lastText || 'Subagente';
+  // Mini-linha do tempo: onde este subagente começou e acabou dentro da janela do grupo (o primeiro a começar → o último a acabar).
+  const active = s.status === 'working' || s.status === 'waiting';
+  const from = s.firstTs || 0;
+  const to = active && win ? win.to : s.lastTs || from;
+  const bar = win && win.span > 0 && from ? { left: Math.max(0, ((from - win.from) / win.span) * 100), width: Math.max(4, ((to - from) / win.span) * 100) } : null;
   return (
     <button type="button" className={'am-agent' + (sel ? ' is-sel' : '') + (last ? ' is-last' : '')} onClick={() => onPick(s.key)} data-tick={tick} title={`${title} — ${st.hint}`}>
       <span className={'am-agent__state is-' + st.tone}>{s.status === 'working' ? <LiveDot /> : <Icon name={st.icon} size={12} />}<span>{st.label}</span></span>
@@ -64,8 +70,19 @@ function AgentRow({ s, sel, onPick, tick, last }) {
       {s.status === 'error' && s.error && <span className="am-agent__err am-priv" title={s.error.message}>{s.error.message}</span>}
       {s.lastToolFailed && s.status !== 'error' && <span className="am-agent__warn" title="A última ferramenta falhou"><Icon name="triangle-alert" size={12} />falhou</span>}
       {s.repo && s.repo.worktree && <span className="lg-pill am-priv" title={`Worktree: ${s.repo.top}`}><Icon name="git-fork" size={10} />{s.repo.worktree}</span>}
-      <span className="lg-muted">{ago(s.lastTs || s.mtime)}</span>
-      <span className="lg-muted" title="Tokens (entrada + saída + cache)">{fmtCompact(totalTokens(s.tokens))} tok</span>
+      {bar ? (
+        <span className="am-agent__line" title={`Rodou por ${dur(to - from)}`}>
+          <span className="am-agent__track" aria-hidden="true"><i className={'is-' + st.tone + (active ? ' is-live' : '')} style={{ left: bar.left + '%', width: Math.min(100 - bar.left, bar.width) + '%' }} /></span>
+          <span className="lg-muted">{dur(to - from)}</span>
+          <span className="lg-muted">{ago(s.lastTs || s.mtime)}</span>
+          <span className="lg-muted" title="Tokens (entrada + saída + cache)">{fmtCompact(totalTokens(s.tokens))} tok</span>
+        </span>
+      ) : (
+        <>
+          <span className="lg-muted">{ago(s.lastTs || s.mtime)}</span>
+          <span className="lg-muted" title="Tokens (entrada + saída + cache)">{fmtCompact(totalTokens(s.tokens))} tok</span>
+        </>
+      )}
     </button>
   );
 }
@@ -85,6 +102,8 @@ function SessionRow({ s, sel, onPick, tick, sum, collapsed, onToggle }) {
         {s.repo && s.repo.worktree && <span className="lg-pill am-priv" title={`Worktree: ${s.repo.top}`}><Icon name="git-fork" size={10} />{s.repo.worktree}</span>}
         {s.branch && <span className="am-session__branch"><Icon name="git-branch" size={10} />{s.branch}</span>}
         <span className="lg-muted" title="Tokens (entrada + saída + cache)">{fmtCompact(totalTokens(s.tokens))} tok</span>
+        <ContextRing ctx={s.context} />
+        <Pulse data={s.pulse} live={s.status === 'working'} />
         <span className="lg-muted">{ago(s.lastTs || s.mtime)}</span>
       </span>
       {s.status === 'waiting' && s.waitingFor && <span className="am-session__wait am-priv"><Icon name="hand" size={12} />{s.waitingFor}</span>}
@@ -133,12 +152,13 @@ function SessionList({ sessions, sel, onPick, tick, collapsed, onToggle }) {
             const kids = g.kids.get(s.sessionId) || [];
             const sum = kids.length ? summarizeAgents(kids) : null;
             const closed = isCollapsed(sum, collapsed, s.key);
+            const win = agentWindow(kids);
             return (
               <div key={s.key} className="am-card">
                 <SessionRow s={s} sel={sel === s.key} onPick={onPick} tick={tick} sum={sum} collapsed={closed} onToggle={() => onToggle(s.key, closed)} />
                 {sum && !closed && (
                   <div className="am-card__kids">
-                    {kids.map((k, i) => <AgentRow key={k.key} s={k} sel={sel === k.key} onPick={onPick} tick={tick} last={i === kids.length - 1} />)}
+                    {kids.map((k, i) => <AgentRow key={k.key} s={k} sel={sel === k.key} onPick={onPick} tick={tick} last={i === kids.length - 1} win={win} />)}
                   </div>
                 )}
               </div>

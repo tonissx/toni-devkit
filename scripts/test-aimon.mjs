@@ -240,6 +240,7 @@ test('serviço: lanes() traz subagente com parentId e ignora quem não tem ativi
   const sub = r.lanes.find((x) => x.parentId);
   assert.equal(sub.parentId, 'sess1');
   assert.ok(r.lanes.every((x) => x.segments.length > 0));
+  assert.ok(r.lanes.every((x) => Array.isArray(x.tools) && x.tools.length <= 600 && x.tools.every((t) => t >= r.since))); // ticks de ferramenta: só o instante, dentro da janela
   assert.equal(svc.lanes({ since: T0 + 3600e3 }).lanes.length, 0); // nada ativo depois de `since`
   assert.equal(svc.lanes({ provider: 'codex', since: 0 }).lanes.length, 0);
   assert.ok(r.stats.peak >= 1);
@@ -317,6 +318,21 @@ test('arquivo de planos: varre, não relê o que não mudou, lê só o que cresc
   assert.equal(a.get('a').sessionTitle, 'Sessão 1');
 });
 
+test('planos: guarda quando o usuário respondeu (answeredAt), mesmo se a resposta vier num trecho depois do pedido', async () => {
+  const { plans } = plansMod.extractPlans(pUse('a', PLAN, 0) + pOk('a', 7) + pUse('b', '# B\nx', 1));
+  assert.equal(plans[0].answeredAt, Date.parse(iso(7)));
+  assert.equal(plans[1].answeredAt, undefined); // sem resposta: sem horário
+  const env = plansEnv();
+  const a = env.mk(); await a.init(); await a.scan();
+  fs.appendFileSync(env.t1, pUse('c', '# Novo\nw', 9));
+  await a.scan();
+  assert.equal(a.get('c').answeredAt, null);
+  fs.appendFileSync(env.t1, pOk('c', 12));
+  await a.scan();
+  assert.equal(a.get('c').answeredAt, Date.parse(iso(12)));
+  assert.equal(a.list({ status: 'approved' }).find((p) => p.id === 'c').answeredAt, Date.parse(iso(12)));
+});
+
 test('arquivo de planos: transcript apagado vira órfão e o plano continua; sobrevive a reinício; busca e esquecer', async () => {
   const env = plansEnv();
   let a = env.mk(); await a.init(); await a.scan(); await a.flush();
@@ -340,6 +356,15 @@ test('arquivo de planos: transcript apagado vira órfão e o plano continua; sob
 /* ─────────────── Resumo dos subagentes ─────────────── */
 const agents = require('../src/tools/aimon/agents.js');
 const K = (status, tools, out, lastTs = 0) => ({ status, tools, tokens: { input: 1, output: out, cacheRead: 0, cacheWrite: 0 }, lastTs });
+
+test('subagentes: janela do grupo para a mini-linha do tempo (início do primeiro → fim do último, ou agora)', () => {
+  const k = (status, firstTs, lastTs) => ({ status, firstTs, lastTs });
+  assert.deepEqual(agents.agentWindow([k('idle', 100, 200), k('idle', 150, 400)], 1000), { from: 100, to: 400, span: 300 });
+  assert.deepEqual(agents.agentWindow([k('idle', 100, 200), k('working', 150, 160)], 1000), { from: 100, to: 1000, span: 900 }); // quem ainda trabalha vai até agora
+  assert.equal(agents.agentWindow([k('idle', 0, 0), null], 1000), null); // sem horário
+  assert.equal(agents.agentWindow([], 1000), null);
+  assert.equal(agents.agentWindow(undefined, 1000), null);
+});
 
 test('subagentes: totais e texto do resumo', () => {
   const sum = agents.summarizeAgents([K('working', 5, 10, 100), K('idle', 3, 20, 300), K('stale', 2, 5, 200), K('waiting', 1, 1, 50), null]);
