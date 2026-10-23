@@ -84,6 +84,9 @@
       "src/commands/binds.js",
       "src/tools/aimon/aiInput.js",
       "src/tools/agents/agentForm.js",
+      "src/tools/agents/recurrence.js",
+      "src/tools/automations/steps.js",
+      "src/tools/automations/template.js",
       "package.json"
     ],
     "extraFiles": [
