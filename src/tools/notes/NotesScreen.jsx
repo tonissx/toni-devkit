@@ -9,6 +9,7 @@ import { TasksPanel } from './TasksPanel.jsx';
 import { TrashPanel } from './TrashPanel.jsx';
 import { TemplateModal } from './TemplateModal.jsx';
 import { GraphPanel } from './GraphPanel.jsx';
+import { QuickOpen } from './QuickOpen.jsx';
 import { FolderRow, PinnedFolderRow, useFolderDnD, iconFill, NOTE_DRAG } from './FolderTree.jsx';
 import { NameModal, DeleteFolderModal, MoveNoteModal, MoveFolderModal, ConfirmModal } from './FolderDialogs.jsx';
 import { FolderSettingsModal } from './FolderSettings.jsx';
@@ -596,6 +597,14 @@ export function NotesScreen({ toast, request }) {
       const typing = /^(INPUT|TEXTAREA)$/.test(e.target.tagName);
       // Ctrl/⌘+N nova · Ctrl/⌘+Shift+N a partir de template
       if (isMod(e) && e.key.toLowerCase() === 'n') { e.preventDefault(); if (e.shiftKey) setDialog({ kind: 'template' }); else newNote(); }
+      // Ctrl/⌘+P abre uma nota pelo nome (também com o foco no editor; evita o "imprimir" do navegador)
+      else if (isMod(e) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        notesApi().recent()
+          .then((r) => [...(r.viewed || []), ...(r.edited || [])].map((x) => x.id))
+          .catch(() => [])
+          .then((recentIds) => setDialog((d) => d || { kind: 'quickopen', recentIds }));
+      }
       else if ((isMod(e) && e.key.toLowerCase() === 'f') || (e.key === '/' && !typing)) { e.preventDefault(); searchRef.current && searchRef.current.focus(); }
     };
     window.addEventListener('keydown', h);
@@ -932,6 +941,14 @@ export function NotesScreen({ toast, request }) {
           onCreated={(note, cursor) => openNote(note.id, 'body', cursor)}
           onEditTemplate={(note) => openNote(note.id, 'body')}
           toast={toast}
+        />
+      )}
+      {dialog && dialog.kind === 'quickopen' && (
+        <QuickOpen
+          notes={allRows}
+          recentIds={dialog.recentIds}
+          onClose={() => setDialog(null)}
+          onPick={(id) => openNote(id, 'body')}
         />
       )}
       {dialog && dialog.kind === 'move' && (

@@ -1,7 +1,7 @@
 import { DS, mod, isMod } from '../../lib/ds.js';
 import { useAutosave, statusLabel, notesApi, cleanError } from '../../notes/client.js';
 import { displayTitle, inlineTags, normTag, snippetCode } from '../../notes/note.js';
-import { continueList, toggleTaskLines, expandOnSpace } from '../../notes/edit.js';
+import { continueList, toggleTaskLines, expandOnSpace, moveLines } from '../../notes/edit.js';
 import { pasteProps } from '../../notes/paste.js';
 import { toggleWrap, makeLink, codeToggle } from '../../notes/markup.js';
 import { applyToTextarea } from '../../notes/textarea.js';
@@ -140,6 +140,13 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
     const t = e.target;
     if (e.nativeEvent.isComposing) return;
     if (suggest.onKey(e)) return;
+    // Alt+↑/↓ move a seleção (ou a linha do cursor) para cima/baixo, como no VS Code.
+    if (e.altKey && !e.shiftKey && !isMod(e) && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      const m = moveLines(t.value, t.selectionStart, t.selectionEnd, e.key === 'ArrowUp' ? -1 : 1);
+      if (m) applyEdit(t, m);
+      return;
+    }
     // Tarefas: Enter continua "- [ ]" · Ctrl/⌘+L alterna texto/tarefa/feita · "[]␣"/"todo␣"/"@hoje␣" expandem.
     let r = null;
     if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !isMod(e) && t.selectionStart === t.selectionEnd) r = continueList(t.value, t.selectionStart);
