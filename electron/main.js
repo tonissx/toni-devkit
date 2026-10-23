@@ -805,6 +805,38 @@ ipcMain.handle('agents:save', (_e, agent, previous) => agents().save(agent, prev
 ipcMain.handle('agents:remove', (_e, name) => agents().remove(String(name || '')));
 ipcMain.handle('agents:duplicate', (_e, name) => agents().duplicate(String(name || '')));
 ipcMain.handle('agents:dir', () => agents().dir);
+// Rotinas agendadas (só rodam com o devkit aberto; ver electron/agents/schedule.js). O estado fica em agents-schedule.json.
+let agentSched = null;
+const agentToasts = new Set();
+const agentSchedule = () => agentSched || (agentSched = require('./agents/schedule').createScheduler({
+  file: path.join(app.getPath('userData'), 'agents-schedule.json'),
+  agents: agents(),
+  broadcast: (evt) => { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('agents:changed', evt); },
+  onFinish: (run, s) => {
+    if (!s || !s.notify || run.status === 'canceled' || !Notification.isSupported()) return;
+    const ok = run.status === 'ok';
+    const n = new Notification({ title: ok ? `Rotina concluída: ${run.name}` : `Rotina com problema: ${run.name}`, body: ok ? (run.result || 'Sem texto de resposta.').replace(/\s+/g, ' ').slice(0, 160) : (run.error || 'Veja o histórico.').slice(0, 160) });
+    agentToasts.add(n);
+    const done = () => agentToasts.delete(n);
+    n.on('click', () => { done(); showMain('agents', { tab: 'routines', run: run.id }); });
+    n.on('close', done);
+    n.on('failed', done);
+    n.show();
+  },
+}));
+function initAgents() { agentSchedule().init().then(() => agentSchedule().start()).catch((e) => console.error('[agents]', e)); }
+ipcMain.handle('agents:routines', () => agentSchedule().list());
+ipcMain.handle('agents:routineSave', (_e, s) => agentSchedule().save(s));
+ipcMain.handle('agents:routineRemove', (_e, id) => agentSchedule().remove(String(id || '')));
+ipcMain.handle('agents:routineEnabled', (_e, id, on) => agentSchedule().setEnabled(String(id || ''), !!on));
+ipcMain.handle('agents:routineRun', (_e, id) => agentSchedule().runNow(String(id || '')));
+ipcMain.handle('agents:runCancel', (_e, id) => agentSchedule().cancel(String(id || '')));
+ipcMain.handle('agents:run', (_e, id) => agentSchedule().run(String(id || '')));
+ipcMain.handle('agents:historyClear', () => agentSchedule().clearHistory());
+ipcMain.handle('agents:pickDir', async () => {
+  const r = await dialog.showOpenDialog(mainWin && !mainWin.isDestroyed() ? mainWin : undefined, { title: 'Pasta de trabalho', properties: ['openDirectory'] });
+  return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
+});
 // Abre um terminal numa pasta que a pessoa escolhe, já com o agente (`claude --agent <nome>`).
 ipcMain.handle('agents:launch', async (_e, name, cwd) => {
   let dir = typeof cwd === 'string' && cwd ? cwd : '';
@@ -1169,6 +1201,7 @@ if (!app.requestSingleInstanceLock()) {
     initGit();
     initLogs();
     initAimon();
+    initAgents();
     initDb();
     initAi();
     initVault();
@@ -1207,6 +1240,7 @@ if (!app.requestSingleInstanceLock()) {
       if (gitSvc) { gitSvc.unwatch(); await gitSvc.flush().catch(() => {}); }
       if (logsSvc) { logsSvc.unwatch(); await logsSvc.flush().catch(() => {}); }
       if (dbSvc) { dbSvc.stopAll(); await dbSvc.flush().catch(() => {}); }
+      if (agentSched) await agentSched.stop().catch(() => {});
       if (aimonSvc) aimonSvc.stop();
       if (aimonRev) aimonRev.stop();
       if (aimonPrefs) await aimonPrefs.flush().catch(() => {});

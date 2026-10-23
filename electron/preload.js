@@ -351,6 +351,19 @@ contextBridge.exposeInMainWorld('devkit', {
     dir: () => ipcRenderer.invoke('agents:dir'),
     /** Abre um terminal já com o agente; sem `cwd`, pergunta a pasta → { launched, cwd?, terminal? }. */
     launch: (name, cwd) => ipcRenderer.invoke('agents:launch', name, cwd),
+    /** Rotinas agendadas (só rodam com o devkit aberto) → { schedules, runs }; o resultado completo de uma execução vem de run(id). */
+    routines: () => ipcRenderer.invoke('agents:routines'),
+    routineSave: (s) => ipcRenderer.invoke('agents:routineSave', s),
+    routineRemove: (id) => ipcRenderer.invoke('agents:routineRemove', id),
+    routineEnabled: (id, on) => ipcRenderer.invoke('agents:routineEnabled', id, on),
+    /** "Rodar agora": ignora o horário. */
+    routineRun: (id) => ipcRenderer.invoke('agents:routineRun', id),
+    runCancel: (runId) => ipcRenderer.invoke('agents:runCancel', runId),
+    run: (runId) => ipcRenderer.invoke('agents:run', runId),
+    historyClear: () => ipcRenderer.invoke('agents:historyClear'),
+    pickDir: () => ipcRenderer.invoke('agents:pickDir'),
+    /** Avisa quando rotinas ou execuções mudam; devolve a função que cancela. */
+    onChanged: (cb) => { const h = (_e, evt) => cb(evt); ipcRenderer.on('agents:changed', h); return () => ipcRenderer.removeListener('agents:changed', h); },
   },
   /** Monitor de IA (ver electron/aimon): sessões recentes de Claude Code, Codex… — somente leitura. */
   aimon: {

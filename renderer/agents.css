@@ -29,3 +29,27 @@
   background: var(--tk-surface-2); color: var(--tk-text); cursor: pointer; font: 600 13px var(--tk-font-sans); }
 .ag-tpl:hover { background: var(--tk-surface-3); }
 .ag-tpl.is-sm { padding: 4px 9px; font-size: 12px; font-weight: 500; gap: 5px; }
+
+/* Rotinas */
+.ag-routines { display: flex; flex-direction: column; gap: 14px; padding: 16px 20px 28px; overflow: auto; flex: 1; min-height: 0; }
+.ag-routines__bar { display: flex; align-items: center; gap: 12px; }
+.ag-sched { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 10px; }
+.ag-sc { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-2); font-size: 12px; color: var(--tk-text-2); }
+.ag-sc.is-off { opacity: .7; }
+.ag-sc__top { display: flex; align-items: center; gap: 8px; }
+.ag-sc__top b { color: var(--tk-text); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-sc__sp { flex: 1; }
+.ag-sc__meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; color: var(--tk-text-3); word-break: break-all; }
+.ag-sc__act { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 2px; }
+.ag-hist__head { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--tk-border); padding-bottom: 6px; font-size: 13px; }
+.ag-hist { display: flex; flex-direction: column; gap: 4px; }
+.ag-run { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; text-align: left; padding: 6px 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm); background: var(--tk-surface-2); color: var(--tk-text); cursor: pointer; font: 12px var(--tk-font-sans); }
+.ag-run:hover { background: var(--tk-surface-3); }
+.ag-pick { display: flex; gap: 8px; }
+.ag-pick > :first-child { flex: 1; }
+.ag-when { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ag-days { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 8px; }
+.ag-hint { margin-top: 6px; }
+.ag-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--tk-text-2); }
+.ag-result { margin: 0; padding: 10px 12px; max-height: 360px; overflow: auto; white-space: pre-wrap; word-break: break-word; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm); background: var(--tk-surface-2); color: var(--tk-text); font: 12px var(--tk-font-mono); }
+.ag-tabs { padding: 8px 20px 0; }
