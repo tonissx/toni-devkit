@@ -18,6 +18,7 @@ const FILTERS = [
   { value: 'all', label: 'Todos' },
   { value: 'approved', label: 'Aprovados' },
   { value: 'rejected', label: 'Recusados' },
+  { value: 'pending', label: 'Sem resposta' },
 ];
 
 function PlanStatus({ s }) {
@@ -49,6 +50,9 @@ export function Plans({ sessions, onOpenSession, onOpenCommit, toast }) {
     const t = setInterval(scan, 10000);
     return () => { alive = false; clearInterval(t); };
   }, [load]);
+
+  // O processo principal varre os planos junto com o acompanhamento e avisa quando entra algum (ainda sem resposta) ou muda o status.
+  React.useEffect(() => api().onChanged((evt) => { if (evt && evt.type === 'plans') load(); }), [load]);
 
   React.useEffect(() => {
     if (!sel) { setDetail(null); return; }

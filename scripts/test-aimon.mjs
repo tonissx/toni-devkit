@@ -308,9 +308,12 @@ test('arquivo de planos: varre, não relê o que não mudou, lê só o que cresc
   fs.appendFileSync(env.t1, pUse('c', '# Novo\nw', 9));
   await a.scan();
   assert.equal(a.get('c').status, 'pending');
+  assert.deepEqual(a.list({ status: 'pending' }).map((p) => p.id), ['c']); // o filtro "Sem resposta" da aba
   fs.appendFileSync(env.t1, pOk('c', 10));
   await a.scan();
   assert.equal(a.get('c').status, 'approved'); // a resposta chegou num trecho depois do pedido
+  assert.deepEqual(a.list({ status: 'pending' }), []); // e o mesmo plano sai de "Sem resposta" (sem duplicar)
+  assert.equal(a.list().filter((p) => p.id === 'c').length, 1);
   assert.equal(a.get('a').sessionTitle, 'Sessão 1');
 });
 

@@ -803,9 +803,21 @@ let aimonSvc = null;
 let aimonUsage = null;
 const aimonUsageStore = () => aimonUsage || (aimonUsage = createUsageStore({ file: path.join(app.getPath('userData'), 'aimon-usage.json') }));
 let aimonUsageReady = null;
+const aimonBroadcast = (evt) => { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('aimon:changed', evt); };
+// Planos: o pedido de aprovação fica no transcript minutos antes da resposta. Varrer junto com o acompanhamento (e não só com a aba
+// Planos aberta) faz o plano entrar ainda "sem resposta"; senão o primeiro scan já o encontra respondido. scan() só relê o que cresceu.
+let plansSyncT = null;
+const syncPlansSoon = () => {
+  if (plansSyncT) return;
+  plansSyncT = setTimeout(async () => {
+    plansSyncT = null;
+    try { const a = await plans(); if (await a.scan()) aimonBroadcast({ type: 'plans' }); } catch { /* o scan da aba Planos tenta de novo */ }
+  }, 4000);
+  if (plansSyncT.unref) plansSyncT.unref();
+};
 const aimon = () => aimonSvc || (aimonSvc = createAimonService({
   providers: [require('./aimon/providers/claude'), require('./aimon/providers/codex')],
-  broadcast: (evt) => { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('aimon:changed', evt); },
+  broadcast: (evt) => { aimonBroadcast(evt); if (evt && evt.type === 'changed') syncPlansSoon(); },
   usage: aimonUsageStore(),
   getPrices: () => (aimonPrefs ? aimonPrefs.get().prices : {}),
   getLimit: () => (aimonPrefs ? aimonPrefs.get().limitTokens : null),
@@ -935,11 +947,11 @@ const plans = () => {
   }
   return plansReady.then(() => plansArchive);
 };
-ipcMain.handle('aimon:plansScan', async () => (await plans()).scan());
+ipcMain.handle('aimon:plansScan', async () => { const changed = await (await plans()).scan(); if (changed) aimonBroadcast({ type: 'plans' }); return changed; }); // avisa também a contagem da aba
 ipcMain.handle('aimon:plans', async (_e, opts) => { const a = await plans(); return { rows: a.list(opts && typeof opts === 'object' ? opts : {}), projects: a.projects() }; });
 ipcMain.handle('aimon:plan', async (_e, id) => (await plans()).get(String(id || '')));
-ipcMain.handle('aimon:planForget', async (_e, id) => (await plans()).forget(String(id || '')));
-ipcMain.handle('aimon:plansClear', async () => (await plans()).clear());
+ipcMain.handle('aimon:planForget', async (_e, id) => { const r = await (await plans()).forget(String(id || '')); aimonBroadcast({ type: 'plans' }); return r; });
+ipcMain.handle('aimon:plansClear', async () => { const r = await (await plans()).clear(); aimonBroadcast({ type: 'plans' }); return r; });
 ipcMain.handle('aimon:providers', () => aimon().providers());
 ipcMain.handle('aimon:list', (_e, opts) => aimon().list(opts && typeof opts === 'object' ? opts : {}));
 ipcMain.handle('aimon:gitChanges', (_e, key) => aimon().gitChanges(String(key || '')));

@@ -193,6 +193,7 @@ export function AIMonitor({ toast, request }) {
   const [bg, setBg] = React.useState(false); // acompanhar em segundo plano (desligado por padrão)
   const [aiSlot, setAiSlot] = React.useState(null); // onde o SessionAi desenha os botões (linha do cabeçalho da sessão)
   const [notify, setNotify] = React.useState(false); // avisos do sistema quando uma sessão espera por você ou dá erro (desligado por padrão)
+  const [pendingPlans, setPendingPlans] = React.useState(0); // planos esperando resposta: aparece na aba Planos
   const [rev, setRev] = React.useState(0); // sobe a cada aviso do processo principal: as raias buscam de novo
   const selRef = React.useRef(null);
   const provRef = React.useRef('all');
@@ -211,7 +212,12 @@ export function AIMonitor({ toast, request }) {
     api().prefs().then((p) => { setBg(!!(p && p.background)); setNotify(!!(p && p.notify)); }, () => {});
     api().setActive(true).catch(() => {});
     let raf = 0;
-    const off = api().onChanged(() => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; loadList(); loadTimeline(); setRev((r) => r + 1); }); });
+    const loadPending = () => api().plans({ status: 'pending' }).then((d) => setPendingPlans(d.rows.length), () => {});
+    loadPending();
+    const off = api().onChanged((evt) => {
+      if (evt && evt.type === 'plans') { loadPending(); return; } // só os planos mudaram: a lista de sessões não
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; loadList(); loadTimeline(); setRev((r) => r + 1); });
+    });
     const clockT = setInterval(() => setTick((t) => t + 1), 5000); // "há 12 s" e o status dependem do relógio
     return () => { off(); clearInterval(clockT); if (raf) cancelAnimationFrame(raf); api().setActive(false).catch(() => {}); };
   }, []);
@@ -259,7 +265,7 @@ export function AIMonitor({ toast, request }) {
           <span className="lg-muted">{working} trabalhando{waiting ? ` · ${waiting} esperando` : ''}{failed ? ` · ${failed} com erro` : ''} · {list.length} sessão(ões) nas últimas 24 h</span>
         </div>
         <div className="gt-head__actions">
-          <SegmentedControl size="sm" options={TABS} value={tab} onChange={(v) => setUi((u) => ({ ...u, tab: v }))} />
+          <SegmentedControl size="sm" options={TABS.map((t) => (t.value === 'plans' && pendingPlans ? { ...t, label: `Planos (${pendingPlans})` } : t))} value={tab} onChange={(v) => setUi((u) => ({ ...u, tab: v }))} />
           {!NO_PROVIDER_FILTER.includes(tab) && <SegmentedControl size="sm" options={options} value={ui.provider} onChange={(provider) => setUi((u) => ({ ...u, provider, sel: null }))} />}
           <button type="button" className={'gt-op is-ghost is-sm' + (ui.hide ? ' is-on' : '')} onClick={() => setUi((u) => ({ ...u, hide: !u.hide }))} title="Desfoca prompts, respostas e comandos (útil ao compartilhar a tela)" aria-pressed={ui.hide}>
             <Icon name={ui.hide ? 'eye-off' : 'eye'} size={14} /><span>{ui.hide ? 'Conteúdo oculto' : 'Ocultar conteúdo'}</span>
