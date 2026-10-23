@@ -58,6 +58,21 @@ test('close: só encerra se o pid está vivo e o início do processo confere; nu
   assert.deepEqual(killed, [10]); // as recusas não mataram nada
 });
 
+test('killPid: no Windows tenta o pedido educado e, se o processo de console recusar, força com /F', async () => {
+  const calls = [];
+  const refuse = async (args) => { calls.push(args.join(' ')); if (!args.includes('/F')) throw new Error('só pode ser forçada'); };
+  await claude.killPid(60780, { platform: 'win32', run: refuse });
+  assert.deepEqual(calls, ['/PID 60780 /T', '/PID 60780 /T /F']);
+  // aceitou o pedido educado: não força
+  const polite = [];
+  await claude.killPid(1, { platform: 'win32', run: async (a) => { polite.push(a.join(' ')); } });
+  assert.deepEqual(polite, ['/PID 1 /T']);
+  // nem forçando: mensagem em português, sem o texto cru (e mal codificado) do taskkill
+  await assert.rejects(claude.killPid(2, { platform: 'win32', run: async () => { throw new Error('ERRO: n�o p�de'); } }), (e) => /não deixou encerrar/.test(e.message) && !/�/.test(e.message));
+  // fora do Windows: SIGTERM no pid (aqui um que não existe: o erro do SO sobe)
+  await assert.rejects(claude.killPid(2 ** 22 + 7, { platform: 'linux' }), /ESRCH|kill/);
+});
+
 test('serviço: closeSession usa o pid que o monitor leu, recusa subagente e sessão que não está viva', async () => {
   const base = tmp();
   const nowIso = new Date().toISOString();
