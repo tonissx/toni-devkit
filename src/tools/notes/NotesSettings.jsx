@@ -7,7 +7,7 @@ const { Modal, Input, Button, Icon, Select } = DS;
 export const DEFAULT_PREFS = { autosaveMs: 400, undoSec: 8 };
 
 // Seção "Sincronização entre computadores" (pasta sincronizada por Dropbox/OneDrive…) escondida da tela por enquanto.
-// Só a interface: a vigia da pasta, o "Recarregar do disco" e a opção `syncFolder` continuam existindo no app.
+// Só a interface: a vigia da pasta (sempre ligada), o "Recarregar do disco" e a opção `syncFolder` (carência dos anexos órfãos) continuam existindo no app.
 const SHOW_FOLDER_SYNC = false;
 
 const AUTOSAVE = [200, 400, 800, 1500, 3000].map((v) => ({ value: v, label: v < 1000 ? v + ' ms' : v / 1000 + ' s' }));
@@ -154,7 +154,7 @@ export function NotesSettingsModal({ prefs, setPrefs, toast, onClose }) {
   const saveHistory = async () => { if (await apply({ historyMax: Number(max), historyGapMin: Number(gap) })) toast('Configurações salvas', 'Histórico atualizado'); };
   const histDirty = cfg && (Number(max) !== cfg.historyMax || Number(gap) !== cfg.historyGapMin);
 
-  const toggleSync = async (on) => { if (await apply({ syncFolder: on })) toast('Configurações salvas', on ? 'Pasta sincronizada: o Devkit vigia mudanças de fora' : 'Vigia da pasta desligado'); };
+  const toggleSync = async (on) => { if (await apply({ syncFolder: on })) toast('Configurações salvas', on ? 'Pasta sincronizada: anexos sem uso esperam 24 h antes de sair' : 'Pasta local'); };
   const reloadDisk = async () => {
     setBusy(true); setError(null);
     try {
@@ -212,7 +212,7 @@ export function NotesSettingsModal({ prefs, setPrefs, toast, onClose }) {
               <input type="checkbox" checked={!!cfg.syncFolder} disabled={busy} onChange={(e) => toggleSync(e.target.checked)} />
               <span>Esta pasta é sincronizada por outro programa</span>
             </label>
-            <small>Liga a vigia da pasta: o que o outro PC alterar aparece aqui sem reiniciar (a sua versão anterior vai para o histórico). Se os dois PCs editarem a mesma nota ao mesmo tempo, a mais recente vale e a outra é guardada como “… (conflito)”. Anexos sem uso só são apagados depois de 24 h, porque podem chegar antes da nota que os cita. O histórico (<code>.devkit/history</code>) fica na pasta e também sincroniza — pode excluí-lo do sync se preferir.</small>
+            <small>A vigia da pasta é automática: o que o outro PC alterar aparece aqui sem reiniciar (a sua versão anterior vai para o histórico). Se os dois PCs editarem a mesma nota ao mesmo tempo, a mais recente vale e a outra é guardada como “… (conflito)”. Anexos sem uso só são apagados depois de 24 h, porque podem chegar antes da nota que os cita. O histórico (<code>.devkit/history</code>) fica na pasta e também sincroniza — pode excluí-lo do sync se preferir.</small>
             <div className="nts-fset__actions">
               <Button size="sm" variant="secondary" icon="refresh-cw" disabled={busy} onClick={reloadDisk}>Recarregar do disco</Button>
             </div>

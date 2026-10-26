@@ -413,7 +413,7 @@ const getNotesSettings = () => notesSettings || (notesSettings = createNotesSett
 const defaultNotesDir = () => path.join(app.getPath('documents'), 'Devkit Notes');
 const notesDir = () => process.env.DEVKIT_NOTES_DIR || getNotesSettings().raw().dir || defaultNotesDir();
 
-// Pasta sincronizada por outro programa (Dropbox, OneDrive, Syncthing…): vigia a pasta e relê o que mudou por fora.
+// Vigia a pasta das notas e relê o que mudou por fora (editor externo, git, Dropbox/OneDrive/Syncthing…). Sempre ligada.
 let notesWatcher = null;
 function applyNotesSync(on) {
   if (on && !notesWatcher) notesWatcher = createWatcher({ dir: notes.dir, onChange: () => notes.reload() });
@@ -426,7 +426,7 @@ function initNotes() {
     dir: notesDir(), broadcast: broadcastNotes, events: bus, historyGapMs: cfg.historyGapMin * 60 * 1000, historyMax: cfg.historyMax,
     stateFile: process.env.DEVKIT_NOTES_DIR ? undefined : path.join(app.getPath('userData'), 'notes-state.json'), syncFolder: cfg.syncFolder,
   });
-  notesReady = notes.init().then((info) => { applyNotesSync(cfg.syncFolder); return info; }).catch((e) => { console.error('[notes]', e); throw e; });
+  notesReady = notes.init().then((info) => { applyNotesSync(true); return info; }).catch((e) => { console.error('[notes]', e); throw e; });
 
   // Sincronização com o Google Drive do próprio usuário (sem servidor nosso). Tokens cifrados com safeStorage.
   const ud = app.getPath('userData');
@@ -466,7 +466,7 @@ ipcMain.handle('notes:set-settings', async (_e, patch) => {
   await notesReady;
   const cfg = getNotesSettings().set(patch);
   notes.configure({ historyGapMs: cfg.historyGapMin * 60 * 1000, historyMax: cfg.historyMax, syncFolder: cfg.syncFolder });
-  applyNotesSync(cfg.syncFolder);
+  applyNotesSync(true);
   return { restart: notesDir() !== notes.dir }; // a pasta nova só vale na próxima abertura
 });
 ipcMain.handle('notes:pick-dir', async (e) => {

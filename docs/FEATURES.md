@@ -676,8 +676,9 @@ move o arquivo para `.trash\` (mantendo a subpasta), nada é apagado de verdade.
 uma vez). Pastas e arquivos cujo nome começa com `.` (`.trash`, `.devkit`, `.git`…) são ignorados. O
 processo principal carrega todas as notas em memória na inicialização; a busca roda aí em milissegundos.
 
-> Sem a opção de pasta sincronizada (abaixo), criar, mover ou renomear pastas e notas **pelo Explorer** com o app
-> aberto só aparece depois de **Recarregar do disco** (Configurações de Notes) ou de reiniciar o Devkit.
+> A pasta é vigiada o tempo todo: criar, editar, mover, renomear ou excluir pastas e notas **por fora** (Explorer,
+> editor externo, git, outro PC) aparece no app em instantes, sem reiniciar. **Recarregar do disco** (Configurações
+> de Notes) força a mesma leitura na hora.
 
 ### Sincronizar entre computadores (sem servidor)
 
@@ -688,10 +689,10 @@ O Devkit não tem servidor: a sincronização é feita pelo serviço de nuvem qu
    e as pastas antes de reiniciar).
 2. Marque **Esta pasta é sincronizada por outro programa**.
 
-O que muda com a opção ligada:
-- **Vigia da pasta**: o que o outro PC criar, editar, mover ou excluir aparece sem reiniciar. Se uma nota aberta no
-  editor é alterada de fora e você não está digitando, ela é atualizada; a sua versão anterior vai para o **Histórico**.
-  Mesmo desligada, **Recarregar do disco** faz a mesma leitura na hora.
+A vigia da pasta é automática (com ou sem a opção); a opção só ajusta o que é específico de pasta sincronizada:
+- **Vigia da pasta** (sempre ligada): o que o outro PC criar, editar, mover ou excluir aparece sem reiniciar. Se uma
+  nota aberta no editor é alterada de fora e você não está digitando, ela é atualizada; a sua versão anterior vai
+  para o **Histórico**.
 - **Conflitos**: se dois PCs editam a mesma nota antes de sincronizar, o serviço de nuvem costuma deixar duas cópias
   do arquivo (“… (conflicted copy)”, “.sync-conflict-…”). Como as duas têm o mesmo `id`, a mais recente continua
   sendo a nota e a outra vira uma nota própria, “Título (conflito)”, para você comparar e apagar uma. Nada é perdido.
