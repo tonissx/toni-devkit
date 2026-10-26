@@ -598,6 +598,10 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
     `Ctrl+Shift+K` vira `` `código` `` (trecho de uma linha) ou bloco ```` ``` ```` (sem seleção / várias linhas). Tudo
     alterna e pode ser desfeito com `Ctrl+Z`
   - `Alt+↑` / `Alt+↓` move a seleção (ou a linha do cursor) para cima/baixo, como no VS Code; `Ctrl+Z` desfaz
+- **Abas das notas abertas**: acima do editor. Abrir uma nota pela lista usa a **aba de prévia** (título em itálico),
+  que a próxima nota substitui; editar, dar duplo clique ou **Manter aberta** (menu da aba) a fixa. `✕`, clique do
+  meio ou `Ctrl+W` fecham; `Ctrl+PageDown`/`PageUp` alternam e `Alt+1…9` vão direto à aba. Botão direito: fechar as
+  outras / à direita. As abas voltam ao reabrir o app; nota excluída (aqui ou por fora) sai da barra
 - **Abrir nota** (`Ctrl+P`, dentro de Notes): busca só entre as notas (título, pasta e tags, sem acento); vazio mostra
   primeiro o histórico das últimas notas escolhidas por ele (como no VS Code, até 30) e depois as últimas abertas. `↑`/`↓` navegam, `Enter` abre, `Esc` fecha
 - **Pastas** (subpastas ilimitadas): o **Explorador** na lateral, com `+` para criar. Cada pasta é um diretório
