@@ -24,7 +24,9 @@ import { TagFilter } from './TagFilter.jsx';
 import { useDismiss } from './useDismiss.js';
 import { countByDay, rangeLabel } from '../../notes/calendar.js';
 import { sideWidth, SIDE_COLLAPSED, SIDE_MAX, SIDE_DEFAULT, SIDE_WIDE } from '../../notes/panel.js';
-import { openTab, closeTab, closeMany, cycle, sanitize } from '../../notes/tabs.js';
+import { openTab, cycle, sanitize } from '../../notes/tabs.js';
+import { place as placeInGrid, addBeside, gridClass, MAX_PANES } from '../../notes/grid.js';
+import { PaneFrame } from './PaneFrame.jsx';
 import { NoteTabs } from './NoteTabs.jsx';
 
 const { PageHeader, Button, IconButton, EmptyState, Icon, Kbd, Spinner, ContextMenu } = DS;
@@ -85,7 +87,26 @@ export function NotesScreen({ toast, request }) {
   const [allRows, setAllRows] = React.useState([]);     // todas (para resolver [[links]] e contar)
   const [tags, setTags] = React.useState([]);
   const [info, setInfo] = React.useState(null);
-  const [current, setCurrent] = React.useState(null);  // { note, isNew, focus }
+  // Visão: de 1 a 4 painéis numa grade fixa (ver notes/grid.js), uma nota por painel; `focus` = painel ativo.
+  const [grid, setGrid] = React.useState({ list: [], focus: 0 });  // list: [{ note, isNew, focus, cursor }]
+  const gridRef = React.useRef(grid);
+  gridRef.current = grid;
+  // "A nota atual" do resto da tela = a do painel ativo.
+  const current = grid.list[grid.focus] || null;
+  const setCurrent = React.useCallback((v) => setGrid((g) => {
+    const cur = g.list[g.focus] || null;
+    const next = typeof v === 'function' ? v(cur) : v;
+    if (next === cur) return g;
+    if (!next) { // sem nota: o painel ativo sai da visão
+      if (!cur) return g;
+      const list = g.list.filter((_, i) => i !== g.focus);
+      return { list, focus: Math.max(0, Math.min(g.focus, list.length - 1)) };
+    }
+    if (!cur) return { list: [...g.list, next], focus: g.list.length };
+    const list = [...g.list]; list[g.focus] = next;
+    return { ...g, list };
+  }), []);
+  const gridRestored = React.useRef(false);
   const [calOpen, setCalOpen] = React.useState(false);   // calendário do filtro de data aberto
   const calChipRef = React.useRef(null);
   const calRef = React.useRef(null);
@@ -226,12 +247,59 @@ export function NotesScreen({ toast, request }) {
   const openNote = React.useCallback(async (id, focus, cursor) => {
     const note = await notesApi().get(id);
     if (!note) { toast('Nota não encontrada', 'Ela pode ter sido excluída', 'error'); return; }
-    setCurrent({ note, isNew: false, focus, cursor: typeof cursor === 'number' ? cursor : undefined });
+    const entry = { note, isNew: false, focus, cursor: typeof cursor === 'number' ? cursor : undefined };
+    // Já está num painel → só foca; senão ocupa o painel ativo (a nota que estava lá continua na barra de abas).
+    setGrid((g) => {
+      const i = g.list.findIndex((e) => e.note.id === id);
+      if (i >= 0) return g.focus === i ? g : { ...g, focus: i };
+      if (!g.list.length) return { list: [entry], focus: 0 };
+      const list = [...g.list]; list[g.focus] = entry;
+      return { ...g, list };
+    });
     // A árvore mostra onde a nota está: abre as pastas dela e passa a ser a pasta ativa.
     if (note.folder) setFoldersUi((f) => ({ ...f, open: { ...f.open, ...Object.fromEntries(ancestors(note.folder).map((p) => [p, true])) } }));
     // Com "Só aqui" ligado a pasta ativa fica onde está (abrir uma nota de subpasta não estreita a lista).
     setUi((u) => ({ ...toNoteView(u), selectedId: id, tabs: openTab(u.tabs, id), folder: u.scope && u.folder ? u.folder : note.folder || null, ...(typeof cursor === 'number' && u.mode === 'preview' ? { mode: 'split' } : {}) }));
   }, []);
+
+  // Aplica uma nova ordem de ids na visão (grid.js decide a posição), buscando a nota se ainda não estava aberta.
+  const commitGrid = React.useCallback(async (nextIds, id) => {
+    let note = (gridRef.current.list.find((e) => e.note.id === id) || {}).note;
+    if (!note) {
+      note = await notesApi().get(id);
+      if (!note) { toast('Nota não encontrada', 'Ela pode ter sido excluída', 'error'); return; }
+    }
+    setGrid((g) => {
+      const byId = new Map(g.list.map((e) => [e.note.id, e]));
+      if (!byId.has(id)) byId.set(id, { note, isNew: false });
+      const list = nextIds.map((n) => byId.get(n)).filter(Boolean);
+      return { list, focus: Math.max(0, list.findIndex((e) => e.note.id === id)) };
+    });
+    setUi((u) => ({ ...toNoteView(u), tabs: openTab(u.tabs, id) }));
+  }, []);
+  const gridIds = () => gridRef.current.list.map((e) => e.note.id);
+  // Soltar uma nota (da lista ou das abas) sobre o painel `targetId`.
+  const dropNote = (id, targetId, zone) => commitGrid(placeInGrid(gridIds(), id, targetId, zone), id);
+  // "Abrir ao lado" (Alt+clique): entra na grade depois do painel ativo.
+  const openBesideNote = (id) => {
+    const g = gridRef.current;
+    const focusId = g.list[g.focus] && g.list[g.focus].note.id;
+    return g.list.length ? commitGrid(addBeside(gridIds(), id, focusId), id) : openNote(id, 'body');
+  };
+
+  // ÚNICO jeito de tirar notas da visão: sai do painel e da barra de abas (a nota continua salva). Não mexe no que está aberto nos outros painéis.
+  const dropFromGrid = React.useCallback((ids) => {
+    setGrid((g) => {
+      const focusedId = g.list[g.focus] && g.list[g.focus].note.id;
+      const list = g.list.filter((e) => !ids.has(e.note.id));
+      if (list.length === g.list.length) return g;
+      let focus = list.findIndex((e) => e.note.id === focusedId);
+      if (focus < 0) focus = Math.max(0, Math.min(g.focus, list.length - 1)); // fechou o ativo: assume quem ocupou o lugar
+      return { list, focus };
+    });
+    setUi((u) => ({ ...u, tabs: (u.tabs || []).filter((t) => !ids.has(t.id)) }));
+  }, []);
+  const removeFromView = (id) => dropFromGrid(new Set([id]));
 
   /**
    * Nota nova. `where` = pasta de destino (padrão: a pasta ativa). Se a pasta tem template padrão a nota nasce dele
@@ -309,42 +377,54 @@ export function NotesScreen({ toast, request }) {
   }, [importNotes]);
 
   /* ─────────────── Abas ─────────────── */
+  // A barra de abas é o contexto geral (notas abertas); a grade abaixo mostra quais delas estão visíveis.
   const tabs = ui.tabs || [];
-  // Fecha a aba; se era a ativa, abre a vizinha (ou volta ao estado vazio). Fechar a aba salva a nota (o editor desmonta).
-  const closeNoteTab = (id) => {
-    const { tabs: rest, next } = closeTab(tabs, id, ui.selectedId);
-    if (id !== ui.selectedId) { setUi((u) => ({ ...u, tabs: rest })); return; }
-    if (next) { setUi((u) => ({ ...u, tabs: rest })); openNote(next); }
-    else { setCurrent(null); setUi((u) => ({ ...u, tabs: rest, selectedId: null })); }
-  };
-  const tabMenu = (id) => [
-    { id: 'close', icon: 'x', label: 'Fechar', shortcut: mod('W') },
-    { id: 'others', icon: 'x', label: 'Fechar as outras' },
-    { id: 'right', icon: 'x', label: 'Fechar à direita' },
-  ];
-  // O handler de teclado (registrado uma vez) lê o estado atual das abas por refs.
+  const tabsBar = tabs.length > 0 ? (
+    <NoteTabs tabs={tabs} activeId={current ? current.note.id : null} visible={new Set(grid.list.map((e) => e.note.id))}
+      rows={allRows} fallbacks={grid.list.map((e) => e.note)} onSelect={(id) => openNote(id)} />
+  ) : null;
+  // O handler de teclado (registrado uma vez) lê o estado atual por refs.
   const tabsRef = React.useRef({ tabs: [], active: null });
-  const closeRef = React.useRef(closeNoteTab);
+  const removeRef = React.useRef(removeFromView);
   const openRef = React.useRef(openNote);
   tabsRef.current = { tabs: view === 'note' ? tabs : [], active: current ? current.note.id : null };
-  closeRef.current = closeNoteTab;
+  removeRef.current = removeFromView;
   openRef.current = openNote;
-  // Notas que deixaram de existir (apagadas aqui, em outro lugar ou por fora do app) saem das abas.
+  // Notas que deixaram de existir (apagadas aqui, em outro lugar ou por fora do app) saem da visão e das abas.
   React.useEffect(() => {
     if (!foldersLoaded) return;
     const ids = new Set(allRows.map((r) => r.id));
-    const keep = (id) => ids.has(id) || (current && current.isNew && current.note.id === id);
+    const isNewId = (id) => gridRef.current.list.some((e) => e.isNew && e.note.id === id);
+    const keep = (id) => ids.has(id) || isNewId(id);
     const clean = sanitize(ui.tabs, keep);
-    if (clean.length === (ui.tabs || []).length) return;
-    const gone = ui.selectedId && !clean.some((t) => t.id === ui.selectedId) && !keep(ui.selectedId);
-    setUi((u) => ({ ...u, tabs: clean }));
-    if (gone) { const n = clean[clean.length - 1]; if (n) openNote(n.id); else { setCurrent(null); setUi((u) => ({ ...u, selectedId: null })); } }
+    if (clean.length !== (ui.tabs || []).length) setUi((u) => ({ ...u, tabs: sanitize(u.tabs, keep) }));
+    const gone = new Set(gridRef.current.list.filter((e) => !keep(e.note.id)).map((e) => e.note.id));
+    if (gone.size) dropFromGrid(gone);
   }, [allRows, foldersLoaded]);
 
-  // Abertura: recupera alterações que ficaram só no backup local e reabre a última nota.
+  // O que está na visão (e qual painel está ativo) é lembrado entre sessões; `selectedId` acompanha o painel ativo.
+  React.useEffect(() => {
+    if (!gridRestored.current) return;
+    const ids = grid.list.map((e) => e.note.id);
+    const sel = ids[grid.focus] || null;
+    setUi((u) => ((u.paneIds || []).join() === ids.join() && u.focusIdx === grid.focus && (u.selectedId || null) === sel ? u : { ...u, paneIds: ids, focusIdx: grid.focus, selectedId: sel }));
+  }, [grid]);
+
+  // Abertura: recupera alterações que ficaram só no backup local e reabre as notas que estavam na visão.
   React.useEffect(() => {
     recoverUnsaved().then((n) => { if (n) toast('Alterações recuperadas', n + ' nota(s) salvas do backup local'); refresh(); });
-    if (ui.selectedId && !request) openNote(ui.selectedId).catch(() => {});
+    (async () => {
+      const ids = (ui.paneIds && ui.paneIds.length ? ui.paneIds : ui.selectedId ? [ui.selectedId] : []).slice(0, MAX_PANES);
+      if (!request && ids.length) {
+        const got = (await Promise.all(ids.map((id) => notesApi().get(id).catch(() => null)))).filter(Boolean);
+        if (got.length) {
+          setGrid({ list: got.map((note) => ({ note, isNew: false })), focus: Math.max(0, Math.min(ui.focusIdx || 0, got.length - 1)) });
+          setUi((u) => ({ ...u, tabs: got.reduce((t, n) => openTab(t, n.id), u.tabs || []) }));
+        }
+      }
+      gridRestored.current = true;
+      setGrid((g) => ({ ...g })); // dispara o efeito acima já com a restauração concluída
+    })();
   }, []);
 
   // Pedidos vindos da palette / de outras ferramentas: abrir nota X ou criar uma nova.
@@ -369,9 +449,7 @@ export function NotesScreen({ toast, request }) {
       const snap = await notesApi().get(note.id);
       await notesApi().remove(note.id);
       armUndo({ kind: 'note', snap, label: 'Nota movida para a Lixeira' });
-      const { tabs: rest, next } = closeTab(tabs, note.id, note.id);
-      setUi((u) => ({ ...u, tabs: rest, selectedId: null }));
-      if (next) openNote(next); else setCurrent(null);
+      dropFromGrid(new Set([note.id]));
     } catch (e) { toast('Erro ao excluir', cleanError(e), 'error'); }
   };
   const undoDelete = async () => {
@@ -450,7 +528,7 @@ export function NotesScreen({ toast, request }) {
     armUndo({ kind: 'folder', snap, label: `Pasta “${baseName(path)}” excluída (${snap.notes.length} ${snap.notes.length === 1 ? 'nota' : 'notas'} na Lixeira)` });
     // Sobrou arquivo que não é nota dentro da pasta: ela continua no disco e o app não apaga o que não é dele.
     if (snap.kept && snap.kept.length) toast('Pasta mantida no disco', `“${snap.kept[0]}” tem arquivos que não são notas. Apague ou mova por fora do app.`, 'warn');
-    if (current && snap.notes.some((n) => n.id === current.note.id)) { setCurrent(null); setUi((u) => ({ ...u, selectedId: null })); }
+    dropFromGrid(new Set(snap.notes.map((n) => n.id)));
     setUi((u) => (typeof u.folder === 'string' && (u.folder === path || isDescendant(u.folder, path)) ? { ...u, folder: null } : u));
   });
 
@@ -486,10 +564,7 @@ export function NotesScreen({ toast, request }) {
     const c = ctxMenu;
     setCtxMenu(null);
     if (!c) return;
-    if (c.kind === 'tab') {
-      if (item.id === 'close') closeNoteTab(c.id);
-      else { setUi((u) => ({ ...u, tabs: closeMany(u.tabs, c.id, item.id) })); openNote(c.id); } // 'others' | 'right': a aba clicada fica ativa
-    } else if (c.kind === 'folder') {
+    if (c.kind === 'folder') {
       const p = c.path;
       if (item.id === 'newnote') newNoteIn(p);
       else if (item.id === 'sub') setDialog({ kind: 'create', parent: p });
@@ -644,8 +719,8 @@ export function NotesScreen({ toast, request }) {
           .catch(() => [])
           .then((recentIds) => setDialog((d) => d || { kind: 'quickopen', recentIds }));
       }
-      // Abas: Ctrl/⌘+W fecha · Ctrl+PageDown / Ctrl+PageUp alternam (Ctrl+Tab é da sidebar) · Alt+1…9 vão direto
-      else if (isMod(e) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'w' && tabsRef.current.tabs.length && tabsRef.current.active) { e.preventDefault(); closeRef.current(tabsRef.current.active); }
+      // Visão: Ctrl/⌘+W tira a nota do painel ativo da visão · Abas: Ctrl+PageDown / Ctrl+PageUp alternam (Ctrl+Tab é da sidebar) · Alt+1…9 vão direto
+      else if (isMod(e) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'w' && tabsRef.current.active) { e.preventDefault(); removeRef.current(tabsRef.current.active); }
       else if (isMod(e) && !e.shiftKey && !e.altKey && (e.key === 'PageDown' || e.key === 'PageUp') && tabsRef.current.tabs.length > 1) {
         e.preventDefault();
         const id = cycle(tabsRef.current.tabs, tabsRef.current.active, e.key === 'PageUp' ? -1 : 1);
@@ -667,7 +742,7 @@ export function NotesScreen({ toast, request }) {
       draggable
       onDragStart={(e) => { e.dataTransfer.setData(NOTE_DRAG, r.id); e.dataTransfer.effectAllowed = 'move'; }}
       onContextMenu={(e) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, kind: 'note', note: r }); }}
-      onClick={() => openNote(r.id)}
+      onClick={(e) => (e.altKey ? openBesideNote(r.id) : openNote(r.id))}
       {...dnd.dropProps(r.folder || '', 'n:' + key)}>
       <Icon name={rowIcon(r)} size={14} className="nts-row__icon" />
       <div className="nts-row__main">
@@ -749,7 +824,7 @@ export function NotesScreen({ toast, request }) {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); moveSel(e.key === 'ArrowDown' ? 1 : -1); }
-                else if (e.key === 'Enter') { e.preventDefault(); if (!current && flat[0]) openNote(flat[0].id, 'body'); else document.querySelector('.nts-body') && document.querySelector('.nts-body').focus(); }
+                else if (e.key === 'Enter') { e.preventDefault(); if (!current && flat[0]) openNote(flat[0].id, 'body'); else document.querySelector('.nts-pane.is-active .nts-body, .nts-body') && document.querySelector('.nts-pane.is-active .nts-body, .nts-body').focus(); }
                 else if (e.key === 'Escape' && query) { e.preventDefault(); setQuery(''); }
               }}
             />
@@ -905,34 +980,39 @@ export function NotesScreen({ toast, request }) {
           ) : view === 'graph' ? (
             <GraphPanel currentId={current ? current.note.id : ui.selectedId} onOpen={(id) => openNote(id)} onOpenLink={openLink} toast={toast} />
           ) : current ? (<>
-            {tabs.length > 0 && (
-              <NoteTabs tabs={tabs} activeId={current.note.id} rows={allRows} fallback={current.note}
-                onSelect={(id) => id !== current.note.id && openNote(id)}
-                onClose={closeNoteTab}
-                onMenu={(id, x, y) => setCtxMenu({ x, y, kind: 'tab', id })} />
-            )}
-            <NoteEditor
-              key={current.note.id}
-              initial={current.note}
-              isNew={current.isNew}
-              focus={current.focus}
-              cursor={current.cursor}
-              mode={ui.mode}
-              setMode={(mode) => setUi((u) => ({ ...u, mode }))}
-              resolve={resolve}
-              onOpenLink={openLink}
-              onOpenNote={(id) => openNote(id)}
-              onDelete={remove}
-              onNoteChange={(n) => {
-                setCurrent((c) => (c && c.note.id === n.id ? { ...c, note: n } : c));
-                setUi((u) => ((u.tabs || []).some((t) => t.id === n.id) ? u : { ...u, tabs: openTab(u.tabs, n.id) })); // nota nova ganha a aba ao ser digitada
-              }}
-              folderOptions={folderOptions}
-              autosaveMs={prefs.autosaveMs}
-              onRevealFolder={revealFolder}
-              toast={toast}
-            />
-          </>) : (
+            {tabsBar}
+            <div className={'nts-grid ' + gridClass(grid.list.length)}>
+              {grid.list.map((e, i) => (
+                <PaneFrame key={e.note.id} active={i === grid.focus} multi={grid.list.length > 1} full={grid.list.length >= MAX_PANES}
+                  onActivate={() => setGrid((g) => (g.focus === i ? g : { ...g, focus: i }))}
+                  onDropNote={(id, zone) => dropNote(id, e.note.id, zone)}>
+                  <NoteEditor
+                    initial={e.note}
+                    isNew={e.isNew}
+                    focus={e.focus}
+                    cursor={e.cursor}
+                    active={i === grid.focus}
+                    mode={ui.mode}
+                    setMode={(mode) => setUi((u) => ({ ...u, mode }))}
+                    resolve={resolve}
+                    onOpenLink={openLink}
+                    onOpenNote={(id) => openNote(id)}
+                    onDelete={remove}
+                    onClose={(n) => removeFromView(n.id)}
+                    onNoteChange={(n) => {
+                      setGrid((g) => ({ ...g, list: g.list.map((x) => (x.note.id === n.id ? { ...x, note: n } : x)) }));
+                      setUi((u) => ((u.tabs || []).some((t) => t.id === n.id) ? u : { ...u, tabs: openTab(u.tabs, n.id) })); // nota nova ganha a aba ao ser digitada
+                    }}
+                    folderOptions={folderOptions}
+                    autosaveMs={prefs.autosaveMs}
+                    onRevealFolder={revealFolder}
+                    toast={toast}
+                  />
+                </PaneFrame>
+              ))}
+            </div>
+          </>) : (<>
+            {tabsBar}
             <div className="nts-empty">
               {noNotesAtAll ? (
                 <EmptyState title="Nenhuma nota ainda."
@@ -944,7 +1024,7 @@ export function NotesScreen({ toast, request }) {
                   action={<Button variant="secondary" icon="plus" kbd={mod('N')} onClick={() => newNote()}>Nova nota</Button>} />
               )}
             </div>
-          )}
+          </>)}
         </section>
       </div>
 
@@ -952,7 +1032,7 @@ export function NotesScreen({ toast, request }) {
         <ContextMenu
           x={Math.min(ctxMenu.x, window.innerWidth - 230)}
           y={Math.max(8, Math.min(ctxMenu.y, window.innerHeight - (ctxMenu.kind === 'folder' ? 470 : 190)))}
-          items={ctxMenu.kind === 'tab' ? tabMenu(ctxMenu.id) : ctxMenu.kind === 'folder' ? folderMenu(ctxMenu.path) : noteMenu(ctxMenu.note)}
+          items={ctxMenu.kind === 'folder' ? folderMenu(ctxMenu.path) : noteMenu(ctxMenu.note)}
           onSelect={onMenuSelect}
           onClose={() => setCtxMenu(null)}
         />

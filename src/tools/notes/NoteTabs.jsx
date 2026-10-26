@@ -1,12 +1,11 @@
-import { DS } from '../../lib/ds.js';
-
-const { Icon } = DS;
+import { NOTE_DRAG } from './FolderTree.jsx';
 
 /**
- * Abas das notas abertas (acima do editor). `tabs` = [{ id, pinned }]; o título vem de `rows` (renomear reflete sozinho).
- * Toda nota aberta ganha uma aba; clique do meio ou ✕ fecha.
+ * Barra de abas do Notes = contexto geral: todas as notas abertas, estejam ou não na visão. A bolinha cheia marca as que
+ * aparecem em algum painel. Clicar traz a nota para a visão (ou foca o painel dela); arrastar uma aba para a visão a
+ * posiciona na grade. Não há ✕ aqui: tirar uma nota da visão é só pelo botão do próprio painel.
  */
-export function NoteTabs({ tabs, activeId, rows, fallback, onSelect, onClose, onMenu }) {
+export function NoteTabs({ tabs, activeId, visible, rows, fallbacks, onSelect }) {
   const ref = React.useRef(null);
   const byId = React.useMemo(() => new Map((rows || []).map((r) => [r.id, r])), [rows]);
 
@@ -21,34 +20,25 @@ export function NoteTabs({ tabs, activeId, rows, fallback, onSelect, onClose, on
       e.preventDefault();
       const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length];
       if (n) { onSelect(n.id); const el = ref.current && ref.current.querySelectorAll('[role="tab"]')[tabs.indexOf(n)]; if (el) el.focus(); }
-    } else if (e.key === 'Delete') { e.preventDefault(); onClose(tabs[i].id); }
-    else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
-      e.preventDefault();
-      const r = e.currentTarget.getBoundingClientRect();
-      onMenu(tabs[i].id, r.left + 12, r.bottom - 4);
-    }
+    } else if (e.key === 'Enter') onSelect(tabs[i].id);
   };
 
   return (
     <div className="nts-tabs tk-scroll" role="tablist" aria-label="Notas abertas" ref={ref}>
       {tabs.map((t, i) => {
-        const r = byId.get(t.id) || (fallback && fallback.id === t.id ? fallback : null);
+        const r = byId.get(t.id) || (fallbacks && fallbacks.find((f) => f.id === t.id)) || null;
         const title = (r && r.title) || 'Sem título';
         const on = t.id === activeId;
+        const vis = visible.has(t.id);
         return (
-          <div key={t.id} role="tab" aria-selected={on} tabIndex={on ? 0 : -1}
-            className={'nts-tab' + (on ? ' is-on' : '')}
-            title={r && r.folder ? r.folder + ' / ' + title : title}
+          <div key={t.id} role="tab" aria-selected={on} tabIndex={on ? 0 : -1} draggable
+            className={'nts-tab' + (on ? ' is-on' : '') + (vis ? ' is-vis' : '')}
+            title={(r && r.folder ? r.folder + ' / ' : '') + title + (vis ? '' : ' — fora da visão (clique para mostrar)')}
+            onDragStart={(e) => { e.dataTransfer.setData(NOTE_DRAG, t.id); e.dataTransfer.effectAllowed = 'move'; }}
             onClick={() => onSelect(t.id)}
-            onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); onClose(t.id); } }}
-            onContextMenu={(e) => { e.preventDefault(); onMenu(t.id, e.clientX, e.clientY); }}
             onKeyDown={(e) => key(e, i)}>
+            <span className="nts-tab__mark" aria-hidden="true" />
             <span className="nts-tab__title">{title}</span>
-            <button type="button" className="nts-tab__x" aria-label={'Fechar ' + title} tabIndex={-1}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => { e.stopPropagation(); onClose(t.id); }}>
-              <Icon name="x" size={12} />
-            </button>
           </div>
         );
       })}

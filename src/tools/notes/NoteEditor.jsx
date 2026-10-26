@@ -62,7 +62,7 @@ function TagsField({ tags, content, onChange }) {
 /**
  * Editor de uma nota. Monte com key={id}: trocar de nota desmonta e o auto-save grava o pendente.
  */
-export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resolve, onOpenLink, onOpenNote, onDelete, onNoteChange, folderOptions = [], autosaveMs = 400, onRevealFolder, toast }) {
+export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resolve, onOpenLink, onOpenNote, onDelete, onNoteChange, active = true, onClose, folderOptions = [], autosaveMs = 400, onRevealFolder, toast }) {
   const { note, update, status, error, flush } = useAutosave(initial, { isNew, delay: autosaveMs });
 
   // Mantém o snapshot do pai (`current.note`) em dia: trocar de aba desmonta o editor e o remonte usa esse snapshot.
@@ -177,6 +177,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
   // Atalhos do editor: Ctrl/⌘+E alterna o modo · Ctrl/⌘+Shift+C copia o snippet.
   React.useEffect(() => {
     const h = (e) => {
+      if (!active) return; // com várias notas na visão, só o painel ativo reage (senão Delete apagaria todas)
       // Delete (sem foco em campo de texto, sem diálogo/menu aberto) manda a nota aberta para a Lixeira — como o botão.
       if (e.key === 'Delete' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.repeat && !e.defaultPrevented) {
         const t = e.target;
@@ -262,6 +263,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
             onClick={async () => { await flush(); window.devkit.stickies.open(note.id).catch((e) => toast('Não foi possível fixar na tela', cleanError(e), 'error')); }} />
           <IconButton size="sm" icon="history" label="Versões anteriores" onClick={() => setShowHistory(true)} disabled={isNew && status === 'idle'} />
           <IconButton size="sm" icon="trash-2" label="Excluir (Delete) — vai para a lixeira" onClick={async () => { await flush(); onDelete(note); }} disabled={isNew && status === 'idle'} />
+          {onClose && <IconButton size="sm" className="nts-close" icon="x" label="Remover da visão (Ctrl+W) — a nota continua salva" onClick={async () => { await flush(); onClose(note); }} />}
         </div>
       </div>
       <div className="nts-editor__meta">

@@ -598,10 +598,17 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
     `Ctrl+Shift+K` vira `` `código` `` (trecho de uma linha) ou bloco ```` ``` ```` (sem seleção / várias linhas). Tudo
     alterna e pode ser desfeito com `Ctrl+Z`
   - `Alt+↑` / `Alt+↓` move a seleção (ou a linha do cursor) para cima/baixo, como no VS Code; `Ctrl+Z` desfaz
-- **Abas das notas abertas**: acima do editor. Toda nota aberta — pela lista, pelo `Ctrl+P`, por um link
-  `[[…]]` ou pelos painéis — ganha uma aba, se ainda não tiver (até 20; a mais antiga sai). `✕`, clique do meio ou
-  `Ctrl+W` fecham; `Ctrl+PageDown`/`PageUp` alternam e `Alt+1…9` vão direto à aba. Botão direito: fechar as
-  outras / à direita. As abas voltam ao reabrir o app; nota excluída (aqui ou por fora) sai da barra
+- **Abas das notas abertas** (contexto geral): acima da área de edição. Toda nota aberta — pela lista, pelo `Ctrl+P`,
+  por um link `[[…]]` ou pelos painéis — ganha uma aba, se ainda não tiver (até 20; a mais antiga sai). A bolinha
+  cheia marca as que estão na visão; clicar numa aba traz a nota para o painel ativo (ou foca o painel dela).
+  `Ctrl+PageDown`/`PageUp` alternam e `Alt+1…9` vão direto à aba. As abas voltam ao reabrir o app
+- **Várias notas ao mesmo tempo** (grade fixa, 1 a 4 painéis, uma nota por painel): 1 nota = tela cheia · 2 = lado a
+  lado · 3 = uma grande à esquerda + duas empilhadas · 4 = grade 2×2. **Arraste** uma nota da lista ou uma aba para a
+  área de edição: no centro de um painel ela entra na grade (se já está cheia, ocupa o lugar dele; se já estava na
+  visão, troca de lugar), nas bordas você escolhe se entra antes ou depois. `Alt+clique` na lista adiciona ao lado
+  do painel ativo. O painel ativo tem borda destacada; a visão volta ao reabrir o app
+- **Tirar uma nota da visão**: só pelo `✕` do próprio painel (ou `Ctrl+W`) — ela sai do painel e da barra de abas, e
+  continua salva. Nota excluída (aqui ou por fora) também sai
 - **Abrir nota** (`Ctrl+P`, dentro de Notes): busca só entre as notas (título, pasta e tags, sem acento); vazio mostra
   as últimas abertas. `↑`/`↓` navegam, `Enter` abre, `Esc` fecha
 - **Pastas** (subpastas ilimitadas): o **Explorador** na lateral, com `+` para criar. Cada pasta é um diretório

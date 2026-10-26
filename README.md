@@ -234,7 +234,7 @@ formatação de SQL/XML direto da área de transferência.
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Próxima / ferramenta anterior |
 | `Ctrl+P` | Notes: abrir nota pelo nome |
 | `Alt+↑` / `Alt+↓` | Notes (editor): mover linha / seleção |
-| `Ctrl+W` · `Ctrl+PageDown` / `PageUp` · `Alt+1…9` | Notes: fechar aba · próxima / anterior · ir para a aba N |
+| `Ctrl+W` · `Ctrl+PageDown` / `PageUp` · `Alt+1…9` | Notes: tirar a nota do painel da visão · aba próxima / anterior · ir para a aba N |
 | `Ctrl+Enter` | Formatar / comparar |
 | `Ctrl+,` | Configurações |
 

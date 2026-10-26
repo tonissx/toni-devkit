@@ -1422,6 +1422,36 @@ test('edit: moveLines moves the cursor line or the whole selection, keeps the se
   assert.equal(mv('a\nb\nc', 0, 2, 1).value, 'b\na\nc');
 });
 
+test('grid: fixed grid by note count; drops insert/swap/replace; zone by pointer', () => {
+  const { place, addBeside, zoneAt, gridClass } = require('../src/notes/grid.js');
+  assert.deepEqual([1, 2, 3, 4, 9].map(gridClass), ['n1', 'n2', 'n3', 'n4', 'n4']);
+  // nota nova: borda direita/baixo → depois do alvo; esquerda/cima → antes; centro com espaço → depois
+  assert.deepEqual(place(['a', 'b'], 'c', 'b', 'bottom'), ['a', 'b', 'c']);
+  assert.deepEqual(place(['a', 'b'], 'c', 'b', 'left'), ['a', 'c', 'b']);
+  assert.deepEqual(place(['a', 'b'], 'c', 'a', 'center'), ['a', 'c', 'b']);
+  // já visível: centro troca de lugar, borda reordena
+  assert.deepEqual(place(['a', 'b', 'c'], 'c', 'a', 'center'), ['c', 'b', 'a']);
+  assert.deepEqual(place(['a', 'b', 'c'], 'c', 'a', 'left'), ['c', 'a', 'b']);
+  // grade cheia: nota de fora ocupa o lugar do alvo (em qualquer zona)
+  assert.deepEqual(place(['a', 'b', 'c', 'd'], 'e', 'b', 'right'), ['a', 'e', 'c', 'd']);
+  assert.deepEqual(place(['a', 'b', 'c', 'd'], 'e', 'c', 'center'), ['a', 'b', 'e', 'd']);
+  // sem efeito
+  assert.deepEqual(place(['a', 'b'], 'a', 'a', 'center'), ['a', 'b']);
+  assert.deepEqual(place(['a', 'b'], 'c', 'zzz', 'center'), ['a', 'b']);
+  const orig = ['a', 'b']; place(orig, 'c', 'a', 'right'); assert.deepEqual(orig, ['a', 'b']); // não muta
+  // "ao lado"
+  assert.deepEqual(addBeside(['a', 'b'], 'c', 'a'), ['a', 'c', 'b']);
+  assert.deepEqual(addBeside(['a', 'b'], 'a', 'b'), ['a', 'b']);
+  assert.deepEqual(addBeside([], 'a', null), ['a']);
+  assert.deepEqual(addBeside(['a', 'b', 'c', 'd'], 'e', 'd'), ['e', 'b', 'c', 'd']); // cheia: ocupa o próximo (volta ao início)
+  // zonas do ponteiro
+  assert.equal(zoneAt(0.5, 0.5), 'center');
+  assert.equal(zoneAt(0.05, 0.5), 'left');
+  assert.equal(zoneAt(0.95, 0.5), 'right');
+  assert.equal(zoneAt(0.5, 0.02), 'top');
+  assert.equal(zoneAt(0.5, 0.97), 'bottom');
+});
+
 test('tabs: every opened note gets a tab (no duplicates), close picks the right neighbour, sanitize drops dead ids', () => {
   const { openTab, closeTab, closeMany, cycle, sanitize } = require('../src/notes/tabs.js');
   let t = openTab([], 'a');
