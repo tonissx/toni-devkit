@@ -599,7 +599,7 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
     alterna e pode ser desfeito com `Ctrl+Z`
   - `Alt+↑` / `Alt+↓` move a seleção (ou a linha do cursor) para cima/baixo, como no VS Code; `Ctrl+Z` desfaz
 - **Abrir nota** (`Ctrl+P`, dentro de Notes): busca só entre as notas (título, pasta e tags, sem acento); vazio mostra
-  as últimas abertas. `↑`/`↓` navegam, `Enter` abre, `Esc` fecha
+  primeiro o histórico das últimas notas escolhidas por ele (como no VS Code, até 30) e depois as últimas abertas. `↑`/`↓` navegam, `Enter` abre, `Esc` fecha
 - **Pastas** (subpastas ilimitadas): o **Explorador** na lateral, com `+` para criar. Cada pasta é um diretório
   de verdade dentro de `Documentos\Devkit Notes`. A lista vira um explorador em cascata: clicar numa pasta a marca e
   abre as subpastas e as notas dela, recuadas e com uma linha-guia leve (as notas soltas ficam no fim, em "Sem pasta").
