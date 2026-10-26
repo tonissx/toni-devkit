@@ -548,6 +548,12 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .md-preview table { border-collapse: collapse; font-size: 12.5px; }
 .md-preview th, .md-preview td { border: 1px solid var(--tk-border); padding: 4px 10px; text-align: left; }
 .md-preview th { background: var(--tk-surface-2); color: var(--tk-text); font-weight: 600; }
+/* Colunas lado a lado (:::colunas … ||| … :::) — empilham quando o preview fica estreito */
+.md-preview .md-cols { display: grid; grid-template-columns: repeat(var(--n, 2), minmax(0, 1fr)); gap: 24px; align-items: start; margin: 0 0 .85em; container-type: inline-size; }
+.md-preview .md-col { min-width: 0; overflow-x: auto; }
+.md-preview .md-col > :first-child { margin-top: 0; }
+.md-preview .md-col > :last-child { margin-bottom: 0; }
+@container (max-width: 520px) { .md-preview .md-cols { grid-template-columns: minmax(0, 1fr); } }
 .md-preview hr { border: 0; border-top: 1px solid var(--tk-border); margin: 1.2em 0; }
 .md-code { border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm); overflow: hidden; background: var(--tk-surface-1); }
 .md-code__bar { display: flex; align-items: center; justify-content: space-between; height: 26px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--tk-border); font: 400 11px var(--tk-font-mono); color: var(--tk-text-3); }

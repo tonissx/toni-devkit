@@ -234,6 +234,7 @@ formatação de SQL/XML direto da área de transferência.
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Próxima / ferramenta anterior |
 | `Ctrl+P` | Notes: abrir nota pelo nome |
 | `Alt+↑` / `Alt+↓` | Notes (editor): mover linha / seleção |
+| `/colunas` + `Espaço` | Notes (editor): inserir bloco de colunas lado a lado |
 | `Ctrl+Enter` | Formatar / comparar |
 | `Ctrl+,` | Configurações |
 

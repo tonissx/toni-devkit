@@ -635,6 +635,11 @@ A memória técnica do Devkit: um scratchpad mais uma biblioteca pessoal pesquis
   movidas) · **pasta sincronizada** por Dropbox/OneDrive/Syncthing (vigia a pasta, trata conflitos; ver
   *Sincronizar entre computadores*) e **Recarregar do disco** · **Google Drive**: conectar a conta e sincronizar sem
   nenhum programa extra (ver *Sincronizar pelo Google Drive*) · quantas versões guardar e o intervalo entre elas · tempo do auto-save · tempo do "Desfazer" após excluir
+- **Colunas lado a lado**: um bloco `:::colunas` … `:::` com uma linha `|||` entre as colunas (2 ou mais) mostra, por
+  exemplo, duas tabelas, ou um diagrama e a explicação, lado a lado no preview. Cada coluna é markdown completo; digitar
+  `/colunas` + espaço insere o esqueleto de 2 colunas com o cursor na primeira. No preview estreito (modo **Lado a lado**)
+  as colunas empilham. Marcações dentro de ``` são ignoradas, e um bloco sem fechamento, sem `|||` ou aninhado fica como
+  markdown comum
 - **Tarefas** (`- [ ] texto`), sem digitar a sintaxe à mão:
   - No editor, `Enter` numa tarefa continua a lista (em tarefa vazia, sai dela) · `Ctrl+L` alterna a linha (ou as
     linhas selecionadas) entre texto → `- [ ]` → `- [x]` → texto · `[]` ou `todo` + espaço no começo da linha vira `- [ ] `

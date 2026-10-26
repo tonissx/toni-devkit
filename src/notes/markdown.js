@@ -157,7 +157,59 @@ export function renderMarkdown(md, { resolve = () => null, secret = () => undefi
       },
     },
   });
-  return { html: marked.parse(String(md || '')), blocks };
+  const html = splitColumns(String(md || '')).map((part) => (part.cols
+    ? `<div class="md-cols" style="--n:${part.cols.length}">${part.cols.map((c) => `<div class="md-col">${marked.parse(c)}</div>`).join('')}</div>`
+    : marked.parse(part.text))).join('');
+  return { html, blocks };
+}
+
+const FENCE_RE = /^ {0,3}(`{3,}|~{3,})/;
+
+/**
+ * Separa os blocos de colunas do resto do texto:
+ *   :::colunas  …  |||  …  :::
+ * Devolve [{ text }] (markdown comum) e [{ cols: [markdown, …] }] na ordem do texto. Marcações dentro de
+ * ``` são ignoradas; um bloco sem fechamento ou sem nenhum `|||` fica como markdown comum (nada some).
+ * Não aninha: um `:::colunas` dentro de outro é só texto da coluna.
+ */
+export function splitColumns(md) {
+  const lines = md.split('\n');
+  const parts = [];
+  let buf = [];
+  const flush = () => { if (buf.length) { parts.push({ text: buf.join('\n') }); buf = []; } };
+  let fence = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const f = FENCE_RE.exec(line);
+    if (fence) {
+      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !line.slice(f[0].length).trim()) fence = null;
+      buf.push(line);
+      continue;
+    }
+    if (f) { fence = f[1]; buf.push(line); continue; }
+    if (!/^:::colunas\s*$/i.test(line)) { buf.push(line); continue; }
+
+    // Procura o ":::" de fechamento (fora de ```), juntando as colunas pelo caminho.
+    const cols = [[]];
+    let inner = null, end = -1;
+    for (let j = i + 1; j < lines.length; j++) {
+      const l = lines[j];
+      const g = FENCE_RE.exec(l);
+      if (inner) {
+        if (g && g[1][0] === inner[0] && g[1].length >= inner.length && !l.slice(g[0].length).trim()) inner = null;
+        cols[cols.length - 1].push(l);
+      } else if (g) { inner = g[1]; cols[cols.length - 1].push(l); }
+      else if (/^:::\s*$/.test(l)) { end = j; break; }
+      else if (/^\|\|\|\s*$/.test(l)) cols.push([]);
+      else cols[cols.length - 1].push(l);
+    }
+    if (end === -1 || cols.length < 2) { buf.push(line); continue; }
+    flush();
+    parts.push({ cols: cols.map((c) => c.join('\n')) });
+    i = end;
+  }
+  flush();
+  return parts;
 }
 
 /**

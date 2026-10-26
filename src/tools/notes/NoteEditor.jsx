@@ -334,6 +334,7 @@ export function NoteEditor({ initial, isNew, focus, cursor, mode, setMode, resol
         {isTemplate
           ? <span title="Variáveis trocadas quando uma nota é criada a partir deste template"><Kbd size="sm">{'{'}</Kbd> variáveis</span>
           : <span><Kbd size="sm">[[</Kbd> link para nota</span>}
+        <span title="Digite /colunas e Espaço para inserir um bloco de colunas lado a lado"><Kbd size="sm">/colunas</Kbd> colunas</span>
         {note.type === 'snippet' && <span><Kbd size="sm">{mod('C', true)}</Kbd> copiar snippet</span>}
         <span className="nts-editor__spacer" />
         <span>{note.content.length} caracteres</span>

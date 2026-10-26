@@ -125,6 +125,12 @@ function expandOnSpace(value, pos, now = new Date()) {
     const text = `${m[1]}- [ ] `;
     return { value: value.slice(0, ls) + text + value.slice(pos), start: ls + text.length, end: ls + text.length };
   }
+  if (/^\/colunas$/i.test(before)) {
+    // Esqueleto de 2 colunas (ver splitColumns em markdown.js); o cursor fica na primeira.
+    const head = ':::colunas\n';
+    const text = `${head}\n|||\n\n:::`;
+    return { value: value.slice(0, ls) + text + value.slice(pos), start: ls + head.length, end: ls + head.length };
+  }
   m = /(^|\s)@(hoje|amanha|amanhã)$/i.exec(before);
   if (m) {
     const from = pos - m[0].length + m[1].length;

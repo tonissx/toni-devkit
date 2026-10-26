@@ -1110,6 +1110,46 @@ test('markdown: code highlight, tasks, tables, wikilinks; raw HTML and js: links
   assert.match(html, /<a href="https:\/\/a.com" target="_blank" rel="noreferrer">ok<\/a>/);
 });
 
+test('markdown: :::colunas splits into side-by-side columns (tables, tasks, code keep working)', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const two = ':::colunas\n## A\n| x | y |\n|---|---|\n| 1 | 2 |\n|||\n- [ ] t\n\n```sql\nSELECT 1\n```\n:::\n\nfim';
+  const { html, blocks } = renderMarkdown(two);
+  assert.equal((html.match(/class="md-col"/g) || []).length, 2);
+  assert.match(html, /class="md-cols" style="--n:2"/);
+  assert.match(html, /<div class="md-col"><h2>A<\/h2>\s*<table>/);
+  assert.match(html, /data-task="0"/);
+  assert.deepEqual(blocks, ['SELECT 1']);
+  assert.match(html, /<p>fim<\/p>\s*$/);
+  const three = renderMarkdown(':::colunas\na\n|||\nb\n|||\nc\n:::').html;
+  assert.equal((three.match(/class="md-col"/g) || []).length, 3);
+  assert.match(three, /--n:3/);
+});
+
+test('markdown: :::colunas ignores fences, and unclosed / separator-less / nested blocks stay plain markdown', async () => {
+  const { renderMarkdown } = await loadMarkdown();
+  const none = (md) => assert.ok(!/md-cols/.test(renderMarkdown(md).html), md);
+  none('```\n:::colunas\na\n|||\nb\n:::\n```');
+  none(':::colunas\na\n|||\nb');
+  none(':::colunas\nsó uma coluna\n:::');
+  // "|||" e ":::" dentro de um ``` da coluna não fecham nem dividem.
+  const { html } = renderMarkdown(':::colunas\n```\n|||\n:::\n```\n|||\nb\n:::');
+  assert.equal((html.match(/class="md-col"/g) || []).length, 2);
+  assert.ok(html.includes('|||'));
+  // Aninhado: o primeiro ":::" fecha o bloco de fora; o resto é texto, sem quebrar.
+  const nested = renderMarkdown(':::colunas\na\n|||\n:::colunas\nb\n:::\nresto\n:::');
+  assert.equal((nested.html.match(/class="md-cols"/g) || []).length, 1);
+});
+
+test('edit: "/colunas " expands to a two-column skeleton with the cursor in the first column', () => {
+  const { expandOnSpace: ex } = E;
+  const r = ex('/colunas', 8);
+  assert.equal(r.value, ':::colunas\n\n|||\n\n:::');
+  assert.equal(r.start, ':::colunas\n'.length);
+  assert.equal(r.end, r.start);
+  assert.equal(ex('texto /colunas', 14), null);
+  assert.equal(ex('```\n/colunas\n```', 12), null);
+});
+
 test('markdown: pasted images (.assets/) render as <img>; other local paths do not', async () => {
   const { renderMarkdown } = await loadMarkdown();
   const { html } = renderMarkdown('![print](.assets/2026-09-29-142100-ab12.png)\n\n![a](.assets/../x.png) ![b](C:/x.png) ![c](.assets/sub/x.png) ![d](https://a.com/x.png)');
