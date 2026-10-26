@@ -1,29 +1,17 @@
 'use strict';
 /**
- * Abas do Notes — lógica pura. Uma aba é `{ id, pinned }`; o título vem da nota, então renomear reflete sozinho.
- * Aba de pré-visualização (pinned=false, itálico na UI): no máximo uma; abrir outra nota pela lista a substitui.
- * Ela vira fixa ao editar, com duplo clique ou pelo menu.
+ * Abas do Notes — lógica pura. Uma aba é `{ id }`; o título vem da nota, então renomear reflete sozinho.
+ * Toda nota aberta ganha uma aba (se ainda não tem); abrir uma já aberta só a ativa.
  */
 
 const MAX_TABS = 20;
 
-/** Abre `id`: já aberta → só ativa; senão substitui a prévia (ou entra no fim). `pin` abre direto como fixa. */
-function openTab(tabs, id, { pin = false } = {}) {
+/** Abre `id`: já aberta → nada muda; senão entra no fim (estourou o limite: descarta a mais antiga). */
+function openTab(tabs, id) {
   const list = tabs || [];
-  const cur = list.find((t) => t.id === id);
-  if (cur) return pin && !cur.pinned ? list.map((t) => (t.id === id ? { ...t, pinned: true } : t)) : list;
-  const i = list.findIndex((t) => !t.pinned);
-  const tab = { id, pinned: !!pin };
-  let next = !pin && i >= 0 ? list.map((t, k) => (k === i ? tab : t)) : [...list, tab];
-  if (next.length > MAX_TABS) { // estourou: descarta a fixa mais antiga que não seja a nova
-    const drop = next.findIndex((t) => t.id !== id);
-    next = next.filter((_, k) => k !== drop);
-  }
-  return next;
-}
-
-function pinTab(tabs, id, pinned = true) {
-  return (tabs || []).map((t) => (t.id === id && t.pinned !== pinned ? { ...t, pinned } : t));
+  if (list.some((t) => t.id === id)) return list;
+  const next = [...list, { id }];
+  return next.length > MAX_TABS ? next.slice(next.length - MAX_TABS) : next;
 }
 
 /** Fecha `id` → { tabs, next } (next = aba a ativar: a da direita, senão a da esquerda; null se não sobrou). */
@@ -37,7 +25,7 @@ function closeTab(tabs, id, activeId) {
   return { tabs: rest, next: n ? n.id : null };
 }
 
-/** Mantém só `id` ('others') ou só até `id` ('right' fecha as da direita). */
+/** 'others' mantém só `id`; 'right' fecha as que estão à direita dele. */
 function closeMany(tabs, id, how) {
   const list = tabs || [];
   const i = list.findIndex((t) => t.id === id);
@@ -61,9 +49,9 @@ function sanitize(tabs, exists) {
   for (const t of Array.isArray(tabs) ? tabs : []) {
     if (!t || typeof t.id !== 'string' || seen.has(t.id) || !exists(t.id)) continue;
     seen.add(t.id);
-    out.push({ id: t.id, pinned: !!t.pinned });
+    out.push({ id: t.id });
   }
   return out.slice(0, MAX_TABS);
 }
 
-module.exports = { openTab, pinTab, closeTab, closeMany, cycle, sanitize, MAX_TABS };
+module.exports = { openTab, closeTab, closeMany, cycle, sanitize, MAX_TABS };

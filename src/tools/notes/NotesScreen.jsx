@@ -25,7 +25,7 @@ import { TagFilter } from './TagFilter.jsx';
 import { useDismiss } from './useDismiss.js';
 import { countByDay, rangeLabel } from '../../notes/calendar.js';
 import { sideWidth, SIDE_COLLAPSED, SIDE_MAX, SIDE_DEFAULT, SIDE_WIDE } from '../../notes/panel.js';
-import { openTab, pinTab, closeTab, closeMany, cycle, sanitize } from '../../notes/tabs.js';
+import { openTab, closeTab, closeMany, cycle, sanitize } from '../../notes/tabs.js';
 import { NoteTabs } from './NoteTabs.jsx';
 
 const { PageHeader, Button, IconButton, EmptyState, Icon, Kbd, Spinner, ContextMenu } = DS;
@@ -322,8 +322,6 @@ export function NotesScreen({ toast, request }) {
     { id: 'close', icon: 'x', label: 'Fechar', shortcut: mod('W') },
     { id: 'others', icon: 'x', label: 'Fechar as outras' },
     { id: 'right', icon: 'x', label: 'Fechar à direita' },
-    { separator: true },
-    { id: 'pin', icon: 'pin', label: (tabs.find((t) => t.id === id) || {}).pinned ? 'Soltar (virar prévia)' : 'Manter aberta' },
   ];
   // O handler de teclado (registrado uma vez) lê o estado atual das abas por refs.
   const tabsRef = React.useRef({ tabs: [], active: null });
@@ -491,7 +489,6 @@ export function NotesScreen({ toast, request }) {
     if (!c) return;
     if (c.kind === 'tab') {
       if (item.id === 'close') closeNoteTab(c.id);
-      else if (item.id === 'pin') setUi((u) => ({ ...u, tabs: pinTab(u.tabs, c.id, !(tabs.find((t) => t.id === c.id) || {}).pinned) }));
       else { setUi((u) => ({ ...u, tabs: closeMany(u.tabs, c.id, item.id) })); openNote(c.id); } // 'others' | 'right': a aba clicada fica ativa
     } else if (c.kind === 'folder') {
       const p = c.path;
@@ -913,7 +910,6 @@ export function NotesScreen({ toast, request }) {
               <NoteTabs tabs={tabs} activeId={current.note.id} rows={allRows} fallback={current.note}
                 onSelect={(id) => id !== current.note.id && openNote(id)}
                 onClose={closeNoteTab}
-                onPin={(id) => setUi((u) => ({ ...u, tabs: pinTab(u.tabs, id) }))}
                 onMenu={(id, x, y) => setCtxMenu({ x, y, kind: 'tab', id })} />
             )}
             <NoteEditor
@@ -930,7 +926,7 @@ export function NotesScreen({ toast, request }) {
               onDelete={remove}
               onNoteChange={(n) => {
                 setCurrent((c) => (c && c.note.id === n.id ? { ...c, note: n } : c));
-                setUi((u) => ((u.tabs || []).some((t) => t.id === n.id && t.pinned) ? u : { ...u, tabs: openTab(u.tabs, n.id, { pin: true }) })); // editar fixa a aba
+                setUi((u) => ((u.tabs || []).some((t) => t.id === n.id) ? u : { ...u, tabs: openTab(u.tabs, n.id) })); // nota nova ganha a aba ao ser digitada
               }}
               folderOptions={folderOptions}
               autosaveMs={prefs.autosaveMs}

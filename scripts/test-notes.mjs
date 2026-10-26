@@ -1422,32 +1422,29 @@ test('edit: moveLines moves the cursor line or the whole selection, keeps the se
   assert.equal(mv('a\nb\nc', 0, 2, 1).value, 'b\na\nc');
 });
 
-test('tabs: preview tab is replaced, pinned stay, close picks the right neighbour, sanitize drops dead ids', () => {
-  const { openTab, pinTab, closeTab, closeMany, cycle, sanitize } = require('../src/notes/tabs.js');
+test('tabs: every opened note gets a tab (no duplicates), close picks the right neighbour, sanitize drops dead ids', () => {
+  const { openTab, closeTab, closeMany, cycle, sanitize } = require('../src/notes/tabs.js');
   let t = openTab([], 'a');
-  assert.deepEqual(t, [{ id: 'a', pinned: false }]);
-  t = openTab(t, 'b'); // substitui a prévia
-  assert.deepEqual(t, [{ id: 'b', pinned: false }]);
-  t = pinTab(t, 'b');
-  t = openTab(t, 'c'); // b fixa → c entra como prévia
-  t = openTab(t, 'd', { pin: true });
-  assert.deepEqual(t.map((x) => x.id + (x.pinned ? '*' : '')), ['b*', 'c', 'd*']);
+  t = openTab(t, 'b');
+  t = openTab(t, 'c');
+  assert.deepEqual(t.map((x) => x.id), ['a', 'b', 'c']);
   assert.equal(openTab(t, 'b'), t); // já aberta: nada muda
-  assert.deepEqual(closeTab(t, 'c', 'c'), { tabs: [t[0], t[2]], next: 'd' });
-  assert.equal(closeTab(t, 'd', 'd').next, 'c');
-  assert.equal(closeTab(t, 'b', 'd').next, 'd'); // fechar outra não troca a ativa
-  assert.deepEqual(closeTab([{ id: 'x', pinned: true }], 'x', 'x'), { tabs: [], next: null });
-  assert.deepEqual(closeMany(t, 'c', 'others').map((x) => x.id), ['c']);
-  assert.deepEqual(closeMany(t, 'c', 'right').map((x) => x.id), ['b', 'c']);
-  assert.equal(cycle(t, 'd', 1), 'b');
-  assert.equal(cycle(t, 'b', -1), 'd');
+  assert.deepEqual(closeTab(t, 'b', 'b'), { tabs: [t[0], t[2]], next: 'c' });
+  assert.equal(closeTab(t, 'c', 'c').next, 'b');
+  assert.equal(closeTab(t, 'a', 'c').next, 'c'); // fechar outra não troca a ativa
+  assert.deepEqual(closeTab([{ id: 'x' }], 'x', 'x'), { tabs: [], next: null });
+  assert.deepEqual(closeMany(t, 'b', 'others').map((x) => x.id), ['b']);
+  assert.deepEqual(closeMany(t, 'b', 'right').map((x) => x.id), ['a', 'b']);
+  assert.equal(cycle(t, 'c', 1), 'a');
+  assert.equal(cycle(t, 'a', -1), 'c');
   assert.equal(cycle([], 'x', 1), null);
-  assert.deepEqual(sanitize([{ id: 'a' }, { id: 'a' }, { id: 'z', pinned: true }, null, { id: 3 }], (id) => id !== 'z'), [{ id: 'a', pinned: false }]);
+  assert.deepEqual(sanitize([{ id: 'a' }, { id: 'a' }, { id: 'z' }, null, { id: 3 }], (id) => id !== 'z'), [{ id: 'a' }]);
   assert.deepEqual(sanitize('lixo', () => true), []);
   let big = [];
-  for (let i = 0; i < 25; i++) big = openTab(big, 'n' + i, { pin: true });
+  for (let i = 0; i < 25; i++) big = openTab(big, 'n' + i);
   assert.equal(big.length, 20);
-  assert.equal(big[big.length - 1].id, 'n24');
+  assert.equal(big[0].id, 'n5'); // estourou: sai a mais antiga
+  assert.equal(big[19].id, 'n24');
 });
 
 test('quickopen: empty query lists recents first; query matches title (accent-insensitive), folder and tags', () => {
