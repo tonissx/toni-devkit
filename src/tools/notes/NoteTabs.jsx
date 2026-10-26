@@ -4,9 +4,9 @@ const { Icon } = DS;
 
 /**
  * Abas das notas abertas (acima do editor). `tabs` = [{ id, pinned }]; o título vem de `rows` (renomear reflete sozinho).
- * Aba em itálico = prévia (a próxima nota aberta pela lista a substitui). Duplo clique fixa; clique do meio ou ✕ fecha.
+ * Toda nota aberta ganha uma aba; clique do meio ou ✕ fecha.
  */
-export function NoteTabs({ tabs, activeId, rows, fallback, onSelect, onClose, onPin, onMenu }) {
+export function NoteTabs({ tabs, activeId, rows, fallback, onSelect, onClose, onMenu }) {
   const ref = React.useRef(null);
   const byId = React.useMemo(() => new Map((rows || []).map((r) => [r.id, r])), [rows]);
 
@@ -37,10 +37,9 @@ export function NoteTabs({ tabs, activeId, rows, fallback, onSelect, onClose, on
         const on = t.id === activeId;
         return (
           <div key={t.id} role="tab" aria-selected={on} tabIndex={on ? 0 : -1}
-            className={'nts-tab' + (on ? ' is-on' : '') + (t.pinned ? '' : ' is-preview')}
+            className={'nts-tab' + (on ? ' is-on' : '')}
             title={r && r.folder ? r.folder + ' / ' + title : title}
             onClick={() => onSelect(t.id)}
-            onDoubleClick={() => onPin(t.id)}
             onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); onClose(t.id); } }}
             onContextMenu={(e) => { e.preventDefault(); onMenu(t.id, e.clientX, e.clientY); }}
             onKeyDown={(e) => key(e, i)}>
