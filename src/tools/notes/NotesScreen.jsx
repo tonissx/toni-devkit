@@ -10,6 +10,7 @@ import { TrashPanel } from './TrashPanel.jsx';
 import { TemplateModal } from './TemplateModal.jsx';
 import { GraphPanel } from './GraphPanel.jsx';
 import { QuickOpen } from './QuickOpen.jsx';
+import { loadHistory, pushHistory, mergeRecents } from '../../notes/quickopenHistory.js';
 import { FolderRow, PinnedFolderRow, useFolderDnD, iconFill, NOTE_DRAG } from './FolderTree.jsx';
 import { NameModal, DeleteFolderModal, MoveNoteModal, MoveFolderModal, ConfirmModal } from './FolderDialogs.jsx';
 import { FolderSettingsModal } from './FolderSettings.jsx';
@@ -603,7 +604,7 @@ export function NotesScreen({ toast, request }) {
         notesApi().recent()
           .then((r) => [...(r.viewed || []), ...(r.edited || [])].map((x) => x.id))
           .catch(() => [])
-          .then((recentIds) => setDialog((d) => d || { kind: 'quickopen', recentIds }));
+          .then((recentIds) => setDialog((d) => d || { kind: 'quickopen', recentIds: mergeRecents(loadHistory(), recentIds) }));
       }
       else if ((isMod(e) && e.key.toLowerCase() === 'f') || (e.key === '/' && !typing)) { e.preventDefault(); searchRef.current && searchRef.current.focus(); }
     };
@@ -948,7 +949,7 @@ export function NotesScreen({ toast, request }) {
           notes={allRows}
           recentIds={dialog.recentIds}
           onClose={() => setDialog(null)}
-          onPick={(id) => openNote(id, 'body')}
+          onPick={(id) => { pushHistory(id); openNote(id, 'body'); }}
         />
       )}
       {dialog && dialog.kind === 'move' && (

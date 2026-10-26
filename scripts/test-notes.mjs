@@ -1438,3 +1438,19 @@ test('quickopen: empty query lists recents first; query matches title (accent-in
   assert.deepEqual(rankNotes(rows, 'rec cozinha').map((r) => r.note.id), ['2']);
   assert.deepEqual(rankNotes(rows, 'zzz'), []);
 });
+
+test('quickopen history: last picked first, no repeats, capped, tolerant to bad storage', () => {
+  const { loadHistory, pushHistory, mergeRecents } = require('../src/notes/quickopenHistory.js');
+  const mem = new Map();
+  const st = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, v) };
+  assert.deepEqual(loadHistory(st), []);
+  pushHistory('a', st); pushHistory('b', st);
+  assert.deepEqual(pushHistory('a', st), ['a', 'b']);
+  assert.deepEqual(loadHistory(st), ['a', 'b']);
+  for (let i = 0; i < 40; i++) pushHistory('n' + i, st);
+  assert.equal(loadHistory(st).length, 30);
+  assert.equal(loadHistory(st)[0], 'n39');
+  assert.deepEqual(mergeRecents(['b', 'a'], ['a', 'c']), ['b', 'a', 'c']);
+  assert.deepEqual(loadHistory({ getItem: () => '{lixo' }), []);
+  assert.deepEqual(loadHistory(null), []);
+});
