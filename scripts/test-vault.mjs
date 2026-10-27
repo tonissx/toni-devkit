@@ -259,6 +259,25 @@ test('service: auto-lock after inactivity; listing does not extend it', async ()
   } finally { await s.done(); }
 });
 
+test('service: manual-only lock (no timeout, ignores screen lock) when configured', async () => {
+  const s = await setup();
+  try {
+    await s.svc.create(PW);
+    s.svc.lock('system'); // padrão: tela travada tranca
+    assert.equal(s.svc.status().unlocked, false);
+
+    await s.svc.unlock(PW);
+    assert.equal(s.svc.status().lockOnSystem, true);
+    await s.svc.setSettings({ autoLockMin: 0, lockOnSystem: false });
+    assert.equal(s.svc.status().autoLockMin, 0);
+    s.time.advance(24 * 60 * 60_000);
+    s.svc.lock('system');
+    assert.equal(s.svc.status().unlocked, true);
+    s.svc.lock('tray'); // bloqueio manual sempre funciona
+    assert.equal(s.svc.status().unlocked, false);
+  } finally { await s.done(); }
+});
+
 test('service: growing wait after repeated wrong passwords', async () => {
   const s = await setup();
   try {
