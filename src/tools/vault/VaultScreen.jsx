@@ -3,7 +3,7 @@ import { KINDS, kindOf, blankEntry, summary, isDbLike, secretBlock, norm } from 
 import { useVaultStatus, generatePassword, copyFromVault, cleanError } from '../../vault/client.js';
 import { UnlockForm } from './UnlockForm.jsx';
 
-const { PageHeader, Button, IconButton, Input, Field, Textarea, Select, SegmentedControl, Modal, EmptyState, Badge, Icon, Spinner, Alert } = DS;
+const { PageHeader, Button, IconButton, Input, Field, Textarea, Select, SegmentedControl, Modal, EmptyState, Badge, Icon, Spinner, Alert, Toggle } = DS;
 
 const vault = () => window.devkit.vault;
 const MASK = '••••••••••';
@@ -68,7 +68,7 @@ export function VaultScreen({ toast, request }) {
   if (!status) return <div className="vlt-screen"><PageHeader icon="vault" title="Vault" /><div className="vlt-center"><Spinner size={18} /></div></div>;
 
   const subtitle = unlocked
-    ? `${entries.length} ${entries.length === 1 ? 'entrada' : 'entradas'} · bloqueia após ${status.autoLockMin} min sem uso · cópias somem em ${status.clearSeconds} s`
+    ? `${entries.length} ${entries.length === 1 ? 'entrada' : 'entradas'} · ${status.autoLockMin ? `bloqueia após ${status.autoLockMin} min sem uso` : 'sem limite de tempo'} · cópias somem em ${status.clearSeconds} s`
     : status.exists ? 'Bloqueado' : 'Cofre local para senhas, tokens e credenciais de banco';
 
   return (
@@ -322,8 +322,12 @@ function SettingsModal({ status, onClose, toast }) {
       footer={<Button variant="secondary" onClick={onClose}>Fechar</Button>}>
       <div className="vlt-settings">
         <div className="set-row">
-          <div><div className="set-row__label">Bloquear automaticamente</div><div className="set-row__hint">Depois desse tempo sem usar o cofre. Também bloqueia ao travar a tela ou suspender o PC.</div></div>
-          <Select size="sm" options={status.autoLockOptions.map((m) => ({ value: m, label: m + ' min' }))} value={status.autoLockMin} onChange={(v) => setting({ autoLockMin: v })} style={{ width: 110 }} />
+          <div><div className="set-row__label">Bloquear automaticamente</div><div className="set-row__hint">Depois desse tempo sem usar o cofre. “Nunca” deixa o bloqueio só manual (botão ou bandeja).</div></div>
+          <Select size="sm" options={status.autoLockOptions.map((m) => ({ value: m, label: m === 0 ? 'Nunca' : m + ' min' }))} value={status.autoLockMin} onChange={(v) => setting({ autoLockMin: v })} style={{ width: 110 }} />
+        </div>
+        <div className="set-row">
+          <div><div className="set-row__label">Bloquear ao travar a tela</div><div className="set-row__hint">Também ao suspender o PC. Desligue junto com o tempo em “Nunca” para só bloquear manualmente.</div></div>
+          <Toggle checked={status.lockOnSystem} onChange={(lockOnSystem) => setting({ lockOnSystem })} />
         </div>
         <div className="set-row">
           <div><div className="set-row__label">Apagar do clipboard após</div><div className="set-row__hint">Só se o que estiver lá ainda for o que o cofre copiou</div></div>

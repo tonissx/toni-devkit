@@ -8,8 +8,8 @@
  *   trancado (Enter pede a senha e copia). Servidor, usuário, campos e segredos nunca entram nele.
  * - Aberto, a chave e as entradas ficam só aqui no processo principal. As janelas recebem metadados (segredos =
  *   null); um segredo só sai daqui para o clipboard (`copy`) ou, sob pedido explícito, para o olho da tela (`reveal`).
- * - Auto-lock por inatividade (só ações do usuário contam: listar/abrir a palette não prolonga), e também ao
- *   bloquear a tela/suspender (electron/main.js).
+ * - Auto-lock por inatividade (só ações do usuário contam: listar/abrir a palette não prolonga; 0 = nunca), e também
+ *   ao bloquear a tela/suspender (electron/main.js; desligável em `lockOnSystem`). Ambos off = só bloqueio manual.
  * - Copiar: o texto vai para o clipboard marcado para ficar fora do histórico do Windows (Win+V) e da nuvem
  *   (`writeSecret`), e é apagado depois de `clearSeconds` se ainda for ele que estiver lá.
  * - Senha errada: a partir da 3ª seguida, espera crescente (1 s, 2 s, 4 s… até 60 s) antes de aceitar outra.
@@ -22,8 +22,8 @@ const { atomicWrite, createQueue } = require('../lib/fsx');
 const vc = require('../../src/vault/crypto.js');
 const { normalizeEntry, metaOf, primaryIndex, connectionString, sameName, cleanName } = require('../../src/vault/entry.js');
 
-const DEFAULT_SETTINGS = { autoLockMin: 10, clearSeconds: 30 };
-const AUTO_LOCK_OPTIONS = [1, 5, 10, 15, 30, 60];
+const DEFAULT_SETTINGS = { autoLockMin: 10, clearSeconds: 30, lockOnSystem: true };
+const AUTO_LOCK_OPTIONS = [0, 1, 5, 10, 15, 30, 60]; // 0 = nunca (só bloqueio manual)
 const CLEAR_OPTIONS = [10, 20, 30, 60, 120];
 
 function createVaultService({
@@ -80,6 +80,7 @@ function createVaultService({
       count: isOpen() ? data.entries.length : null,
       waitMs: Math.max(0, waitUntil - now()),
       autoLockMin: s.autoLockMin,
+      lockOnSystem: s.lockOnSystem !== false,
       clearSeconds: s.clearSeconds,
       autoLockOptions: AUTO_LOCK_OPTIONS,
       clearOptions: CLEAR_OPTIONS,
@@ -91,7 +92,7 @@ function createVaultService({
   function touch() {
     if (lockTimer) timers.clearTimeout(lockTimer);
     lockTimer = null;
-    if (!isOpen()) return;
+    if (!isOpen() || !settings().autoLockMin) return; // 0 = sem limite de tempo
     lockTimer = timers.setTimeout(() => lock('auto'), settings().autoLockMin * 60 * 1000);
     if (lockTimer && lockTimer.unref) lockTimer.unref();
   }
@@ -156,6 +157,8 @@ function createVaultService({
 
   /** Tranca: esquece chave e entradas (o arquivo continua igual). */
   function lock(reason = 'manual') {
+    // Tela travada/suspensão: ignorado se o usuário optou por bloqueio só manual.
+    if (reason === 'system' && isOpen() && settings().lockOnSystem === false) return status();
     if (lockTimer) timers.clearTimeout(lockTimer);
     lockTimer = null;
     const was = isOpen();
@@ -256,6 +259,7 @@ function createVaultService({
     requireOpen();
     const s = { ...settings() };
     if (next && AUTO_LOCK_OPTIONS.includes(Number(next.autoLockMin))) s.autoLockMin = Number(next.autoLockMin);
+    if (next && typeof next.lockOnSystem === 'boolean') s.lockOnSystem = next.lockOnSystem;
     if (next && CLEAR_OPTIONS.includes(Number(next.clearSeconds))) s.clearSeconds = Number(next.clearSeconds);
     data.settings = s;
     await persist();
