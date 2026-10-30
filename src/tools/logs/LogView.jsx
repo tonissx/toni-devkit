@@ -349,6 +349,26 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
   };
 
   const res = React.useMemo(() => toRegexes(sum && sum.highlight), [sum && sum.qid]);
+
+  /* ─────────────── Detalhe destacado (janela própria) ─────────────── */
+  // A janela só mostra: o estado continua aqui e ela devolve as ações. Fechar a janela (ou o log) re-acopla.
+  const [detached, setDetached] = React.useState(false);
+  const popState = () => ({ kind: 'logs-detail', title: 'Devkit — Detalhe do log', id, i: sel ? sel.i : null, highlight: sum ? sum.highlight : null, http: src.http,
+    pinned: !!sel && pinSet.has(sel.i), inCase: !!sel && inCase(sel.i), dbServers });
+  const actRef = React.useRef(null);
+  actRef.current = { addFilter: (a) => addFilter(a.term, a.replace), follow: (a) => follow(a.term), jump: (a) => jumpToEntry(a.i),
+    pin: (a) => togglePin({ i: a.i }), case: (a) => toggleCase({ i: a.i }) };
+  React.useEffect(() => {
+    const off = [
+      window.devkit.popout.onAction((a) => { const f = a.kind === 'logs-detail' && actRef.current[a.type]; if (f) f(a); }),
+      window.devkit.popout.onDocked((kind) => { if (kind === 'logs-detail') setDetached(false); }),
+    ];
+    return () => { off.forEach((f) => f()); window.devkit.popout.close('logs-detail'); };
+  }, []);
+  React.useEffect(() => {
+    if (detached) window.devkit.popout.update(popState());
+  }, [detached, sel && sel.i, sum && sum.qid, pinSet, caseObj, dbServers]);
+  const detach = () => { setDetached(true); window.devkit.popout.open(popState()); };
   const fmtOptions = FORMAT_IDS.map((f) => [f, FORMATS[f].label]);
   const truncNote = src.truncated ? 'Arquivo grande: mostrando só o final (1,5 GB). Os arquivos/trechos mais antigos ficaram de fora.' : null;
   const errorsTotal = sum ? sum.levelTotals[5] + sum.levelTotals[6] : 0;
@@ -480,11 +500,11 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
               <Charts id={id} sum={sum} onFilter={(t) => addFilter(t, false) || set({ tab: 'lines' })} onLevels={(lv) => set({ levels: lv, tab: 'lines' })} />
             )}
         </div>
-        {sel && (tab === 'lines' || tab === 'problems') && (
+        {sel && !detached && (tab === 'lines' || tab === 'problems') && (
           <div className={'lg-side' + (detailSplit.dragging ? ' is-dragging' : '')} style={{ width: detailSplit.size }}>
             <div className="lg-grip is-v" role="separator" aria-orientation="vertical" aria-label="Largura do detalhe (arraste; duplo clique alterna)"
               aria-valuemin={DETAIL_MIN} aria-valuemax={DETAIL_MAX} aria-valuenow={detailSplit.size} tabIndex={0} {...detailSplit.grip} />
-            <Detail id={id} i={sel.i} res={res} http={src.http} toast={toast} onClose={() => setSel(null)}
+            <Detail id={id} i={sel.i} res={res} http={src.http} toast={toast} onClose={() => setSel(null)} onDetach={detach}
               onAddFilter={addFilter} onJump={jumpToEntry} onFollow={follow} pinned={pinSet.has(sel.i)} onPin={togglePin} inCase={inCase(sel.i)} onCase={toggleCase}
               ai={aiOn(cfg) ? aiErr : null}
               aiSlot={aiOn(cfg) ? (entry) => <AiButton ai={aiErr} label="Explicar" onClick={() => explain(entry)} title="Explicar o erro com IA (o texto passa pelo filtro de segredos)" /> : null}

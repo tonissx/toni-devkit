@@ -25,6 +25,7 @@ const opts = {
     app: path.join(root, 'src', 'main.jsx'),
     palette: path.join(root, 'src', 'palette.jsx'),
     sticky: path.join(root, 'src', 'sticky.jsx'),
+    popout: path.join(root, 'src', 'popout.jsx'),
   },
   outdir: path.join(root, 'renderer', 'dist'),
   bundle: true,
