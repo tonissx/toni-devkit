@@ -1,0 +1,10 @@
+/* Janela destacada (renderer/popout.html): o Detail ocupa a janela inteira, sem a largura/borda de painel lateral. */
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--tk-surface-1); color: var(--tk-text); }
+.po-root { height: 100%; display: flex; flex-direction: column; position: relative; }
+.po-root > .lg-detail { flex: 1; width: auto; border-left: 0; }
+.po-empty { margin: auto; padding: 24px; text-align: center; color: var(--tk-text-muted, #8a8f9c); font-size: 13px; }
+.po-toast { position: absolute; left: 12px; right: 12px; bottom: 12px; padding: 8px 12px; border: 1px solid var(--tk-border); border-radius: 8px; background: var(--tk-surface-2, var(--tk-surface-1)); font-size: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+.po-toast.is-error { border-color: var(--lg-error); }
+.po-toast b { display: block; }
+.po-git { overflow-y: auto; }

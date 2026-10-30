@@ -102,7 +102,8 @@ function ExplainCommit({ repo, c, cfg }) {
   );
 }
 
-function CommitDetail({ repo, hash, run, onPick }) {
+/** onDetach (aba Histórico: destacar para uma janela) / onDock (janela destacada: voltar). */
+export function CommitDetail({ repo, hash, run, onPick, onDetach, onDock }) {
   const cfg = useAiMode();
   const { data: c, error } = useRepoData(repo, (r) => gitApi().commit(r, hash), [hash]);
   const [file, setFile] = React.useState(null);
@@ -126,6 +127,8 @@ function CommitDetail({ repo, hash, run, onPick }) {
           <button type="button" className="gt-hash" title="Copiar o hash completo" onClick={() => window.devkit.clipboard.write(c.hash)}><Icon name="copy" size={11} /> {short(c.hash)}</button>
           {c.parents.length > 1 && <span className="gt-detail__merge" title="Commit de merge: junta duas linhas de história"><Icon name="git-merge" size={12} /> merge</span>}
           <button type="button" className="gt-hash" title="Cria uma nota com a mensagem, os arquivos e o diff deste commit" onClick={() => saveAsNote(repo, c).then((n) => window.devkit.notes.open({ id: n.id }))}><Icon name="notebook-pen" size={11} /> salvar como nota</button>
+          {onDetach && <button type="button" className="gt-hash" title="Abre este commit numa janela própria" onClick={onDetach}><Icon name="external-link" size={11} /> destacar</button>}
+          {onDock && <button type="button" className="gt-hash" title="Voltar para a janela principal" onClick={onDock}><Icon name="panel-right-close" size={11} /> re-acoplar</button>}
         </div>
         {aiOn(cfg) && <ExplainCommit key={c.hash} repo={repo} c={c} cfg={cfg} />}
         {c.parents.length > 0 && (
@@ -182,6 +185,7 @@ export function History({ repo, status, run, focus }) {
   const [query, setQuery] = React.useState({ grep: '', author: '' });
   const [pages, setPages] = React.useState(1);
   const [sel, setSel] = React.useState(null);
+  const [detached, setDetached] = React.useState(false); // o detalhe do commit está numa janela própria (ver electron/main.js, pop-out)
   const { data: commits, error, loading } = useRepoData(repo, (r) => gitApi().log(r, { limit: PAGE * pages, grep: query.grep || undefined, author: query.author || undefined }), [query.grep, query.author, pages]);
   const layout = React.useMemo(() => layoutGraph(commits || []), [commits]);
   // Fotos do Gravatar (Configurações): lidas ao abrir a aba; quem não tem foto continua com as iniciais.
@@ -226,8 +230,24 @@ export function History({ repo, status, run, focus }) {
     if (i >= 0) { const el = listRef.current; const top = i * ROW; if (top < el.scrollTop || top > el.scrollTop + el.clientHeight - ROW) el.scrollTop = top - el.clientHeight / 3; }
   }, [sel, commits]);
 
-  if (status.unborn) return <div className="gt-msg">Ainda não há commits neste repositório.</div>;
   const selected = commits && commits.find((c) => c.hash.startsWith(sel || '-'));
+  // Detalhe destacado: a janela só mostra o commit escolhido; operações e "ir para o pai" voltam para cá.
+  const popState = () => ({ kind: 'git-commit', title: 'Devkit — Commit', repo, hash: selected ? selected.hash : null });
+  const actRef = React.useRef(null);
+  actRef.current = { run: (a) => run(a.op), pick: (a) => setSel(a.hash) };
+  React.useEffect(() => {
+    const off = [
+      window.devkit.popout.onAction((a) => { const f = a.kind === 'git-commit' && actRef.current[a.type]; if (f) f(a); }),
+      window.devkit.popout.onDocked((kind) => { if (kind === 'git-commit') setDetached(false); }),
+    ];
+    return () => { off.forEach((f) => f()); window.devkit.popout.close('git-commit'); };
+  }, []);
+  React.useEffect(() => {
+    if (detached && selected) window.devkit.popout.update(popState());
+  }, [detached, selected && selected.hash, repo]);
+  const detach = () => { setDetached(true); window.devkit.popout.open(popState()); };
+
+  if (status.unborn) return <div className="gt-msg">Ainda não há commits neste repositório.</div>;
 
   return (
     <div className="gt-history" ref={rootRef}>
@@ -265,13 +285,13 @@ export function History({ repo, status, run, focus }) {
           {commits && !commits.length && <div className="gt-msg">Nenhum commit encontrado com esse filtro.</div>}
         </div>
       </div>
-      <aside className={'gt-history__side' + (live != null ? ' is-dragging' : '')} style={{ width: w }}>
+      {!detached && <aside className={'gt-history__side' + (live != null ? ' is-dragging' : '')} style={{ width: w }}>
         <div className="gt-history__grip" role="separator" aria-orientation="vertical" aria-label="Largura dos detalhes do commit"
           aria-valuemin={SIDE_MIN} aria-valuemax={SIDE_MAX} aria-valuenow={w} tabIndex={0} {...drag} />
         <div className="gt-history__scroll tk-scroll">
-          {selected ? <CommitDetail repo={repo} hash={selected.hash} run={run} onPick={setSel} /> : <div className="gt-msg">Escolha um commit.</div>}
+          {selected ? <CommitDetail repo={repo} hash={selected.hash} run={run} onPick={setSel} onDetach={detach} /> : <div className="gt-msg">Escolha um commit.</div>}
         </div>
-      </aside>
+      </aside>}
     </div>
   );
 }

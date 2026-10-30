@@ -266,6 +266,20 @@ contextBridge.exposeInMainWorld('devkit', {
     },
   },
   /**
+   * Pop-out — painel destacado numa janela própria (ver electron/main.js). A tela de origem usa open/update/close e
+   * onAction/onDocked; a janela destacada usa self/onState/action e close (= re-acoplar).
+   */
+  popout: {
+    open: (state) => ipcRenderer.send('popout:open', state),
+    update: (state) => ipcRenderer.send('popout:update', state),
+    close: (kind) => ipcRenderer.send('popout:close', kind),
+    self: () => ipcRenderer.invoke('popout:self'),
+    action: (a) => ipcRenderer.send('popout:action', a),
+    onState: (cb) => { const h = (_e, s) => cb(s); ipcRenderer.on('popout:state', h); return () => ipcRenderer.removeListener('popout:state', h); },
+    onAction: (cb) => { const h = (_e, a) => cb(a); ipcRenderer.on('popout:action', h); return () => ipcRenderer.removeListener('popout:action', h); },
+    onDocked: (cb) => { const h = (_e, kind) => cb(kind); ipcRenderer.on('popout:docked', h); return () => ipcRenderer.removeListener('popout:docked', h); },
+  },
+  /**
    * Sticky notes — notas fixadas na tela (ver electron/stickies/service.js). open/list/toggleAll valem de qualquer janela;
    * self/set/close só na janela da própria sticky (o processo principal sabe de qual nota ela é).
    */

@@ -188,6 +188,8 @@ operações do meio para cima. Usa o **git instalado** (sem shell, sem rede: nad
   `git clean` apagaria, com escolha e cópia antes) · **.gitignore** (ver e acrescentar padrões). Em Mudanças, o ícone de
   olho riscado num arquivo novo sugere padrões (este arquivo, a extensão, a pasta…) — inclusive para pastas com outro
   repositório dentro
+- **Destacar** (no detalhe do commit, aba Histórico): abre o commit numa janela própria que acompanha o commit escolhido;
+  criar branch, trazer ou voltar a branch rodam na janela principal (onde fica a confirmação). **Re-acoplar** devolve o painel
 - **Ritmo** na Visão geral: dias da semana × horas dos commits dos últimos 180 dias
 - **Integrações**: no detalhe do commit, **salvar como nota** (mensagem, arquivos e diff numa nota com tag `git`) e, por
   arquivo, **abrir no Diff Checker** (antes × depois). A palette lista cada repositório ("Git: <nome>") e as receitas; o
@@ -245,7 +247,9 @@ Para achar rápido o que deu errado num log. Abre arquivos de centenas de MB em 
 - **Detalhe**: mensagem, campos (logger, thread, requisição, status, tempo, JSON), **stack** com os frames do framework
   (Java, JBoss, Hibernate…) apagados e recolhidos e o `Caused by` em destaque, **contexto** (±50 entradas sem filtro) e o
   texto original. **Copiar**, **Copiar sem segredos** (senhas, tokens, `Authorization`, e-mails e CPFs viram `‹oculto›`)
-  e **Notes** (cria uma nota com a entrada)
+  e **Notes** (cria uma nota com a entrada). O botão **Destacar** (↗) tira o detalhe do painel e o abre numa **janela
+  própria**, como o undock do DevTools do Chrome: ela acompanha a linha selecionada, os botões de filtro, pular, seguir,
+  fixar e investigar agem na janela principal, e **Re-acoplar** (ou fechar a janela) devolve o detalhe ao painel lateral
 - **Problemas**: erros e avisos **agrupados** — a mesma falha com ids, números e horários diferentes vira uma linha só
   (pela exceção, a causa raiz, o primeiro frame do sistema e a mensagem sem as partes que variam). Cada grupo mostra
   quantas vezes (no filtro e no total), desde quando, a última vez, o desenho no tempo e **novo** (apareceu depois que o

@@ -101,10 +101,11 @@ function Context({ id, i, res, onJump, http }) {
 }
 
 /**
- * props: id, i (entrada), res, http, onClose, onAddFilter(term), onJump(i), toast, aiSlot(entry) (botão/painel da IA)
+ * props: id, i (entrada), res, http, onClose, onAddFilter(term), onJump(i), toast, aiSlot(entry) (botão/painel da IA),
+ * onDetach (painel lateral: destacar para uma janela) / onDock (janela destacada: voltar; no lugar do botão de fechar)
  */
 
-export function Detail({ id, i, res, http, onClose, pinned, onPin, inCase, onCase, onFollow, onAddFilter, onJump, toast, aiSlot, ai, dbServers }) {
+export function Detail({ id, i, res, http, onClose, pinned, onPin, inCase, onCase, onFollow, onAddFilter, onJump, toast, aiSlot, ai, dbServers, onDetach, onDock }) {
   const [entry, setEntry] = React.useState(null);
   const [error, setError] = React.useState(null);
   const [tab, setTab] = React.useState('entry');
@@ -144,7 +145,9 @@ export function Detail({ id, i, res, http, onClose, pinned, onPin, inCase, onCas
         <span className="lg-detail__file" title={entry.segment}><Icon name="file-text" size={11} /> {entry.segment}</span>
         <span className="lg-grow" />
         {onPin && <button type="button" className={'lg-icon' + (pinned ? ' is-on' : '')} onClick={() => onPin(entry)} aria-pressed={!!pinned} title={pinned ? 'Soltar esta entrada (m)' : 'Fixar esta entrada para voltar depois (m)'} aria-label={pinned ? 'Soltar entrada' : 'Fixar entrada'}><Icon name="pin" size={14} /></button>}
-        <button type="button" className="lg-icon" onClick={onClose} title="Fechar (Esc)" aria-label="Fechar detalhe"><Icon name="x" size={14} /></button>
+        {onDetach && <button type="button" className="lg-icon" onClick={onDetach} title="Destacar numa janela própria" aria-label="Destacar detalhe"><Icon name="external-link" size={14} /></button>}
+        {onDock && <button type="button" className="lg-icon" onClick={onDock} title="Voltar para a janela principal" aria-label="Re-acoplar detalhe"><Icon name="panel-right-close" size={14} /></button>}
+        {!onDock && <button type="button" className="lg-icon" onClick={onClose} title="Fechar (Esc)" aria-label="Fechar detalhe"><Icon name="x" size={14} /></button>}
       </div>
       <div className="lg-detail__actions">
         <button type="button" className="lg-btn" onClick={() => copyText(entry.text, toast, 'Entrada copiada')}><Icon name="copy" size={13} /><span>Copiar</span></button>

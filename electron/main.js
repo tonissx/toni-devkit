@@ -692,6 +692,86 @@ ipcMain.handle('stickies:self', async (e) => { await stickiesReady; const id = s
 ipcMain.handle('stickies:set', async (e, patch) => { await stickiesReady; return stickies.set(stickyOf(e), patch && typeof patch === 'object' ? patch : {}); });
 ipcMain.handle('stickies:close', async (e) => { await stickiesReady; return stickies.close(stickyOf(e)); });
 
+/* ─────────────── Pop-out (painel destacado para fora da janela principal) ─────────────── */
+// Uma janela só, genérica: a tela que destaca (hoje o detalhe do Log) manda `{ kind, ...estado }`, a janela mostra e devolve
+// as ações (filtrar, pular, fixar…) para a principal, que continua dona do estado. Fechar a janela = re-acoplar.
+let popoutWin = null;
+let popoutState = null;
+
+// `kind` diz de quem é a janela (a tela que destacou): só ela reage ao re-acoplar e às ações.
+function popoutDocked() {
+  const kind = popoutState && popoutState.kind;
+  popoutWin = null;
+  popoutState = null;
+  if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('popout:docked', kind);
+}
+
+function openPopout(state) {
+  const title = state.title || 'Devkit — Detalhe';
+  if (popoutWin && !popoutWin.isDestroyed()) {
+    // Outra tela pediu a janela: a anterior perde o painel destacado e volta ao lugar de origem.
+    if (popoutState && popoutState.kind !== state.kind && mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('popout:docked', popoutState.kind);
+    popoutState = state;
+    popoutWin.setTitle(title);
+    popoutWin.webContents.send('popout:state', state);
+    return;
+  }
+  popoutState = state;
+  const win = new BrowserWindow({
+    width: 560,
+    height: 720,
+    minWidth: 380,
+    minHeight: 320,
+    show: false,
+    // Filha da principal: no Windows/Linux fica sempre acima dela (clicar na principal não esconde o detalhe) sem ficar
+    // acima dos outros programas, e some/volta junto quando a principal vai para a bandeja.
+    parent: mainWin && !mainWin.isDestroyed() ? mainWin : undefined,
+    autoHideMenuBar: true,
+    backgroundColor: '#141417',
+    title,
+    icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+    },
+  });
+  popoutWin = win;
+  win.setMenuBarVisibility(false);
+  win.once('ready-to-show', () => win.show());
+  win.on('closed', () => { if (popoutWin === win) popoutDocked(); });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.loadFile(path.join(__dirname, '..', 'renderer', 'popout.html'));
+}
+
+const isPopout = (e) => !!popoutWin && !popoutWin.isDestroyed() && e.sender.id === popoutWin.webContents.id;
+ipcMain.on('popout:open', (_e, state) => { if (state && typeof state === 'object' && typeof state.kind === 'string') openPopout(state); });
+// Estado novo vindo da tela de origem (outra linha selecionada, fixou…): a janela só acompanha.
+ipcMain.on('popout:update', (_e, state) => {
+  if (!popoutWin || !state || typeof state !== 'object' || !popoutState || state.kind !== popoutState.kind) return;
+  popoutState = state;
+  popoutWin.webContents.send('popout:state', state);
+});
+// A janela fecha por si (re-acoplar) ou a tela de origem pede dizendo quem é — assim uma tela não fecha a janela de outra.
+ipcMain.on('popout:close', (e, kind) => {
+  if (!popoutWin || popoutWin.isDestroyed()) return;
+  if (isPopout(e) || (popoutState && popoutState.kind === kind)) popoutWin.close();
+});
+// Chamados pela própria janela destacada.
+ipcMain.handle('popout:self', (e) => (isPopout(e) ? popoutState : null));
+ipcMain.on('popout:action', (e, action) => {
+  if (!isPopout(e) || !action || typeof action.type !== 'string' || !mainWin || mainWin.isDestroyed()) return;
+  mainWin.webContents.send('popout:action', { ...action, kind: popoutState && popoutState.kind });
+  // Operações do Git pedem confirmação na janela principal: traz ela para a frente.
+  if (action.type === 'run') { if (mainWin.isMinimized()) mainWin.restore(); mainWin.show(); mainWin.focus(); }
+});
+
 /* ─────────────── Git (repositórios locais) ─────────────── */
 // Lista de repositórios em %APPDATA%/Toni Devkit/git-repos.json; o git do sistema roda sem shell (ver electron/git/service.js).
 let gitSvc = null;
