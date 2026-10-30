@@ -3,6 +3,7 @@
 import { resolveTheme } from './lib/themes.js';
 import { Detail } from './tools/logs/Detail.jsx';
 import { toRegexes } from './tools/logs/shared.jsx';
+import { useExplainEntry } from './tools/logs/explain.jsx';
 import { CommitDetail } from './tools/git/History.jsx';
 
 const applyTheme = (pref) => { document.documentElement.dataset.theme = resolveTheme(pref || 'dark'); };
@@ -36,6 +37,7 @@ function Popout() {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setToastMsg(null), 3500);
   };
+  const explainer = useExplainEntry(state && state.id, state && state.formatLabel, state && state.i);
   const res = React.useMemo(() => toRegexes(state && state.highlight), [state && state.highlight]);
   const act = (type, payload) => window.devkit.popout.action({ type, ...payload });
   const dock = () => window.devkit.popout.close();
@@ -52,7 +54,7 @@ function Popout() {
         onFollow={(term) => act('follow', { term })}
         onAddFilter={(term, replace) => act('addFilter', { term, replace: !!replace })}
         onJump={(i) => act('jump', { i })}
-        dbServers={state.dbServers} />
+        ai={explainer.ai} aiSlot={explainer.aiSlot} dbServers={state.dbServers} />
       {toastMsg && <div className={'po-toast' + (toastMsg.kind === 'error' ? ' is-error' : '')} role="status"><b>{toastMsg.title}</b>{toastMsg.text}</div>}
     </div>
   );
