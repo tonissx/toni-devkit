@@ -162,7 +162,9 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       }
     }
     await walk(String(root || ''), 0);
-    return found.filter((f) => !state.repos.some((r) => sameDir(r.path, f)));
+    // Caminho real nos dois lados: no Windows a mesma pasta pode vir em forma curta (8.3, ex.: ANTONI~1.GON) ou longa.
+    const real = (p) => { try { return fss.realpathSync.native(p); } catch { return p; } };
+    return found.filter((f) => !state.repos.some((r) => sameDir(real(r.path), real(f))));
   }
 
   /** O repositório precisa estar na lista do usuário. Devolve { top, gitDir }. */
