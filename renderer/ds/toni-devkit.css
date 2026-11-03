@@ -456,6 +456,8 @@
 .tk-root,.tk-root *{box-sizing:border-box}
 .tk-root{font-family:var(--tk-font-sans);font-size:var(--tk-fs-md);line-height:var(--tk-lh-normal);color:var(--tk-text);background:var(--tk-surface-1);-webkit-font-smoothing:antialiased;font-feature-settings:"ss01","cv11"}
 .tk-root :focus-visible{outline:none;box-shadow:var(--tk-focus-ring)}
+/* campos de texto não levam anel de foco; o destaque é só a cor da borda */
+.tk-root input:not([type=checkbox],[type=radio],[type=range]):focus-visible,.tk-root textarea:focus-visible,.tk-root select:focus-visible{box-shadow:none}
 .tk-num{font-variant-numeric:tabular-nums}
 .tk-mono{font-family:var(--tk-font-mono)}
 .tk-dotgrid{background:var(--tk-dot-grid)}
@@ -560,14 +562,14 @@ a:hover{color:var(--tk-green-300)}
 .tk-input input:focus-visible,.tk-palette__search input:focus-visible{box-shadow:none}
 .tk-input.is-mono,.tk-input.is-mono input{font-family:var(--tk-font-mono);font-size:12.5px}
 .tk-input:hover,.tk-input.is-hover{border-color:#3a3a42}
-.tk-input:focus-within,.tk-input.is-focus{border-color:rgba(61,220,132,.6);box-shadow:0 0 0 3px rgba(61,220,132,.14)}
-.tk-input.is-invalid{border-color:rgba(255,92,92,.6)}.tk-input.is-invalid:focus-within{box-shadow:0 0 0 3px rgba(255,92,92,.14)}
+.tk-input:focus-within,.tk-input.is-focus{border-color:rgba(61,220,132,.6)}
+.tk-input.is-invalid{border-color:rgba(255,92,92,.6)}
 .tk-input.is-disabled{opacity:.45;pointer-events:none}
 .tk-input__icon{color:var(--tk-text-3)}
 .tk-input__affix{color:var(--tk-text-3);font:400 12px/1 var(--tk-font-mono);white-space:nowrap}
 .tk-textarea{width:100%;background:var(--tk-surface-3);border:1px solid var(--tk-border-strong);border-radius:var(--tk-radius-md);color:var(--tk-text);font:400 13px/1.5 var(--tk-font-sans);padding:10px 12px;resize:vertical;outline:none;transition:border-color var(--tk-dur-fast) var(--tk-ease),box-shadow var(--tk-dur-fast) var(--tk-ease)}
 .tk-textarea.is-code{font:400 12.5px/1.6 var(--tk-font-mono);white-space:pre;overflow:auto}
-.tk-textarea:focus{border-color:rgba(61,220,132,.6);box-shadow:0 0 0 3px rgba(61,220,132,.14)}
+.tk-textarea:focus{border-color:rgba(61,220,132,.6)}
 .tk-textarea.is-invalid{border-color:rgba(255,92,92,.6)}
 .tk-select{position:relative;min-width:0}
 .tk-select__btn{cursor:pointer;text-align:left;justify-content:flex-start}

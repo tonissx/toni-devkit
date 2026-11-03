@@ -26,7 +26,7 @@ export function Investigation({ cases, activeId, onActive, onCases, logKey, open
   const [renaming, setRenaming] = React.useState(false);
   const [armDel, setArmDel] = React.useState(false);
   const ai = useAiTask('logInvestigation', cfg);
-  React.useEffect(() => { setArmDel(false); setRenaming(false); ai.close(); }, [activeId]);
+  React.useEffect(() => { setArmDel(false); setRenaming(false); setQuestion(''); ai.close(); }, [activeId]);
   React.useEffect(() => { if (!armDel) return undefined; const t = setTimeout(() => setArmDel(false), 3000); return () => clearTimeout(t); }, [armDel]);
 
   const update = (patch) => onCases((list) => list.map((x) => (x.id === activeId ? { ...x, ...patch, updatedAt: Date.now() } : x)));
@@ -36,6 +36,12 @@ export function Investigation({ cases, activeId, onActive, onCases, logKey, open
     onCases((list) => [...list, nc]);
     onActive(nc.id);
     setRenaming(true);
+  };
+  /* O caso já é gravado a cada edição; "salvar" o fecha (fica no histórico) e limpa a tela. */
+  const save = () => {
+    if (!c.conclusion.trim()) return;
+    toast('Investigação salva', c.title, 'ok');
+    onActive(null);
   };
   const remove = () => {
     if (!armDel) { setArmDel(true); return; }
@@ -127,6 +133,9 @@ export function Investigation({ cases, activeId, onActive, onCases, logKey, open
       <div className="lg-case__texts">
         <label><span>Hipótese</span><textarea value={c.hypothesis} onChange={(e) => update({ hypothesis: e.target.value })} placeholder="O que você acha que aconteceu?" rows={2} /></label>
         <label><span>Conclusão</span><textarea value={c.conclusion} onChange={(e) => update({ conclusion: e.target.value })} placeholder="Causa confirmada e o que fazer" rows={2} /></label>
+        <div className="lg-case__save">
+          <button type="button" className="lg-btn is-accent" disabled={!c.conclusion.trim()} onClick={save} title="Guarda no histórico e limpa a tela para uma nova investigação"><Icon name="check" size={13} /><span>Salvar</span></button>
+        </div>
       </div>
 
       {aiOn(cfg) && (

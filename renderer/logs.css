@@ -299,6 +299,7 @@
 .lg-case__title { height: 26px; min-width: 200px; padding: 0 8px; border: 1px solid var(--tk-accent); border-radius: var(--tk-radius-sm); background: var(--tk-surface-input, var(--tk-surface-2)); color: var(--tk-text); font: 13px var(--tk-font-sans); }
 .lg-case__sum { color: var(--tk-text-2); font: 12px var(--tk-font-sans); }
 .lg-case__texts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.lg-case__save { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
 .lg-case__texts label { display: flex; flex-direction: column; gap: 4px; font: 500 11px var(--tk-font-sans); color: var(--tk-text-3); }
 .lg-case textarea, .lg-case__ask { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm); background: var(--tk-surface-2); color: var(--tk-text); font: 12.5px/1.45 var(--tk-font-sans); resize: vertical; }
 .lg-case textarea:focus, .lg-case__ask:focus { outline: 0; border-color: var(--tk-accent); }
