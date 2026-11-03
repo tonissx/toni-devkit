@@ -112,6 +112,7 @@ const TOOL_META = [
     name: 'DevCore',
     icon: 'cpu',
     group: 'DevCore',
+    detachable: false, // jogo idle: não há o que acompanhar ao lado de outra ferramenta
     desc: 'Infraestrutura idle com DevPets — cresce sozinha enquanto você trabalha',
     keywords: ['idle', 'devpets', 'pets', 'jogo', 'incremental', 'compute', 'infraestrutura'],
   },

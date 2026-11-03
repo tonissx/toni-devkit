@@ -22,6 +22,8 @@ const { createUpdaterService } = require('./updater/service');
 const { createLinksService } = require('./links/service');
 const { createVaultService } = require('./vault/service');
 const { createStickiesService } = require('./stickies/service');
+const { createToolWindows } = require('./toolwindows');
+const { TOOL_META } = require('../src/tools/meta.js');
 const { createGitService } = require('./git/service');
 const { createAvatarService } = require('./git/avatars');
 const { createLogsService } = require('./logs/service');
@@ -144,14 +146,72 @@ function createMainWindow() {
   return win;
 }
 
+/* ─────────────── Ferramentas em janela própria ─────────────── */
+// Uma janela por ferramenta (electron/toolwindows.js). É o mesmo renderer da principal, aberto com ?tool=<id>:
+// só a ferramenta, sem sidebar. O estado pesado (logs, banco…) fica neste processo, então as duas janelas o enxergam.
+const broadcastTools = (ids) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('tools:changed', ids); };
+
+function createToolWindow(toolId) {
+  const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const width = Math.min(1100, area.width), height = Math.min(760, area.height);
+  const win = new BrowserWindow({
+    width,
+    height,
+    x: area.x + Math.round((area.width - width) / 2),
+    y: area.y + Math.round((area.height - height) / 2),
+    minWidth: 640,
+    minHeight: 420,
+    show: false,
+    backgroundColor: '#050506',
+    title: 'Toni Devkit',
+    icon: path.join(__dirname, '..', 'renderer', 'assets', 'icon.png'),
+    frame: isMac,
+    titleBarStyle: isMac ? 'hiddenInset' : undefined,
+    trafficLightPosition: isMac ? { x: 14, y: 12 } : undefined,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+    },
+  });
+  win.once('ready-to-show', () => { win.show(); win.focus(); });
+  win.on('maximize', () => win.webContents.send('win:state', { maximized: true }));
+  win.on('unmaximize', () => win.webContents.send('win:state', { maximized: false }));
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), { query: { tool: toolId } });
+  return win;
+}
+
+const toolWindows = createToolWindows({
+  createWindow: createToolWindow,
+  broadcast: broadcastTools,
+  isDetachable: (id) => TOOL_META.some((t) => t.id === id && t.detachable !== false),
+});
+
 /** Envia um comando (navegar, tema, sidebar) para a janela principal — ou enfileira até ela carregar. */
 function sendToMain(cmd) {
+  // Ferramenta destacada: o pedido vai para a janela dela, não para a principal.
+  const target = cmd.type === 'go' ? cmd.route : cmd.type === 'open-note' ? 'notes' : null;
+  const tw = target && toolWindows.get(target);
+  if (tw) {
+    tw.webContents.send('app:command', cmd);
+    toolWindows.focusIfDetached(target);
+    return;
+  }
   if (mainWin && mainLoaded) mainWin.webContents.send('app:command', cmd);
   else mainQueue = [...mainQueue.slice(-19), cmd];
 }
 
 /** Traz a janela principal para frente (criando se preciso) e, opcionalmente, navega. */
 function showMain(route, params) {
+  // Ferramenta destacada: basta levar o pedido e o foco para a janela dela.
+  if (route && toolWindows.get(route)) { sendToMain({ type: 'go', route, params }); return; }
   if (route) sendToMain({ type: 'go', route, params });
   if (!mainWin) { createMainWindow(); return; } // aparece sozinha no ready-to-show
   if (mainWin.isMinimized()) mainWin.restore();
@@ -368,6 +428,16 @@ ipcMain.on('app:open', (_e, route, params) => {
 });
 ipcMain.on('app:command', (_e, cmd) => { if (cmd && typeof cmd.type === 'string') sendToMain(cmd); });
 ipcMain.on('app:quit', () => { quitting = true; app.quit(); });
+
+// Ferramentas em janela própria. attach fecha a janela e devolve a ferramenta à principal.
+ipcMain.handle('tools:list', () => toolWindows.list());
+ipcMain.handle('tools:detach', (_e, toolId) => toolWindows.detach(String(toolId || '')));
+ipcMain.handle('tools:attach', (_e, toolId) => {
+  const id = String(toolId || '');
+  const ok = toolWindows.attach(id);
+  if (ok) showMain(id);
+  return ok;
+});
 
 /* ─────────────── Event Bus (renderer → processo principal) ─────────────── */
 ipcMain.on('events:emit', (_e, name, data) => { bus.emit(String(name), data); });

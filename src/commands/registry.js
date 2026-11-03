@@ -80,6 +80,17 @@ const toolCommands = TOOL_META.map((t) => ({
   run: (ctx) => ctx.openApp(t.id),
 }));
 
+/** "Abrir <ferramenta> em janela": a ferramenta ganha uma janela própria (ou a que já existe vem para a frente). */
+const toolWindowCommands = TOOL_META.filter((t) => t.detachable !== false).map((t) => ({
+  id: 'toolwin:' + t.id,
+  name: t.name + ' em janela',
+  description: 'Abrir ' + t.name + ' numa janela própria, ao lado das outras ferramentas',
+  category: 'tools',
+  icon: 'external-link',
+  keywords: ['janela', 'destacar', 'separar', 'lado a lado', 'nova janela', 'múltiplas', 'ferramenta', t.name, ...(t.keywords || [])],
+  run: async (ctx) => { await ctx.detachTool(t.id); },
+}));
+
 /* ─────────────── Actions ─────────────── */
 const readJson = (storage, key) => { try { return JSON.parse(storage.getItem(key)) || {}; } catch { return {}; } };
 
@@ -551,7 +562,7 @@ function dbServerCommands(servers) {
   }));
 }
 
-const COMMANDS = [...searchCommands, ...toolCommands, ...actionCommands, ...noteCommands, ...devcoreCommands, ...gitCommands, ...logsCommands, ...dbCommands];
+const COMMANDS = [...searchCommands, ...toolCommands, ...toolWindowCommands, ...actionCommands, ...noteCommands, ...devcoreCommands, ...gitCommands, ...logsCommands, ...dbCommands];
 
 const categoryName = (id) => (id === 'web' ? 'Web' : id === 'devcore' ? 'DevCore' : id === 'vault' ? 'Vault' : id === 'links' ? 'Link' : (CATEGORIES.find((c) => c.id === id) || {}).name || '');
 
