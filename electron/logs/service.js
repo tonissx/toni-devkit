@@ -14,13 +14,14 @@ const fss = require('node:fs');
 const path = require('node:path');
 const { atomicWrite, createQueue } = require('../lib/fsx');
 const { families } = require('../../src/logs/rotate.js');
-const { normalizeCases } = require('../../src/logs/investigation.js');
+const { normalizeCases, mergeCases } = require('../../src/logs/investigation.js');
 
 const MAX_RECENTS = 15;
 const MAX_PRESETS = 40;
+const MAX_TOMBS = 200;
 
 function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss.watch, pollMs = 1000, now = () => Date.now() }) {
-  let state = { recents: [], presets: [], investigations: [], overrides: {} };
+  let state = { recents: [], presets: [], investigations: [], removed: {}, overrides: {} };
   const queue = createQueue();
   const open = new Map(); // id → { id, spec, name, files, live, watcher, timer, ino, busy, seenErrors, errors }
   let seq = 0;
@@ -32,6 +33,7 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
         recents: Array.isArray(raw.recents) ? raw.recents : [],
         presets: Array.isArray(raw.presets) ? raw.presets : [],
         investigations: normalizeCases(raw.investigations),
+        removed: raw.removed && typeof raw.removed === 'object' && !Array.isArray(raw.removed) ? raw.removed : {},
         overrides: raw.overrides && typeof raw.overrides === 'object' ? raw.overrides : {},
       };
     } catch { /* primeira vez */ }
@@ -241,9 +243,18 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
     },
     /** Casos do modo Investigação (entradas guardadas, anotações, hipótese e conclusão). */
     investigations: () => state.investigations,
-    async saveInvestigations(list) {
-      state.investigations = normalizeCases(list);
+    /**
+     * Mescla (não substitui): a janela principal e a de Logs destacada editam cada uma a sua cópia, e a última a gravar não
+     * pode apagar a outra. `removed` = ids que esta janela excluiu; ficam como lápide para não voltarem de outra janela.
+     */
+    async saveInvestigations(list, removed = []) {
+      const t = now();
+      const tombs = { ...state.removed };
+      for (const id of Array.isArray(removed) ? removed : []) if (typeof id === 'string' && id) tombs[id] = t;
+      state.removed = Object.fromEntries(Object.entries(tombs).sort((a, b) => b[1] - a[1]).slice(0, MAX_TOMBS));
+      state.investigations = mergeCases(state.investigations, normalizeCases(list), state.removed);
       await persist();
+      broadcast({ type: 'investigations' });
       return state.investigations;
     },
     /** Famílias de logs numa pasta (para escolher antes de abrir). */

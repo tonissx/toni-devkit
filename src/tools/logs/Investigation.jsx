@@ -5,12 +5,61 @@ import { DS } from '../../lib/ds.js';
 import { AiPanel, AiButton, aiOn, useAiTask } from '../../ai/ui.jsx';
 import { usePersisted } from '../../lib/store.js';
 import { redact } from '../../logs/redact.js';
-import { TAGS, TAG_LABEL, normalizeCase, addItem, removeItem, patchItem, moveItem, steps, summary, fmtDelta, fmtStamp, headline, toMarkdown, dbHint } from '../../logs/investigation.js';
+import { TAGS, TAG_LABEL, STATUS_LABEL, searchCases, relatedCases, normalizeCase, addItem, removeItem, patchItem, moveItem, steps, summary, fmtDelta, fmtStamp, headline, toMarkdown, dbHint } from '../../logs/investigation.js';
 import { logsApi, errText, LevelBadge, copyText } from './shared.jsx';
 
 const { Icon } = DS;
 
 const LEVEL_NAME = ['—', 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'];
+
+/** Seletor de casos: em aberto e resolvidos em grupos separados. */
+function CaseSelect({ cases, value, onChange, placeholder, className = 'lg-select' }) {
+  const open = cases.filter((x) => x.status !== 'done');
+  const done = cases.filter((x) => x.status === 'done');
+  const opts = (list) => list.map((x) => <option key={x.id} value={x.id}>{x.title} ({x.items.length})</option>);
+  return (
+    <select className={className} value={value} onChange={(e) => e.target.value && onChange(e.target.value)} aria-label="Investigação">
+      {placeholder && <option value="">{placeholder}</option>}
+      {done.length === 0 ? opts(open) : <>
+        {open.length > 0 && <optgroup label={`${STATUS_LABEL.open} (${open.length})`}>{opts(open)}</optgroup>}
+        <optgroup label={`${STATUS_LABEL.done} (${done.length})`}>{opts(done)}</optgroup>
+      </>}
+    </select>
+  );
+}
+
+/** Histórico: busca em tudo o que foi guardado (título, hipótese, conclusão, passos) e abre o caso. */
+function History({ cases, onActive, onCreate }) {
+  const [q, setQ] = React.useState('');
+  const res = React.useMemo(() => searchCases(cases, q), [cases, q]);
+  return (
+    <div className="lg-case lg-case--empty lg-hist">
+      <Icon name="clipboard-list" size={24} />
+      <b>{cases.length ? 'Histórico de investigações' : 'Nenhuma investigação ainda'}</b>
+      {cases.length === 0 && <span>Guarde entradas do log num caso para revisar o passo a passo, anotar e pedir uma análise à IA. Na aba <b>Linhas</b>, selecione uma entrada e aperte <kbd>i</kbd> (ou <b>Investigar</b> no detalhe).</span>}
+      {cases.length > 0 && (
+        <>
+          <input className="lg-case__ask lg-hist__q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar em títulos, conclusões e passos…" aria-label="Buscar nas investigações" autoFocus />
+          <div className="lg-hist__list" role="list">
+            {res.length === 0 && <span className="lg-muted">Nada encontrado para “{q}”.</span>}
+            {res.map(({ c, where, snippet }) => (
+              <button key={c.id} type="button" role="listitem" className="lg-hist__row" onClick={() => onActive(c.id)}>
+                <span className="lg-hist__top">
+                  <b>{c.title}</b>
+                  <span className={'lg-badge' + (c.status === 'done' ? ' is-done' : '')}>{STATUS_LABEL[c.status]}</span>
+                  <span className="lg-muted">{c.items.length} passo{c.items.length === 1 ? '' : 's'}</span>
+                </span>
+                {snippet && <span className="lg-hist__snip"><i>{where}:</i> {snippet}</span>}
+                {!snippet && !q && c.conclusion.trim() && <span className="lg-hist__snip"><i>conclusão:</i> {c.conclusion.trim().replace(/\s+/g, ' ').slice(0, 110)}</span>}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      <button type="button" className="lg-btn is-accent" onClick={onCreate}><Icon name="plus" size={13} /><span>Nova investigação</span></button>
+    </div>
+  );
+}
 
 /**
  * props: cases, activeId, onActive(id), onCases(fn(lista) → lista), logKey (identifica o log aberto), openId (id do log aberto),
@@ -37,12 +86,14 @@ export function Investigation({ cases, activeId, onActive, onCases, logKey, open
     onActive(nc.id);
     setRenaming(true);
   };
-  /* O caso já é gravado a cada edição; "salvar" o fecha (fica no histórico) e limpa a tela. */
+  /* O caso já é gravado a cada edição; "salvar" o marca como resolvido (fica no histórico) e limpa a tela. */
   const save = () => {
     if (!c.conclusion.trim()) return;
-    toast('Investigação salva', c.title, 'ok');
+    update({ status: 'done' });
+    toast('Investigação resolvida', `${c.title} — fica no histórico.`, 'ok');
     onActive(null);
   };
+  const reopen = () => update({ status: 'open' });
   const remove = () => {
     if (!armDel) { setArmDel(true); return; }
     onCases((list) => list.filter((x) => x.id !== activeId));
@@ -83,36 +134,22 @@ export function Investigation({ cases, activeId, onActive, onCases, logKey, open
     })),
   }));
 
-  if (!c) {
-    return (
-      <div className="lg-case lg-case--empty">
-        <Icon name="clipboard-list" size={24} />
-        <b>{cases.length ? 'Escolha uma investigação' : 'Nenhuma investigação ainda'}</b>
-        <span>Guarde entradas do log num caso para revisar o passo a passo, anotar e pedir uma análise à IA. Na aba <b>Linhas</b>, selecione uma entrada e aperte <kbd>i</kbd> (ou <b>Investigar</b> no detalhe).</span>
-        {cases.length > 0 && (
-          <select className="lg-select" value="" onChange={(e) => e.target.value && onActive(e.target.value)} aria-label="Investigação">
-            <option value="">Abrir uma investigação…</option>
-            {cases.map((x) => <option key={x.id} value={x.id}>{x.title} ({x.items.length})</option>)}
-          </select>
-        )}
-        <button type="button" className="lg-btn is-accent" onClick={create}><Icon name="plus" size={13} /><span>Nova investigação</span></button>
-      </div>
-    );
-  }
+  if (!c) return <History cases={cases} onActive={onActive} onCreate={create} />;
 
   const st = steps(c.items, mode);
+  const related = relatedCases(cases, c.items, c.id);
   const days = new Set(st.list.map((s) => (s.item.ts != null ? fmtStamp(s.item.ts).slice(0, 10) : ''))).size;
   const filters = ai.st && ai.st.phase === 'done' && ai.st.data && ai.st.data.filters ? ai.st.data.filters : [];
 
   return (
     <div className="lg-case tk-scroll">
       <div className="lg-case__bar">
-        <select className="lg-select" value={c.id} onChange={(e) => onActive(e.target.value)} aria-label="Investigação">
-          {cases.map((x) => <option key={x.id} value={x.id}>{x.title} ({x.items.length})</option>)}
-        </select>
+        <CaseSelect cases={cases} value={c.id} onChange={onActive} />
+        <span className={'lg-badge' + (c.status === 'done' ? ' is-done' : '')}>{STATUS_LABEL[c.status]}</span>
         {renaming
           ? <input className="lg-case__title" autoFocus value={c.title} onChange={(e) => update({ title: e.target.value })} onBlur={() => { if (!c.title.trim()) update({ title: 'Investigação' }); setRenaming(false); }} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur(); }} aria-label="Nome da investigação" />
           : <button type="button" className="lg-icon" onClick={() => setRenaming(true)} title="Renomear" aria-label="Renomear"><Icon name="pencil" size={14} /></button>}
+        <button type="button" className="lg-icon" onClick={() => onActive(null)} title="Histórico e busca" aria-label="Histórico e busca"><Icon name="history" size={14} /></button>
         <button type="button" className="lg-icon" onClick={create} title="Nova investigação" aria-label="Nova investigação"><Icon name="plus" size={15} /></button>
         <button type="button" className={'lg-icon' + (armDel ? ' is-danger' : '')} onClick={remove} title={armDel ? 'Clique de novo para excluir' : 'Excluir esta investigação'} aria-label="Excluir investigação"><Icon name="trash-2" size={14} /></button>
         <span className="lg-grow" />
@@ -129,12 +166,24 @@ export function Investigation({ cases, activeId, onActive, onCases, logKey, open
       </div>
 
       <div className="lg-case__sum">{summary(c.items, mode)}</div>
+      {related.length > 0 && (
+        <div className="lg-case__related">
+          <span className="lg-muted">Parecido com:</span>
+          {related.slice(0, 4).map(({ c: r, shared }) => (
+            <button key={r.id} type="button" className="lg-chip" onClick={() => onActive(r.id)} title={`${shared} falha${shared === 1 ? '' : 's'} em comum · ${STATUS_LABEL[r.status]}${r.conclusion.trim() ? ' — ' + r.conclusion.trim().slice(0, 140) : ''}`}>
+              <Icon name={r.status === 'done' ? 'check' : 'clipboard-list'} size={11} />{r.title}<span className="lg-muted">· {shared}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="lg-case__texts">
         <label><span>Hipótese</span><textarea value={c.hypothesis} onChange={(e) => update({ hypothesis: e.target.value })} placeholder="O que você acha que aconteceu?" rows={2} /></label>
         <label><span>Conclusão</span><textarea value={c.conclusion} onChange={(e) => update({ conclusion: e.target.value })} placeholder="Causa confirmada e o que fazer" rows={2} /></label>
         <div className="lg-case__save">
-          <button type="button" className="lg-btn is-accent" disabled={!c.conclusion.trim()} onClick={save} title="Guarda no histórico e limpa a tela para uma nova investigação"><Icon name="check" size={13} /><span>Salvar</span></button>
+          {c.status === 'done'
+            ? <button type="button" className="lg-btn" onClick={reopen} title="Volta o caso para Em aberto"><Icon name="rotate-ccw" size={13} /><span>Reabrir caso</span></button>
+            : <button type="button" className="lg-btn is-accent" disabled={!c.conclusion.trim()} onClick={save} title="Marca como resolvido, guarda no histórico e limpa a tela para uma nova investigação"><Icon name="check" size={13} /><span>Resolvido</span></button>}
         </div>
       </div>
 

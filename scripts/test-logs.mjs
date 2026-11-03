@@ -541,3 +541,37 @@ test('pushRecent: mais novo primeiro, sem repetir nem vazio, limitado', () => {
   assert.equal(pushRecent(Array.from({ length: 10 }, (_, i) => 'q' + i), 'novo').length, 10);
   assert.equal(pushRecent(Array.from({ length: 10 }, (_, i) => 'q' + i), 'novo')[0], 'novo');
 });
+
+test('investigation: status, mesclagem entre janelas, busca e casos parecidos', () => {
+  const V = require('../src/logs/investigation.js');
+  // status: explícito vence; sem status, com conclusão = resolvida
+  assert.equal(V.normalizeCase({}).status, 'open');
+  assert.equal(V.normalizeCase({ conclusion: 'era o pool' }).status, 'done');
+  assert.equal(V.normalizeCase({ conclusion: 'x', status: 'open' }).status, 'open');
+  assert.equal(V.normalizeCase({ status: 'lixo' }).status, 'open');
+  // mescla: vence o updatedAt maior; casos de outra janela não somem; lápide impede a volta
+  const a = (id, updatedAt, title = id) => V.normalizeCase({ id, title, updatedAt, createdAt: 1 });
+  const m = V.mergeCases([a('x', 10, 'velho'), a('y', 5)], [a('x', 20, 'novo'), a('z', 1)]);
+  assert.deepEqual(m.map((c) => c.id), ['x', 'y', 'z']);
+  assert.equal(m[0].title, 'novo');
+  assert.equal(V.mergeCases([a('x', 20, 'novo')], [a('x', 10, 'velho')])[0].title, 'novo');
+  assert.deepEqual(V.mergeCases([a('x', 10), a('y', 5)], [], { x: 50 }).map((c) => c.id), ['y']);
+  assert.deepEqual(V.mergeCases([], [a('x', 60)], { x: 50 }).map((c) => c.id), ['x']); // editado depois de excluir
+  // busca: sem acento/maiúscula, todas as palavras, sem consulta lista em aberto primeiro
+  const c1 = V.normalizeCase({ id: '1', title: 'Fila travada', conclusion: 'Pool de conexões esgotado', updatedAt: 1, items: [{ text: 'ERROR timeout na conexão com o banco', log: 'app.log' }] });
+  const c2 = V.normalizeCase({ id: '2', title: 'Login lento', status: 'open', updatedAt: 2, items: [{ text: 'WARN token expirado' }] });
+  assert.deepEqual(V.searchCases([c1, c2], 'CONEXAO esgotado').map((r) => r.c.id), ['1']);
+  assert.equal(V.searchCases([c1, c2], 'esgotado')[0].where, 'conclusão');
+  assert.equal(V.searchCases([c1, c2], 'token')[0].where, 'passo');
+  assert.deepEqual(V.searchCases([c1, c2], 'inexistente'), []);
+  assert.deepEqual(V.searchCases([c1, c2], '').map((r) => r.c.id), ['2', '1']); // aberta antes da resolvida
+  // parentesco: mesmo grupo de falha, ou mesma linha sem números/ids
+  assert.equal(V.signature({ text: 'curto' }), null);
+  assert.equal(V.signature({ text: 'Timeout after 3000 ms on conn 77' }), V.signature({ text: 'Timeout after 15 ms on conn 9\nstack' }));
+  assert.equal(V.signature({ text: 'x', group: 'g1' }), 'g:g1');
+  const r1 = V.normalizeCase({ id: 'a', items: [{ text: 'ERROR Timeout after 3000 ms on conn 77' }] });
+  const r2 = V.normalizeCase({ id: 'b', items: [{ text: 'ERROR Timeout after 15 ms on conn 9' }, { text: 'INFO outra coisa qualquer aqui' }] });
+  const r3 = V.normalizeCase({ id: 'c', items: [{ text: 'WARN nada a ver com isso, mesmo' }] });
+  assert.deepEqual(V.relatedCases([r1, r2, r3], r1.items, 'a').map((x) => [x.c.id, x.shared]), [['b', 1]]);
+  assert.deepEqual(V.relatedCases([r1], r1.items, 'a'), []);
+});
