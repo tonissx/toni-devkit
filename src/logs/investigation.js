@@ -4,7 +4,7 @@
  * relatório em Markdown e o corte do que vai para a IA.
  *
  * Um caso guarda COPIAS das entradas (texto, hora, nível, de que log vieram): o log pode rotacionar ou sumir, o caso fica.
- *   Investigation { id, title, createdAt, updatedAt, hypothesis, conclusion, items[] }
+ *   Investigation { id, title, createdAt, updatedAt, status ('open' | 'done'), hypothesis, conclusion, items[] }
  *   Item { id, i, ts, level, text, log, path, group, tag, note, addedAt }
  * `i` (índice da entrada no log) só serve para "ir ao log" quando o log aberto é o mesmo `path`.
  */
@@ -16,6 +16,8 @@ const MAX_ITEMS = 200;
 const MAX_TEXT = 4000;
 const MAX_NOTE = 1000;
 const MAX_FIELD = 4000;
+const STATUSES = ['open', 'done'];
+const STATUS_LABEL = { open: 'Em aberto', done: 'Resolvida' };
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const str = (v, max) => String(v == null ? '' : v).slice(0, max);
@@ -46,19 +48,98 @@ function normalizeItem(x, now = Date.now()) {
 /** Caso válido ou null. */
 function normalizeCase(c, now = Date.now()) {
   if (!c || typeof c !== 'object') return null;
+  const conclusion = str(c.conclusion, MAX_FIELD);
   return {
     id: str(c.id, 40) || uid(),
     title: str(c.title, 120).trim() || 'Investigação',
     createdAt: num(c.createdAt) ?? now,
     updatedAt: num(c.updatedAt) ?? now,
+    // casos de antes do status: com conclusão já estão resolvidos
+    status: STATUSES.includes(c.status) ? c.status : (conclusion.trim() ? 'done' : 'open'),
     hypothesis: str(c.hypothesis, MAX_FIELD),
-    conclusion: str(c.conclusion, MAX_FIELD),
+    conclusion,
     items: (Array.isArray(c.items) ? c.items : []).map((x) => normalizeItem(x, now)).filter(Boolean).slice(0, MAX_ITEMS),
   };
 }
 
 function normalizeCases(list, now = Date.now()) {
   return (Array.isArray(list) ? list : []).map((c) => normalizeCase(c, now)).filter(Boolean).slice(0, MAX_CASES);
+}
+
+/**
+ * Junta duas versões da lista (o processo principal guarda uma, cada janela edita a sua): por id, vence a de `updatedAt`
+ * maior (empate: a que chega). `tombs` = { id: quando foi excluído } — o caso excluído não volta, a menos que alguém
+ * o tenha editado depois da exclusão. Ordem da base; casos novos vão para o fim.
+ */
+function mergeCases(base, incoming, tombs = {}) {
+  const dead = (c) => tombs[c.id] != null && c.updatedAt <= tombs[c.id];
+  const byId = new Map();
+  for (const c of base) byId.set(c.id, c);
+  for (const c of incoming) {
+    const cur = byId.get(c.id);
+    if (!cur || c.updatedAt >= cur.updatedAt) byId.set(c.id, c);
+  }
+  return [...byId.values()].filter((c) => !dead(c)).slice(0, MAX_CASES);
+}
+
+const fold = (t) => String(t == null ? '' : t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+/**
+ * Busca nos casos (título, conclusão, hipótese, texto/nota/log dos passos). Todas as palavras precisam aparecer, sem
+ * maiúsculas nem acentos. Sem consulta devolve todos: em aberto primeiro, depois os mais recentes.
+ * → [{ c, where, snippet }] (where: 'título' | 'conclusão' | 'hipótese' | 'passo'; snippet: trecho com o achado)
+ */
+function searchCases(cases, q) {
+  const terms = fold(q).split(/\s+/).filter(Boolean);
+  const byRecent = (a, b) => (a.status === b.status ? 0 : a.status === 'open' ? -1 : 1) || b.updatedAt - a.updatedAt;
+  if (!terms.length) return cases.slice().sort(byRecent).map((c) => ({ c, where: '', snippet: '' }));
+  const clip = (text) => {
+    const raw = String(text);
+    const f = fold(raw);
+    const at = Math.max(0, Math.min(...terms.map((t) => { const k = f.indexOf(t); return k < 0 ? Infinity : k; })));
+    const from = Math.max(0, at - 30);
+    return (from ? '…' : '') + raw.slice(from, from + 110).replace(/\s+/g, ' ').trim() + (raw.length > from + 110 ? '…' : '');
+  };
+  const out = [];
+  for (const c of cases) {
+    const fields = [
+      { w: 'título', t: c.title, score: 3 }, { w: 'conclusão', t: c.conclusion, score: 2 }, { w: 'hipótese', t: c.hypothesis, score: 2 },
+      ...c.items.map((x) => ({ w: 'passo', t: `${x.text}\n${x.note}\n${x.log}`, score: 1 })),
+    ];
+    const hay = fields.map((f) => fold(f.t)).join('\n');
+    if (!terms.every((t) => hay.includes(t))) continue;
+    // melhor campo: o de maior peso que contém alguma das palavras
+    const hit = fields.filter((f) => terms.some((t) => fold(f.t).includes(t))).sort((a, b) => b.score - a.score)[0] || fields[0];
+    out.push({ c, where: hit.w, snippet: hit.w === 'título' ? '' : clip(hit.t), score: hit.score });
+  }
+  return out.sort((a, b) => b.score - a.score || byRecent(a.c, b.c)).map(({ c, where, snippet }) => ({ c, where, snippet }));
+}
+
+/**
+ * Assinatura de um passo para reconhecer "a mesma coisa" em outro caso: o grupo de falha do log, ou a primeira linha sem
+ * números, datas, ids e hex. null se for curta demais para dizer algo.
+ */
+function signature(item) {
+  if (item.group) return 'g:' + item.group;
+  const line = fold(String(item.text || '').split('\n')[0])
+    .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, '#')
+    .replace(/\b0x[0-9a-f]+\b/g, '#')
+    .replace(/\d+/g, '#')
+    .replace(/\s+/g, ' ').trim();
+  return line.length >= 20 ? 'l:' + line.slice(0, 120) : null;
+}
+
+/** Outros casos (≠ excludeId) com passos parecidos com `items`. → [{ c, shared }] por mais em comum, depois mais recentes. */
+function relatedCases(cases, items, excludeId = null) {
+  const mine = new Set(items.map(signature).filter(Boolean));
+  if (!mine.size) return [];
+  const out = [];
+  for (const c of cases) {
+    if (c.id === excludeId) continue;
+    const shared = new Set(c.items.map(signature).filter((g) => g && mine.has(g))).size;
+    if (shared) out.push({ c, shared });
+  }
+  return out.sort((a, b) => b.shared - a.shared || b.c.updatedAt - a.c.updatedAt);
 }
 
 /** Mesma entrada do mesmo log (ou, sem índice, mesma hora e mesmo texto). */
@@ -202,7 +283,7 @@ function fitSteps(list, { budget = 24000, per = 1500 } = {}) {
 }
 
 module.exports = {
-  TAGS, TAG_LABEL, MAX_CASES, MAX_ITEMS, MAX_TEXT, MAX_NOTE,
+  TAGS, TAG_LABEL, STATUSES, STATUS_LABEL, mergeCases, searchCases, signature, relatedCases, MAX_CASES, MAX_ITEMS, MAX_TEXT, MAX_NOTE,
   normalizeItem, normalizeCase, normalizeCases, sameItem, addItem, removeItem, patchItem, moveItem,
   ordered, steps, summary, fmtDelta, fmtSpan, fmtStamp, headline, toMarkdown, dbHint, fitSteps,
 };

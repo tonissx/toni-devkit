@@ -17,7 +17,7 @@ import { Charts } from './Charts.jsx';
 import { Hits } from './Hits.jsx';
 import { Marks } from './Marks.jsx';
 import { Investigation } from './Investigation.jsx';
-import { normalizeCase, addItem, removeItem, MAX_ITEMS } from '../../logs/investigation.js';
+import { normalizeCase, addItem, removeItem, relatedCases, MAX_ITEMS } from '../../logs/investigation.js';
 import { useSameText, filterTermFor } from './sameText.js';
 import { escapeRe } from '../../logs/query.js';
 import { usePersisted } from '../../lib/store.js';
@@ -279,7 +279,10 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
     const r = addItem(target.items, raw);
     if (r.full) { toast('Investigação cheia', `O limite é de ${MAX_ITEMS} passos por investigação.`, 'error'); return; }
     onCases((l) => l.map((c) => (c.id === target.id ? { ...c, items: addItem(c.items, raw).items, updatedAt: Date.now() } : c)));
-    toast(`Guardado na investigação (${r.items.length})`, target.title, 'ok');
+    // já investigado antes? avisa em qual caso apareceu algo parecido (e se tinha conclusão)
+    const rel = relatedCases(cases, [r.item], target.id);
+    const note = rel.length ? ` · Parecido com «${rel[0].c.title}»${rel[0].c.status === 'done' ? ' (resolvida)' : ''}${rel.length > 1 ? ` e mais ${rel.length - 1}` : ''}` : '';
+    toast(`Guardado na investigação (${r.items.length})`, target.title + note, 'ok');
   };
   const jumpFromCase = (item) => { set({ tab: 'lines' }); jumpToEntry(item.i); };
   // Faixa de marcadores ao lado da rolagem: onde estão os achados e os fixados.

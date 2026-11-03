@@ -266,6 +266,27 @@ test('teto de memória: lê só o final e avisa', async () => {
   assert.match(rows.at(-1).text, /linha 49$/);
 });
 
+test('investigações: duas janelas gravando não se apagam; excluir não volta', async () => {
+  const { dir, svc } = setup();
+  await svc.saveInvestigations([{ id: 'a', title: 'A', updatedAt: 10 }]);
+  // a "janela 2" nunca viu o caso A e grava só o B: A continua
+  let l = await svc.saveInvestigations([{ id: 'b', title: 'B', updatedAt: 20 }]);
+  assert.deepEqual(l.map((c) => c.id).sort(), ['a', 'b']);
+  // a janela 2 edita o A mais tarde: vence a versão mais nova; a velha não volta por cima
+  l = await svc.saveInvestigations([{ id: 'a', title: 'A2', updatedAt: 30 }]);
+  assert.equal(l.find((c) => c.id === 'a').title, 'A2');
+  l = await svc.saveInvestigations([{ id: 'a', title: 'A velho', updatedAt: 5 }]);
+  assert.equal(l.find((c) => c.id === 'a').title, 'A2');
+  // exclusão: a janela 1 apaga o B; a janela 2, ainda com o B na memória, grava e ele não ressuscita
+  l = await svc.saveInvestigations([{ id: 'a', title: 'A2', updatedAt: 30 }], ['b']);
+  assert.deepEqual(l.map((c) => c.id), ['a']);
+  l = await svc.saveInvestigations([{ id: 'a', title: 'A2', updatedAt: 30 }, { id: 'b', title: 'B', updatedAt: 20 }]);
+  assert.deepEqual(l.map((c) => c.id), ['a']);
+  await svc.flush();
+  assert.ok(JSON.parse(fs.readFileSync(path.join(dir, 'logs.json'), 'utf8')).removed.b); // a lápide sobrevive ao reinício
+  svc.unwatch();
+});
+
 test('investigações persistem em logs.json, sem lixo e com limites', async () => {
   const { dir, svc } = setup();
   assert.deepEqual(svc.investigations(), []);

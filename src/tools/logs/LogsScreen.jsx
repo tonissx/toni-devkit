@@ -73,9 +73,22 @@ export function LogsScreen({ toast, request }) {
   const [caseUi, setCaseUi] = usePersisted('logs.case', { active: null });
   const casesRef = React.useRef([]);
   const saveT = React.useRef(null);
-  const saveCases = () => { clearTimeout(saveT.current); saveT.current = null; api.saveInvestigations(casesRef.current).catch((e) => toast('Não foi possível salvar a investigação', errText(e), 'error')); };
+  const removedRef = React.useRef(new Set()); // ids excluídos aqui e ainda não avisados ao processo principal
+  const saveCases = () => {
+    clearTimeout(saveT.current); saveT.current = null;
+    const removed = [...removedRef.current];
+    removedRef.current = new Set();
+    // o processo principal mescla com o que as outras janelas gravaram (e avisa todas por `logs:changed`)
+    api.saveInvestigations(casesRef.current, removed).catch((e) => {
+      for (const id of removed) removedRef.current.add(id);
+      toast('Não foi possível salvar a investigação', errText(e), 'error');
+    });
+  };
+  const loadCases = () => api.investigations().then((l) => { if (!saveT.current) { casesRef.current = l; setCases(l); } }, () => {});
   const updateCases = (fn) => {
     const next = typeof fn === 'function' ? fn(casesRef.current) : fn;
+    const keep = new Set(next.map((x) => x.id));
+    for (const x of casesRef.current) if (!keep.has(x.id)) removedRef.current.add(x.id);
     casesRef.current = next;
     setCases(next);
     clearTimeout(saveT.current);
@@ -111,11 +124,12 @@ export function LogsScreen({ toast, request }) {
     })();
     refreshRecents();
     api.presets().then(setPresets, () => {});
-    api.investigations().then((l) => { if (!saveT.current) { casesRef.current = l; setCases(l); } }, () => {});
+    loadCases();
     const off = api.onChanged((evt) => {
       if (!evt) return;
       if (evt.type === 'opening') setOpening((o) => ({ ...o, [evt.id]: { name: evt.name, done: 0, total: 0 } }));
       else if (evt.type === 'progress') setOpening((o) => (o[evt.id] ? { ...o, [evt.id]: { ...o[evt.id], done: evt.done, total: evt.total, n: evt.n } } : o));
+      else if (evt.type === 'investigations') loadCases(); // outra janela (ou esta mesma) gravou: pega a versão mesclada
       else if (evt.type === 'crashed') { setSources([]); toast('O leitor de logs parou', 'Provavelmente faltou memória com um arquivo enorme. Abra de novo.', 'error'); }
     });
     return () => { alive = false; off(); };
