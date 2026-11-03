@@ -182,9 +182,8 @@ export function Investigation({ cases, activeId, onActive, onCases, logKey, open
         <label><span>Conclusão</span><textarea value={c.conclusion} onChange={(e) => update({ conclusion: e.target.value })} placeholder="Causa confirmada e o que fazer" rows={2} /></label>
         <div className="lg-case__save">
           {c.status === 'done'
-            ? <button type="button" className="lg-btn" onClick={reopen} title="Volta para Em aberto"><Icon name="history" size={13} /><span>Reabrir</span></button>
-            : null}
-          <button type="button" className="lg-btn is-accent" disabled={!c.conclusion.trim()} onClick={save} title="Marca como resolvida, guarda no histórico e limpa a tela para uma nova investigação"><Icon name="check" size={13} /><span>Salvar</span></button>
+            ? <button type="button" className="lg-btn" onClick={reopen} title="Volta o caso para Em aberto"><Icon name="rotate-ccw" size={13} /><span>Reabrir caso</span></button>
+            : <button type="button" className="lg-btn is-accent" disabled={!c.conclusion.trim()} onClick={save} title="Marca como resolvido, guarda no histórico e limpa a tela para uma nova investigação"><Icon name="check" size={13} /><span>Resolvido</span></button>}
         </div>
       </div>
 
