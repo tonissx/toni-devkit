@@ -294,6 +294,7 @@ export function Palette() {
     const d = window.devkit;
     return {
       openApp: (route, params) => d.app.open(route, params),
+      detachTool: (id) => d.tools.detach(id),
       devcore: d.devcore,
       vault: d.vault,
       appCommand: (cmd) => {

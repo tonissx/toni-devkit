@@ -1,9 +1,10 @@
 import { DS, mod } from '../lib/ds.js';
 import { TOOLS } from '../tools/registry.js';
 
-const { Sidebar, SidebarGroup, SidebarItem, IconButton } = DS;
+const { Sidebar, SidebarGroup, SidebarItem, IconButton, Icon } = DS;
 
-export function AppSidebar({ route, go, collapsed, onCollapse, dots = {} }) {
+/** `detached`: ids em janela própria (marcados com um ícone; clicar leva ao foco da janela). Shift+clique abre a ferramenta em janela. */
+export function AppSidebar({ route, go, collapsed, onCollapse, dots = {}, detached = [], onDetach }) {
   const groups = [];
   TOOLS.forEach((t) => {
     let g = groups.find((x) => x.name === t.group);
@@ -46,7 +47,8 @@ export function AppSidebar({ route, go, collapsed, onCollapse, dots = {} }) {
         <SidebarGroup key={g.name} label={collapsed ? null : g.name}>
           {g.items.map((t) => (
             <SidebarItem key={t.id} icon={t.icon} label={t.name} active={route === t.id} dot={!!dots[t.id] && route !== t.id}
-              onClick={() => go(t.id)} />
+              badge={detached.includes(t.id) ? <Icon name="external-link" size={12} /> : undefined}
+              onClick={(e) => (e && e.shiftKey && t.detachable !== false && onDetach ? onDetach(t.id) : go(t.id))} />
           ))}
         </SidebarGroup>
       ))}

@@ -84,6 +84,17 @@ contextBridge.exposeInMainWorld('devkit', {
     quit: () => ipcRenderer.send('app:quit'),
     loginItem: (enable) => ipcRenderer.invoke('app:login-item', enable),
   },
+  /** Ferramentas em janela própria (ver electron/toolwindows.js). list → ids destacados; onChanged recebe a lista nova. */
+  tools: {
+    list: () => ipcRenderer.invoke('tools:list'),
+    detach: (toolId) => ipcRenderer.invoke('tools:detach', toolId),
+    attach: (toolId) => ipcRenderer.invoke('tools:attach', toolId),
+    onChanged: (cb) => {
+      const h = (_e, ids) => cb(ids);
+      ipcRenderer.on('tools:changed', h);
+      return () => ipcRenderer.removeListener('tools:changed', h);
+    },
+  },
   shell: {
     openUrl: (url) => ipcRenderer.invoke('shell:open-url', url),
   },
