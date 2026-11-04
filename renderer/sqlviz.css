@@ -26,6 +26,8 @@
 .sqv__node.is-match .sqv__box { stroke: var(--tk-amber); stroke-width: 2; }
 .sqv__title { font-weight: 700; fill: var(--tk-text); }
 .sqv__col { fill: var(--tk-text); }
+.sqv__hit { fill: var(--tk-amber); fill-opacity: .28; }
+.sqv__col.is-hit { font-weight: 700; }
 .sqv__type { fill: var(--tk-text-3); }
 .sqv__pk, .sqv__fkm { font-size: 10px; font-weight: 700; }
 .sqv__pk { fill: var(--tk-amber); }
