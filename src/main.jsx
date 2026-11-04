@@ -29,6 +29,8 @@ const detachedTool = (() => {
   return t && t.detachable !== false ? id : null;
 })();
 const DEFAULT_PREFS = { theme: 'dark', collapsed: false, route: 'sql' };
+/** Ferramentas com estado de tela (diagrama, zoom…) que não pode se perder ao navegar: ficam montadas, só escondidas. */
+const KEEP_ALIVE = ['sqlviz'];
 /** Vale durante toda a vida da janela, então a escolha do hook não muda entre renders. */
 const usePrefs = detachedTool
   ? () => React.useState(() => ({ ...load('prefs', DEFAULT_PREFS), route: detachedTool }))
@@ -178,6 +180,12 @@ function App() {
   };
   const onTitleDbl = (e) => { if (!e.target.closest('button')) window.devkit.window.toggleMaximize(); };
 
+  // Ferramentas que continuam montadas (só escondidas) ao sair delas: zoom, posições, seleção e schema carregado voltam como estavam.
+  // Entra na lista na primeira visita; sai se a ferramenta for para uma janela própria.
+  const keptRef = React.useRef(new Set());
+  if (KEEP_ALIVE.includes(route) && (detachedTool || !detached.includes(route))) keptRef.current.add(route);
+  const keptList = [...keptRef.current].filter((id) => (detachedTool ? id === detachedTool : !detached.includes(id)));
+
   const tool = findTool(route);
   const Screen = tool && tool.component;
   const screen = !detachedTool && detached.includes(route) && tool
@@ -205,7 +213,13 @@ function App() {
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {!detachedTool && <AppSidebar route={route} go={go} collapsed={prefs.collapsed} onCollapse={toggleSidebar} dots={dots}
           detached={detached} onDetach={detachTool} />}
-        <main className="tk-scroll" style={{ flex: 1, minWidth: 0, overflow: 'auto', background: 'var(--tk-surface-1)' }}>{screen}</main>
+        <main className="tk-scroll" style={{ flex: 1, minWidth: 0, overflow: 'auto', background: 'var(--tk-surface-1)' }}>
+          {keptList.map((id) => {
+            const Kept = findTool(id).component;
+            return <div key={id} hidden={route !== id} style={{ height: '100%' }}><Kept toast={toast} request={request && request.route === id ? request : undefined} /></div>;
+          })}
+          {!keptList.includes(route) && screen}
+        </main>
       </div>
       <div className="toasts">
         {toasts.map((t) => <Toast key={t.id} variant={t.variant} title={t.title} description={t.description} onClose={() => setToasts((x) => x.filter((y) => y.id !== t.id))} />)}

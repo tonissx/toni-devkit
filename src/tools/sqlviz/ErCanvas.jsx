@@ -1,6 +1,7 @@
 import { DS } from '../../lib/ds.js';
 import { ER } from '../../db/erlayout.js';
 import { fkGeom, linkedColumns } from './erExport.js';
+import { colKey } from '../../db/ersearch.js';
 
 const { IconButton } = DS;
 
@@ -14,7 +15,7 @@ const title = (t) => (t.schema && t.schema !== 'dbo' ? `${t.schema}.${t.name}` :
  * navegação por teclado (Tab entre tabelas, setas para a vizinha mais próxima, Enter/Espaço seleciona, Esc limpa).
  * Tudo vai para o DOM como texto de React/SVG (escapado), nunca como HTML.
  */
-export function ErCanvas({ schema, nodes, groups, selectedId, onSelect, matches, onMoveNode, onRemove, fitSignal, focusReq, related }) {
+export function ErCanvas({ schema, nodes, groups, selectedId, onSelect, matches, matchCols, onMoveNode, onRemove, fitSignal, focusReq, related }) {
   const wrap = React.useRef(null);
   const nodeRefs = React.useRef(new Map());
   const [box, setBox] = React.useState({ w: 0, h: 0 });
@@ -46,7 +47,13 @@ export function ErCanvas({ schema, nodes, groups, selectedId, onSelect, matches,
     setView({ k, x: (box.w - b.w * k) / 2 - b.x * k, y: (box.h - b.h * k) / 2 - b.y * k });
   }, [box.w, box.h]);
   const ready = box.w > 0;
-  React.useEffect(() => { if (ready) fit(); }, [fitSignal, ready]);
+  // Enquadra uma vez por sinal. Escondido (outra aba/ferramenta) a largura vai a 0 e volta ao reexibir: isso não pode refazer o enquadramento.
+  const fittedSignal = React.useRef(null);
+  React.useEffect(() => {
+    if (!ready || fittedSignal.current === fitSignal) return;
+    fittedSignal.current = fitSignal;
+    fit();
+  }, [fitSignal, ready]);
 
   // Centraliza numa tabela (busca).
   React.useEffect(() => {
@@ -143,7 +150,8 @@ export function ErCanvas({ schema, nodes, groups, selectedId, onSelect, matches,
     const x1 = x0 + box.w / view.k + 400, y1 = y0 + box.h / view.k + 400;
     return n.x + n.w >= x0 && n.x <= x1 && n.y + n.h >= y0 && n.y <= y1;
   };
-  const dimmed = (id) => related && !related.has(id);
+  // Esmaece o que está fora da seleção e, durante a busca, as tabelas que não casaram.
+  const dimmed = (id) => (related && !related.has(id)) || (matches && !matches.has(id));
 
   return (
     <div ref={wrap} className="sqv__graph" onPointerDown={onBgDown} onPointerMove={onMove} onPointerUp={onUp}>
@@ -195,12 +203,14 @@ export function ErCanvas({ schema, nodes, groups, selectedId, onSelect, matches,
                 {t.columns.map((c, i) => {
                   const y = n.y + ER.head + ER.pad + i * ER.row + 14;
                   const lk = links.has(t.id) ? links.get(t.id).get(c.name) : null;
+                  const hit = matchCols && matchCols.has(colKey(t.id, c.name));
                   return (
                     <g key={c.name + i}>
+                      {hit && <rect x={n.x + 1} y={y - 14} width={n.w - 2} height={ER.row} className="sqv__hit" />}
                       {lk && <rect x={n.x + 1} y={y - 14} width={n.w - 2} height={ER.row} className="sqv__link" style={{ fill: lk }} />}
                       {lk && <rect x={n.x + 1} y={y - 14} width={3} height={ER.row} style={{ fill: lk }} />}
                       {(c.pk || c.fk) && <text x={n.x + 10} y={y} className={c.pk ? 'sqv__pk' : 'sqv__fkm'}>{c.pk ? 'PK' : 'FK'}</text>}
-                      <text x={n.x + 34} y={y} className="sqv__col">{c.name}</text>
+                      <text x={n.x + 34} y={y} className={'sqv__col' + (hit ? ' is-hit' : '')}>{c.name}</text>
                       <text x={n.x + n.w - 10} y={y} textAnchor="end" className="sqv__type">{c.type}{c.nullable ? '' : ' •'}</text>
                     </g>
                   );

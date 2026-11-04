@@ -1,6 +1,7 @@
-import { DS } from '../../lib/ds.js';
+import { DS, mod, isMod } from '../../lib/ds.js';
 import { usePersisted } from '../../lib/store.js';
 import { parseSchemaInput, expand, subset } from '../../db/schema.js';
+import { searchSchema, stepIndex } from '../../db/ersearch.js';
 import { useAiMode, useAiTask, aiOn, AiButton, AiPanel } from '../../ai/ui.jsx';
 import { layoutEr, toDbml } from '../../db/erlayout.js';
 import { SCHEMA_QUERY } from '../../db/queries.js';
@@ -48,7 +49,7 @@ export function ErDiagram({ toast }) {
   const [moved, setMoved] = React.useState({});
   const [fitSignal, setFitSignal] = React.useState(0);
   const [focusReq, setFocusReq] = React.useState(null);
-  const [cursor, setCursor] = React.useState(0);
+  const [cursor, setCursor] = React.useState(-1); // posição na lista de tabelas achadas (-1 = ainda não navegou)
 
   const [loaded, setLoaded] = React.useState(null); // { label, schema } — substitui o texto colado
 
@@ -70,11 +71,9 @@ export function ErDiagram({ toast }) {
     return out;
   }, [base, moved]);
 
-  const matches = React.useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q || !schema) return null;
-    return new Set(schema.tables.filter((t) => t.id.toLowerCase().includes(q) || t.columns.some((c) => c.name.toLowerCase().includes(q))).map((t) => t.id));
-  }, [search, schema]);
+  const found = React.useMemo(() => searchSchema(schema, search), [search, schema]);
+  const matches = React.useMemo(() => (found ? new Set(found.tables) : null), [found]);
+  const matchCols = found ? found.columns : null;
 
   const related = React.useMemo(() => (schema && selected ? expand(schema, selected, 1) : null), [schema, selected]);
 
@@ -86,13 +85,39 @@ export function ErDiagram({ toast }) {
     ? { schema: subset(schema, related), partial: `${selected} e as tabelas ligadas a ela por FK` }
     : { schema }));
 
-  const goToMatch = () => {
-    if (!matches || !matches.size) return;
-    const list = [...matches];
-    const id = list[cursor % list.length];
-    setCursor((c) => c + 1);
+  // Enter = próxima tabela achada, Shift+Enter = anterior (em círculo); o diagrama centraliza nela.
+  const goToMatch = (dir = 1) => {
+    if (!found || !found.tables.length) return;
+    const n = found.tables.length;
+    const next = cursor < 0 ? (dir < 0 ? n - 1 : 0) : stepIndex(cursor, n, dir);
+    const id = found.tables[next];
+    setCursor(next);
     setSelected(id);
     setFocusReq({ id, nonce: Date.now() });
+  };
+
+  // Ctrl+F foca a busca do diagrama (só quando ele está visível; nas outras abas/ferramentas o evento passa direto).
+  const rootRef = React.useRef(null);
+  const barRef = React.useRef(null);
+  const hasSchema = !!schema;
+  React.useEffect(() => {
+    const h = (e) => {
+      if (!isMod(e) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'f') return;
+      const root = rootRef.current;
+      if (!root || !root.offsetParent || !hasSchema) return; // escondido (outra aba/ferramenta) ou sem diagrama
+      if (e.target.closest && e.target.closest('.cm-editor, textarea')) return; // o editor do schema tem a busca dele
+      const input = barRef.current && barRef.current.querySelector('input');
+      if (!input) return;
+      e.preventDefault();
+      input.focus();
+      input.select();
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [hasSchema]);
+  const onSearchKey = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); goToMatch(e.shiftKey ? -1 : 1); }
+    else if (e.key === 'Escape') { if (search) setSearch(''); e.currentTarget.blur(); }
   };
 
   const copyQuery = async () => {
@@ -122,23 +147,27 @@ export function ErDiagram({ toast }) {
   } else {
     right = (
       <div className="sqv__stage">
-        <div className="sqv__bar">
+        <div className="sqv__bar" ref={barRef}>
           <Input
             size="sm"
             icon="search"
             placeholder="Buscar tabela ou coluna…"
+            kbd={mod('F')}
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setCursor(0); }}
-            onKeyDown={(e) => { if (e.key === 'Enter') goToMatch(); }}
+            onChange={(e) => { setSearch(e.target.value); setCursor(-1); }}
+            onKeyDown={onSearchKey}
           />
-          {matches && <Badge size="sm" variant={matches.size ? 'ok' : 'warn'}>{matches.size} achada(s)</Badge>}
+          {found && <Badge size="sm" variant={found.tables.length ? 'ok' : 'warn'}>
+            {cursor >= 0 ? `${cursor + 1}/` : ''}{found.tables.length} tabela(s){found.columns.size ? ` · ${found.columns.size} coluna(s)` : ''}
+          </Badge>}
         </div>
         <ErCanvas
           schema={schema}
-          nodes={nodes}
+          nodes={nodes}
           selectedId={selected}
           onSelect={setSelected}
           matches={matches}
+          matchCols={matchCols}
           related={related}
           fitSignal={fitSignal}
           focusReq={focusReq}
@@ -149,7 +178,7 @@ export function ErDiagram({ toast }) {
   }
 
   return (
-    <div className="sqv__er">
+    <div className="sqv__er" ref={rootRef}>
       <ServerLoader toast={toast} onLoaded={(schema, label) => setLoaded({ schema, label })} extra={loaded && <Button variant="ghost" size="sm" icon="x" onClick={() => setLoaded(null)}>Voltar ao texto</Button>} />
       {schema && schema.warnings.length > 0 && (
         <Alert variant="warn" title={`${schema.warnings.length} aviso(s)`}>{schema.warnings.slice(0, 3).join(' · ')}{schema.warnings.length > 3 ? ' …' : ''}</Alert>
