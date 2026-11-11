@@ -89,6 +89,24 @@ test('engine: consulta, linhas, detalhe, contexto, próximo erro, exportar', asy
   assert.equal(ch.loggers.items[0].key, 'com.x');
 });
 
+test('engine: hitSub filtra os achados por texto (visão "sub") e hitNear respeita', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  fs.writeFileSync(f, line(1, 'INFO', 'ok') + line(2, 'ERROR', 'falhou id=7') + line(3, 'WARN', 'lento') + line(4, 'ERROR', 'falhou id=8') + line(5, 'ERROR', 'falhou id=9'));
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  assert.equal(e.call('query', { id: 'a', qid: 1, q: 'falhou', full: true }).total, 3);
+  assert.deepEqual(e.call('hitSub', { id: 'a', qid: 1, text: 'ID=8' }), { total: 1 });
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 1, from: 0, count: 10, view: 'sub' }).rows.map((x) => x.i), [3]);
+  assert.equal(e.call('rows', { id: 'a', qid: 1, from: 0, count: 10, view: 'sub' }).rows[0].hit, undefined);
+  assert.deepEqual(e.call('hitSub', { id: 'a', qid: 1, text: 'id=' }), { total: 3 });
+  assert.deepEqual(e.call('hitNear', { id: 'a', qid: 1, i: 1, dir: 1, sub: true }), { k: 1, i: 3, total: 3 });
+  assert.deepEqual(e.call('hitSub', { id: 'a', qid: 1, text: 'zzz' }), { total: 0 });
+  assert.equal(e.call('hitSub', { id: 'a', qid: 99, text: 'x' }).stale, true);
+  assert.deepEqual(e.call('hitSub', { id: 'a', qid: 1, text: '  ' }), { total: 3 }); // vazio limpa
+  assert.deepEqual(e.call('rows', { id: 'a', qid: 1, from: 0, count: 10, view: 'sub' }).rows.map((x) => x.i), [1, 3, 4]);
+});
+
 test('engine: visão "full" mantém o log inteiro e marca os achados; hitNear pula de achado em achado', async () => {
   const dir = tmp();
   const f = path.join(dir, 'server.log');

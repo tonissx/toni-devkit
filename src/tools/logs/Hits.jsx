@@ -29,8 +29,17 @@ function Pins({ pins, onJump, onUnpin }) {
  * borda arrastável), onOpen() (abre no tamanho padrão), scrollTo, listRef, onPick(k, i), onStep(dir),
  * showHits (há filtro: aba Achados), tab ('hits' | 'pins'), onTab, pins, onJumpPin(i), onUnpin(i)
  */
-export function Hits({ id, sum, res, http, k, height, dragging, grip, onOpen, scrollTo, listRef, onPick, onStep, showHits, tab, onTab, pins, onJumpPin, onUnpin }) {
-  const total = sum.total;
+export function Hits({ id, sum, res, http, k, height, dragging, grip, onOpen, scrollTo, listRef, onPick, onStep, showHits, tab, onTab, pins, onJumpPin, onUnpin, sub = '', onSub = () => {}, subTotal = null }) {
+  const [draft, setDraft] = React.useState(sub);
+  React.useEffect(() => { setDraft(sub); }, [sub]);
+  React.useEffect(() => {
+    if (draft === sub) return undefined;
+    const t = setTimeout(() => onSub(draft), 200);
+    return () => clearTimeout(t);
+  }, [draft]);
+  const all = sum.total;
+  const filteringSub = !!sub.trim() && subTotal != null;
+  const total = filteringSub ? subTotal : all;
   const cur = showHits && tab === 'hits' ? 'hits' : 'pins';
   const open = height > 0;
   const pick = (t) => { onTab(t); if (!open) onOpen(); };
@@ -40,10 +49,18 @@ export function Hits({ id, sum, res, http, k, height, dragging, grip, onOpen, sc
         aria-valuenow={height} tabIndex={0} {...grip} />
       <header className="lg-hits__head">
         <div className="lg-hits__tabs" role="tablist">
-          {showHits && <button type="button" role="tab" aria-selected={cur === 'hits'} className={cur === 'hits' ? 'is-on' : ''} onClick={() => pick('hits')}>Achados <small>{fmtNum(total)}</small></button>}
+          {showHits && <button type="button" role="tab" aria-selected={cur === 'hits'} className={cur === 'hits' ? 'is-on' : ''} onClick={() => pick('hits')}>Achados <small>{fmtNum(all)}</small></button>}
           <button type="button" role="tab" aria-selected={cur === 'pins'} className={cur === 'pins' ? 'is-on' : ''} onClick={() => pick('pins')}>Fixados <small>{fmtNum(pins.length)}</small></button>
         </div>
-        {cur === 'hits' && <span className="lg-muted">{k != null && total ? `${fmtNum(k + 1)} de ${fmtNum(total)}` : ''}</span>}
+        {cur === 'hits' && (
+          <label className="lg-hits__search" title="Pesquisar dentro dos achados">
+            <Icon name="search" size={12} />
+            <input type="text" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Pesquisar nos achados…" aria-label="Pesquisar nos achados"
+              onKeyDown={(e) => { if (e.key === 'Escape' && draft) { e.stopPropagation(); setDraft(''); onSub(''); } }} />
+            {draft && <button type="button" className="lg-icon" onClick={() => { setDraft(''); onSub(''); }} title="Limpar" aria-label="Limpar pesquisa"><Icon name="x" size={11} /></button>}
+          </label>
+        )}
+        {cur === 'hits' && <span className="lg-muted">{filteringSub ? `${fmtNum(total)} de ${fmtNum(all)}` : k != null && total ? `${fmtNum(k + 1)} de ${fmtNum(total)}` : ''}</span>}
         <span className="lg-grow" />
         {cur === 'hits' && (
           <>
@@ -56,9 +73,9 @@ export function Hits({ id, sum, res, http, k, height, dragging, grip, onOpen, sc
         <div className="lg-hits__body" style={{ height }}>
           {cur === 'hits'
             ? (
-              <LogList id={id} summary={sum} view="hits" total={total} res={res} http={http} selPos={k} listRef={listRef}
+              <LogList id={id} summary={sum} view={filteringSub ? 'sub' : 'hits'} total={total} res={res} http={http} selPos={k} listRef={listRef}
                 onSelect={(pos, row) => onPick(pos, row.i)} scrollTo={scrollTo}
-                empty={<div className="lg-empty is-small"><b>Nada casa com esse filtro</b></div>} />
+                empty={<div className="lg-empty is-small"><b>{filteringSub ? `Nenhum achado contém “${sub.trim()}”` : 'Nada casa com esse filtro'}</b></div>} />
             )
             : <Pins pins={pins} onJump={onJumpPin} onUnpin={onUnpin} />}
         </div>
