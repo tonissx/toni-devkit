@@ -77,6 +77,9 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
   const [hitK, setHitK] = React.useState(null);        // posição do achado atual entre os achados
   const [hitScroll, setHitScroll] = React.useState(null);
   const hitsRef = React.useRef(null);
+  const [hitSub, setHitSub] = React.useState('');      // pesquisa dentro da bandeja de achados
+  const [hitSubTotal, setHitSubTotal] = React.useState(null);
+  const subOn = !!hitSub.trim() && hitSubTotal != null;
   // Bandejas ajustáveis na mão (arrastar a borda): o Detalhe à direita e Achados/Fixados embaixo. Valem para todos os logs.
   const [lay, setLay] = usePersisted('logs.layout', { detailW: DETAIL_DEFAULT, hitsH: HITS_DEFAULT });
   const bodyRef = React.useRef(null);
@@ -157,6 +160,15 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
   runRef.current = run;
   React.useEffect(() => { run(); }, [run]);
   React.useEffect(() => { setHitK(null); }, [q, levels && levels.join(',')]);
+  // Sub-busca nos achados: roda no worker sobre a consulta atual e refaz quando ela muda (ao vivo, filtro novo).
+  React.useEffect(() => { setHitK(null); }, [hitSub]);
+  React.useEffect(() => {
+    setHitSubTotal(null);
+    if (!sum || !hitSub.trim()) return undefined;
+    let alive = true;
+    api.hitSub({ id, qid: sum.qid, text: hitSub }).then((r) => { if (alive && r && !r.stale) setHitSubTotal(r.total); }, () => {});
+    return () => { alive = false; };
+  }, [sum && sum.qid, hitSub]);
 
   // Eventos do serviço: cresceu, reaberto (rotação/truncado), erro.
   React.useEffect(() => {
@@ -203,9 +215,9 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
   // Próximo/anterior achado do filtro (dá a volta no fim); o log completo vai até a posição dele.
   const nextHit = async (dir) => {
     if (!sum) return;
-    const r = await api.hitNear({ id, qid: sum.qid, i: sel ? sel.i : dir > 0 ? -1 : sum.n, dir });
+    const r = await api.hitNear({ id, qid: sum.qid, i: sel ? sel.i : dir > 0 ? -1 : sum.n, dir, sub: subOn });
     if (!r || r.stale) return;
-    if (r.i < 0) { toast('Nenhum achado', 'Nada no log casa com o filtro.', 'ok'); return; }
+    if (r.i < 0) { toast('Nenhum achado', subOn ? 'Nenhum achado contém o texto pesquisado.' : 'Nada no log casa com o filtro.', 'ok'); return; }
     if (tab !== 'lines') set({ tab: 'lines' });
     pickHit(r.k, r.i);
   };
@@ -470,6 +482,7 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
                   <Hits id={id} sum={sum} res={res} http={src.http} k={hitK} height={hitsSplit.size} dragging={hitsSplit.dragging} grip={hitsSplit.grip} onOpen={() => setLay((l) => ({ ...l, hitsH: HITS_DEFAULT }))}
                     scrollTo={hitScroll} listRef={hitsRef} onPick={(k, i) => pickHit(k, i)} onStep={nextHit}
                     showHits={full} tab={full ? hitsTab : 'pins'} onTab={(t) => set({ hitsTab: t })}
+                    sub={hitSub} onSub={setHitSub} subTotal={hitSubTotal}
                     pins={pins} onJumpPin={(i) => jumpToEntry(i)} onUnpin={(i) => setPins((l) => l.filter((p) => p.i !== i))} />
                 )}
                 {newCount > 0 && !atBottom && (

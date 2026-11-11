@@ -275,6 +275,7 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
       }
       return L.ctxRes;
     }
+    if (view === 'sub') return L.sub ? L.sub.res : L.sum.result; // sub-busca na bandeja de achados
     if (view !== 'full') return L.sum.result;
     if (!L.full) {
       const ix = s.index;
@@ -319,7 +320,7 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
     const L = lastOf(s, qid);
     if (!L) return { stale: true };
     const r = resultOf(s, L, view);
-    const mask = view === 'hits' ? null : hitMaskOf(s, L);
+    const mask = view === 'hits' || view === 'sub' ? null : hitMaskOf(s, L);
     const out = [];
     const end = Math.min(r.length, from + count);
     const ix = s.index;
@@ -401,14 +402,33 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
   }
 
   /**
-   * O achado seguinte (dir 1) / anterior (-1) a partir de uma entrada do log, dando a volta no fim.
-   * → { k, i, total } (k = posição entre os achados; i = índice da entrada no log; i -1 se não há achados).
+   * Sub-busca nos achados (bandeja de baixo): mantém só os achados cujo texto contém `text` (sem diferenciar maiúsculas).
+   * Texto vazio limpa. A visão 'sub' de rows/locate/hitNear passa a usar esse resultado. → { total }
    */
-  function hitNear({ id, qid, i, dir = 1 }) {
+  function hitSub({ id, qid, text = '' }) {
     const s = get(id);
     const L = lastOf(s, qid);
     if (!L) return { stale: true };
-    const r = L.sum.result;
+    const t = String(text).trim().toLowerCase();
+    if (!t) { L.sub = null; return { total: L.sum.result.length }; }
+    if (!L.sub || L.sub.text !== t) {
+      const r = L.sum.result;
+      const out = [];
+      for (let k = 0; k < r.length; k++) if (s.index.text(r[k]).toLowerCase().includes(t)) out.push(r[k]);
+      L.sub = { text: t, res: Int32Array.from(out) };
+    }
+    return { total: L.sub.res.length };
+  }
+
+  /**
+   * O achado seguinte (dir 1) / anterior (-1) a partir de uma entrada do log, dando a volta no fim.
+   * → { k, i, total } (k = posição entre os achados; i = índice da entrada no log; i -1 se não há achados).
+   */
+  function hitNear({ id, qid, i, dir = 1, sub = false }) {
+    const s = get(id);
+    const L = lastOf(s, qid);
+    if (!L) return { stale: true };
+    const r = sub && L.sub ? L.sub.res : L.sum.result;
     if (!r.length) return { k: -1, i: -1, total: 0 };
     let lo = 0; let hi = r.length;
     while (lo < hi) { const mid = (lo + hi) >> 1; if (r[mid] < i) lo = mid + 1; else hi = mid; }
@@ -505,7 +525,7 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
 
   function close({ id }) { sources.delete(id); return true; }
 
-  const OPS = { open, grow, info: ({ id }) => info(id), query, rows, entry, context, locate, seekTime, next, hitNear, marks, sparks, charts, exportTo, textOf, close };
+  const OPS = { open, grow, info: ({ id }) => info(id), query, rows, entry, context, locate, seekTime, next, hitNear, hitSub, marks, sparks, charts, exportTo, textOf, close };
   return {
     call(op, args) {
       const fn = OPS[op];

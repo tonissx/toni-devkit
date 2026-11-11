@@ -215,6 +215,10 @@
 .lg-hits__head { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; font: 12px var(--tk-font-sans); color: var(--tk-text-2); }
 .lg-hits__head .lg-btn { height: 22px; padding: 0 6px; }
 .lg-hits__tabs { display: inline-flex; gap: 2px; }
+.lg-hits__search { display: inline-flex; align-items: center; gap: 5px; height: 22px; width: 220px; padding: 0 6px; border: 1px solid var(--tk-border); border-radius: 6px; background: var(--tk-surface-2); color: var(--tk-text-3); }
+.lg-hits__search:focus-within { border-color: var(--tk-accent); }
+.lg-hits__search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--tk-text); font: 12px var(--tk-font-sans); }
+.lg-hits__search .lg-icon { width: 16px; height: 16px; }
 .lg-hits__tabs button { height: 24px; padding: 0 8px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--tk-text-3); font: 500 12px var(--tk-font-sans); cursor: pointer; }
 .lg-hits__tabs button.is-on { color: var(--tk-text); border-bottom-color: var(--tk-accent); }
 .lg-hits__tabs small { color: var(--tk-text-3); margin-left: 3px; }
