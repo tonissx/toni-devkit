@@ -367,15 +367,28 @@ contextBridge.exposeInMainWorld('devkit', {
   },
   /** Agentes (ver electron/agents): subagentes do Claude Code, um .md por agente em ~/.claude/agents. */
   agents: {
-    list: () => ipcRenderer.invoke('agents:list'),
-    get: (name) => ipcRenderer.invoke('agents:get', name),
+    /** Agentes dos dois escopos: { user: { dir, rows }, project: { dir, root, rows } | null }. `root` = pasta do projeto (opcional). */
+    list: (root) => ipcRenderer.invoke('agents:list', root || null),
+    // `ctx` = { scope: 'user' | 'project', root } em todas as chamadas abaixo (omitido = usuário).
+    /** O que existe na máquina para o formulário: { skills, mcp, worktreeBan } (skills de usuário/projeto/plugins, servidores MCP, linha do CLAUDE.md que proíbe worktree). */
+    catalog: (root) => ipcRenderer.invoke('agents:catalog', root || null),
+    /** O .md final (frontmatter + corpo) que o formulário geraria → { text } | { error }. Não grava nada. */
+    preview: (agent) => ipcRenderer.invoke('agents:preview', agent),
+    /** Versões anteriores (cópia local a cada salvamento): [{ id, at, chars }], da mais nova para a mais antiga. */
+    history: (name, ctx) => ipcRenderer.invoke('agents:history', name, ctx),
+    historyGet: (name, id, ctx) => ipcRenderer.invoke('agents:historyGet', name, id, ctx),
+    /** Volta o arquivo a uma versão; a de agora vira uma versão do histórico. */
+    restore: (name, id, ctx) => ipcRenderer.invoke('agents:restore', name, id, ctx),
+    get: (name, ctx) => ipcRenderer.invoke('agents:get', name, ctx),
     /** Cria ou atualiza; `previous` = nome anterior quando a pessoa renomeou. */
-    save: (agent, previous) => ipcRenderer.invoke('agents:save', agent, previous),
-    remove: (name) => ipcRenderer.invoke('agents:remove', name),
-    duplicate: (name) => ipcRenderer.invoke('agents:duplicate', name),
-    dir: () => ipcRenderer.invoke('agents:dir'),
-    /** Abre um terminal já com o agente; sem `cwd`, pergunta a pasta → { launched, cwd?, terminal? }. */
-    launch: (name, cwd) => ipcRenderer.invoke('agents:launch', name, cwd),
+    save: (agent, previous, opts, ctx) => ipcRenderer.invoke('agents:save', agent, previous, opts, ctx),
+    /** Texto cru de um .md (inclusive inválido) e sua gravação; `{ conflict: true }` se o disco mudou (repita com `force`). */
+    rawGet: (id, ctx) => ipcRenderer.invoke('agents:rawGet', id, ctx),
+    rawSave: (id, text, opts, ctx) => ipcRenderer.invoke('agents:rawSave', id, text, opts, ctx),
+    remove: (name, ctx) => ipcRenderer.invoke('agents:remove', name, ctx),
+    duplicate: (name, ctx) => ipcRenderer.invoke('agents:duplicate', name, ctx),
+    /** Abre um terminal já com o agente; sem `cwd`, pergunta a pasta (agente de projeto abre na raiz) → { launched, cwd?, terminal? }. */
+    launch: (name, cwd, ctx) => ipcRenderer.invoke('agents:launch', name, cwd, ctx),
   },
   /** Monitor de IA (ver electron/aimon): sessões recentes de Claude Code, Codex… — somente leitura. */
   aimon: {

@@ -11,7 +11,7 @@ const patch = 'diff --git a/a.js b/a.js\n--- a/a.js\n+++ b/a.js\n@@ -1 +1 @@\n-a
 
 test('todas as tarefas montam system + user em texto', () => {
   const inputs = {
-    commitMessage: { diff: patch }, explainCommit: { message: 'x', patch }, conflictHelp: { ours: ['a'], theirs: ['b'] },
+    agentDraft: { goal: 'confere o XML da nota com o pedido' }, commitMessage: { diff: patch }, explainCommit: { message: 'x', patch }, conflictHelp: { ours: ['a'], theirs: ['b'] },
     branchName: { description: 'corrigir login' }, prSummary: { base: 'main', head: 'feat/x', commits: ['a'], patch },
     sqlExplain: { sql: 'select 1' }, sqlFromText: { description: 'clientes' }, sqlModify: { sql: 'select 1', instruction: 'filtrar 2025' }, jsonNames: { lang: 'TypeScript', code: 'interface Root {}', sample: '{}' },
     jsonError: { error: 'x', line: 1, col: 1, excerpt: '1 | {' }, diffSummary: { patch }, noteMeta: { content: 'texto' },
