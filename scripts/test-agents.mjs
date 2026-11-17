@@ -326,3 +326,58 @@ test('preview do arquivo: o mesmo texto que será gravado, ou o erro que impede'
   assert.match(store.preview({ name: 'Ruim', description: 'd' }).error, /letras minúsculas/);
   assert.equal(fs.readdirSync(dir).length, 1); // preview não grava
 });
+
+test('histórico: uma cópia local por salvamento, com limite, que acompanha o renomear e permite restaurar', async () => {
+  const dir = tmp(); const historyDir = tmp();
+  const store = createAgentStore({ dir, historyDir });
+  const a = await store.save({ name: 'rev', description: 'Use quando v1.', prompt: 'um' });
+  assert.deepEqual(await store.history('rev'), []); // o primeiro salvamento não tem "anterior"
+  await store.save({ ...a, description: 'Use quando v2.', prompt: 'dois' }, 'rev');
+  await store.save({ ...a, description: 'Use quando v3.', prompt: 'tres' }, 'rev');
+  await store.save({ ...a, description: 'Use quando v3.', prompt: 'tres' }, 'rev'); // idêntico: não cria versão
+  const h = await store.history('rev');
+  assert.equal(h.length, 2);
+  assert.ok(h[0].at >= h[1].at); // da mais nova para a mais antiga
+  assert.match((await store.historyGet('rev', h[1].id)).text, /v1/);
+  assert.match((await store.historyGet('rev', h[0].id)).text, /v2/);
+
+  const r = await store.restore('rev', h[1].id); // volta para a v1
+  assert.equal(r.description, 'Use quando v1.');
+  assert.equal((await store.history('rev')).length, 3); // a v3 de antes virou uma versão
+  assert.match((await store.historyGet('rev', (await store.history('rev'))[0].id)).text, /v3/);
+
+  // renomear: o histórico vai junto e as versões antigas ganham o nome novo (é o que a restauração grava)
+  await store.save({ ...r, name: 'rev-novo' }, 'rev');
+  const hn = await store.history('rev-novo');
+  assert.ok(hn.length >= 3);
+  assert.deepEqual(await store.history('rev'), []);
+  assert.match((await store.historyGet('rev-novo', hn[hn.length - 1].id)).text, /name: rev-novo/);
+
+  // texto cru também gera versão; ids e nomes inválidos são recusados; sem pasta de histórico nada quebra
+  await store.rawSave('rev-novo', '---\nname: rev-novo\ndescription: Use quando raw.\n---\nx\n');
+  assert.equal((await store.history('rev-novo')).length, hn.length + 1);
+  await assert.rejects(store.historyGet('rev-novo', '../x'), /inválida/);
+  await assert.rejects(store.history('../x'), /inválido/);
+  const semHist = createAgentStore({ dir: tmp() });
+  await semHist.save({ name: 'a', description: 'd' }); await semHist.save({ name: 'a', description: 'd2' }, 'a');
+  assert.deepEqual(await semHist.history('a'), []);
+
+  // limite de versões
+  const lim = createAgentStore({ dir: tmp(), historyDir: tmp() });
+  await lim.save({ name: 'l', description: 'd0' });
+  for (let i = 1; i <= 25; i++) await lim.save({ name: 'l', description: 'd' + i }, 'l');
+  assert.equal((await lim.history('l')).length, 20);
+});
+
+test('histórico: diff entre versões resume trechos iguais', () => {
+  const { diffRows } = require('../src/tools/agents/agentHistory.js');
+  const base = Array.from({ length: 30 }, (_, i) => 'linha ' + i).join('\n');
+  const mudou = base.replace('linha 15', 'linha QUINZE');
+  const d = diffRows(base, mudou);
+  assert.equal(d.added, 1); assert.equal(d.removed, 1);
+  assert.ok(d.rows.some((r) => r.k === 'gap' && r.n > 0)); // trechos iguais longos são colapsados
+  assert.ok(d.rows.length < 20);
+  const iguais = diffRows(base, base);
+  assert.deepEqual([iguais.added, iguais.removed], [0, 0]);
+  assert.equal(diffRows('a', 'a\nb').added, 1);
+});

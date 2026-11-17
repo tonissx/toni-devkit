@@ -949,7 +949,16 @@ function initLogs() {
 /* ─────────────── Agentes (subagentes do Claude Code: ~/.claude/agents e <projeto>/.claude/agents; ver electron/agents) ─────────────── */
 // Cada chamada traz `ctx` = { scope: 'user' | 'project', root }. No projeto, vence o agente do projeto (regra do Claude Code).
 const agentStores = new Map();
-const agentsAt = (dir) => { let s = agentStores.get(dir); if (!s) { s = require('./agents/store').createAgentStore({ dir }); agentStores.set(dir, s); } return s; };
+// Histórico de versões: cópias locais em %APPDATA%\Toni Devkit\agents-history\<pasta>\<agente>\ (uma por salvamento, sem commit).
+const agentsAt = (dir) => {
+  let s = agentStores.get(dir);
+  if (!s) {
+    const key = require('node:crypto').createHash('sha1').update(path.resolve(dir).toLowerCase()).digest('hex').slice(0, 12);
+    s = require('./agents/store').createAgentStore({ dir, historyDir: path.join(app.getPath('userData'), 'agents-history', key) });
+    agentStores.set(dir, s);
+  }
+  return s;
+};
 const agentRoot = (root) => {
   const r = String(root || '');
   let ok = false;
@@ -968,6 +977,9 @@ ipcMain.handle('agents:list', async (_e, root) => {
 });
 ipcMain.handle('agents:catalog', (_e, root) => require('./agents/catalog').catalog({ root: root ? agentRoot(root) : null }));
 ipcMain.handle('agents:preview', (_e, agent) => agents(null).preview(agent));
+ipcMain.handle('agents:history', (_e, name, ctx) => agents(ctx).history(String(name || '')));
+ipcMain.handle('agents:historyGet', (_e, name, id, ctx) => agents(ctx).historyGet(String(name || ''), String(id || '')));
+ipcMain.handle('agents:restore', (_e, name, id, ctx) => agents(ctx).restore(String(name || ''), String(id || '')));
 ipcMain.handle('agents:get', (_e, name, ctx) => agents(ctx).get(String(name || '')));
 const agentOpts = (o) => ({ rev: o && o.rev ? String(o.rev) : '', force: !!(o && o.force) });
 ipcMain.handle('agents:save', (_e, agent, previous, opts, ctx) => agents(ctx).save(agent, previous == null ? null : String(previous), agentOpts(opts)));

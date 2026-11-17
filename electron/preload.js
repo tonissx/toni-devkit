@@ -374,6 +374,11 @@ contextBridge.exposeInMainWorld('devkit', {
     catalog: (root) => ipcRenderer.invoke('agents:catalog', root || null),
     /** O .md final (frontmatter + corpo) que o formulário geraria → { text } | { error }. Não grava nada. */
     preview: (agent) => ipcRenderer.invoke('agents:preview', agent),
+    /** Versões anteriores (cópia local a cada salvamento): [{ id, at, chars }], da mais nova para a mais antiga. */
+    history: (name, ctx) => ipcRenderer.invoke('agents:history', name, ctx),
+    historyGet: (name, id, ctx) => ipcRenderer.invoke('agents:historyGet', name, id, ctx),
+    /** Volta o arquivo a uma versão; a de agora vira uma versão do histórico. */
+    restore: (name, id, ctx) => ipcRenderer.invoke('agents:restore', name, id, ctx),
     get: (name, ctx) => ipcRenderer.invoke('agents:get', name, ctx),
     /** Cria ou atualiza; `previous` = nome anterior quando a pessoa renomeou. */
     save: (agent, previous, opts, ctx) => ipcRenderer.invoke('agents:save', agent, previous, opts, ctx),

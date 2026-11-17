@@ -5,6 +5,7 @@ import { errText } from '../../lib/fmt.jsx';
 import { agentKey, mergeRows, scopeLabel } from './agentScope.js';
 import { COLORS, EFFORTS, MEMORY_SCOPES, MODELS, MODEL_CUSTOM, PERMISSION_MODES, PRESETS, TEMPLATES, TOOL_CHOICES, colorHex, describePermissions, draftOf, isStdModel, permissions, presetOf, promptStats, validateDescription, validateName, sameDraft, toolsForPreset } from './agentForm.js';
 import { TagPicker } from './TagPicker.jsx';
+import { diffRows } from './agentHistory.js';
 import { AiButton, AiPanel, aiOn, useAiMode, useAiTask } from '../../ai/ui.jsx';
 
 const { PageHeader, Button, Input, Field, Textarea, Select, SegmentedControl, Modal, EmptyState, Badge, Icon, Spinner, Alert, Checkbox, Toggle } = DS;
@@ -28,6 +29,7 @@ export function AgentsScreen({ toast }) {
   const [advOpen, setAdvOpen] = React.useState(false);
   const [view, setView] = React.useState('edit');   // 'edit' | 'file' (preview do .md final)
   const [fileText, setFileText] = React.useState(null); // { text } | { error } | null
+  const [hist, setHist] = React.useState(null);   // histórico aberto: { name, scope, list, sel, text, current, busy }
   const [goal, setGoal] = React.useState('');       // objetivo para "Gerar rascunho com IA"
   const aiCfg = useAiMode();
   const aiDraft = useAiTask('agentDraft', aiCfg, {
@@ -105,6 +107,27 @@ export function AgentsScreen({ toast }) {
     } catch (e) { toast('Não foi possível salvar', errText(e), 'error'); } finally { setBusy(false); }
   };
   const removeRaw = () => api().remove(raw.id, ctxOf(raw.scope)).then(() => { toast('Arquivo excluído', raw.id + '.md'); setConfirmDel(false); setSel(null); setRaw(null); reload(); }, fail('Não foi possível excluir'));
+  const loadVersion = (h, id) => api().historyGet(h.name, id, ctxOf(h.scope)).then((v) => setHist((c) => (c ? { ...c, sel: id, text: v.text } : c)), fail('Não foi possível abrir a versão'));
+  const openHistory = async () => {
+    try {
+      const ctx = ctxOf(saved.scope);
+      const [list, cur] = await Promise.all([api().history(saved.name, ctx), api().rawGet(saved.name, ctx)]);
+      const h = { name: saved.name, scope: saved.scope, list, sel: null, text: '', current: cur.text, busy: false };
+      setHist(h);
+      if (list.length) loadVersion(h, list[0].id);
+    } catch (e) { toast('Não foi possível abrir o histórico', errText(e), 'error'); }
+  };
+  const restoreVersion = async () => {
+    if (!hist || !hist.sel) return;
+    if (dirty && !window.confirm('Há alterações não salvas no formulário; elas serão descartadas ao restaurar. Continuar?')) return;
+    setHist((c) => ({ ...c, busy: true }));
+    try {
+      const a = await api().restore(hist.name, hist.sel, ctxOf(hist.scope));
+      setSaved({ ...a, scope: hist.scope }); setDraft(draftOf(a)); setHist(null);
+      toast('Versão restaurada', `${hist.name}.md voltou para ${new Date(Number(hist.sel.slice(0, 13))).toLocaleString('pt-BR')}. A versão anterior continua no histórico.`, 'ok');
+      reload();
+    } catch (e) { setHist((c) => (c ? { ...c, busy: false } : c)); toast('Não foi possível restaurar', errText(e), 'error'); }
+  };
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
 
   const save = async (force) => {
@@ -325,6 +348,7 @@ export function AgentsScreen({ toast }) {
                   <Button variant="primary" icon="save" disabled={busy || !dirty || !!nameCheck} title={nameCheck ? nameCheck.text : undefined} onClick={() => save()}>{busy ? 'Salvando…' : 'Salvar'}</Button>
                   {saved && <>
                     <Button variant="secondary" icon="terminal" disabled={dirty} title={dirty ? 'Salve antes de chamar' : 'Abre um terminal numa pasta que você escolhe, já com este agente'} onClick={launch}>Chamar no terminal</Button>
+                    <Button variant="ghost" icon="history" title="Versões anteriores deste agente (uma cópia local a cada salvamento), com diff e restauração" onClick={openHistory}>Histórico</Button>
                     <Button variant="ghost" icon="copy" onClick={duplicate}>Duplicar</Button>
                     <Button variant="ghost" icon="trash-2" onClick={() => setConfirmDel(true)}>Excluir</Button>
                   </>}
@@ -335,6 +359,34 @@ export function AgentsScreen({ toast }) {
           </main>
         </div>
       )}
+      {hist && (() => {
+        const diff = hist.sel ? diffRows(hist.current, hist.text) : null;
+        return (
+          <Modal open onClose={() => setHist(null)} icon="history" title={`Histórico de “${hist.name}”`} width={940}
+            description="Cada salvamento guarda a versão anterior numa cópia local (até 20), sem commit. O diff mostra o que mudaria no arquivo atual ao restaurar a versão escolhida."
+            footer={<><Button variant="ghost" onClick={() => setHist(null)}>Fechar</Button><Button variant="primary" icon="rotate-ccw" disabled={!hist.sel || hist.busy || (diff && !diff.added && !diff.removed)} onClick={restoreVersion}>Restaurar esta versão</Button></>}>
+            {!hist.list.length ? <p className="ag-muted ag-pad">Ainda não há versões anteriores: elas aparecem a partir do segundo salvamento.</p> : (
+              <div className="ag-hist">
+                <div className="ag-hist__list">
+                  {hist.list.map((v) => (
+                    <button key={v.id} type="button" className={'ag-hist__item' + (v.id === hist.sel ? ' is-sel' : '')} onClick={() => loadVersion(hist, v.id)}>
+                      <b>{new Date(v.at).toLocaleString('pt-BR')}</b><span>{v.chars.toLocaleString('pt-BR')} caracteres</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="ag-hist__diff">
+                  {diff && <p className="ag-muted">Restaurar esta versão: <b className="ag-add">+{diff.added}</b> / <b className="ag-del">−{diff.removed}</b> linhas em relação ao arquivo atual{!diff.added && !diff.removed ? ' (idêntica ao atual)' : ''}.</p>}
+                  <pre className="ag-diff">
+                    {diff && diff.rows.map((r, i) => r.k === 'gap'
+                      ? <div key={i} className="ag-diff__row is-gap">… {r.n} linha(s) iguais</div>
+                      : <div key={i} className={'ag-diff__row is-' + r.k}><i>{r.k === 'add' ? '+' : r.k === 'del' ? '−' : ' '}</i>{r.text || ' '}</div>)}
+                  </pre>
+                </div>
+              </div>
+            )}
+          </Modal>
+        );
+      })()}
       {confirmDel && (saved || raw) && (
         <Modal open onClose={() => setConfirmDel(false)} icon="trash-2" title={`Excluir “${(saved || raw).name || raw.id}”?`} width={440}
           description={`O arquivo ${saved ? saved.name : raw.id}.md sai de ${(curScope === 'project' ? dirs.project : dirs.user) || '~/.claude/agents'}. Não há como desfazer.`}

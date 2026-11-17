@@ -62,3 +62,19 @@
 .ag-file { display: flex; flex-direction: column; gap: 8px; }
 .ag-file__pre { margin: 0; padding: 12px 14px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-2); color: var(--tk-text);
   font: 12.5px/1.5 var(--tk-font-mono); white-space: pre-wrap; word-break: break-word; max-height: 62vh; overflow: auto; user-select: text; }
+.ag-hist { display: flex; gap: 12px; min-height: 320px; max-height: 60vh; }
+.ag-hist__list { width: 220px; flex: none; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.ag-hist__item { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 7px 9px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md);
+  background: var(--tk-surface-2); color: var(--tk-text-2); cursor: pointer; font: 12px var(--tk-font-sans); }
+.ag-hist__item:hover { background: var(--tk-surface-3); }
+.ag-hist__item.is-sel { border-color: color-mix(in srgb, var(--tk-accent) 55%, transparent); background: color-mix(in srgb, var(--tk-accent) 8%, var(--tk-surface-2)); }
+.ag-hist__item b { color: var(--tk-text); }
+.ag-hist__item span { color: var(--tk-text-3); }
+.ag-hist__diff { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ag-diff { flex: 1; margin: 0; overflow: auto; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-2); font: 12px/1.5 var(--tk-font-mono); user-select: text; }
+.ag-diff__row { white-space: pre-wrap; word-break: break-word; padding: 0 8px 0 4px; color: var(--tk-text-2); }
+.ag-diff__row i { display: inline-block; width: 16px; font-style: normal; color: var(--tk-text-3); user-select: none; }
+.ag-diff__row.is-add { background: color-mix(in srgb, #22c55e 16%, transparent); color: var(--tk-text); }
+.ag-diff__row.is-del { background: color-mix(in srgb, #ef4444 16%, transparent); color: var(--tk-text); }
+.ag-diff__row.is-gap { color: var(--tk-text-3); background: var(--tk-surface-3); padding-left: 20px; font-style: italic; }
+.ag-add { color: #22c55e; } .ag-del { color: #ef4444; }

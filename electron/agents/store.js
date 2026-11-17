@@ -141,10 +141,21 @@ function cleanAgent(raw) {
   };
 }
 
+const HISTORY_MAX = 20;           // versões guardadas por agente (as mais antigas saem)
+const HID = /^\d{13}(?:-\d+)?$/;   // id de uma versão: o instante do salvamento
+
+/** Troca a linha `name:` do frontmatter (versões antigas podem ter o nome de antes de um renomear). */
+function withName(text, name) {
+  const src = String(text);
+  const m = /^(---\r?\n)([\s\S]*?)(\r?\n---)/.exec(src);
+  if (!m || !/^name:/m.test(m[2])) return src;
+  return src.slice(0, m[1].length) + m[2].replace(/^name:[^\r\n]*/m, 'name: ' + quoteIfNeeded(name)) + src.slice(m[1].length + m[2].length);
+}
+
 /** Identifica a versão do arquivo em disco (detecta edição externa entre abrir e salvar). */
 const revOf = (st) => `${Math.round(st.mtimeMs)}-${st.size}`;
 
-function createAgentStore({ dir = defaultDir() } = {}) {
+function createAgentStore({ dir = defaultDir(), historyDir = null } = {}) {
   const file = (name) => {
     if (!NAME.test(String(name))) throw new Error('Nome de agente inválido');
     return path.join(dir, name + '.md');
@@ -161,6 +172,30 @@ function createAgentStore({ dir = defaultDir() } = {}) {
     const a = parseAgent(text);
     return { ...a, name, rev: revOf(st), permissions: permissions(a.tools, a.disallowedTools) };
   };
+  /**
+   * Guarda uma cópia do texto ANTES de ele ser sobrescrito (uma por salvamento, só no disco do devkit, sem commit).
+   * Falha aqui nunca impede salvar. Repetir o último texto não cria versão nova.
+   */
+  const snapshot = async (name, text) => {
+    if (!historyDir || text == null) return;
+    try {
+      const d = path.join(historyDir, name);
+      await fs.mkdir(d, { recursive: true });
+      const ids = (await fs.readdir(d)).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3)).filter((id) => HID.test(id)).sort();
+      if (ids.length && await fs.readFile(path.join(d, ids[ids.length - 1] + '.md'), 'utf8') === text) return;
+      let id = String(Date.now());
+      for (let n = 1; ids.includes(id); n++) id = `${Date.now()}-${n}`;
+      await atomicWrite(path.join(d, id + '.md'), text);
+      ids.push(id);
+      for (const old of ids.slice(0, Math.max(0, ids.length - HISTORY_MAX))) await fs.rm(path.join(d, old + '.md'), { force: true });
+    } catch { /* o histórico é um extra */ }
+  };
+  const versionFile = (name, id) => {
+    if (!historyDir) throw new Error('O histórico não está disponível.');
+    if (!HID.test(String(id))) throw new Error('Versão inválida.');
+    return path.join(historyDir, file(name) && name, id + '.md');
+  };
+  const readOrNull = (f) => fs.readFile(f, 'utf8').catch(() => null);
   const bad = (id, error, promptChars = 0) => ({ id, name: id, invalid: true, error, description: '', model: '', tools: null, permissions: permissions(null), promptChars });
   return {
     dir,
@@ -203,7 +238,10 @@ function createAgentStore({ dir = defaultDir() } = {}) {
         const st = await fs.stat(f).catch(() => null);
         if (st && revOf(st) !== rev) return { conflict: true };
       }
-      await atomicWrite(f, String(text == null ? '' : text));
+      const next = String(text == null ? '' : text);
+      const prev = await readOrNull(f);
+      if (NAME.test(String(id)) && prev !== next) await snapshot(String(id), prev);
+      await atomicWrite(f, next);
       return { ok: true };
     },
     /**
@@ -223,9 +261,39 @@ function createAgentStore({ dir = defaultDir() } = {}) {
         if (st && revOf(st) !== opts.rev) return { conflict: true };
       }
       await fs.mkdir(dir, { recursive: true });
-      await atomicWrite(target, serializeAgent(a));
+      if (renamed && historyDir) await fs.rename(path.join(historyDir, previous), path.join(historyDir, a.name)).catch(() => {}); // o histórico acompanha o nome
+      const out = serializeAgent(a);
+      const prev = await readOrNull(renamed ? file(previous) : target);
+      if (prev !== out) await snapshot(a.name, prev); // salvar sem mudar nada não cria versão
+      await atomicWrite(target, out);
       if (renamed) await fs.rm(file(previous), { force: true });
       return read(a.name);
+    },
+    /** Versões anteriores deste agente (da mais nova para a mais antiga): [{ id, at, chars }]. */
+    async history(name) {
+      file(name);
+      if (!historyDir) return [];
+      const d = path.join(historyDir, name);
+      let ids = [];
+      try { ids = (await fs.readdir(d)).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3)).filter((id) => HID.test(id)); } catch { return []; }
+      const rows = await Promise.all(ids.map(async (id) => {
+        const t = await readOrNull(path.join(d, id + '.md'));
+        return t == null ? null : { id, at: Number(id.slice(0, 13)), chars: t.length };
+      }));
+      return rows.filter(Boolean).sort((x, y) => (x.id < y.id ? 1 : -1));
+    },
+    /** Texto de uma versão, já com o nome atual do agente (é o que a restauração grava). */
+    async historyGet(name, id) {
+      const t = await fs.readFile(versionFile(name, id), 'utf8');
+      return { id, text: withName(t, name) };
+    },
+    /** Restaura uma versão: a de agora vira uma versão do histórico (dá para voltar) e o arquivo recebe a antiga. */
+    async restore(name, id) {
+      const { text } = await this.historyGet(name, id);
+      const target = file(name);
+      await snapshot(name, await readOrNull(target));
+      await atomicWrite(target, text);
+      return read(name);
     },
     async remove(name) { await fs.rm(rawFile(name), { force: true }); return true; },
     async duplicate(name) {
@@ -239,4 +307,4 @@ function createAgentStore({ dir = defaultDir() } = {}) {
   };
 }
 
-module.exports = { createAgentStore, parseAgent, serializeAgent, cleanAgent, defaultDir, NAME };
+module.exports = { withName, HISTORY_MAX, createAgentStore, parseAgent, serializeAgent, cleanAgent, defaultDir, NAME };
