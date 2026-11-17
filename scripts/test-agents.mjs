@@ -114,13 +114,45 @@ test('validação e segurança dos nomes', async () => {
   await assert.rejects(store.remove('..\\x'), /inválido/);
 });
 
-test('arquivos que não são agentes são ignorados, e extras sobrevivem ao salvar', async () => {
+test('edição fora do devkit: salvar detecta que o disco mudou e só sobrescreve com confirmação', async () => {
+  const dir = tmp();
+  const store = createAgentStore({ dir });
+  const a = await store.save({ name: 'x', description: 'd', prompt: 'um' });
+  assert.ok(a.rev);
+  fs.writeFileSync(path.join(dir, 'x.md'), '---\nname: x\ndescription: editado fora\n---\ntexto externo, mais longo\n');
+  const r = await store.save({ ...a, description: 'minha' }, 'x', { rev: a.rev });
+  assert.equal(r.conflict, true);
+  assert.match(fs.readFileSync(path.join(dir, 'x.md'), 'utf8'), /editado fora/); // nada foi gravado
+  const f = await store.save({ ...a, description: 'minha' }, 'x', { rev: a.rev, force: true });
+  assert.equal(f.description, 'minha');
+  assert.equal((await store.rawSave('x', 'novo', { rev: 'velho' })).conflict, true);
+});
+
+test('arquivo inválido não some da lista: aparece com o erro e dá para corrigir pelo texto cru; extras sobrevivem ao salvar', async () => {
   const dir = tmp();
   fs.writeFileSync(path.join(dir, 'README.txt'), 'x');
-  fs.writeFileSync(path.join(dir, 'Nome Ruim.md'), '---\nname: x\n---\n');
+  fs.writeFileSync(path.join(dir, 'Nome Ruim.md'), '---\nname: x\ndescription: d\n---\n');
+  fs.writeFileSync(path.join(dir, 'sem-front.md'), 'só texto');
+  fs.writeFileSync(path.join(dir, 'aberto.md'), '---\nname: aberto\ndescription: d\nprompt sem fechar');
+  fs.writeFileSync(path.join(dir, 'sem-desc.md'), '---\nname: sem-desc\n---\ncorpo');
   fs.writeFileSync(path.join(dir, 'meu.md'), '---\nname: meu\ndescription: d\ncolor: red\n---\nprompt\n');
   const store = createAgentStore({ dir });
-  assert.deepEqual((await store.list()).map((x) => x.name), ['meu']);
+  const rows = await store.list();
+  assert.deepEqual(rows.map((x) => x.name), ['Nome Ruim', 'aberto', 'meu', 'sem-desc', 'sem-front']); // README.txt não é .md
+  assert.deepEqual(rows.filter((x) => x.invalid).map((x) => x.name), ['Nome Ruim', 'aberto', 'sem-desc', 'sem-front']);
+  assert.match(rows.find((x) => x.name === 'aberto').error, /não termina/);
+  assert.match(rows.find((x) => x.name === 'sem-front').error, /não começa/);
+  assert.match(rows.find((x) => x.name === 'sem-desc').error, /description/);
+  assert.match(rows.find((x) => x.name === 'Nome Ruim').error, /nome do arquivo/);
+
+  const raw = await store.rawGet('sem-front');
+  assert.equal(raw.text, 'só texto');
+  await store.rawSave('sem-front', '---\nname: sem-front\ndescription: agora vale\n---\nok\n', { rev: raw.rev });
+  assert.equal((await store.list()).find((x) => x.name === 'sem-front').invalid, false);
+  await assert.rejects(store.rawGet('../x'), /inválido/);
+  await store.remove('Nome Ruim'); // inválido também pode ser excluído
+  assert.ok(!fs.existsSync(path.join(dir, 'Nome Ruim.md')));
+
   const a = await store.get('meu');
   await store.save({ ...a, description: 'd2' }, 'meu');
   assert.match(fs.readFileSync(path.join(dir, 'meu.md'), 'utf8'), /color: red/);

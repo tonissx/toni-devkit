@@ -24,29 +24,56 @@ export function AgentsScreen({ toast }) {
   const [busy, setBusy] = React.useState(false);
   const [confirmDel, setConfirmDel] = React.useState(false);
   const [filter, setFilter] = React.useState('');
+  const [raw, setRaw] = React.useState(null);      // arquivo inválido aberto como texto cru: { id, text, orig, rev, error }
 
   const fail = (title) => (e) => toast(title, errText(e), 'error');
   const reload = React.useCallback(() => api().list().then(setRows, fail('Não foi possível listar os agentes')), []);
   React.useEffect(() => { reload(); api().dir().then(setDir, () => {}); }, []);
+  // A lista reflete o disco: relê ao voltar para a janela (arquivos criados, editados ou apagados fora do devkit).
+  React.useEffect(() => {
+    const on = () => { if (document.visibilityState !== 'hidden') reload(); };
+    window.addEventListener('focus', on); document.addEventListener('visibilitychange', on);
+    return () => { window.removeEventListener('focus', on); document.removeEventListener('visibilitychange', on); };
+  }, [reload]);
 
-  const dirty = !!draft && (!saved || !sameDraft(draft, saved));
+  const rawDirty = !!raw && raw.text !== raw.orig;
+  const dirty = rawDirty || (!!draft && (!saved || !sameDraft(draft, saved)));
   const guard = () => !dirty || window.confirm('Há alterações não salvas neste agente. Descartar?');
 
-  const open = (name) => {
-    if (name === sel && saved) return;
+  const open = (row) => {
+    const name = row.name;
+    if (name === sel && (saved || raw)) return;
     if (!guard()) return;
-    api().get(name).then((a) => { setSel(name); setSaved(a); setDraft(draftOf(a)); }, fail('Não foi possível abrir o agente'));
+    if (row.invalid) {
+      api().rawGet(row.id).then((r) => { setSel(name); setSaved(null); setDraft(null); setRaw({ ...r, orig: r.text }); }, fail('Não foi possível abrir o arquivo'));
+      return;
+    }
+    api().get(name).then((a) => { setSel(name); setRaw(null); setSaved(a); setDraft(draftOf(a)); }, fail('Não foi possível abrir o agente'));
   };
   const startNew = (tpl = TEMPLATES[0]) => {
     if (!guard()) return;
-    setSel(null); setSaved(null); setDraft(draftOf(tpl.agent));
+    setSel(null); setSaved(null); setRaw(null); setDraft(draftOf(tpl.agent));
   };
-  const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
-
-  const save = async () => {
+  const saveRaw = async (force) => {
     setBusy(true);
     try {
-      const a = await api().save(draft, saved ? saved.name : null);
+      const r = await api().rawSave(raw.id, raw.text, { rev: raw.rev, force });
+      if (r && r.conflict) { if (window.confirm('Este arquivo mudou no disco desde que você o abriu. Sobrescrever com o seu texto?')) return saveRaw(true); return; }
+      toast('Arquivo salvo', raw.id + '.md', 'ok');
+      setSel(null); setRaw(null); reload();
+    } catch (e) { toast('Não foi possível salvar', errText(e), 'error'); } finally { setBusy(false); }
+  };
+  const removeRaw = () => api().remove(raw.id).then(() => { toast('Arquivo excluído', raw.id + '.md'); setConfirmDel(false); setSel(null); setRaw(null); reload(); }, fail('Não foi possível excluir'));
+  const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
+
+  const save = async (force) => {
+    setBusy(true);
+    try {
+      const a = await api().save(draft, saved ? saved.name : null, { rev: saved ? saved.rev : '', force: force === true });
+      if (a && a.conflict) {
+        if (window.confirm('Este agente mudou no disco desde que você o abriu (edição fora do devkit). Sobrescrever com a sua versão?')) return save(true);
+        return;
+      }
       setSel(a.name); setSaved(a); setDraft(draftOf(a));
       toast('Agente salvo', a.name + '.md', 'ok');
       reload();
@@ -56,6 +83,7 @@ export function AgentsScreen({ toast }) {
   const remove = () => api().remove(saved.name).then(() => { toast('Agente excluído', saved.name); setConfirmDel(false); setSel(null); setSaved(null); setDraft(null); reload(); }, fail('Não foi possível excluir'));
   const launch = () => api().launch(saved.name).then((r) => { if (r && r.launched) toast('Terminal aberto', `claude --agent ${saved.name} em ${r.cwd}`, 'ok'); }, fail('Não foi possível abrir o agente'));
 
+  const invalidCount = (rows || []).filter((a) => a.invalid).length;
   const list = (rows || []).filter((a) => !filter.trim() || (a.name + ' ' + a.description).toLowerCase().includes(filter.trim().toLowerCase()));
   const perms = draft ? permissions(draft.tools) : null;
   const pd = describePermissions(perms);
@@ -64,7 +92,7 @@ export function AgentsScreen({ toast }) {
 
   return (
     <div className="ag">
-      <PageHeader icon="sparkles" title="Agentes" subtitle={rows ? `${rows.length} agente(s) em ${dir || '~/.claude/agents'}` : 'Carregando…'}
+      <PageHeader icon="sparkles" title="Agentes" subtitle={rows ? `${rows.length - invalidCount} agente(s)${invalidCount ? ` + ${invalidCount} arquivo(s) inválido(s)` : ''} em ${dir || '~/.claude/agents'}` : 'Carregando…'}
         actions={<Button variant="primary" icon="plus" onClick={() => startNew()}>Novo agente</Button>} />
       {!rows ? <div className="ag-center"><Spinner size={18} /></div> : (
         <div className="ag-body">
@@ -72,9 +100,9 @@ export function AgentsScreen({ toast }) {
             <div className="ag-side__search"><Input size="sm" type="search" placeholder="Buscar agente…" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
             <div className="ag-list">
               {list.map((a) => (
-                <button key={a.name} type="button" className={'ag-card' + (a.name === sel ? ' is-sel' : '')} onClick={() => open(a.name)}>
-                  <span className="ag-card__top"><b>{a.name}</b><PermBadge perms={a.permissions} /></span>
-                  <span className="ag-card__desc">{a.description || 'Sem descrição'}</span>
+                <button key={a.name} type="button" className={'ag-card' + (a.name === sel ? ' is-sel' : '')} onClick={() => open(a)}>
+                  <span className="ag-card__top"><b>{a.name}</b>{a.invalid ? <Badge size="sm" variant="error" title={a.error}>inválido</Badge> : <PermBadge perms={a.permissions} />}</span>
+                  <span className="ag-card__desc">{a.invalid ? a.error : (a.description || 'Sem descrição')}</span>
                   {a.model && <span className="ag-card__meta"><Icon name="cpu" size={11} /> {a.model}</span>}
                 </button>
               ))}
@@ -82,7 +110,19 @@ export function AgentsScreen({ toast }) {
             </div>
           </aside>
           <main className="ag-main">
-            {!draft ? (
+            {raw ? (
+              <div className="ag-form">
+                <Alert variant="error" title={`${raw.id}.md não é um agente válido`} icon="shield-alert">{raw.error || 'Corrigido? Salve para o agente voltar à lista.'}</Alert>
+                <Field label="Texto do arquivo" hint="Frontmatter entre linhas “---” (name e description obrigatórios), depois o prompt.">
+                  <Textarea rows={22} className="ag-prompt" value={raw.text} onChange={(e) => setRaw((r) => ({ ...r, text: e.target.value }))} />
+                </Field>
+                <div className="ag-actions">
+                  <Button variant="primary" icon="save" disabled={busy || !rawDirty} onClick={() => saveRaw(false)}>{busy ? 'Salvando…' : 'Salvar arquivo'}</Button>
+                  <Button variant="ghost" icon="trash-2" onClick={() => setConfirmDel(true)}>Excluir</Button>
+                  {rawDirty && <span className="ag-muted">Alterações não salvas</span>}
+                </div>
+              </div>
+            ) : !draft ? (
               <div className="ag-start">
                 <EmptyState icon="sparkles" title="Monte um agente" description="Um agente é um especialista com prompt, ferramentas e regras próprias. Comece por um modelo ou em branco." />
                 <div className="ag-tpls">
@@ -142,10 +182,10 @@ export function AgentsScreen({ toast }) {
           </main>
         </div>
       )}
-      {confirmDel && saved && (
-        <Modal open onClose={() => setConfirmDel(false)} icon="trash-2" title={`Excluir “${saved.name}”?`} width={440}
-          description={`O arquivo ${saved.name}.md sai de ${dir || '~/.claude/agents'}. Não há como desfazer.`}
-          footer={<><Button variant="ghost" onClick={() => setConfirmDel(false)}>Cancelar</Button><Button variant="destructive" icon="trash-2" onClick={remove}>Excluir</Button></>} />
+      {confirmDel && (saved || raw) && (
+        <Modal open onClose={() => setConfirmDel(false)} icon="trash-2" title={`Excluir “${(saved || raw).name || raw.id}”?`} width={440}
+          description={`O arquivo ${saved ? saved.name : raw.id}.md sai de ${dir || '~/.claude/agents'}. Não há como desfazer.`}
+          footer={<><Button variant="ghost" onClick={() => setConfirmDel(false)}>Cancelar</Button><Button variant="destructive" icon="trash-2" onClick={saved ? remove : removeRaw}>Excluir</Button></>} />
       )}
     </div>
   );

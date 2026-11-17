@@ -29,12 +29,12 @@ function quoteIfNeeded(v) {
   return s === '' || /^[\s"'`>|*&!%@#\-?[\]{},]/.test(s) || /:\s|\s#|[\r\n]|\s$/.test(s) ? JSON.stringify(s) : s;
 }
 
-/** → { name, description, model, tools: string[]|null, extra: string, prompt } */
+/** → { name, description, model, tools: string[]|null, extra: string, prompt, error } — `error` quando o arquivo não é um agente válido. */
 function parseAgent(text) {
   const src = String(text == null ? '' : text).replace(/^﻿/, '').replace(/\r\n?/g, '\n');
-  const out = { name: '', description: '', model: '', tools: null, extra: '', prompt: src };
+  const out = { name: '', description: '', model: '', tools: null, extra: '', prompt: src, error: null };
   const m = /^---\n([\s\S]*?)\n---[ \t]*(?:\n|$)([\s\S]*)$/.exec(src);
-  if (!m) return out;
+  if (!m) { out.error = /^---\n/.test(src) ? 'O frontmatter não termina: falta a linha “---” de fechamento.' : 'O arquivo não começa com um frontmatter (“---” na primeira linha).'; return out; }
   out.prompt = m[2].replace(/^\n+/, '');
   const blocks = []; // { key, lines[] } — continuação (listas, textos longos) fica com a chave de cima
   for (const line of m[1].split('\n')) {
@@ -51,6 +51,8 @@ function parseAgent(text) {
     else out[b.key] = v;
   }
   out.extra = extra.join('\n').replace(/\s+$/, '');
+  if (!out.description && !extra.some((l) => /^description:/.test(l))) out.error = 'Falta o campo obrigatório “description” no frontmatter.';
+  else if (!out.name && !extra.some((l) => /^name:/.test(l))) out.error = 'Falta o campo obrigatório “name” no frontmatter.';
   return out;
 }
 
@@ -77,41 +79,89 @@ function cleanAgent(raw) {
   return { name, description, tools: tools && tools.length ? tools : null, model, extra: String(r.extra || ''), prompt: String(r.prompt || '') };
 }
 
+/** Identifica a versão do arquivo em disco (detecta edição externa entre abrir e salvar). */
+const revOf = (st) => `${Math.round(st.mtimeMs)}-${st.size}`;
+
 function createAgentStore({ dir = defaultDir() } = {}) {
   const file = (name) => {
     if (!NAME.test(String(name))) throw new Error('Nome de agente inválido');
     return path.join(dir, name + '.md');
   };
-  const read = async (name) => {
-    const text = await fs.readFile(file(name), 'utf8');
-    const a = parseAgent(text);
-    return { ...a, name, permissions: permissions(a.tools) };
+  // Arquivos inválidos são identificados pelo nome do arquivo (sem .md), que pode nem seguir a regra de nomes.
+  const rawFile = (id) => {
+    const s = String(id);
+    if (!s || /[\\/]/.test(s) || s.startsWith('.') || s.includes('\0')) throw new Error('Arquivo inválido');
+    return path.join(dir, s + '.md');
   };
+  const read = async (name) => {
+    const f = file(name);
+    const [text, st] = await Promise.all([fs.readFile(f, 'utf8'), fs.stat(f)]);
+    const a = parseAgent(text);
+    return { ...a, name, rev: revOf(st), permissions: permissions(a.tools) };
+  };
+  const bad = (id, error, promptChars = 0) => ({ id, name: id, invalid: true, error, description: '', model: '', tools: null, permissions: permissions(null), promptChars });
   return {
     dir,
-    /** Todos os agentes da pasta, em ordem alfabética (arquivos que não são agentes válidos são ignorados). */
+    /**
+     * Todos os .md da pasta, em ordem alfabética. Nenhum some: o que não é um agente válido vem com `invalid: true`
+     * e `error` (a tela mostra e deixa abrir o texto cru para corrigir).
+     */
     async list() {
-      let names = [];
-      try { names = (await fs.readdir(dir)).filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3)).filter((n) => NAME.test(n)); } catch { /* sem pasta ainda */ }
-      const rows = await Promise.all(names.sort().map((n) => read(n).catch(() => null)));
-      return rows.filter(Boolean).map(({ prompt, extra, ...row }) => ({ ...row, promptChars: prompt.length }));
+      let ids = [];
+      try { ids = (await fs.readdir(dir)).filter((f) => f.toLowerCase().endsWith('.md') && !f.startsWith('.')).map((f) => f.slice(0, -3)); } catch { /* sem pasta ainda */ }
+      const rows = await Promise.all(ids.sort().map(async (id) => {
+        try {
+          const f = rawFile(id);
+          const [text, st] = await Promise.all([fs.readFile(f, 'utf8'), fs.stat(f)]);
+          if (!st.isFile()) return null;
+          const a = parseAgent(text);
+          const err = a.error || (NAME.test(id) ? null : 'O nome do arquivo precisa usar só letras minúsculas, números e hífens.');
+          if (err) return bad(id, err, a.prompt.length);
+          const { prompt, extra, error, ...row } = a;
+          return { ...row, id, name: id, invalid: false, rev: revOf(st), permissions: permissions(a.tools), promptChars: prompt.length };
+        } catch (e) { return bad(id, 'Não foi possível ler o arquivo: ' + (e.message || e)); }
+      }));
+      return rows.filter(Boolean);
     },
     get: (name) => read(name),
-    /** Cria ou atualiza. `previous`: nome anterior, quando a pessoa renomeou (o arquivo antigo é removido). */
-    async save(raw, previous) {
+    /** Texto cru de um arquivo (para corrigir um agente inválido) → { id, text, rev, error }. */
+    async rawGet(id) {
+      const f = rawFile(id);
+      const [text, st] = await Promise.all([fs.readFile(f, 'utf8'), fs.stat(f)]);
+      return { id: String(id), text, rev: revOf(st), error: parseAgent(text).error };
+    },
+    /** Grava o texto cru. Com `rev` diferente do disco devolve { conflict: true }, a menos que `force`. */
+    async rawSave(id, text, { rev, force } = {}) {
+      const f = rawFile(id);
+      if (rev && !force) {
+        const st = await fs.stat(f).catch(() => null);
+        if (st && revOf(st) !== rev) return { conflict: true };
+      }
+      await atomicWrite(f, String(text == null ? '' : text));
+      return { ok: true };
+    },
+    /**
+     * Cria ou atualiza. `previous`: nome anterior, quando a pessoa renomeou (o arquivo antigo é removido).
+     * `opts.rev`: versão do arquivo quando foi aberto; se o disco mudou desde então devolve { conflict: true } sem
+     * gravar (a tela pede confirmação e repete com `opts.force`).
+     */
+    async save(raw, previous, opts = {}) {
       const a = cleanAgent(raw);
       const target = file(a.name);
       const renamed = previous && previous !== a.name;
       if (renamed || previous == null) {
         const exists = await fs.access(target).then(() => true, () => false);
         if (exists) throw new Error(`Já existe um agente chamado “${a.name}”.`);
+      } else if (opts.rev && !opts.force) {
+        const st = await fs.stat(target).catch(() => null);
+        if (st && revOf(st) !== opts.rev) return { conflict: true };
       }
       await fs.mkdir(dir, { recursive: true });
       await atomicWrite(target, serializeAgent(a));
       if (renamed) await fs.rm(file(previous), { force: true });
       return read(a.name);
     },
-    async remove(name) { await fs.rm(file(name), { force: true }); return true; },
+    async remove(name) { await fs.rm(rawFile(name), { force: true }); return true; },
     async duplicate(name) {
       const src = await read(name);
       const taken = new Set((await this.list()).map((x) => x.name));

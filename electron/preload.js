@@ -370,7 +370,10 @@ contextBridge.exposeInMainWorld('devkit', {
     list: () => ipcRenderer.invoke('agents:list'),
     get: (name) => ipcRenderer.invoke('agents:get', name),
     /** Cria ou atualiza; `previous` = nome anterior quando a pessoa renomeou. */
-    save: (agent, previous) => ipcRenderer.invoke('agents:save', agent, previous),
+    save: (agent, previous, opts) => ipcRenderer.invoke('agents:save', agent, previous, opts),
+    /** Texto cru de um .md (inclusive inválido) e sua gravação; `{ conflict: true }` se o disco mudou (repita com `force`). */
+    rawGet: (id) => ipcRenderer.invoke('agents:rawGet', id),
+    rawSave: (id, text, opts) => ipcRenderer.invoke('agents:rawSave', id, text, opts),
     remove: (name) => ipcRenderer.invoke('agents:remove', name),
     duplicate: (name) => ipcRenderer.invoke('agents:duplicate', name),
     dir: () => ipcRenderer.invoke('agents:dir'),
