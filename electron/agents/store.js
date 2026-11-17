@@ -186,6 +186,10 @@ function createAgentStore({ dir = defaultDir() } = {}) {
       return rows.filter(Boolean);
     },
     get: (name) => read(name),
+    /** O .md exato que seria gravado para este formulário (somente leitura, nada vai para o disco). → { text } | { error } */
+    preview(raw) {
+      try { return { text: serializeAgent(cleanAgent(raw)) }; } catch (e) { return { error: e.message || String(e) }; }
+    },
     /** Texto cru de um arquivo (para corrigir um agente inválido) → { id, text, rev, error }. */
     async rawGet(id) {
       const f = rawFile(id);

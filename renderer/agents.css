@@ -56,3 +56,9 @@
 .ag-note { display: inline-flex; align-items: flex-start; gap: 5px; margin: 4px 0 0; font-size: 12px; line-height: 1.35; }
 .ag-note.is-error { color: var(--tk-danger, #ef4444); }
 .ag-note.is-warn { color: var(--tk-warn, #d97706); }
+.ag-viewbar { display: flex; }
+.ag-ai { display: flex; gap: 8px; align-items: center; }
+.ag-ai > :first-child { flex: 1; min-width: 0; }
+.ag-file { display: flex; flex-direction: column; gap: 8px; }
+.ag-file__pre { margin: 0; padding: 12px 14px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-md); background: var(--tk-surface-2); color: var(--tk-text);
+  font: 12.5px/1.5 var(--tk-font-mono); white-space: pre-wrap; word-break: break-word; max-height: 62vh; overflow: auto; user-select: text; }

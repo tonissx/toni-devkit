@@ -281,3 +281,48 @@ test('validações: nome (formato, embutidos, duplicado no escopo) e descrição
   await assert.rejects(store.save({ name: 'explore', description: 'x' }), /embutido/);
   await assert.rejects(store.save({ name: 'plan', description: 'x' }), /embutido/);
 });
+
+test('modelos prontos: cobrem revisor, pesquisador, SQL somente leitura e planejador, e passam nas validações', async () => {
+  const ids = form.TEMPLATES.map((t) => t.id);
+  for (const id of ['blank', 'reviewer', 'researcher', 'sql-readonly', 'planner']) assert.ok(ids.includes(id), id);
+  const store = createAgentStore({ dir: tmp() });
+  for (const t of form.TEMPLATES.filter((t) => t.agent.name)) {
+    assert.equal(form.validateName(t.agent.name), null, t.id);
+    assert.equal(form.validateDescription(t.agent.description).length, 0, t.id);
+    const saved = await store.save(t.agent); // grava e lê de volta com os campos novos
+    assert.equal(saved.color || '', t.agent.color || '', t.id);
+    assert.deepEqual(saved.skills, t.agent.skills || [], t.id);
+  }
+  const sql = form.TEMPLATES.find((t) => t.id === 'sql-readonly').agent;
+  assert.equal(form.describePermissions(form.permissions(sql.tools)).tone, 'danger'); // roda comandos: o alerta vermelho aparece
+  assert.equal(form.TEMPLATES.find((t) => t.id === 'planner').agent.permissionMode, 'plan');
+  assert.equal(form.describePermissions(form.permissions(form.TEMPLATES.find((t) => t.id === 'researcher').agent.tools)).tone, 'ok');
+});
+
+test('IA: tarefa agentDraft monta o pedido e interpreta o rascunho, filtrando ferramentas desconhecidas', () => {
+  const { TASKS, slugAgent } = require('../src/ai/tasks.js');
+  const t = TASKS.agentDraft;
+  assert.throws(() => t.build({ goal: 'curto' }), /uma frase/);
+  const req = t.build({ goal: 'confere o XML da nota com o pedido de compra', skills: ['totvs-rm', 'fluig'] });
+  assert.match(req.system, /SOMENTE com um bloco/);
+  assert.match(req.system, /QUANDO/);
+  assert.match(req.user, /confere o XML/);
+  assert.match(req.user, /totvs-rm, fluig/);
+  const d = t.parse('Aqui está:\n```json\n{"name":"Conferidor de NF","description":"  Confere   a nota. Use quando chegar uma NF.  ","tools":["Read","Grep","Hack","Read"],"prompt":"Você confere notas.\\r\\nPasso 1."}\n```');
+  assert.deepEqual(d, { name: 'conferidor-de-nf', description: 'Confere a nota. Use quando chegar uma NF.', tools: ['Read', 'Grep'], prompt: 'Você confere notas.\nPasso 1.\n' });
+  assert.deepEqual(t.parse('sem json nenhum'), { name: '', description: '', tools: [], prompt: '' });
+  assert.equal(slugAgent('Revisão  de Código!!'), 'revisao-de-codigo');
+});
+
+test('preview do arquivo: o mesmo texto que será gravado, ou o erro que impede', async () => {
+  const dir = tmp();
+  const store = createAgentStore({ dir });
+  const draft = { name: 'x', description: 'Use quando precisar.', tools: ['Read'], skills: ['fluig'], color: 'red', prompt: 'Oi' };
+  const p = store.preview(draft);
+  assert.match(p.text, /^---\nname: x\n/);
+  const saved = await store.save(draft);
+  assert.equal(fs.readFileSync(path.join(dir, 'x.md'), 'utf8'), p.text);
+  assert.ok(saved.name);
+  assert.match(store.preview({ name: 'Ruim', description: 'd' }).error, /letras minúsculas/);
+  assert.equal(fs.readdirSync(dir).length, 1); // preview não grava
+});

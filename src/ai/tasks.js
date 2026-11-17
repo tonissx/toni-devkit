@@ -626,6 +626,41 @@ const TASKS = {
   },
 };
 
+/* ───────── Agentes ───────── */
+const AGENT_TOOLS = ['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch', 'Edit', 'Write', 'Bash', 'PowerShell', 'Agent', 'TodoWrite', 'NotebookEdit'];
+/** Texto → nome de agente (minúsculas, sem acento, hífens, até 40 caracteres). */
+const slugAgent = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
+
+TASKS.agentDraft = {
+  label: 'Rascunho de agente', maxTokens: 1500,
+  build(i) {
+    const goal = tidy(i.goal);
+    if (goal.length < 8) throw new Error('Descreva o objetivo do agente em uma frase.');
+    const skills = (Array.isArray(i.skills) ? i.skills : []).slice(0, 60).join(', ');
+    return {
+      system: ['Você escreve subagentes do Claude Code (arquivos .md com frontmatter) a partir do objetivo que a pessoa descreve.', PT,
+        'Responda SOMENTE com um bloco ```json com as chaves: "name", "description", "tools", "prompt".',
+        '- name: minúsculas, números e hífens (ex.: revisor-fluig).',
+        '- description: 1 a 3 frases, com no mínimo 80 caracteres, dizendo o que o agente faz e QUANDO o Claude deve chamá-lo ("Use quando…" / "Use proativamente depois de…"). É com ela que o Claude decide chamar o agente.',
+        `- tools: lista com o MÍNIMO necessário, escolhida só entre: ${AGENT_TOOLS.join(', ')}. Prefira só leitura (Read, Grep, Glob). Inclua Edit/Write só se o agente precisa alterar arquivos, e Bash/PowerShell só se precisa rodar comandos.`,
+        '- prompt: as instruções do agente, em segunda pessoa ("Você…"), com o papel, o passo a passo, regras fixas e o formato da resposta. Direto e sem enrolação; use markdown simples.',
+        'Não invente nomes de arquivos, tabelas ou comandos da pessoa. Não inclua segredos.'].join('\n'),
+      user: [`Objetivo do agente: ${clip(goal, 600)}`, skills ? `Skills disponíveis (cite no prompt só se fizer sentido): ${clip(skills, 800)}` : null].filter(Boolean).join('\n\n'),
+    };
+  },
+  clean: tidy,
+  parse(text) {
+    const o = looseJson(text) || {};
+    const tools = [...new Set((Array.isArray(o.tools) ? o.tools : []).map((t) => String(t).trim()).filter((t) => AGENT_TOOLS.includes(t)))];
+    return {
+      name: slugAgent(o.name),
+      description: typeof o.description === 'string' ? o.description.replace(/\s+/g, ' ').trim().slice(0, 600) : '',
+      tools,
+      prompt: typeof o.prompt === 'string' ? o.prompt.replace(/\r\n/g, '\n').trim() + '\n' : '',
+    };
+  },
+};
+
 // Tarefas do Monitor de IA (src/tools/aimon): num arquivo à parte, com os mesmos auxiliares.
 Object.assign(TASKS, require('./tasks-aimon.js')({ clip, tidy, PT, MD, redact }));
 
@@ -640,4 +675,4 @@ function sniffKind(text) {
   return 'text';
 }
 
-module.exports = { TASKS, clip, lastFence, validBranch, slugBranch, branchPrefixes, trimContext, guessPrefix, renameTypes, looseJson, cmdRefs, noteRefs, sniffKind };
+module.exports = { TASKS, slugAgent, AGENT_TOOLS, clip, lastFence, validBranch, slugBranch, branchPrefixes, trimContext, guessPrefix, renameTypes, looseJson, cmdRefs, noteRefs, sniffKind };

@@ -5,6 +5,7 @@ import { errText } from '../../lib/fmt.jsx';
 import { agentKey, mergeRows, scopeLabel } from './agentScope.js';
 import { COLORS, EFFORTS, MEMORY_SCOPES, MODELS, MODEL_CUSTOM, PERMISSION_MODES, PRESETS, TEMPLATES, TOOL_CHOICES, colorHex, describePermissions, draftOf, isStdModel, permissions, presetOf, promptStats, validateDescription, validateName, sameDraft, toolsForPreset } from './agentForm.js';
 import { TagPicker } from './TagPicker.jsx';
+import { AiButton, AiPanel, aiOn, useAiMode, useAiTask } from '../../ai/ui.jsx';
 
 const { PageHeader, Button, Input, Field, Textarea, Select, SegmentedControl, Modal, EmptyState, Badge, Icon, Spinner, Alert, Checkbox, Toggle } = DS;
 
@@ -25,6 +26,23 @@ export function AgentsScreen({ toast }) {
   const [newScope, setNewScope] = React.useState(null); // escopo de um agente ainda não salvo
   const [catalog, setCatalog] = React.useState({ skills: [], mcp: [], worktreeBan: null }); // skills, servidores MCP e CLAUDE.md do projeto
   const [advOpen, setAdvOpen] = React.useState(false);
+  const [view, setView] = React.useState('edit');   // 'edit' | 'file' (preview do .md final)
+  const [fileText, setFileText] = React.useState(null); // { text } | { error } | null
+  const [goal, setGoal] = React.useState('');       // objetivo para "Gerar rascunho com IA"
+  const aiCfg = useAiMode();
+  const aiDraft = useAiTask('agentDraft', aiCfg, {
+    onDone: (r) => {
+      const d = r && r.data;
+      if (!d || !d.description || !d.prompt) { toast('A IA não devolveu um rascunho utilizável', 'Tente descrever o objetivo com mais detalhes.', 'warn'); return; }
+      setDraft((cur) => (cur ? { ...cur, name: cur.name.trim() ? cur.name : d.name, description: d.description, prompt: d.prompt, ...(d.tools.length ? { tools: d.tools } : {}) } : cur));
+      toast('Rascunho gerado', 'Revise e ajuste: tudo continua editável. Nada foi salvo ainda.', 'ok');
+    },
+  });
+  React.useEffect(() => {
+    if (view !== 'file' || !draft) return undefined;
+    const t = setTimeout(() => { api().preview(draft).then(setFileText, (e) => setFileText({ error: errText(e) })); }, 150);
+    return () => clearTimeout(t);
+  }, [view, draft]);
   const [modelCustom, setModelCustom] = React.useState(false);
   React.useEffect(() => { setModelCustom(false); }, [sel]);
   const [sel, setSel] = React.useState(null);      // chave (escopo:nome) em edição, ou null
@@ -175,6 +193,15 @@ export function AgentsScreen({ toast }) {
               </div>
             ) : (
               <div className="ag-form">
+                <div className="ag-viewbar">
+                  <SegmentedControl size="sm" value={view} onChange={setView} options={[{ value: 'edit', label: 'Editar', icon: 'pencil' }, { value: 'file', label: 'Arquivo (.md)', icon: 'file-text' }]} />
+                </div>
+                {view === 'file' ? (
+                  <div className="ag-file">
+                    <p className="ag-muted"><Icon name="info" size={12} /> Somente leitura: é exatamente o que será gravado ao salvar{saved ? ` em ${saved.name}.md` : ''}.{dirty ? '' : ' (sem alterações pendentes)'}</p>
+                    {fileText && fileText.error ? <Alert variant="warn" title="Ainda não dá para gerar o arquivo" icon="shield-alert">{fileText.error}</Alert> : <pre className="ag-file__pre">{fileText ? fileText.text : '…'}</pre>}
+                  </div>
+                ) : <>
                 {!saved && (
                   <Field label="Onde salvar" hint={newScope === 'project' ? `${dirs.project || '<projeto>/.claude/agents'} — vale só neste projeto e pode ir para o git.` : `${dirs.user} — vale em todos os seus projetos.`}>
                     <SegmentedControl size="sm" value={newScope || 'user'} onChange={(v) => { if (v === 'user' || project) setNewScope(v); }}
@@ -184,6 +211,15 @@ export function AgentsScreen({ toast }) {
                 {!saved && draft.name && newScope && rows && rows.some((a) => a.scope !== newScope && a.name === draft.name) && (
                   <p className="ag-muted"><Icon name="info" size={12} /> Já existe “{draft.name}” no escopo {scopeLabel(newScope === 'project' ? 'user' : 'project').toLowerCase()}; o do projeto prevalece sobre o do usuário.</p>
                 )}
+                <Field label="Gerar rascunho com IA" hint="Descreva o objetivo em uma frase. A IA sugere descrição, ferramentas e prompt inicial; tudo fica editável e nada é salvo sozinho.">
+                  <div className="ag-ai">
+                    <Input size="sm" value={goal} placeholder="ex.: confere se o XML da nota bate com o pedido de compra no RM" onChange={(e) => setGoal(e.target.value)} />
+                    <AiButton ai={aiDraft} label="Gerar rascunho" disabled={!aiOn(aiCfg) || goal.trim().length < 8} reason={!aiOn(aiCfg) ? 'IA desligada' : undefined}
+                      title={!aiOn(aiCfg) ? 'Ligue a IA em Configurações → IA' : undefined}
+                      onClick={() => { if (draft.prompt.trim() && !window.confirm('Substituir a descrição, as ferramentas e o prompt do formulário pelo rascunho da IA? (Nada é salvo no disco até você clicar em Salvar.)')) return; aiDraft.start(() => ({ goal, skills: catalog.skills.map((k) => k.name) })); }} />
+                  </div>
+                  <AiPanel ai={aiDraft} body="none" />
+                </Field>
                 {!saved && (
                   <div className="ag-tpls is-inline">
                     <span className="ag-muted">Começar de:</span>
@@ -284,6 +320,7 @@ export function AgentsScreen({ toast }) {
                 </Field>
                 {extraLines > 0 && <p className="ag-muted"><Icon name="info" size={12} /> {extraLines} linha(s) do arquivo que a tela não edita (como hooks ou campos novos) são preservadas ao salvar.</p>}
 
+                </>}
                 <div className="ag-actions">
                   <Button variant="primary" icon="save" disabled={busy || !dirty || !!nameCheck} title={nameCheck ? nameCheck.text : undefined} onClick={() => save()}>{busy ? 'Salvando…' : 'Salvar'}</Button>
                   {saved && <>

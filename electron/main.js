@@ -967,6 +967,7 @@ ipcMain.handle('agents:list', async (_e, root) => {
   return out;
 });
 ipcMain.handle('agents:catalog', (_e, root) => require('./agents/catalog').catalog({ root: root ? agentRoot(root) : null }));
+ipcMain.handle('agents:preview', (_e, agent) => agents(null).preview(agent));
 ipcMain.handle('agents:get', (_e, name, ctx) => agents(ctx).get(String(name || '')));
 const agentOpts = (o) => ({ rev: o && o.rev ? String(o.rev) : '', force: !!(o && o.force) });
 ipcMain.handle('agents:save', (_e, agent, previous, opts, ctx) => agents(ctx).save(agent, previous == null ? null : String(previous), agentOpts(opts)));

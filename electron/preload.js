@@ -372,6 +372,8 @@ contextBridge.exposeInMainWorld('devkit', {
     // `ctx` = { scope: 'user' | 'project', root } em todas as chamadas abaixo (omitido = usuário).
     /** O que existe na máquina para o formulário: { skills, mcp, worktreeBan } (skills de usuário/projeto/plugins, servidores MCP, linha do CLAUDE.md que proíbe worktree). */
     catalog: (root) => ipcRenderer.invoke('agents:catalog', root || null),
+    /** O .md final (frontmatter + corpo) que o formulário geraria → { text } | { error }. Não grava nada. */
+    preview: (agent) => ipcRenderer.invoke('agents:preview', agent),
     get: (name, ctx) => ipcRenderer.invoke('agents:get', name, ctx),
     /** Cria ou atualiza; `previous` = nome anterior quando a pessoa renomeou. */
     save: (agent, previous, opts, ctx) => ipcRenderer.invoke('agents:save', agent, previous, opts, ctx),
