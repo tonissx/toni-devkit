@@ -40,17 +40,17 @@ export function AgentsScreen({ toast }) {
       toast('Rascunho gerado', 'Revise e ajuste: tudo continua editável. Nada foi salvo ainda.', 'ok');
     },
   });
+  const [modelCustom, setModelCustom] = React.useState(false);
+  const [sel, setSel] = React.useState(null);      // chave (escopo:nome) em edição, ou null
+  const [saved, setSaved] = React.useState(null);  // versão em disco do agente aberto (null = novo)
+  const [draft, setDraft] = React.useState(null);  // o que está no formulário
+  const [busy, setBusy] = React.useState(false);
   React.useEffect(() => {
     if (view !== 'file' || !draft) return undefined;
     const t = setTimeout(() => { api().preview(draft).then(setFileText, (e) => setFileText({ error: errText(e) })); }, 150);
     return () => clearTimeout(t);
   }, [view, draft]);
-  const [modelCustom, setModelCustom] = React.useState(false);
   React.useEffect(() => { setModelCustom(false); }, [sel]);
-  const [sel, setSel] = React.useState(null);      // chave (escopo:nome) em edição, ou null
-  const [saved, setSaved] = React.useState(null);  // versão em disco do agente aberto (null = novo)
-  const [draft, setDraft] = React.useState(null);  // o que está no formulário
-  const [busy, setBusy] = React.useState(false);
   const [confirmDel, setConfirmDel] = React.useState(false);
   const [filter, setFilter] = React.useState('');
   const [raw, setRaw] = React.useState(null);      // arquivo inválido aberto como texto cru: { id, text, orig, rev, error }
