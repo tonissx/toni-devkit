@@ -14,6 +14,9 @@ const TOOL_CHOICES = [
   { name: 'Write', hint: 'Criar arquivos' },
   { name: 'Bash', hint: 'Rodar comandos (bash)' },
   { name: 'PowerShell', hint: 'Rodar comandos (PowerShell)' },
+  { name: 'Agent', hint: 'Delegar para outros agentes' },
+  { name: 'TodoWrite', hint: 'Manter uma lista de tarefas' },
+  { name: 'NotebookEdit', hint: 'Editar notebooks Jupyter' },
 ];
 
 const PRESETS = [
@@ -23,12 +26,42 @@ const PRESETS = [
   { value: 'custom', label: 'Personalizado', tools: null },
 ];
 
+/** Valor do select que abre o campo para digitar um ID completo de modelo (ex.: claude-opus-5-5). */
+const MODEL_CUSTOM = '__custom';
 const MODELS = [
-  { value: '', label: 'Herdar da sessão' },
+  { value: '', label: 'Herdar da sessão (padrão)' },
+  { value: 'inherit', label: 'inherit (explícito)' },
   { value: 'sonnet', label: 'Sonnet' },
   { value: 'opus', label: 'Opus' },
   { value: 'haiku', label: 'Haiku' },
+  { value: 'fable', label: 'Fable' },
+  { value: MODEL_CUSTOM, label: 'Outro (digitar o ID)…' },
 ];
+const isStdModel = (v) => MODELS.some((m) => m.value === v && m.value !== MODEL_CUSTOM);
+
+/** Valores aceitos pelo frontmatter (documentação de subagents do Claude Code). */
+const PERMISSION_MODES = [
+  { value: '', label: 'Padrão (não escrever)', text: 'Usa o modo da sessão que chamou o agente.' },
+  { value: 'default', label: 'default', text: 'Pede permissão para cada ação sensível, como no uso normal.' },
+  { value: 'acceptEdits', label: 'acceptEdits', text: 'Aceita edições de arquivos sem perguntar; comandos continuam pedindo.' },
+  { value: 'auto', label: 'auto', text: 'Um classificador decide o que pode seguir sem perguntar.' },
+  { value: 'dontAsk', label: 'dontAsk', text: 'Nega o que não estiver permitido, em vez de perguntar.' },
+  { value: 'plan', label: 'plan', text: 'Só planeja e lê: não altera nada.' },
+  { value: 'bypassPermissions', label: 'bypassPermissions', text: 'Não pede NENHUMA permissão. Use só em ambiente isolado.' },
+  { value: 'manual', label: 'manual', text: 'Apelido de default.' },
+];
+const MEMORY_SCOPES = [
+  { value: '', label: 'Sem memória (não escrever)', text: 'O agente não guarda nada entre execuções.' },
+  { value: 'user', label: 'user', text: 'Memória persistente em ~/.claude/agent-memory/<nome>/ (vale em todos os projetos).' },
+  { value: 'project', label: 'project', text: 'Memória em .claude/agent-memory/<nome>/ (do projeto; pode ir para o git).' },
+  { value: 'local', label: 'local', text: 'Memória em .claude/agent-memory-local/<nome>/ (do projeto, fora do git).' },
+];
+const EFFORTS = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
+const COLORS = [
+  { value: 'red', hex: '#ef4444' }, { value: 'blue', hex: '#3b82f6' }, { value: 'green', hex: '#22c55e' }, { value: 'yellow', hex: '#eab308' },
+  { value: 'purple', hex: '#a855f7' }, { value: 'orange', hex: '#f97316' }, { value: 'pink', hex: '#ec4899' }, { value: 'cyan', hex: '#06b6d4' },
+];
+const colorHex = (name) => (COLORS.find((c) => c.value === name) || {}).hex || null;
 
 const READ_TOOLS = [...READ, 'TodoWrite', 'NotebookRead', 'Task', 'Agent'];
 const EDIT_TOOLS = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'];
@@ -38,9 +71,14 @@ const EXEC_TOOLS = ['Bash', 'PowerShell', 'BashOutput', 'KillShell'];
  * O que o agente pode fazer. Sem `tools` ele herda todas as ferramentas — inclusive editar e rodar comandos.
  * → { level: 'read' | 'edit' | 'exec', all: boolean, edit: string[], exec: string[], other: string[] }
  */
-function permissions(tools) {
-  if (!Array.isArray(tools) || !tools.length) return { level: 'exec', all: true, edit: [], exec: [], other: [] };
+function permissions(tools, disallowed) {
   const base = (t) => String(t).replace(/\(.*$/, '');
+  if (!Array.isArray(tools) || !tools.length) {
+    // Herda tudo, menos o que estiver em disallowedTools. Bloquear Bash e PowerShell tira o "pode rodar comandos".
+    const blocked = (Array.isArray(disallowed) ? disallowed : []).map(base);
+    const noExec = blocked.includes('Bash') && blocked.includes('PowerShell');
+    return { level: noExec ? 'edit' : 'exec', all: true, noExec, blocked, edit: [], exec: [], other: [] };
+  }
   const edit = tools.filter((t) => EDIT_TOOLS.includes(base(t)));
   const exec = tools.filter((t) => EXEC_TOOLS.includes(base(t)));
   const other = tools.filter((t) => ![...READ_TOOLS, ...EDIT_TOOLS, ...EXEC_TOOLS].includes(base(t)));
@@ -67,6 +105,7 @@ function toolsForPreset(value, current) {
 /** Explicação do que o agente pode fazer → { tone: 'ok' | 'warn' | 'danger', title, text } — mostrada antes de agendar ou chamar. */
 function describePermissions(p) {
   if (!p) return null;
+  if (p.all && p.noExec) return { tone: 'warn', title: 'Herda tudo, menos comandos', text: `Sem lista de ferramentas ele herda as da sessão (inclusive editar arquivos e tools MCP), mas Bash e PowerShell estão bloqueados${p.blocked.length > 2 ? ` (e também: ${p.blocked.filter((t) => !['Bash', 'PowerShell'].includes(t)).join(', ')})` : ''}.` };
   if (p.all) return { tone: 'danger', title: 'Pode tudo', text: 'Sem lista de ferramentas, o agente herda todas as da sessão: ler, editar arquivos e rodar comandos.' };
   if (p.level === 'exec') return { tone: 'danger', title: 'Pode rodar comandos', text: `Além de ler${p.edit.length ? ' e editar' : ''}, executa comandos (${p.exec.join(', ')}). Use só em pastas em que você confia.` };
   if (p.level === 'edit') return { tone: 'warn', title: 'Pode alterar arquivos', text: `Pode usar ${[...p.edit, ...p.other].join(', ')}. Não roda comandos.` };
@@ -96,7 +135,13 @@ const TEMPLATES = [
   },
 ];
 
-const draftOf = (a) => ({ name: a.name || '', description: a.description || '', model: a.model || '', tools: Array.isArray(a.tools) ? [...a.tools] : null, extra: a.extra || '', prompt: a.prompt || '' });
+const list = (v) => (Array.isArray(v) ? [...v] : []);
+const draftOf = (a) => ({
+  name: a.name || '', description: a.description || '', model: a.model || '', tools: Array.isArray(a.tools) ? [...a.tools] : null,
+  disallowedTools: list(a.disallowedTools), skills: list(a.skills), mcpServers: list(a.mcpServers),
+  permissionMode: a.permissionMode || '', maxTurns: a.maxTurns == null ? '' : String(a.maxTurns), memory: a.memory || '', effort: a.effort || '',
+  isolation: a.isolation || '', color: a.color || '', background: a.background === true, extra: a.extra || '', prompt: a.prompt || '',
+});
 const sameDraft = (a, b) => JSON.stringify(draftOf(a)) === JSON.stringify(draftOf(b));
 
-module.exports = { permissions, READ, EDIT, TOOL_CHOICES, PRESETS, MODELS, TEMPLATES, presetOf, toolsForPreset, describePermissions, draftOf, sameDraft };
+module.exports = { permissions, READ, EDIT, TOOL_CHOICES, PRESETS, MODELS, MODEL_CUSTOM, isStdModel, PERMISSION_MODES, MEMORY_SCOPES, EFFORTS, COLORS, colorHex, TEMPLATES, presetOf, toolsForPreset, describePermissions, draftOf, sameDraft };

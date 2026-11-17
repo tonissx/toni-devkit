@@ -3,9 +3,10 @@
 import { DS } from '../../lib/ds.js';
 import { errText } from '../../lib/fmt.jsx';
 import { agentKey, mergeRows, scopeLabel } from './agentScope.js';
-import { MODELS, PRESETS, TEMPLATES, TOOL_CHOICES, describePermissions, draftOf, permissions, presetOf, sameDraft, toolsForPreset } from './agentForm.js';
+import { COLORS, EFFORTS, MEMORY_SCOPES, MODELS, MODEL_CUSTOM, PERMISSION_MODES, PRESETS, TEMPLATES, TOOL_CHOICES, colorHex, describePermissions, draftOf, isStdModel, permissions, presetOf, sameDraft, toolsForPreset } from './agentForm.js';
+import { TagPicker } from './TagPicker.jsx';
 
-const { PageHeader, Button, Input, Field, Textarea, Select, SegmentedControl, Modal, EmptyState, Badge, Icon, Spinner, Alert, Checkbox } = DS;
+const { PageHeader, Button, Input, Field, Textarea, Select, SegmentedControl, Modal, EmptyState, Badge, Icon, Spinner, Alert, Checkbox, Toggle } = DS;
 
 const api = () => window.devkit.agents;
 const TONE_VARIANT = { ok: 'ok', warn: 'warn', danger: 'error' };
@@ -22,6 +23,10 @@ export function AgentsScreen({ toast }) {
   const [repos, setRepos] = React.useState([]);    // repositórios do Git do devkit: candidatos a "projeto"
   const [project, setProject] = React.useState(() => { try { return localStorage.getItem('agents.project') || ''; } catch { return ''; } });
   const [newScope, setNewScope] = React.useState(null); // escopo de um agente ainda não salvo
+  const [catalog, setCatalog] = React.useState({ skills: [], mcp: [], worktreeBan: null }); // skills, servidores MCP e CLAUDE.md do projeto
+  const [advOpen, setAdvOpen] = React.useState(false);
+  const [modelCustom, setModelCustom] = React.useState(false);
+  React.useEffect(() => { setModelCustom(false); }, [sel]);
   const [sel, setSel] = React.useState(null);      // chave (escopo:nome) em edição, ou null
   const [saved, setSaved] = React.useState(null);  // versão em disco do agente aberto (null = novo)
   const [draft, setDraft] = React.useState(null);  // o que está no formulário
@@ -39,6 +44,7 @@ export function AgentsScreen({ toast }) {
     if (project) { setProject(''); } else fail('Não foi possível listar os agentes')(e);
   }), [project]);
   React.useEffect(() => { reload(); }, [reload]);
+  React.useEffect(() => { api().catalog(project || null).then(setCatalog, () => setCatalog({ skills: [], mcp: [], worktreeBan: null })); }, [project]);
   React.useEffect(() => { try { localStorage.setItem('agents.project', project); } catch { /* sem armazenamento */ } }, [project]);
   React.useEffect(() => {
     window.devkit.git.list().then((r) => setRepos((r && r.repos) || []), () => {});
@@ -108,7 +114,14 @@ export function AgentsScreen({ toast }) {
   const projectName = (repos.find((r) => r.path === project) || {}).name || project.split(/[\\/]/).filter(Boolean).pop() || '';
   const curScope = saved ? saved.scope : raw ? raw.scope : newScope;
   const list = (rows || []).filter((a) => !filter.trim() || (a.name + ' ' + a.description).toLowerCase().includes(filter.trim().toLowerCase()));
-  const perms = draft ? permissions(draft.tools) : null;
+  const perms = draft ? permissions(draft.tools, draft.disallowedTools) : null;
+  const pmode = draft ? PERMISSION_MODES.find((m) => m.value === draft.permissionMode) : null;
+  const memScope = draft ? MEMORY_SCOPES.find((m) => m.value === draft.memory) : null;
+  const freeTools = draft && draft.tools ? draft.tools.filter((t) => !TOOL_CHOICES.some((c) => c.name === t)) : [];
+  const skillOpts = catalog.skills.map((k) => ({ name: k.name, hint: k.source + (k.description ? ' — ' + k.description : '') }));
+  const mcpOpts = catalog.mcp.map((k) => ({ name: k.name, hint: k.source }));
+  const toolOpts = TOOL_CHOICES.map((t) => ({ name: t.name, hint: t.hint }));
+  const modelSel = modelCustom || (draft && !isStdModel(draft.model)) ? MODEL_CUSTOM : (draft ? draft.model : '');
   const pd = describePermissions(perms);
   const preset = draft ? presetOf(draft.tools) : 'all';
   const extraLines = draft && draft.extra ? draft.extra.split('\n').filter(Boolean).length : 0;
@@ -128,7 +141,7 @@ export function AgentsScreen({ toast }) {
             <div className="ag-list">
               {list.map((a) => (
                 <button key={agentKey(a)} type="button" className={'ag-card' + (agentKey(a) === sel ? ' is-sel' : '')} onClick={() => open(a)}>
-                  <span className="ag-card__top"><b>{a.name}</b><Badge size="sm" variant={a.scope === 'project' ? 'info' : 'neutral'} title={a.scope === 'project' ? dirs.project : dirs.user}>{scopeLabel(a.scope)}</Badge></span>
+                  <span className="ag-card__top"><b>{colorHex(a.color) && <i className="ag-dot" style={{ background: colorHex(a.color) }} title={a.color} />}{a.name}</b><Badge size="sm" variant={a.scope === 'project' ? 'info' : 'neutral'} title={a.scope === 'project' ? dirs.project : dirs.user}>{scopeLabel(a.scope)}</Badge></span>
                   <span className="ag-card__top">{a.invalid ? <Badge size="sm" variant="error" title={a.error}>inválido</Badge> : <PermBadge perms={a.permissions} />}{!a.invalid && a.scope === 'user' && projectNames.has(a.name) && <Badge size="sm" variant="warn" title="Existe um agente com este nome no projeto, e o do projeto prevalece: este não será usado nesse projeto.">sobreposto</Badge>}{!a.invalid && a.scope === 'project' && userNames.has(a.name) && <Badge size="sm" variant="info" title="Há um agente do usuário com este nome; este (do projeto) prevalece.">prevalece</Badge>}</span>
                   <span className="ag-card__desc">{a.invalid ? a.error : (a.description || 'Sem descrição')}</span>
                   {a.model && <span className="ag-card__meta"><Icon name="cpu" size={11} /> {a.model}</span>}
@@ -179,8 +192,16 @@ export function AgentsScreen({ toast }) {
                     <Input value={draft.name} placeholder="ex.: revisor-fluig" onChange={(e) => set({ name: e.target.value })} />
                   </Field>
                   <Field label="Modelo">
-                    <Select options={MODELS.some((m) => m.value === draft.model) ? MODELS : [...MODELS, { value: draft.model, label: draft.model }]} value={draft.model} style={{ width: 190 }}
-                      onChange={(v) => set({ model: v })} />
+                    <Select options={MODELS} value={modelSel} style={{ width: 210 }}
+                      onChange={(v) => { if (v === MODEL_CUSTOM) { setModelCustom(true); if (isStdModel(draft.model)) set({ model: '' }); } else { setModelCustom(false); set({ model: v }); } }} />
+                    {modelSel === MODEL_CUSTOM && <Input size="sm" style={{ marginTop: 6, width: 210 }} value={draft.model} placeholder="ex.: claude-opus-5-5" onChange={(e) => set({ model: e.target.value })} />}
+                  </Field>
+                  <Field label="Cor" hint="Aparece na lista e na interface do Claude Code.">
+                    <div className="ag-colors">
+                      <button type="button" className={'ag-color is-none' + (!draft.color ? ' is-on' : '')} title="Sem cor" aria-label="Sem cor" onClick={() => set({ color: '' })} />
+                      {COLORS.map((c) => <button key={c.value} type="button" className={'ag-color' + (draft.color === c.value ? ' is-on' : '')} style={{ background: c.hex }} title={c.value} aria-label={c.value} onClick={() => set({ color: c.value })} />)}
+                    </div>
+                    {draft.color && !colorHex(draft.color) && <p className="ag-muted"><Icon name="info" size={12} /> “{draft.color}” não é uma das cores da documentação; é mantida como está.</p>}
                   </Field>
                 </div>
                 <Field label="Quando usar" hint="O Claude escolhe chamar o agente com base nesta frase. Seja específico.">
@@ -191,19 +212,70 @@ export function AgentsScreen({ toast }) {
                   <SegmentedControl size="sm" options={PRESETS.map((p) => ({ value: p.value, label: p.label }))} value={preset} onChange={(v) => set({ tools: toolsForPreset(v, draft.tools) })} />
                 </Field>
                 {draft.tools && (
-                  <div className="ag-tools">
-                    {TOOL_CHOICES.map((t) => (
-                      <Checkbox key={t.name} label={`${t.name} — ${t.hint}`} checked={draft.tools.includes(t.name)}
-                        onChange={(v) => { const on = typeof v === 'boolean' ? v : !draft.tools.includes(t.name); set({ tools: on ? [...draft.tools, t.name] : draft.tools.filter((x) => x !== t.name) }); }} />
-                    ))}
-                  </div>
+                  <>
+                    <div className="ag-tools">
+                      {TOOL_CHOICES.map((t) => (
+                        <Checkbox key={t.name} label={`${t.name} — ${t.hint}`} checked={draft.tools.includes(t.name)}
+                          onChange={(v) => { const on = typeof v === 'boolean' ? v : !draft.tools.includes(t.name); set({ tools: on ? [...draft.tools, t.name] : draft.tools.filter((x) => x !== t.name) }); }} />
+                      ))}
+                    </div>
+                    <Field label="Outras ferramentas" hint="Para as que a lista não conhece, inclusive de servidores MCP (mcp__servidor__ferramenta). Tecle Enter para adicionar.">
+                      <TagPicker value={freeTools} placeholder="ex.: mcp__github__create_issue" onChange={(v) => set({ tools: [...draft.tools.filter((t) => TOOL_CHOICES.some((c) => c.name === t)), ...v] })} />
+                    </Field>
+                  </>
                 )}
+                <Field label="Ferramentas bloqueadas (disallowedTools)" hint="Vale mais com “Tudo (herda)”: o agente herda tudo, menos isto. É aplicado antes da lista acima.">
+                  <TagPicker value={draft.disallowedTools} options={toolOpts} placeholder="ex.: Bash, PowerShell" onChange={(v) => set({ disallowedTools: v })} />
+                </Field>
                 <Alert variant={TONE_VARIANT[pd.tone]} title={pd.title} icon={TONE_ICON[pd.tone]}>{pd.text}</Alert>
+                {perms && perms.level === 'exec' && !perms.all && <Alert variant="error" title="Atenção: este agente roda comandos" icon="shield-alert">Bash/PowerShell marcado. Confira o prompt e use só em pastas em que você confia.</Alert>}
+
+                <div className="ag-grid">
+                  <Field label="Modo de permissão (permissionMode)" hint={pmode ? pmode.text : undefined}>
+                    <Select options={PERMISSION_MODES.map((m) => ({ value: m.value, label: m.label }))} value={draft.permissionMode} style={{ width: '100%' }}
+                      onChange={(v) => set({ permissionMode: v })} />
+                  </Field>
+                  <Field label="Máximo de turnos (maxTurns)" hint="Para o agente depois desse número de passos, com o que já tiver. Vazio = sem limite.">
+                    <Input size="sm" type="number" min={1} value={draft.maxTurns} placeholder="ex.: 20" onChange={(e) => set({ maxTurns: e.target.value })} />
+                  </Field>
+                  <Field label="Memória (memory)" hint={memScope ? memScope.text : undefined}>
+                    <Select options={MEMORY_SCOPES.map((m) => ({ value: m.value, label: m.label }))} value={draft.memory} style={{ width: '100%' }} onChange={(v) => set({ memory: v })} />
+                  </Field>
+                </div>
+                {draft.permissionMode === 'bypassPermissions' && <Alert variant="error" title="bypassPermissions: sem nenhuma confirmação" icon="shield-alert">O agente executa tudo o que a lista de ferramentas permite sem perguntar. Prefira um modo mais restrito.</Alert>}
+
+                <Field label="Skills (skills)" hint={`Carregadas por inteiro no início do agente (máx. 32). ${catalog.skills.length} encontrada(s) em usuário, projeto e plugins; dá para digitar outra.`}>
+                  <TagPicker value={draft.skills} options={skillOpts} max={32} placeholder="Buscar skill…" onChange={(v) => set({ skills: v })} />
+                </Field>
+                <Field label="Servidores MCP (mcpServers)" hint={`Nomes de servidores configurados (${catalog.mcp.length} encontrado(s)). Configuração inline continua no arquivo e é preservada.`}>
+                  <TagPicker value={draft.mcpServers} options={mcpOpts} placeholder="Buscar servidor…" onChange={(v) => set({ mcpServers: v })} />
+                </Field>
+
+                <div className="ag-adv">
+                  <button type="button" className="ag-adv__head" aria-expanded={advOpen} onClick={() => setAdvOpen((o) => !o)}><Icon name={advOpen ? 'chevron-down' : 'chevron-right'} size={14} /> Avançado</button>
+                  {advOpen && (
+                    <div className="ag-adv__body">
+                      <Field label="Em segundo plano (background)" hint="Mantém o agente rodando em segundo plano, mesmo quando o Claude espera por ele.">
+                        <Toggle checked={draft.background} label={draft.background ? 'Ligado' : 'Desligado'} onChange={(v) => set({ background: typeof v === 'boolean' ? v : !draft.background })} />
+                      </Field>
+                      <div className="ag-grid">
+                        <Field label="Esforço (effort)" hint="Depende do modelo. Vazio = padrão.">
+                          <Select options={EFFORTS.map((e) => ({ value: e, label: e || 'Padrão (não escrever)' }))} value={draft.effort} style={{ width: '100%' }} onChange={(v) => set({ effort: v })} />
+                        </Field>
+                        <Field label="Isolamento (isolation)" hint="worktree roda o agente numa cópia temporária do repositório.">
+                          <Select options={[{ value: '', label: 'Nenhum (não escrever)' }, { value: 'worktree', label: 'worktree' }]} value={draft.isolation} style={{ width: '100%' }} onChange={(v) => set({ isolation: v })} />
+                        </Field>
+                      </div>
+                      {draft.isolation === 'worktree' && catalog.worktreeBan && <Alert variant="warn" title="Este projeto proíbe worktrees" icon="shield-alert">O CLAUDE.md do projeto diz: “{catalog.worktreeBan}”. Com isolation: worktree o agente cria uma.</Alert>}
+                      {/^hooks:/m.test(draft.extra || '') && <p className="ag-muted"><Icon name="info" size={12} /> Este agente tem <code>hooks</code> no arquivo: não são editáveis aqui, mas são preservados ao salvar.</p>}
+                    </div>
+                  )}
+                </div>
 
                 <Field label="Prompt" hint="As instruções do agente. Pode citar skills, regras e o jeito de responder.">
                   <Textarea rows={14} className="ag-prompt" value={draft.prompt} onChange={(e) => set({ prompt: e.target.value })} />
                 </Field>
-                {extraLines > 0 && <p className="ag-muted"><Icon name="info" size={12} /> {extraLines} linha(s) extras do arquivo (como cor ou skills) são preservadas ao salvar.</p>}
+                {extraLines > 0 && <p className="ag-muted"><Icon name="info" size={12} /> {extraLines} linha(s) do arquivo que a tela não edita (como hooks ou campos novos) são preservadas ao salvar.</p>}
 
                 <div className="ag-actions">
                   <Button variant="primary" icon="save" disabled={busy || !dirty} onClick={save}>{busy ? 'Salvando…' : 'Salvar'}</Button>

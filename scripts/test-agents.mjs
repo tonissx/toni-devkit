@@ -11,6 +11,7 @@ const { createAgentStore, parseAgent, serializeAgent } = require('../electron/ag
 const form = require('../src/tools/agents/agentForm.js');
 const resume = require('../electron/aimon/resume.js');
 const scope = require('../src/tools/agents/agentScope.js');
+const catalog = require('../electron/agents/catalog.js');
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'tk-agents-'));
 
@@ -31,13 +32,76 @@ test('parseAgent aceita CRLF, BOM e arquivo sem frontmatter', () => {
   assert.equal(parseAgent('só texto').prompt, 'só texto');
 });
 
-test('chaves desconhecidas e blocos de várias linhas são preservados', () => {
-  const src = '---\nname: x\ndescription: d\ncolor: blue\nskills:\n  - fluig\n  - totvs-rm\n---\nprompt\n';
+test('chaves desconhecidas e blocos complexos são preservados; campos conhecidos viram estruturados', () => {
+  const src = '---\nname: x\ndescription: d\ncolor: blue\nskills:\n  - fluig\n  - totvs-rm\nhooks:\n  PreToolUse:\n    - matcher: Bash\nfuturo: 1\nmcpServers:\n  - github: {command: x}\n---\nprompt\n';
   const a = parseAgent(src);
-  assert.equal(a.extra, 'color: blue\nskills:\n  - fluig\n  - totvs-rm');
+  assert.equal(a.color, 'blue');
+  assert.deepEqual(a.skills, ['fluig', 'totvs-rm']);
+  assert.deepEqual(a.mcpServers, []); // mapa inline não é uma lista simples: fica no extra
+  assert.equal(a.extra, 'hooks:\n  PreToolUse:\n    - matcher: Bash\nfuturo: 1\nmcpServers:\n  - github: {command: x}');
   const out = serializeAgent({ ...a, description: 'novo' });
-  assert.match(out, /color: blue\nskills:\n {2}- fluig\n {2}- totvs-rm\n---/);
+  assert.match(out, /skills:\n {2}- fluig\n {2}- totvs-rm\ncolor: blue\nhooks:/);
   assert.equal(parseAgent(out).description, 'novo');
+  assert.equal(parseAgent(out).extra, a.extra);
+});
+
+test('campos novos: escreve só o que está preenchido e lê de volta igual', () => {
+  const vazio = serializeAgent({ name: 'a', description: 'd', prompt: 'p' });
+  assert.equal(vazio, '---\nname: a\ndescription: d\n---\n\np\n');
+  const full = {
+    name: 'a', description: 'd', prompt: 'p', model: 'claude-opus-5-5', tools: ['Read', 'mcp__gh__issue'], disallowedTools: ['Bash', 'PowerShell'],
+    permissionMode: 'acceptEdits', maxTurns: '12', skills: ['fluig', 'superpowers:brainstorming'], mcpServers: ['github'], memory: 'project',
+    background: true, effort: 'high', isolation: 'worktree', color: 'purple', extra: '',
+  };
+  const text = serializeAgent(full);
+  assert.match(text, /disallowedTools: Bash, PowerShell\nmodel: claude-opus-5-5\npermissionMode: acceptEdits\nmaxTurns: 12\n/);
+  const b = parseAgent(text);
+  for (const k of Object.keys(full)) if (k !== 'prompt') assert.deepEqual(b[k], full[k], k);
+  // listas em várias formas de YAML
+  const y = parseAgent('---\nname: a\ndescription: d\ntools: [Read, Grep]\nskills: fluig, totvs-rm\ndisallowedTools:\n  - Bash\n---\n');
+  assert.deepEqual([y.tools, y.skills, y.disallowedTools], [['Read', 'Grep'], ['fluig', 'totvs-rm'], ['Bash']]);
+});
+
+test('validação dos campos novos', async () => {
+  const store = createAgentStore({ dir: tmp() });
+  await assert.rejects(store.save({ name: 'a', description: 'd', maxTurns: 'dez' }), /número inteiro/);
+  await assert.rejects(store.save({ name: 'a', description: 'd', maxTurns: '0' }), /número inteiro/);
+  await assert.rejects(store.save({ name: 'a', description: 'd', skills: ['a, b'] }), /Skills/);
+  const a = await store.save({ name: 'a', description: 'd', skills: ['x', 'x', ' y '], maxTurns: '5', color: 'red' });
+  assert.deepEqual(a.skills, ['x', 'y']);
+  assert.equal(a.maxTurns, '5');
+});
+
+test('permissões: disallowedTools tira o "pode rodar comandos" de quem herda tudo', () => {
+  assert.equal(form.permissions(null, ['Bash']).level, 'exec');
+  const p = form.permissions(null, ['Bash', 'PowerShell']);
+  assert.equal(p.level, 'edit');
+  assert.equal(form.describePermissions(p).tone, 'warn');
+  assert.equal(form.permissions(['Agent', 'TodoWrite']).level, 'read');
+  assert.equal(form.colorHex('purple'), '#a855f7');
+  assert.equal(form.colorHex('#fff'), null);
+  assert.equal(form.isStdModel('opus'), true);
+  assert.equal(form.isStdModel('claude-opus-5-5'), false);
+  assert.ok(form.PERMISSION_MODES.some((m) => m.value === 'bypassPermissions'));
+});
+
+test('catálogo: skills (usuário, projeto, plugins), MCP e proibição de worktree', async () => {
+  const home = tmp(); const root = tmp();
+  const mk = (d, name, desc) => { fs.mkdirSync(path.join(d, name), { recursive: true }); fs.writeFileSync(path.join(d, name, 'SKILL.md'), `---\nname: ${name}\ndescription: ${desc}\n---\ncorpo`); };
+  mk(path.join(home, '.claude', 'skills'), 'fluig', 'Dev no Fluig');
+  mk(path.join(root, '.claude', 'skills'), 'do-projeto', 'Skill do projeto');
+  const plug = path.join(home, 'plug'); mk(path.join(plug, 'skills'), 'brainstorming', 'Ideias');
+  fs.mkdirSync(path.join(home, '.claude', 'plugins'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.claude', 'plugins', 'installed_plugins.json'), JSON.stringify({ plugins: { 'superpowers@market': [{ installPath: plug }] } }));
+  fs.writeFileSync(path.join(root, '.mcp.json'), JSON.stringify({ mcpServers: { github: {} } }));
+  fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { playwright: {} } }));
+  fs.writeFileSync(path.join(root, 'CLAUDE.md'), '# Regras\n- Não use worktrees neste repositório.\n');
+  const c = await catalog.catalog({ root, home });
+  assert.deepEqual(c.skills.map((s) => s.name), ['do-projeto', 'fluig', 'superpowers:brainstorming']);
+  assert.equal(c.skills[1].description, 'Dev no Fluig');
+  assert.deepEqual(c.mcp.map((m) => m.name), ['github', 'playwright']);
+  assert.match(c.worktreeBan, /worktrees/);
+  assert.equal((await catalog.catalog({ root: tmp(), home: tmp() })).worktreeBan, null);
 });
 
 test('serializar e ler de volta mantém os valores, mesmo com ":" e aspas', () => {

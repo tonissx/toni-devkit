@@ -370,6 +370,8 @@ contextBridge.exposeInMainWorld('devkit', {
     /** Agentes dos dois escopos: { user: { dir, rows }, project: { dir, root, rows } | null }. `root` = pasta do projeto (opcional). */
     list: (root) => ipcRenderer.invoke('agents:list', root || null),
     // `ctx` = { scope: 'user' | 'project', root } em todas as chamadas abaixo (omitido = usuário).
+    /** O que existe na máquina para o formulário: { skills, mcp, worktreeBan } (skills de usuário/projeto/plugins, servidores MCP, linha do CLAUDE.md que proíbe worktree). */
+    catalog: (root) => ipcRenderer.invoke('agents:catalog', root || null),
     get: (name, ctx) => ipcRenderer.invoke('agents:get', name, ctx),
     /** Cria ou atualiza; `previous` = nome anterior quando a pessoa renomeou. */
     save: (agent, previous, opts, ctx) => ipcRenderer.invoke('agents:save', agent, previous, opts, ctx),
