@@ -3,7 +3,7 @@
 import { DS } from '../../lib/ds.js';
 import { errText } from '../../lib/fmt.jsx';
 import { agentKey, mergeRows, scopeLabel } from './agentScope.js';
-import { COLORS, EFFORTS, MEMORY_SCOPES, MODELS, MODEL_CUSTOM, PERMISSION_MODES, PRESETS, TEMPLATES, TOOL_CHOICES, colorHex, describePermissions, draftOf, isStdModel, permissions, presetOf, sameDraft, toolsForPreset } from './agentForm.js';
+import { COLORS, EFFORTS, MEMORY_SCOPES, MODELS, MODEL_CUSTOM, PERMISSION_MODES, PRESETS, TEMPLATES, TOOL_CHOICES, colorHex, describePermissions, draftOf, isStdModel, permissions, presetOf, promptStats, validateDescription, validateName, sameDraft, toolsForPreset } from './agentForm.js';
 import { TagPicker } from './TagPicker.jsx';
 
 const { PageHeader, Button, Input, Field, Textarea, Select, SegmentedControl, Modal, EmptyState, Badge, Icon, Spinner, Alert, Checkbox, Toggle } = DS;
@@ -121,6 +121,9 @@ export function AgentsScreen({ toast }) {
   const skillOpts = catalog.skills.map((k) => ({ name: k.name, hint: k.source + (k.description ? ' — ' + k.description : '') }));
   const mcpOpts = catalog.mcp.map((k) => ({ name: k.name, hint: k.source }));
   const toolOpts = TOOL_CHOICES.map((t) => ({ name: t.name, hint: t.hint }));
+  const nameCheck = draft ? validateName(draft.name, { others: (rows || []).filter((a) => a.scope === curScope), current: saved ? saved.name : null }) : null;
+  const descWarns = draft ? validateDescription(draft.description) : [];
+  const ps = draft ? promptStats(draft.prompt) : null;
   const modelSel = modelCustom || (draft && !isStdModel(draft.model)) ? MODEL_CUSTOM : (draft ? draft.model : '');
   const pd = describePermissions(perms);
   const preset = draft ? presetOf(draft.tools) : 'all';
@@ -189,7 +192,8 @@ export function AgentsScreen({ toast }) {
                 )}
                 <div className="ag-row">
                   <Field label="Nome" hint="Minúsculas, números e hífens. É o nome do arquivo.">
-                    <Input value={draft.name} placeholder="ex.: revisor-fluig" onChange={(e) => set({ name: e.target.value })} />
+                    <Input value={draft.name} invalid={!!(nameCheck && draft.name.trim())} placeholder="ex.: revisor-fluig" onChange={(e) => set({ name: e.target.value })} />
+                    {nameCheck && draft.name.trim() && <p className="ag-note is-error"><Icon name="shield-alert" size={12} /> {nameCheck.text}</p>}
                   </Field>
                   <Field label="Modelo">
                     <Select options={MODELS} value={modelSel} style={{ width: 210 }}
@@ -206,6 +210,8 @@ export function AgentsScreen({ toast }) {
                 </div>
                 <Field label="Quando usar" hint="O Claude escolhe chamar o agente com base nesta frase. Seja específico.">
                   <Textarea rows={2} value={draft.description} placeholder="ex.: Revisa datasets do Fluig antes do deploy" onChange={(e) => set({ description: e.target.value })} />
+                  {descWarns.map((w) => <p key={w} className="ag-note is-warn"><Icon name="info" size={12} /> {w}</p>)}
+                  <p className="ag-muted">{draft.description.trim().length} caracteres</p>
                 </Field>
 
                 <Field label="O que ele pode fazer">
@@ -274,11 +280,12 @@ export function AgentsScreen({ toast }) {
 
                 <Field label="Prompt" hint="As instruções do agente. Pode citar skills, regras e o jeito de responder.">
                   <Textarea rows={14} className="ag-prompt" value={draft.prompt} onChange={(e) => set({ prompt: e.target.value })} />
+                  <p className="ag-muted" title="Estimativa: cerca de 4 caracteres por token. Todo o prompt entra no contexto do agente.">{ps.chars.toLocaleString('pt-BR')} caracteres · ~{ps.tokens.toLocaleString('pt-BR')} tokens{ps.tokens > 3000 ? ' — prompt longo: considere mover detalhes para skills' : ''}</p>
                 </Field>
                 {extraLines > 0 && <p className="ag-muted"><Icon name="info" size={12} /> {extraLines} linha(s) do arquivo que a tela não edita (como hooks ou campos novos) são preservadas ao salvar.</p>}
 
                 <div className="ag-actions">
-                  <Button variant="primary" icon="save" disabled={busy || !dirty} onClick={save}>{busy ? 'Salvando…' : 'Salvar'}</Button>
+                  <Button variant="primary" icon="save" disabled={busy || !dirty || !!nameCheck} title={nameCheck ? nameCheck.text : undefined} onClick={() => save()}>{busy ? 'Salvando…' : 'Salvar'}</Button>
                   {saved && <>
                     <Button variant="secondary" icon="terminal" disabled={dirty} title={dirty ? 'Salve antes de chamar' : 'Abre um terminal numa pasta que você escolhe, já com este agente'} onClick={launch}>Chamar no terminal</Button>
                     <Button variant="ghost" icon="copy" onClick={duplicate}>Duplicar</Button>

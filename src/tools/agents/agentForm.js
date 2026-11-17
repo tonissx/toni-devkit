@@ -144,4 +144,47 @@ const draftOf = (a) => ({
 });
 const sameDraft = (a, b) => JSON.stringify(draftOf(a)) === JSON.stringify(draftOf(b));
 
-module.exports = { permissions, READ, EDIT, TOOL_CHOICES, PRESETS, MODELS, MODEL_CUSTOM, isStdModel, PERMISSION_MODES, MEMORY_SCOPES, EFFORTS, COLORS, colorHex, TEMPLATES, presetOf, toolsForPreset, describePermissions, draftOf, sameDraft };
+/** Agentes embutidos do Claude Code: um agente com o mesmo nome seria ambíguo (ou ignorado). */
+const BUILTIN_AGENTS = ['Explore', 'Plan', 'general-purpose', 'claude', 'statusline-setup', 'claude-code-guide'];
+const isBuiltinName = (name) => BUILTIN_AGENTS.some((b) => b.toLowerCase() === String(name || '').trim().toLowerCase());
+
+const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+/**
+ * Valida o nome. `others`: agentes do MESMO escopo (linhas da lista); `current`: nome já salvo deste agente (pode se repetir).
+ * → { level: 'error', text } | null. Erros impedem salvar.
+ */
+function validateName(name, { others = [], current = null } = {}) {
+  const n = String(name || '').trim();
+  if (!n) return { level: 'error', text: 'Dê um nome ao agente.' };
+  if (isBuiltinName(n)) return { level: 'error', text: `“${n}” é o nome de um agente embutido do Claude Code. Escolha outro.` };
+  if (!NAME_RE.test(n)) {
+    if (/[A-Z]/.test(n)) return { level: 'error', text: 'Use só minúsculas (o nome é também o nome do arquivo).' };
+    if (/^-/.test(n)) return { level: 'error', text: 'O nome não pode começar com hífen.' };
+    if (n.includes(':')) return { level: 'error', text: 'O nome não pode ter “:” (reservado para agentes de plugins).' };
+    if (n.length > 64) return { level: 'error', text: 'Máximo de 64 caracteres.' };
+    return { level: 'error', text: 'Use só letras minúsculas, números e hífens (ex.: revisor-fluig).' };
+  }
+  if (n !== current && others.some((a) => a.name === n)) return { level: 'error', text: `Já existe um agente “${n}” neste escopo.` };
+  return null;
+}
+
+const TRIGGER = /\b(use|usar|usa|utilize|acione|chame|invoque|quando|sempre que|depois de|antes de|proativ\w*|proactively|when|whenever|after|before|if)\b/i;
+
+/** Avisos (não bloqueiam) sobre a descrição, que é o que o Claude lê para decidir chamar o agente. → string[] */
+function validateDescription(desc) {
+  const d = String(desc || '').replace(/\s+/g, ' ').trim();
+  if (!d) return [];
+  const out = [];
+  if (d.length < 80) out.push(`Descrição curta (${d.length} caracteres; o ideal é ter 80 ou mais): detalhe o que o agente faz.`);
+  if (!TRIGGER.test(d)) out.push('Diga QUANDO acionar (ex.: “Use quando…”, “Use proativamente depois de…”): é isso que faz o Claude chamar o agente.');
+  return out;
+}
+
+/** Tamanho do prompt: caracteres e uma estimativa de tokens (~4 caracteres por token; só uma ordem de grandeza). */
+function promptStats(text) {
+  const chars = String(text || '').length;
+  return { chars, tokens: Math.ceil(chars / 4) };
+}
+
+module.exports = { BUILTIN_AGENTS, isBuiltinName, validateName, validateDescription, promptStats, permissions, READ, EDIT, TOOL_CHOICES, PRESETS, MODELS, MODEL_CUSTOM, isStdModel, PERMISSION_MODES, MEMORY_SCOPES, EFFORTS, COLORS, colorHex, TEMPLATES, presetOf, toolsForPreset, describePermissions, draftOf, sameDraft };

@@ -8,7 +8,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { atomicWrite } = require('../lib/fsx');
-const { permissions } = require('../../src/tools/agents/agentForm.js');
+const { permissions, isBuiltinName } = require('../../src/tools/agents/agentForm.js');
 
 const NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const KEY_LINE = /^([A-Za-z][\w-]*):(?:\s+(.*)|\s*)$/;
@@ -124,6 +124,7 @@ function cleanAgent(raw) {
   const r = raw && typeof raw === 'object' ? raw : {};
   const name = String(r.name || '').trim();
   if (!NAME.test(name)) throw new Error('O nome do agente usa só letras minúsculas, números e hífens (ex.: revisor-fluig).');
+  if (isBuiltinName(name)) throw new Error(`“${name}” é o nome de um agente embutido do Claude Code. Escolha outro.`);
   const description = String(r.description || '').replace(/\s+/g, ' ').trim();
   if (!description) throw new Error('Descreva quando este agente deve ser usado: é com base nisso que o Claude escolhe chamá-lo.');
   const tools = Array.isArray(r.tools) ? cleanList(r.tools, 'Ferramentas') : null;

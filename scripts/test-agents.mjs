@@ -248,3 +248,36 @@ test('escopos: mesma lista junta usuário e projeto, e o do projeto prevalece qu
   assert.equal((await u.get('revisor')).description, 'do usuário');
   assert.equal(scope.scopeLabel('project'), 'Projeto');
 });
+
+test('validações: nome (formato, embutidos, duplicado no escopo) e descrição', async () => {
+  const others = [{ name: 'revisor' }, { name: 'outro' }];
+  const v = (n, c) => form.validateName(n, { others, current: c || null });
+  assert.equal(v('novo-agente'), null);
+  assert.match(v('').text, /Dê um nome/);
+  assert.match(v('Revisor').text, /minúsculas/);
+  assert.match(v('-x').text, /hífen/);
+  assert.match(v('a:b').text, /“:”/);
+  assert.match(v('a b').text, /letras minúsculas/);
+  assert.match(v('x'.repeat(65)).text, /64/);
+  for (const b of ['Explore', 'Plan', 'general-purpose', 'claude', 'statusline-setup', 'claude-code-guide', 'explore', 'plan']) assert.match(v(b).text, /embutido/, b);
+  assert.match(v('revisor').text, /Já existe/);
+  assert.equal(v('revisor', 'revisor'), null); // o próprio agente em edição não conta como duplicado
+  assert.match(v('outro', 'revisor').text, /Já existe/); // renomear para um nome que já existe
+
+  assert.equal(form.validateDescription('').length, 0);
+  assert.equal(form.validateDescription('Revisa código do Fluig antes do deploy, apontando bugs, riscos e inconsistências. Use depois de mudanças relevantes.').length, 0);
+  const curta = form.validateDescription('Revisa código');
+  assert.equal(curta.length, 2); // curta e sem “quando”
+  const semGatilho = form.validateDescription('Agente que revisa o código alterado procurando bugs, riscos de segurança e inconsistências com o código ao redor.');
+  assert.equal(semGatilho.length, 1);
+  assert.match(semGatilho[0], /QUANDO/);
+  assert.equal(form.validateDescription('Use para revisar.').length, 1); // gatilho ok, mas curta
+
+  assert.deepEqual(form.promptStats(''), { chars: 0, tokens: 0 });
+  assert.deepEqual(form.promptStats('a'.repeat(401)), { chars: 401, tokens: 101 });
+  for (const t of form.TEMPLATES.filter((t) => t.agent.name)) assert.equal(form.validateDescription(t.agent.description).length, 0, t.id);
+
+  const store = createAgentStore({ dir: tmp() });
+  await assert.rejects(store.save({ name: 'explore', description: 'x' }), /embutido/);
+  await assert.rejects(store.save({ name: 'plan', description: 'x' }), /embutido/);
+});

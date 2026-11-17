@@ -53,3 +53,6 @@
 .ag-adv__head { width: 100%; display: flex; align-items: center; gap: 6px; padding: 8px 12px; border: 0; background: transparent; color: var(--tk-text); cursor: pointer; font: 600 13px var(--tk-font-sans); }
 .ag-adv__body { display: flex; flex-direction: column; gap: 14px; padding: 4px 12px 14px; }
 .ag-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; align-items: start; }
+.ag-note { display: inline-flex; align-items: flex-start; gap: 5px; margin: 4px 0 0; font-size: 12px; line-height: 1.35; }
+.ag-note.is-error { color: var(--tk-danger, #ef4444); }
+.ag-note.is-warn { color: var(--tk-warn, #d97706); }
