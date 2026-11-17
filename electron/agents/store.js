@@ -173,4 +173,4 @@ function createAgentStore({ dir = defaultDir() } = {}) {
   };
 }
 
-module.exports = { createAgentStore, parseAgent, serializeAgent, cleanAgent, NAME };
+module.exports = { createAgentStore, parseAgent, serializeAgent, cleanAgent, defaultDir, NAME };

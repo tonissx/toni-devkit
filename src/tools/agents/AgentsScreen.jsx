@@ -2,6 +2,7 @@
 // (formato nativo da ferramenta: funciona também no terminal). Cada um declara o que pode fazer; a tela mostra isso em palavras.
 import { DS } from '../../lib/ds.js';
 import { errText } from '../../lib/fmt.jsx';
+import { agentKey, mergeRows, scopeLabel } from './agentScope.js';
 import { MODELS, PRESETS, TEMPLATES, TOOL_CHOICES, describePermissions, draftOf, permissions, presetOf, sameDraft, toolsForPreset } from './agentForm.js';
 
 const { PageHeader, Button, Input, Field, Textarea, Select, SegmentedControl, Modal, EmptyState, Badge, Icon, Spinner, Alert, Checkbox } = DS;
@@ -16,9 +17,12 @@ function PermBadge({ perms }) {
 }
 
 export function AgentsScreen({ toast }) {
-  const [rows, setRows] = React.useState(null);
-  const [dir, setDir] = React.useState('');
-  const [sel, setSel] = React.useState(null);      // nome salvo em edição, ou null
+  const [rows, setRows] = React.useState(null);   // agentes dos dois escopos (cada linha tem .scope)
+  const [dirs, setDirs] = React.useState({ user: '~/.claude/agents', project: '' });
+  const [repos, setRepos] = React.useState([]);    // repositórios do Git do devkit: candidatos a "projeto"
+  const [project, setProject] = React.useState(() => { try { return localStorage.getItem('agents.project') || ''; } catch { return ''; } });
+  const [newScope, setNewScope] = React.useState(null); // escopo de um agente ainda não salvo
+  const [sel, setSel] = React.useState(null);      // chave (escopo:nome) em edição, ou null
   const [saved, setSaved] = React.useState(null);  // versão em disco do agente aberto (null = novo)
   const [draft, setDraft] = React.useState(null);  // o que está no formulário
   const [busy, setBusy] = React.useState(false);
@@ -27,8 +31,19 @@ export function AgentsScreen({ toast }) {
   const [raw, setRaw] = React.useState(null);      // arquivo inválido aberto como texto cru: { id, text, orig, rev, error }
 
   const fail = (title) => (e) => toast(title, errText(e), 'error');
-  const reload = React.useCallback(() => api().list().then(setRows, fail('Não foi possível listar os agentes')), []);
-  React.useEffect(() => { reload(); api().dir().then(setDir, () => {}); }, []);
+  const reload = React.useCallback(() => api().list(project || null).then((r) => {
+    setRows(mergeRows(r));
+    setDirs({ user: r.user.dir, project: r.project ? r.project.dir : '' });
+  }, (e) => {
+    // Projeto que sumiu do disco: volta só para o escopo do usuário em vez de travar a tela.
+    if (project) { setProject(''); } else fail('Não foi possível listar os agentes')(e);
+  }), [project]);
+  React.useEffect(() => { reload(); }, [reload]);
+  React.useEffect(() => { try { localStorage.setItem('agents.project', project); } catch { /* sem armazenamento */ } }, [project]);
+  React.useEffect(() => {
+    window.devkit.git.list().then((r) => setRepos((r && r.repos) || []), () => {});
+  }, []);
+  const ctxOf = (scope) => ({ scope: scope || 'user', root: project });
   // A lista reflete o disco: relê ao voltar para a janela (arquivos criados, editados ou apagados fora do devkit).
   React.useEffect(() => {
     const on = () => { if (document.visibilityState !== 'hidden') reload(); };
@@ -42,48 +57,56 @@ export function AgentsScreen({ toast }) {
 
   const open = (row) => {
     const name = row.name;
-    if (name === sel && (saved || raw)) return;
+    const key = agentKey(row);
+    if (key === sel && (saved || raw)) return;
     if (!guard()) return;
     if (row.invalid) {
-      api().rawGet(row.id).then((r) => { setSel(name); setSaved(null); setDraft(null); setRaw({ ...r, orig: r.text }); }, fail('Não foi possível abrir o arquivo'));
+      api().rawGet(row.id, ctxOf(row.scope)).then((r) => { setSel(key); setSaved(null); setDraft(null); setRaw({ ...r, scope: row.scope, orig: r.text }); }, fail('Não foi possível abrir o arquivo'));
       return;
     }
-    api().get(name).then((a) => { setSel(name); setRaw(null); setSaved(a); setDraft(draftOf(a)); }, fail('Não foi possível abrir o agente'));
+    api().get(name, ctxOf(row.scope)).then((a) => { setSel(key); setRaw(null); setSaved({ ...a, scope: row.scope }); setDraft(draftOf(a)); }, fail('Não foi possível abrir o agente'));
   };
   const startNew = (tpl = TEMPLATES[0]) => {
     if (!guard()) return;
     setSel(null); setSaved(null); setRaw(null); setDraft(draftOf(tpl.agent));
+    setNewScope(project ? 'project' : 'user'); // com projeto escolhido, o padrão é criar nele
   };
   const saveRaw = async (force) => {
     setBusy(true);
     try {
-      const r = await api().rawSave(raw.id, raw.text, { rev: raw.rev, force });
+      const r = await api().rawSave(raw.id, raw.text, { rev: raw.rev, force }, ctxOf(raw.scope));
       if (r && r.conflict) { if (window.confirm('Este arquivo mudou no disco desde que você o abriu. Sobrescrever com o seu texto?')) return saveRaw(true); return; }
       toast('Arquivo salvo', raw.id + '.md', 'ok');
       setSel(null); setRaw(null); reload();
     } catch (e) { toast('Não foi possível salvar', errText(e), 'error'); } finally { setBusy(false); }
   };
-  const removeRaw = () => api().remove(raw.id).then(() => { toast('Arquivo excluído', raw.id + '.md'); setConfirmDel(false); setSel(null); setRaw(null); reload(); }, fail('Não foi possível excluir'));
+  const removeRaw = () => api().remove(raw.id, ctxOf(raw.scope)).then(() => { toast('Arquivo excluído', raw.id + '.md'); setConfirmDel(false); setSel(null); setRaw(null); reload(); }, fail('Não foi possível excluir'));
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }));
 
   const save = async (force) => {
     setBusy(true);
     try {
-      const a = await api().save(draft, saved ? saved.name : null, { rev: saved ? saved.rev : '', force: force === true });
+      const scope = saved ? saved.scope : newScope;
+      const a = await api().save(draft, saved ? saved.name : null, { rev: saved ? saved.rev : '', force: force === true }, ctxOf(scope));
       if (a && a.conflict) {
         if (window.confirm('Este agente mudou no disco desde que você o abriu (edição fora do devkit). Sobrescrever com a sua versão?')) return save(true);
         return;
       }
-      setSel(a.name); setSaved(a); setDraft(draftOf(a));
-      toast('Agente salvo', a.name + '.md', 'ok');
+      setSel(agentKey({ scope, name: a.name })); setSaved({ ...a, scope }); setDraft(draftOf(a));
+      toast('Agente salvo', `${a.name}.md (${scopeLabel(scope).toLowerCase()})`, 'ok');
       reload();
     } catch (e) { toast('Não foi possível salvar', errText(e), 'error'); } finally { setBusy(false); }
   };
-  const duplicate = () => api().duplicate(saved.name).then((a) => { toast('Agente duplicado', a.name, 'ok'); setSel(a.name); setSaved(a); setDraft(draftOf(a)); reload(); }, fail('Não foi possível duplicar'));
-  const remove = () => api().remove(saved.name).then(() => { toast('Agente excluído', saved.name); setConfirmDel(false); setSel(null); setSaved(null); setDraft(null); reload(); }, fail('Não foi possível excluir'));
-  const launch = () => api().launch(saved.name).then((r) => { if (r && r.launched) toast('Terminal aberto', `claude --agent ${saved.name} em ${r.cwd}`, 'ok'); }, fail('Não foi possível abrir o agente'));
+  const duplicate = () => api().duplicate(saved.name, ctxOf(saved.scope)).then((a) => { toast('Agente duplicado', a.name, 'ok'); setSel(agentKey({ scope: saved.scope, name: a.name })); setSaved({ ...a, scope: saved.scope }); setDraft(draftOf(a)); reload(); }, fail('Não foi possível duplicar'));
+  const remove = () => api().remove(saved.name, ctxOf(saved.scope)).then(() => { toast('Agente excluído', saved.name); setConfirmDel(false); setSel(null); setSaved(null); setDraft(null); reload(); }, fail('Não foi possível excluir'));
+  const launch = () => api().launch(saved.name, undefined, ctxOf(saved.scope)).then((r) => { if (r && r.launched) toast('Terminal aberto', `claude --agent ${saved.name} em ${r.cwd}`, 'ok'); }, fail('Não foi possível abrir o agente'));
 
   const invalidCount = (rows || []).filter((a) => a.invalid).length;
+  const count = (scope) => (rows || []).filter((a) => a.scope === scope && !a.invalid).length;
+  const projectNames = new Set((rows || []).filter((a) => a.scope === 'project').map((a) => a.name));
+  const userNames = new Set((rows || []).filter((a) => a.scope === 'user').map((a) => a.name));
+  const projectName = (repos.find((r) => r.path === project) || {}).name || project.split(/[\\/]/).filter(Boolean).pop() || '';
+  const curScope = saved ? saved.scope : raw ? raw.scope : newScope;
   const list = (rows || []).filter((a) => !filter.trim() || (a.name + ' ' + a.description).toLowerCase().includes(filter.trim().toLowerCase()));
   const perms = draft ? permissions(draft.tools) : null;
   const pd = describePermissions(perms);
@@ -92,16 +115,21 @@ export function AgentsScreen({ toast }) {
 
   return (
     <div className="ag">
-      <PageHeader icon="sparkles" title="Agentes" subtitle={rows ? `${rows.length - invalidCount} agente(s)${invalidCount ? ` + ${invalidCount} arquivo(s) inválido(s)` : ''} em ${dir || '~/.claude/agents'}` : 'Carregando…'}
+      <PageHeader icon="sparkles" title="Agentes" subtitle={rows ? `${count('user')} do usuário em ${dirs.user}${dirs.project ? ` · ${count('project')} do projeto em ${dirs.project}` : ''}${invalidCount ? ` · ${invalidCount} arquivo(s) inválido(s)` : ''}` : 'Carregando…'}
         actions={<Button variant="primary" icon="plus" onClick={() => startNew()}>Novo agente</Button>} />
       {!rows ? <div className="ag-center"><Spinner size={18} /></div> : (
         <div className="ag-body">
           <aside className="ag-side">
-            <div className="ag-side__search"><Input size="sm" type="search" placeholder="Buscar agente…" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
+            <div className="ag-side__search">
+              <Select size="sm" value={project} style={{ width: '100%', marginBottom: 6 }} title="Projeto cujos agentes (.claude/agents) aparecem junto com os do usuário"
+                options={[{ value: '', label: 'Sem projeto (só usuário)' }, ...repos.map((r) => ({ value: r.path, label: 'Projeto: ' + (r.name || r.path) })), ...(project && !repos.some((r) => r.path === project) ? [{ value: project, label: 'Projeto: ' + projectName }] : [])]}
+                onChange={(v) => { if (guard()) { setProject(v); setSel(null); setSaved(null); setRaw(null); setDraft(null); } }} />
+              <Input size="sm" type="search" placeholder="Buscar agente…" value={filter} onChange={(e) => setFilter(e.target.value)} /></div>
             <div className="ag-list">
               {list.map((a) => (
-                <button key={a.name} type="button" className={'ag-card' + (a.name === sel ? ' is-sel' : '')} onClick={() => open(a)}>
-                  <span className="ag-card__top"><b>{a.name}</b>{a.invalid ? <Badge size="sm" variant="error" title={a.error}>inválido</Badge> : <PermBadge perms={a.permissions} />}</span>
+                <button key={agentKey(a)} type="button" className={'ag-card' + (agentKey(a) === sel ? ' is-sel' : '')} onClick={() => open(a)}>
+                  <span className="ag-card__top"><b>{a.name}</b><Badge size="sm" variant={a.scope === 'project' ? 'info' : 'neutral'} title={a.scope === 'project' ? dirs.project : dirs.user}>{scopeLabel(a.scope)}</Badge></span>
+                  <span className="ag-card__top">{a.invalid ? <Badge size="sm" variant="error" title={a.error}>inválido</Badge> : <PermBadge perms={a.permissions} />}{!a.invalid && a.scope === 'user' && projectNames.has(a.name) && <Badge size="sm" variant="warn" title="Existe um agente com este nome no projeto, e o do projeto prevalece: este não será usado nesse projeto.">sobreposto</Badge>}{!a.invalid && a.scope === 'project' && userNames.has(a.name) && <Badge size="sm" variant="info" title="Há um agente do usuário com este nome; este (do projeto) prevalece.">prevalece</Badge>}</span>
                   <span className="ag-card__desc">{a.invalid ? a.error : (a.description || 'Sem descrição')}</span>
                   {a.model && <span className="ag-card__meta"><Icon name="cpu" size={11} /> {a.model}</span>}
                 </button>
@@ -131,6 +159,15 @@ export function AgentsScreen({ toast }) {
               </div>
             ) : (
               <div className="ag-form">
+                {!saved && (
+                  <Field label="Onde salvar" hint={newScope === 'project' ? `${dirs.project || '<projeto>/.claude/agents'} — vale só neste projeto e pode ir para o git.` : `${dirs.user} — vale em todos os seus projetos.`}>
+                    <SegmentedControl size="sm" value={newScope || 'user'} onChange={(v) => { if (v === 'user' || project) setNewScope(v); }}
+                      options={[{ value: 'user', label: 'Usuário' }, { value: 'project', label: project ? `Projeto (${projectName})` : 'Projeto (escolha um na lista)', disabled: !project }]} />
+                  </Field>
+                )}
+                {!saved && draft.name && newScope && rows && rows.some((a) => a.scope !== newScope && a.name === draft.name) && (
+                  <p className="ag-muted"><Icon name="info" size={12} /> Já existe “{draft.name}” no escopo {scopeLabel(newScope === 'project' ? 'user' : 'project').toLowerCase()}; o do projeto prevalece sobre o do usuário.</p>
+                )}
                 {!saved && (
                   <div className="ag-tpls is-inline">
                     <span className="ag-muted">Começar de:</span>
@@ -184,7 +221,7 @@ export function AgentsScreen({ toast }) {
       )}
       {confirmDel && (saved || raw) && (
         <Modal open onClose={() => setConfirmDel(false)} icon="trash-2" title={`Excluir “${(saved || raw).name || raw.id}”?`} width={440}
-          description={`O arquivo ${saved ? saved.name : raw.id}.md sai de ${dir || '~/.claude/agents'}. Não há como desfazer.`}
+          description={`O arquivo ${saved ? saved.name : raw.id}.md sai de ${(curScope === 'project' ? dirs.project : dirs.user) || '~/.claude/agents'}. Não há como desfazer.`}
           footer={<><Button variant="ghost" onClick={() => setConfirmDel(false)}>Cancelar</Button><Button variant="destructive" icon="trash-2" onClick={saved ? remove : removeRaw}>Excluir</Button></>} />
       )}
     </div>

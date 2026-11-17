@@ -10,6 +10,7 @@ const require = createRequire(import.meta.url);
 const { createAgentStore, parseAgent, serializeAgent } = require('../electron/agents/store.js');
 const form = require('../src/tools/agents/agentForm.js');
 const resume = require('../electron/aimon/resume.js');
+const scope = require('../src/tools/agents/agentScope.js');
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'tk-agents-'));
 
@@ -164,4 +165,22 @@ test('abrir o agente no terminal: comando fixo com o nome validado', () => {
   assert.throws(() => resume.plan({ provider: 'claude', mode: 'agent', agent: 'x; calc', cwd }), /Agente inválido/);
   assert.throws(() => resume.plan({ provider: 'claude', mode: 'agent', cwd }), /Agente inválido/);
   assert.throws(() => resume.plan({ provider: 'codex', mode: 'agent', agent: 'ok', cwd }), /Agente inválido/);
+});
+
+test('escopos: mesma lista junta usuário e projeto, e o do projeto prevalece quando o nome se repete', async () => {
+  const user = path.join(tmp(), 'user-agents');
+  const proj = path.join(tmp(), 'repo', '.claude', 'agents');
+  const u = createAgentStore({ dir: user });
+  const p = createAgentStore({ dir: proj });
+  await u.save({ name: 'revisor', description: 'do usuário' });
+  await u.save({ name: 'so-usuario', description: 'x' });
+  await p.save({ name: 'revisor', description: 'do projeto' });
+  fs.writeFileSync(path.join(proj, 'quebrado.md'), 'sem frontmatter');
+  const rows = scope.mergeRows({ user: { rows: await u.list() }, project: { rows: await p.list() } });
+  assert.deepEqual(rows.map((r) => scope.agentKey(r)), ['project:quebrado', 'project:revisor', 'user:revisor', 'user:so-usuario']);
+  assert.deepEqual(scope.overlaps(rows), [{ name: 'revisor', winner: 'project', shadowed: 'user' }]);
+  assert.equal(scope.mergeRows({ user: { rows: [] }, project: null }).length, 0);
+  assert.equal((await p.get('revisor')).description, 'do projeto'); // cada escopo escreve na sua pasta
+  assert.equal((await u.get('revisor')).description, 'do usuário');
+  assert.equal(scope.scopeLabel('project'), 'Projeto');
 });

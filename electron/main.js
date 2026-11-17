@@ -946,27 +946,43 @@ function initLogs() {
   logsReady = logsSvc.init().catch((e) => { console.error('[logs]', e); });
 }
 
-/* ─────────────── Agentes (subagentes do Claude Code em ~/.claude/agents; ver electron/agents) ─────────────── */
-let agentStore = null;
-const agents = () => agentStore || (agentStore = require('./agents/store').createAgentStore());
-ipcMain.handle('agents:list', () => agents().list());
-ipcMain.handle('agents:get', (_e, name) => agents().get(String(name || '')));
+/* ─────────────── Agentes (subagentes do Claude Code: ~/.claude/agents e <projeto>/.claude/agents; ver electron/agents) ─────────────── */
+// Cada chamada traz `ctx` = { scope: 'user' | 'project', root }. No projeto, vence o agente do projeto (regra do Claude Code).
+const agentStores = new Map();
+const agentsAt = (dir) => { let s = agentStores.get(dir); if (!s) { s = require('./agents/store').createAgentStore({ dir }); agentStores.set(dir, s); } return s; };
+const agentRoot = (root) => {
+  const r = String(root || '');
+  let ok = false;
+  try { ok = path.isAbsolute(r) && require('node:fs').statSync(r).isDirectory(); } catch { /* inexistente */ }
+  if (!ok) throw new Error('Pasta do projeto inválida ou não encontrada.');
+  return r;
+};
+const agents = (ctx) => (ctx && ctx.scope === 'project'
+  ? agentsAt(path.join(agentRoot(ctx.root), '.claude', 'agents'))
+  : agentsAt(require('./agents/store').defaultDir()));
+ipcMain.handle('agents:list', async (_e, root) => {
+  const user = agents(null);
+  const out = { user: { dir: user.dir, rows: await user.list() }, project: null };
+  if (root) { const p = agents({ scope: 'project', root }); out.project = { dir: p.dir, root: String(root), rows: await p.list() }; }
+  return out;
+});
+ipcMain.handle('agents:get', (_e, name, ctx) => agents(ctx).get(String(name || '')));
 const agentOpts = (o) => ({ rev: o && o.rev ? String(o.rev) : '', force: !!(o && o.force) });
-ipcMain.handle('agents:save', (_e, agent, previous, opts) => agents().save(agent, previous == null ? null : String(previous), agentOpts(opts)));
-ipcMain.handle('agents:rawGet', (_e, id) => agents().rawGet(String(id || '')));
-ipcMain.handle('agents:rawSave', (_e, id, text, opts) => agents().rawSave(String(id || ''), String(text == null ? '' : text), agentOpts(opts)));
-ipcMain.handle('agents:remove', (_e, name) => agents().remove(String(name || '')));
-ipcMain.handle('agents:duplicate', (_e, name) => agents().duplicate(String(name || '')));
-ipcMain.handle('agents:dir', () => agents().dir);
-// Abre um terminal numa pasta que a pessoa escolhe, já com o agente (`claude --agent <nome>`).
-ipcMain.handle('agents:launch', async (_e, name, cwd) => {
+ipcMain.handle('agents:save', (_e, agent, previous, opts, ctx) => agents(ctx).save(agent, previous == null ? null : String(previous), agentOpts(opts)));
+ipcMain.handle('agents:rawGet', (_e, id, ctx) => agents(ctx).rawGet(String(id || '')));
+ipcMain.handle('agents:rawSave', (_e, id, text, opts, ctx) => agents(ctx).rawSave(String(id || ''), String(text == null ? '' : text), agentOpts(opts)));
+ipcMain.handle('agents:remove', (_e, name, ctx) => agents(ctx).remove(String(name || '')));
+ipcMain.handle('agents:duplicate', (_e, name, ctx) => agents(ctx).duplicate(String(name || '')));
+// Abre um terminal numa pasta, já com o agente (`claude --agent <nome>`). Agente de projeto abre na raiz do projeto.
+ipcMain.handle('agents:launch', async (_e, name, cwd, ctx) => {
   let dir = typeof cwd === 'string' && cwd ? cwd : '';
+  if (!dir && ctx && ctx.scope === 'project') dir = agentRoot(ctx.root);
   if (!dir) {
     const r = await dialog.showOpenDialog(mainWin && !mainWin.isDestroyed() ? mainWin : undefined, { title: 'Pasta de trabalho do agente', properties: ['openDirectory'] });
     if (r.canceled || !r.filePaths[0]) return { launched: false };
     dir = r.filePaths[0];
   }
-  await agents().get(String(name || '')); // só agentes que existem
+  await agents(ctx).get(String(name || '')); // só agentes que existem
   const r = await require('./aimon/resume').open({ provider: 'claude', mode: 'agent', agent: String(name), cwd: dir });
   return { launched: true, cwd: dir, ...r };
 });
