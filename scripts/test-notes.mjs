@@ -765,6 +765,8 @@ test('filters and empty query (most recent first)', () => {
   assert.deepEqual(titles(searchNotes(c, '', { filter: { pinned: true } })), ['PowerShell — npm.ps1 execution policy']);
   assert.equal(searchNotes(c, '', { filter: { quick: true } }).length, 1);
   assert.equal(searchNotes(c, '', { filter: { type: 'snippet' } }).length, 1);
+  assert.equal(searchNotes(c, '', { filter: { excludeType: 'snippet' } }).length, c.length - 1);
+  assert.equal(searchNotes(c, '', { filter: { excludeType: 'diagram' } }).length, c.length);
   assert.equal(searchNotes(c, '', { filter: { tag: 'sql' } }).length, 1);
   assert.equal(searchNotes(c, '')[0].title, 'Deploy — docker compose');
 });
