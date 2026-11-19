@@ -37,7 +37,6 @@ const FILTERS = [
   { id: 'quick', label: 'Quick', filter: { quick: true } },
   { id: 'pinned', label: 'Pinned', filter: { pinned: true } },
   { id: 'snippet', label: 'Snippets', filter: { type: 'snippet' } },
-  { id: 'diagram', label: 'Diagramas', filter: { type: 'diagram' } },
   { id: 'favorite', label: 'Favoritas', filter: { favorite: true } },
   { id: 'recent', label: 'Recentes', filter: null },
 ];
@@ -76,7 +75,7 @@ function Excerpt({ ex, fallback }) {
   return out;
 }
 
-export function NotesScreen({ toast, request }) {
+export function NotesScreen({ toast, request, open }) {
   const aiCfg = useAiMode();
   const [ui, setUi] = usePersisted('notes.ui', { selectedId: null, mode: 'edit', filter: 'all', tag: null, view: 'note', tabs: [] });
   const [trashCount, setTrashCount] = React.useState(0);
@@ -162,7 +161,8 @@ export function NotesScreen({ toast, request }) {
   const tagsLabel = !hasTags ? 'Tags' : selTags.length <= 2 ? selTags.join(sep) : `${selTags[0]} +${selTags.length - 1}`;
   const tagsTitle = `Notas com ${tagMode === 'any' ? 'qualquer uma de' : 'todas'}: ${selTags.map((t) => '#' + t).join(', ')}`;
   const setSelTags = (list) => setUi((u) => ({ ...u, tag: null, tags: list }));
-  const filter = { ...(filterDef.filter || {}), ...(hasTags ? { tags: selTags, tagMode } : {}), ...(scopeFolder ? { folder: scopeFolder, recursive: true } : {}), ...(range ? { created: range } : {}) };
+  // Diagramas moram na ferramenta Diagramas: ficam fora da lista de notas (continuam em allRows, para links/embeds e QuickOpen).
+  const filter = { excludeType: 'diagram', ...(filterDef.filter || {}),...(hasTags ? { tags: selTags, tagMode } : {}), ...(scopeFolder ? { folder: scopeFolder, recursive: true } : {}), ...(range ? { created: range } : {}) };
   const q = query.trim();
 
   const refresh = React.useCallback(async () => {
@@ -533,8 +533,8 @@ export function NotesScreen({ toast, request }) {
     if (!rows) return [];
     if (ui.filter === 'recent' && !q && recent) {
       return [
-        { title: 'Recently Edited', items: recent.edited.map((r) => ({ ...r, time: r.updated })) },
-        { title: 'Recently Viewed', items: recent.viewed.map((r) => ({ ...r, time: r.viewedAt })) },
+        { title: 'Recently Edited', items: recent.edited.filter((r) => r.type !== 'diagram').map((r) => ({ ...r, time: r.updated })) },
+        { title: 'Recently Viewed', items: recent.viewed.filter((r) => r.type !== 'diagram').map((r) => ({ ...r, time: r.viewedAt })) },
       ].filter((g) => g.items.length);
     }
     if (q || ui.filter !== 'all' || hasTags || range) return [{ title: null, items: rows.map((r) => ({ ...r, time: r.updated })) }];
@@ -1005,7 +1005,11 @@ export function NotesScreen({ toast, request }) {
           notes={allRows}
           recentIds={dialog.recentIds}
           onClose={() => setDialog(null)}
-          onPick={(id) => { pushHistory(id); openNote(id, 'body'); }}
+          onPick={(id) => {
+            const n = allRows.find((r) => r.id === id);
+            if (n && n.type === 'diagram' && open) return open('diagrams', { id }); // diagrama abre na ferramenta própria
+            pushHistory(id); openNote(id, 'body');
+          }}
         />
       )}
       {dialog && dialog.kind === 'move' && (

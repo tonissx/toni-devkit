@@ -108,6 +108,7 @@ function matchesFilter(note, flt) {
   if (flt.pinned && !note.pinned) return false;
   if (flt.favorite && !note.favorite) return false;
   if (flt.type && note.type !== flt.type) return false;
+  if (flt.excludeType && note.type === flt.excludeType) return false;
   if (!matchesTags(fieldsOf(note).tags, flt)) return false;
   if (flt.created && !inRange(localDay(note.created), flt.created)) return false;
   return true;

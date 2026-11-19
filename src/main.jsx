@@ -193,7 +193,7 @@ function App() {
     : route === 'home' ? <Home go={go} open={open} openPalette={openPalette} updater={updater} toast={toast}
       theme={prefs.theme} setTheme={(theme) => setPrefs((p) => ({ ...p, theme }))} />
     : route === 'settings' ? <Settings prefs={prefs} setPrefs={setPrefs} info={info} sqlVersion={sqlVersion} updater={updater} toast={toast} />
-    : <Screen toast={toast} request={request && request.route === route ? request : undefined} />;
+    : <Screen toast={toast} open={open} request={request && request.route === route ? request : undefined} />;
 
   const title = (tool ? tool.name : route === 'settings' ? 'Configurações' : 'Início') + ' — Devkit';
 

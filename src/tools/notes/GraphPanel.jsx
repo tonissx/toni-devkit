@@ -22,6 +22,16 @@ const taskLabel = (n) => `${n.tasksDone}/${taskTotal(n)}`;
  * roda dá zoom, arrastar um nó o prende no lugar (duplo clique solta), clique abre a nota, hover destaca
  * os vizinhos. Cores por pasta de 1º nível. "Nota atual" mostra só a vizinhança da nota aberta.
  */
+/** Diagramas pertencem à ferramenta Diagramas: saem do grafo (e o grau dos vizinhos é recalculado). */
+function withoutDiagrams(g) {
+  const gone = new Set(g.nodes.filter((n) => n.type === 'diagram').map((n) => n.id));
+  if (!gone.size) return g;
+  const links = g.links.filter((l) => !gone.has(l.source) && !gone.has(l.target));
+  const deg = new Map();
+  for (const l of links) { deg.set(l.source, (deg.get(l.source) || 0) + 1); deg.set(l.target, (deg.get(l.target) || 0) + 1); }
+  return { ...g, nodes: g.nodes.filter((n) => !gone.has(n.id)).map((n) => ({ ...n, degree: deg.get(n.id) || 0 })), links };
+}
+
 export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
   const [opts, setOpts] = usePersisted('notes.graph', { mode: 'global', depth: 1, orphans: true, ghosts: false, pending: false });
   const [raw, setRaw] = React.useState(null); // null = carregando
@@ -40,7 +50,7 @@ export function GraphPanel({ currentId, onOpen, onOpenLink, toast }) {
   /* ─────────────── Dados ─────────────── */
   React.useEffect(() => {
     let t = null, alive = true;
-    const load = () => Promise.all([notesApi().graph(), notesApi().folders().catch(() => [])]).then(([g, f]) => { if (alive) { setFolders(f); setRaw(g); } }).catch((e) => { if (alive) { setRaw({ nodes: [], links: [] }); toast('Não foi possível montar o grafo', cleanError(e), 'error'); } });
+    const load = () => Promise.all([notesApi().graph(), notesApi().folders().catch(() => [])]).then(([g, f]) => { if (alive) { setFolders(f); setRaw(withoutDiagrams(g)); } }).catch((e) => { if (alive) { setRaw({ nodes: [], links: [] }); toast('Não foi possível montar o grafo', cleanError(e), 'error'); } });
     load();
     const off = notesApi().onChanged(() => { clearTimeout(t); t = setTimeout(load, 200); });
     return () => { alive = false; off(); clearTimeout(t); };
