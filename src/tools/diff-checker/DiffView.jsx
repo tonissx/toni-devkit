@@ -37,6 +37,80 @@ function buildItems(rows, collapse, expanded) {
   return items;
 }
 
+/**
+ * Minimap das diferenças (como a régua do VS Code): uma faixa ao lado da rolagem com um marcador por trecho alterado,
+ * na posição proporcional ao conteúdo real (mede as linhas no DOM, então respeita quebra de linha e trechos recolhidos).
+ * A janela visível aparece em destaque; clicar ou arrastar rola o resultado.
+ */
+function Minimap({ scrollRef, deps, current, onPick }) {
+  const [marks, setMarks] = React.useState([]); // { top, h, k, hunk } em fração (0–1) do conteúdo
+  const [thumb, setThumb] = React.useState({ top: 0, h: 1 });
+  const trackRef = React.useRef(null);
+  const raf = React.useRef(0);
+
+  const measure = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || !el.scrollHeight) return;
+    const H = el.scrollHeight;
+    const out = [];
+    el.querySelectorAll('[data-k]').forEach((n) => {
+      const k = n.getAttribute('data-k'), hunk = Number(n.getAttribute('data-h'));
+      const last = out[out.length - 1];
+      const top = n.offsetTop, bottom = top + n.offsetHeight;
+      // Linhas coladas do mesmo trecho viram um marcador só.
+      if (last && last.hunk === hunk && last.k === k && top - last.bottom <= 1) last.bottom = bottom;
+      else out.push({ top, bottom, k, hunk });
+    });
+    setMarks(out.map((m) => ({ top: m.top / H, h: (m.bottom - m.top) / H, k: m.k, hunk: m.hunk })));
+  }, [scrollRef]);
+
+  const syncThumb = React.useCallback(() => {
+    const el = scrollRef.current;
+    if (!el || !el.scrollHeight) return;
+    setThumb({ top: el.scrollTop / el.scrollHeight, h: Math.min(1, el.clientHeight / el.scrollHeight) });
+  }, [scrollRef]);
+
+  React.useLayoutEffect(() => { measure(); syncThumb(); }, deps); // eslint-disable-line react-hooks/exhaustive-deps
+
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    const onScroll = () => { if (!raf.current) raf.current = requestAnimationFrame(() => { raf.current = 0; syncThumb(); }); };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(() => { measure(); syncThumb(); });
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => { el.removeEventListener('scroll', onScroll); ro.disconnect(); if (raf.current) cancelAnimationFrame(raf.current); raf.current = 0; };
+  }, [scrollRef, measure, syncThumb]);
+
+  const seek = (e) => {
+    const el = scrollRef.current, tr = trackRef.current;
+    if (!el || !tr) return;
+    const box = tr.getBoundingClientRect();
+    const f = Math.min(1, Math.max(0, (e.clientY - box.top) / box.height));
+    el.scrollTop = f * el.scrollHeight - el.clientHeight / 2;
+  };
+  const onDown = (e) => {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    seek(e);
+  };
+  const onMove = (e) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) seek(e); };
+
+  return (
+    <div className="dfc-mini" aria-hidden="true" onPointerDown={onDown} onPointerMove={onMove}>
+      <div className="dfc-mini__track" ref={trackRef}>
+        {marks.map((m, i) => (
+          <span key={i} className={'dfc-mini__mk is-' + m.k + (m.hunk === current ? ' is-cur' : '')}
+            style={{ top: (m.top * 100) + '%', height: 'max(3px, ' + (m.h * 100) + '%)' }}
+            onPointerDown={(e) => { e.stopPropagation(); onPick(m.hunk); }} />
+        ))}
+        <span className="dfc-mini__view" style={{ top: (thumb.top * 100) + '%', height: (thumb.h * 100) + '%' }} />
+      </div>
+    </div>
+  );
+}
+
 const Cell = ({ kind, no, text, segs, lang }) => (
   <div className={'tk-diff__row is-' + kind}>
     <span className="tk-diff__no">{no}</span>
@@ -79,9 +153,18 @@ export function DiffView({ result, view, granularity, collapse, compare, lang, c
 
   const rowProps = (r, i) => ({
     className: 'dfc-row' + (r.hunk >= 0 && r.hunk === current ? ' is-cur' : ''),
+    'data-k': r.hunk >= 0 ? r.t : undefined,
+    'data-h': r.hunk >= 0 ? r.hunk : undefined,
     'data-hunk-start': r.hunk >= 0 && (i === 0 || rows[i - 1].hunk !== r.hunk) ? r.hunk : undefined,
     onClick: r.hunk >= 0 && r.hunk !== current ? () => onPick(r.hunk) : undefined,
   });
+
+  const withMap = (content) => (
+    <div className="dfc-wrap">
+      <div ref={scrollRef} className="dfc-scroll tk-scroll"><div className="dfc-content">{content}</div></div>
+      <Minimap scrollRef={scrollRef} deps={[items, view, inline, current]} current={current} onPick={onPick} />
+    </div>
+  );
 
   if (view === 'unified') {
     // Em cada bloco: todas as remoções e depois todas as adições (como no git).
@@ -104,7 +187,7 @@ export function DiffView({ result, view, granularity, collapse, compare, lang, c
         const r = it.row, del = side === 'del';
         const segs = r.t === 'mod' && inline.get(it.i) ? inline.get(it.i)[del ? 0 : 1] : null;
         return (
-          <div key={it.i + side} {...rowProps(r, it.i)} data-hunk-start={undefined}><div className={'tk-diff__row dfc-uni is-' + side}>
+          <div key={it.i + side} {...rowProps(r, it.i)} data-k={side} data-hunk-start={undefined}><div className={'tk-diff__row dfc-uni is-' + side}>
             <span className="tk-diff__no">{del ? r.a + 1 : ''}</span><span className="tk-diff__no">{del ? '' : r.b + 1}</span>
             <span className="tk-diff__sign">{del ? '−' : '+'}</span>
             <span className="tk-diff__text"><Code text={del ? a[r.a] : b[r.b]} segs={segs} lang={lang} /></span>
@@ -116,11 +199,11 @@ export function DiffView({ result, view, granularity, collapse, compare, lang, c
         {block.filter((x) => x.row.b >= 0).map((x) => line(x, 'add'))}
       </div>);
     }
-    return <div ref={scrollRef} className="dfc-scroll tk-scroll">{out}</div>;
+    return withMap(out);
   }
 
-  return (
-    <div ref={scrollRef} className="dfc-scroll tk-scroll">
+  return withMap(
+    <>
       {items.map((it) => {
         if (it.fold !== undefined) return fold(it);
         const r = it.row, i = it.i;
@@ -145,6 +228,6 @@ export function DiffView({ result, view, granularity, collapse, compare, lang, c
           </div>
         );
       })}
-    </div>
+    </>
   );
 }
