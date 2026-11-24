@@ -174,7 +174,7 @@ test('standupText: ontem por repositório, hoje por urgência e impedimentos', (
   }, { today: '2026-10-05' });
   assert.equal(t, [
     '## Ontem', '- **api**: fix a; add b', '- **web**: ui', '- Concluí: Revisar PR', '- Sessão com IA: api — Refatora', '',
-    '## Hoje', '- !3 A', '- !1 B', '- C', '',
+    '## Hoje', '- A', '- B', '- C', '',
     '## Impedimentos', '- repo x: conflito', '- Tarefa vencida: A',
   ].join('\n'));
 });

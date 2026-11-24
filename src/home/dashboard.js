@@ -178,8 +178,6 @@ function standupYesterdayRange(now) {
   return { from: from.getTime(), to: to.getTime(), key };
 }
 
-const STANDUP_PRI = { 1: '!1 ', 2: '!2 ', 3: '!3 ' };
-
 /**
  * Standup (Markdown) a partir do que o processo principal juntou:
  * { yesterday: { commits: [{repo, subject}], tasksDone: [{text, noteTitle}], aiSessions: [{title, project}] },
@@ -210,7 +208,7 @@ function standupText(data, { today } = {}) {
   if (todo.length) {
     const rank = (t) => (t.due && today && t.due < today ? 0 : 1);
     todo.sort((a, b) => rank(a) - rank(b) || (a.priority || 9) - (b.priority || 9) || String(a.due || '9999').localeCompare(String(b.due || '9999')));
-    out.push('## Hoje', ...todo.slice(0, 10).map((t) => `- ${STANDUP_PRI[t.priority] || ''}${t.text}`), '');
+    out.push('## Hoje', ...todo.slice(0, 10).map((t) => `- ${t.text}`), '');
   }
 
   const bl = blockers.slice();
