@@ -902,6 +902,35 @@ function createNotesService({ dir, broadcast = () => {}, events = null, historyG
         || String(b.noteUpdated).localeCompare(String(a.noteUpdated)) || a.noteId.localeCompare(b.noteId) || a.index - b.index);
     },
 
+    /**
+     * Tarefas concluídas no intervalo [since, until) (ms), pelo histórico de versões: compara a nota como estava
+     * ao começar o intervalo com a de quando ele terminou. Uma tarefa conta se está marcada no fim e não estava no começo
+     * (ou nem existia). Notas sem versão no intervalo ficam de fora (não há como provar). → [{ noteId, noteTitle, text }]
+     * O "começo" é a 1ª versão guardada dentro do intervalo (o conteúdo de antes da 1ª edição); o "fim", a 1ª versão guardada
+     * depois dele — ou a nota atual quando não há edição posterior.
+     */
+    async tasksDoneBetween(since, until) {
+      const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const out = [];
+      for (const n of notes.values()) {
+        if (n.type === 'snippet' || n.type === 'diagram' || isTemplate(n)) continue;
+        if (Date.parse(n.updated) < since) continue;
+        try {
+          const vs = (await store.listHistory(n.id)).map((v) => ({ ...v, ms: Date.parse(v.at) })).sort((a, b) => a.ms - b.ms);
+          const first = vs.find((v) => v.ms >= since);
+          if (!first || first.ms >= until) continue;
+          const endV = vs.find((v) => v.ms >= until);
+          const before = new Map();
+          for (const t of tasksOf((await store.readVersion(n.id, first.stamp)).content)) before.set(norm(t.text), t.checked);
+          const endContent = endV ? (await store.readVersion(n.id, endV.stamp)).content : n.content;
+          for (const t of tasksOf(endContent)) {
+            if (t.checked && before.get(norm(t.text)) !== true) out.push({ noteId: n.id, noteTitle: displayTitle(n), text: t.text });
+          }
+        } catch { /* nota com histórico ilegível: fica de fora */ }
+      }
+      return out;
+    },
+
     /** Marca/desmarca a n-ésima tarefa (índice de tasks()) da nota. */
     // Lê e grava dentro da fila (serial): duas edições seguidas da mesma nota (marcar + capturar) não se sobrescrevem.
     toggleTask(id, index) {

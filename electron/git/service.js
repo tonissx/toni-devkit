@@ -369,6 +369,31 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     return P.parseReflog((await git(repo, ['reflog', '--date=unix', `--format=${P.REFLOG_FORMAT}`, `-n${Math.min(1000, limit | 0 || 150)}`], { ok: [0, 128] })).stdout);
   }
 
+  /**
+   * Commits da pessoa num intervalo (para o standup): `since`/`until` em ms (until exclusivo). O autor é o `user.name`
+   * ou `user.email` do próprio repositório; sem nenhum configurado, devolve []. Só branches, remotos e HEAD
+   * (nunca o stash nem os pontos de volta do Devkit), sem merges. O intervalo é pela data do commit (committer): commit
+   * reaplicado por rebase ou cherry-pick conta no dia em que foi reaplicado, e o git para de olhar ao achar um commit
+   * mais antigo que `since` (histórico com datas fora de ordem pode perder commits).
+   * → [{ hash, time (s), subject }]
+   */
+  async function activity(repo, { since, until } = {}) {
+    if (!(await hasHead(repo))) return [];
+    const cfg = async (k) => (await git(repo, ['config', '--get', k], { ok: [0, 1] })).stdout.trim();
+    const [name, email] = await Promise.all([cfg('user.name'), cfg('user.email')]);
+    const who = [name, email].filter(Boolean);
+    if (!who.length) return [];
+    const args = ['log', '--no-merges', '--fixed-strings', '-i', '--format=%H%x1f%at%x1f%s', '--max-count=300'];
+    for (const w of who) args.push(`--author=${w.slice(0, 100)}`);
+    if (Number.isFinite(since)) args.push(`--since=${new Date(since).toISOString()}`);
+    if (Number.isFinite(until)) args.push(`--until=${new Date(until - 1000).toISOString()}`);
+    args.push('--branches', '--remotes', 'HEAD');
+    const out = (await git(repo, args)).stdout;
+    const seen = new Set();
+    return out.split('\n').filter(Boolean).map((l) => { const [hash, t, subject] = l.split('\x1f'); return { hash, time: Number(t), subject: subject || '' }; })
+      .filter((c) => c.hash && !seen.has(c.hash) && seen.add(c.hash));
+  }
+
   /** Visão geral: números, atividade dos últimos 90 dias, autores e arquivos mais alterados. */
   async function overview(repo) {
     const s = await status(repo);
@@ -806,7 +831,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
   }
 
   return {
-    init, version, list, add, remove, scan, open, summaries,
+    init, version, list, add, remove, scan, open, summaries, activity,
     status, log, commit, diff, branches, compare, stashes, stashFiles, reflog, overview, backups,
     exec, restoreBackup, mergePreview, conflictFile, rebaseInfo, files,
     blame, searchText, bisectState, tags, cleanPreview, gitignore, rhythm, fileVersions, worktrees,

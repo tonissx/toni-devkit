@@ -1481,3 +1481,23 @@ test('quickopen history: last picked first, no repeats, capped, tolerant to bad 
   assert.deepEqual(loadHistory({ getItem: () => '{lixo' }), []);
   assert.deepEqual(loadHistory(null), []);
 });
+
+test('service: tasksDoneBetween acha o que foi marcado no intervalo pelo histórico', async () => {
+  const dir = tmp();
+  try {
+    const svc = createNotesService({ dir, historyGapMs: 0 });
+    await svc.init();
+    const since = Date.now() - 60 * 1000;
+    const n = await svc.create({ title: 'Dia', content: '- [ ] enviar relatório\n- [x] já estava feita\n- [ ] continua aberta' });
+    await new Promise((r) => setTimeout(r, 5));
+    await svc.save({ id: n.id, content: '- [x] enviar relatório\n- [x] já estava feita\n- [ ] continua aberta\n- [x] nasceu feita' });
+    const done = await svc.tasksDoneBetween(since, Date.now() + 60 * 1000);
+    assert.deepEqual(done.map((t) => t.text).sort(), ['enviar relatório', 'nasceu feita']);
+    assert.equal(done[0].noteId, n.id);
+    // Intervalo no futuro: nada. Nota sem edição guardada no intervalo: fora.
+    assert.deepEqual(await svc.tasksDoneBetween(Date.now() + 60 * 1000, Date.now() + 120 * 1000), []);
+    const quieta = await svc.create({ title: 'Quieta', content: '- [x] velha' });
+    assert.ok(quieta.id);
+    assert.ok(!(await svc.tasksDoneBetween(since, Date.now() + 60 * 1000)).some((t) => t.text === 'velha'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

@@ -1178,3 +1178,30 @@ test('serviço: status informa o remoto e push -u dá upstream à branch nova', 
     assert.equal(st.branch.upstream, 'origin/feat/nova');
   } finally { t.done(); }
 });
+
+test('serviço: activity lista só os commits da pessoa no intervalo', async () => {
+  const t = await setup();
+  try {
+    const dir = makeRepo(t.root, 'proj');
+    const dayAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+    const commitAt = (msg, when, author) => {
+      write(dir, `${msg}.txt`, msg);
+      sh(dir, 'add', '-A');
+      execFileSync('git', ['commit', '-q', '-m', msg, ...(author ? ['--author', author] : [])], {
+        cwd: dir, encoding: 'utf8', env: { ...process.env, LC_ALL: 'C', GIT_AUTHOR_DATE: when, GIT_COMMITTER_DATE: when },
+      });
+    };
+    // Em ordem cronológica: o `git log --since` para ao achar um commit mais antigo que o limite.
+    commitAt('antigo', dayAgo(10));
+    commitAt('ontem', dayAgo(2));
+    commitAt('de outra pessoa', dayAgo(2), 'Outra <outra@x.com>');
+    const repo = await t.svc.add(dir);
+    const got = await t.svc.activity(repo, { since: Date.now() - 3 * 864e5, until: Date.now() - 1 * 864e5 });
+    assert.deepEqual(got.map((c) => c.subject), ['ontem']);
+    assert.equal(typeof got[0].time, 'number');
+    const all = await t.svc.activity(repo, { since: Date.now() - 30 * 864e5 });
+    assert.deepEqual(all.map((c) => c.subject).sort(), ['antigo', 'inicial', 'ontem']);
+    const empty = makeRepo(t.root, 'vazio', { empty: true });
+    assert.deepEqual(await t.svc.activity(await t.svc.add(empty), { since: 0 }), []);
+  } finally { t.done(); }
+});

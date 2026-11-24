@@ -155,6 +155,8 @@ contextBridge.exposeInMainWorld('devkit', {
     tags: () => ipcRenderer.invoke('notes:tags'),
     /** Tarefas ("- [ ]") de todas as notas: { status: 'open'|'done'|'all', tag }. */
     tasks: (filter) => ipcRenderer.invoke('notes:tasks', filter),
+    /** Tarefas concluídas no intervalo [since, until) em ms, pelo histórico de versões. */
+    tasksDoneBetween: (since, until) => ipcRenderer.invoke('notes:tasksDoneBetween', since, until),
     toggleTask: (id, index) => ipcRenderer.invoke('notes:toggleTask', id, index),
     /** Captura rápida: acrescenta "- [ ] texto" à nota Inbox. */
     appendTask: (text) => ipcRenderer.invoke('notes:appendTask', text),
@@ -322,6 +324,8 @@ contextBridge.exposeInMainWorld('devkit', {
     open: (repo) => ipcRenderer.invoke('git:open', repo),
     openIn: (repo, where) => ipcRenderer.invoke('git:open-in', repo, where),
     summaries: () => ipcRenderer.invoke('git:summaries'),
+    /** Commits da pessoa num intervalo (ms; until exclusivo) em um repositório. */
+    activity: (repo, opts) => ipcRenderer.invoke('git:activity', repo, opts),
     status: (repo) => ipcRenderer.invoke('git:status', repo),
     log: (repo, opts) => ipcRenderer.invoke('git:log', repo, opts),
     /** Fotos do Gravatar por e-mail → { [email]: data URL | null }. Só o hash do e-mail sai da máquina. */
@@ -550,6 +554,10 @@ contextBridge.exposeInMainWorld('devkit', {
   /**
    * IA opcional (ver electron/ai/service.js): modo Local (Ollama) ou Nuvem (Claude, chave no Vault — nunca chega aqui).
    */
+  /** Standup do dia: o que foi feito no dia útil anterior e o que há para hoje (git, notas, Monitor de IA). */
+  standup: {
+    today: () => ipcRenderer.invoke('standup:today'),
+  },
   ai: {
     status: () => ipcRenderer.invoke('ai:status'),
     /** Só a configuração (rápido: não consulta o Ollama). */

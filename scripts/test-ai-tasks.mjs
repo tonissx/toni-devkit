@@ -21,6 +21,7 @@ test('todas as tarefas montam system + user em texto', () => {
     logIncident: { groups: [{ level: 'ERROR', count: 3, title: 'x', first: '10:00', last: '10:05' }], total: 10 },
     logInvestigation: { title: 'Fila travada', steps: [{ n: 1, time: '2026-10-22 10:00:03,638', level: 'ERROR', text: 'ERROR timeout' }] },
     aimonSummary: { title: 'Sessão', prompts: ['faz X'], answers: ['feito'] }, aimonReview: { diff: patch, goal: 'ajustar a' }, aimonBrief: { title: 'Sessão', prompts: ['faz X'] },
+    standup: { date: '2026-10-19', text: '## Ontem\n- fix' },
     aimonDiary: { date: '2026-10-19', sessions: [{ title: 'Sessão', prompts: ['faz X'] }], totals: { workMs: 3600e3 } },
     aimonPr: { title: 'Sessão', branch: 'feat/x', plan: '# Plano\n- passo', commits: [{ hash: 'abcdef1', subject: 'faz x' }], files: ['src/a.js'] },
     aimonPatterns: { sessions: [{ provider: 'claude', prompt: 'faz x', turns: 3, corrections: 1, toolErrors: 0 }, { provider: 'claude', prompt: 'faz y', turns: 2 }, { provider: 'codex', prompt: 'faz z', turns: 9, corrections: 4 }], plans: [{ status: 'rejected', title: 'Plano', reason: 'amplo demais' }] },
@@ -319,4 +320,13 @@ test('db/schema: fkPath e mentionedTables', () => {
   assert.deepEqual(fkPath(sc, 'dbo.A', 'dbo.A'), []);
   assert.equal(fkPath(sc, 'dbo.A', 'dbo.D'), null);
   assert.deepEqual(mentionedTables(sc, 'liga a com C'), ['dbo.A', 'dbo.C']);
+});
+
+test('standup: só o texto entra, sem segredos, e vazio vira erro em português', () => {
+  assert.throws(() => TASKS.standup.build({ text: '  ' }), /Não há atividade/);
+  const r = TASKS.standup.build({ date: '2026-10-19', text: '## Ontem\n- ajustei login com senha=abc123 e ana@x.com' });
+  assert.doesNotMatch(r.user, /abc123|ana@x\.com/);
+  assert.match(r.user, /‹oculto›/);
+  assert.match(r.user, /Data: 2026-10-19/);
+  assert.match(r.system, /SOMENTE/);
 });

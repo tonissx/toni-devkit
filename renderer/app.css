@@ -88,7 +88,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .jsv__scroll { height: 100%; overflow: auto; padding: 8px; background: var(--tk-surface-1); font: 12px var(--tk-font-mono); }
 
 .home-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-.home-section { padding: 8px 24px 24px; display: flex; flex-direction: column; gap: 12px; max-width: 1200px; }
+.home-section { padding: 8px 24px 24px; display: flex; flex-direction: column; gap: 12px; }
 .home-section__title { font: 500 11px/1 var(--tk-font-sans); color: var(--tk-text-3); text-transform: uppercase; letter-spacing: .06em; }
 
 /* Início: painel do dia */
@@ -96,9 +96,9 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .home-sub { text-transform: none; }
 .home-sub::first-letter { text-transform: uppercase; }
 .home-sub__sep { margin: 0 6px; opacity: .5; }
-.home-custom { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 14px 24px 0; padding: 10px 14px; max-width: 1152px;
+.home-custom { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin: 14px 24px 0; padding: 10px 14px;
   border: 1px dashed var(--tk-border-strong); border-radius: var(--tk-radius-md); background: var(--tk-surface-2); }
-.home-status { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 24px; max-width: 1200px; }
+.home-status { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 24px; }
 .home-status:empty { display: none; }
 .home-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-pill);
   background: var(--tk-surface-2); color: var(--tk-text-2); font: 400 12px var(--tk-font-sans); cursor: pointer; }
@@ -106,7 +106,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .home-chip.is-warn { color: var(--tk-amber); border-color: var(--tk-amber-a12); background: var(--tk-amber-a12); }
 .home-chip.is-error { color: var(--tk-red); border-color: var(--tk-red-a24); background: var(--tk-red-a12); }
 .home-chip.is-accent { color: var(--tk-accent-text); border-color: var(--tk-green-a24); background: var(--tk-green-a12); }
-.home-dash { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; padding: 0 24px 16px; max-width: 1200px; align-items: start; }
+.home-dash { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 12px; padding: 0 24px 16px; align-items: start; }
 .home-panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .home-panel .tk-card__head { margin-bottom: 2px; }
 .home-msg { display: flex; align-items: center; gap: 8px; padding: 6px 2px; font-size: 12.5px; color: var(--tk-text-3); line-height: 1.45; }
@@ -1839,7 +1839,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 
 /* Início: pontos de cor. Cada painel ganha uma --hue tirada da paleta de sintaxe do tema (--tk-syn-*), que todos
    os temas redefinem — então as cores acompanham Hacking, Dracula, Tokyo Night, Claro etc. */
-.home-panel.is-tasks, .home-tool.is-code { --hue: var(--tk-syn-keyword); }
+.home-panel.is-tasks, .home-panel.is-standup, .home-tool.is-code { --hue: var(--tk-syn-keyword); }
 .home-panel.is-notes, .home-tool.is-know { --hue: var(--tk-syn-string); }
 .home-panel.is-links { --hue: var(--tk-syn-bool); }
 .home-panel.is-dc, .home-tool.is-core { --hue: var(--tk-syn-number); }
@@ -2252,3 +2252,9 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   padding-top: 10px;
   margin-top: -4px;
 }
+
+/* Início — painel Standup (ocupa a linha toda) */
+.home-panel.is-standup { grid-column: 1 / -1; }
+.home-standup { font-size: 13px; }
+.home-standup .ai-md > :first-child { margin-top: 0; }
+.home-standup__bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }

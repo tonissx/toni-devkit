@@ -79,6 +79,7 @@
       "src/logs/**",
       "src/db/**",
       "src/sql/risks.js",
+      "src/home/dashboard.js",
       "src/ai/**",
       "src/commands/search.js",
       "src/commands/binds.js",
