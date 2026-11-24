@@ -163,7 +163,65 @@ function dbAttention(summaries) {
   }).sort((a, b) => RANK[a.level] - RANK[b.level] || String(a.name).localeCompare(String(b.name), 'pt-BR'));
 }
 
+/**
+ * Intervalo de "ontem" do standup: o dia útil anterior (segunda olha a sexta; domingo e sábado também), em ms locais.
+ * { from: 00:00 do dia, to: 00:00 do dia seguinte (exclusivo), key: 'AAAA-MM-DD' }.
+ */
+function standupYesterdayRange(now) {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let back = 1;
+  const wd = d.getDay(); // 0 dom … 6 sáb
+  if (wd === 1) back = 3; else if (wd === 0) back = 2;
+  const from = new Date(d.getFullYear(), d.getMonth(), d.getDate() - back);
+  const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1);
+  const key = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}-${String(from.getDate()).padStart(2, '0')}`;
+  return { from: from.getTime(), to: to.getTime(), key };
+}
+
+const STANDUP_PRI = { 1: '!1 ', 2: '!2 ', 3: '!3 ' };
+
+/**
+ * Standup (Markdown) a partir do que o processo principal juntou:
+ * { yesterday: { commits: [{repo, subject}], tasksDone: [{text, noteTitle}], aiSessions: [{title, project}] },
+ *   today: { tasks: [{text, due, priority, noteTitle}] }, blockers: [string] }.
+ * `today` (AAAA-MM-DD) decide o que é "vencida". Devolve '' quando não há nada a contar.
+ */
+function standupText(data, { today } = {}) {
+  const y = (data && data.yesterday) || {};
+  const commits = y.commits || [];
+  const done = y.tasksDone || [];
+  const ai = y.aiSessions || [];
+  const todo = ((data && data.today && data.today.tasks) || []).slice();
+  const blockers = ((data && data.blockers) || []).filter(Boolean);
+  const out = [];
+
+  const yl = [];
+  const byRepo = new Map();
+  for (const c of commits) (byRepo.get(c.repo) || byRepo.set(c.repo, []).get(c.repo)).push(c.subject);
+  for (const [repo, subs] of byRepo) yl.push(`- **${repo}**: ${subs.length === 1 ? subs[0] : subs.join('; ')}`);
+  for (const t of done) yl.push(`- Concluí: ${t.text}`);
+  const seenAi = new Set();
+  for (const s of ai) {
+    const label = [s.project, s.title].filter(Boolean).join(' — ');
+    if (label && !seenAi.has(label)) { seenAi.add(label); yl.push(`- Sessão com IA: ${label}`); }
+  }
+  if (yl.length) out.push('## Ontem', ...yl, '');
+
+  if (todo.length) {
+    const rank = (t) => (t.due && today && t.due < today ? 0 : 1);
+    todo.sort((a, b) => rank(a) - rank(b) || (a.priority || 9) - (b.priority || 9) || String(a.due || '9999').localeCompare(String(b.due || '9999')));
+    out.push('## Hoje', ...todo.slice(0, 10).map((t) => `- ${STANDUP_PRI[t.priority] || ''}${t.text}`), '');
+  }
+
+  const bl = blockers.slice();
+  for (const t of todo) if (t.due && today && t.due < today) bl.push(`Tarefa vencida: ${t.text}`);
+  if (bl.length) out.push('## Impedimentos', ...[...new Set(bl)].slice(0, 8).map((b) => `- ${b}`), '');
+
+  return out.join('\n').trim();
+}
+
 const PANELS = [
+  { id: 'standup', name: 'Standup' },
   { id: 'tasks', name: 'Tarefas' },
   { id: 'notes', name: 'Notas' },
   { id: 'git', name: 'Repositórios git' },
@@ -174,4 +232,4 @@ const PANELS = [
   { id: 'tools', name: 'Ferramentas' },
 ];
 
-module.exports = { greeting, longDate, daysBetween, dueLabel, agenda, daySummary, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, logsAttention, dbAttention, PANELS };
+module.exports = { greeting, longDate, daysBetween, dueLabel, agenda, daySummary, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, logsAttention, dbAttention, standupYesterdayRange, standupText, PANELS };

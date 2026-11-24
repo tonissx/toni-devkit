@@ -519,7 +519,7 @@ ipcMain.handle('notes:sync-connect', async () => { await notesReady; return note
 ipcMain.handle('notes:sync-disconnect', async () => { await notesReady; return notesSync.disconnect(); });
 ipcMain.handle('notes:sync-now', async (_e, opts) => { await notesReady; await notesSync.syncNow(opts); return notesSync.status(); });
 
-const NOTES_API = ['info', 'reload', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage', 'saveAttachment', 'orphanAssets', 'cleanAssets', 'backlinks', 'linkRefs', 'renameLinks', 'history', 'version', 'restoreVersion', 'trashList', 'restoreFromTrash', 'deleteFromTrash', 'emptyTrash', 'templates', 'fromTemplate', 'ensureRootFolder', 'graph', 'trashCount',
+const NOTES_API = ['info', 'reload', 'list', 'get', 'save', 'create', 'remove', 'restore', 'search', 'recent', 'markViewed', 'resolveLink', 'tags', 'tasks', 'tasksDoneBetween', 'toggleTask', 'appendTask', 'folders', 'createFolder', 'renameFolder', 'moveFolder', 'moveNote', 'removeFolder', 'restoreFolder', 'saveImage', 'saveAttachment', 'orphanAssets', 'cleanAssets', 'backlinks', 'linkRefs', 'renameLinks', 'history', 'version', 'restoreVersion', 'trashList', 'restoreFromTrash', 'deleteFromTrash', 'emptyTrash', 'templates', 'fromTemplate', 'ensureRootFolder', 'graph', 'trashCount',
   'setFolderMeta', 'moveFolderOrder', 'folderClash', 'duplicateFolder', 'trashFolders', 'restoreFolderFromTrash', 'folderAbs'];
 for (const fn of NOTES_API) {
   ipcMain.handle('notes:' + fn, async (_e, ...args) => { await notesReady; return notes[fn](...args); });
@@ -853,7 +853,7 @@ function initGit() {
   gitReady = gitSvc.init().catch((e) => { console.error('[git]', e); });
 }
 
-const GIT_API = ['version', 'list', 'add', 'remove', 'scan', 'open', 'summaries', 'status', 'log', 'commit', 'diff', 'branches', 'compare', 'stashes', 'stashFiles', 'reflog', 'overview', 'backups', 'exec', 'restoreBackup', 'mergePreview', 'conflictFile', 'rebaseInfo', 'files', 'blame', 'searchText', 'bisectState', 'tags', 'cleanPreview', 'gitignore', 'rhythm', 'fileVersions', 'worktrees'];
+const GIT_API = ['version', 'list', 'add', 'remove', 'scan', 'open', 'summaries', 'activity', 'status', 'log', 'commit', 'diff', 'branches', 'compare', 'stashes', 'stashFiles', 'reflog', 'overview', 'backups', 'exec', 'restoreBackup', 'mergePreview', 'conflictFile', 'rebaseInfo', 'files', 'blame', 'searchText', 'bisectState', 'tags', 'cleanPreview', 'gitignore', 'rhythm', 'fileVersions', 'worktrees'];
 for (const fn of GIT_API) {
   ipcMain.handle('git:' + fn, async (_e, ...args) => { await gitReady; return gitSvc[fn](...args); });
 }
@@ -1133,6 +1133,40 @@ ipcMain.handle('aimon:search', async (_e, q, opts) => {
   return r;
 });
 ipcMain.handle('aimon:dayDigest', () => aimon().dayDigest());
+
+// Standup do dia (painel da Início): o que foi feito no dia útil anterior (commits da pessoa, tarefas concluídas pelo
+// histórico das notas, sessões do Monitor de IA) e o que há para hoje. Cada fonte falha sozinha: uma que quebra não derruba as outras.
+ipcMain.handle('standup:today', async () => {
+  const D = require('../src/home/dashboard.js');
+  const nowD = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const today = `${nowD.getFullYear()}-${pad(nowD.getMonth() + 1)}-${pad(nowD.getDate())}`;
+  const range = D.standupYesterdayRange(nowD);
+  const data = { date: today, yesterdayKey: range.key, yesterday: { commits: [], tasksDone: [], aiSessions: [] }, today: { tasks: [] }, blockers: [] };
+  try {
+    await gitReady;
+    const sums = await gitSvc.summaries();
+    const rows = sums.filter((s) => !s.error).slice(0, 30);
+    const per = await Promise.all(rows.map((s) => gitSvc.activity(s.path, { since: range.from, until: range.to }).then((l) => l.map((c) => ({ repo: s.name, subject: c.subject })), () => [])));
+    data.yesterday.commits = per.flat();
+    for (const r of D.repoAttention(sums)) if (r.level === 'conflict') data.blockers.push(`${r.name}: ${r.notes.join(', ')}`);
+  } catch (e) { console.error('[standup] git', e); }
+  try {
+    await notesReady;
+    data.yesterday.tasksDone = (await notes.tasksDoneBetween(range.from, range.to)).slice(0, 30);
+    data.today.tasks = notes.tasks({ status: 'open' })
+      .filter((t) => (t.due && t.due <= today) || (!t.due && t.priority === 1))
+      .slice(0, 15).map((t) => ({ text: t.text, due: t.due, priority: t.priority, noteTitle: t.noteTitle }));
+  } catch (e) { console.error('[standup] notas', e); }
+  try {
+    // Só o que o acompanhamento já tem em memória: sem o monitor aberto não há sessões (e a seção some).
+    const { lanes } = aimon().lanes({ since: range.from });
+    data.yesterday.aiSessions = lanes
+      .filter((l) => !l.parentId && l.segments.some((s) => s.to > range.from && s.from < range.to))
+      .map((l) => ({ title: l.title || l.label || '', project: l.project || '' }));
+  } catch (e) { console.error('[standup] ia', e); }
+  return data;
+});
 // Abre um terminal na pasta da sessão rodando `claude --resume <id>` (ou `codex resume <id>`, ou a ferramenta pura).
 ipcMain.handle('aimon:resume', async (_e, req) => {
   const r = req && typeof req === 'object' ? req : {};

@@ -413,6 +413,7 @@ ChatGPT — montado localmente, sem outra chamada à IA.
 | SQL Visualizer | **Lineage**: explicar a query (passo a passo por CTE) ou só a coluna selecionada, a partir das origens que o Devkit já calculou · **Diagrama ER**: documentar o schema (descrição por tabela e FKs prováveis que faltam), só a tabela selecionada e as vizinhas quando há seleção · **Explorador**: perguntar ao schema (o menor caminho de FKs é calculado no app e a IA só redige o SQL) · **Plano**: explicar o plano. Vão só nomes de tabelas, colunas, tipos e chaves — nunca dados; o SQL passa pelo filtro de segredos |
 | Logs | **Explicar** o erro selecionado (o que aconteceu, causa provável, onde olhar, como confirmar — com o contexto do Fluig quando é um log do Fluig) · Problemas → **Resumir** (triagem dos grupos do filtro) · Investigação → **Analisar** o passo a passo guardado (e perguntar sobre ele). O texto passa antes pelo filtro de segredos |
 | Notes | Botão **IA** no editor: **título e tags** (em chips, reaproveitando as tags que já existem), **Resumir** (insere no topo), **Transformar em checklist** (seleção ou nota toda) · **Perguntar às notas**: digite a pergunta na busca |
+| Início | **Standup**: reescreve o texto da daily (Ontem / Hoje / Impedimentos) que o Devkit já montou, em tom de standup — sem inventar itens. Vai só o texto do painel, pelo filtro de segredos |
 | Palette | Comece com **`?`** para perguntar (pode sugerir ações do Devkit) · em Notes, `?` pergunta às notas · **IA: explicar o que está copiado** (SQL, JSON, XML, código ou erro com stack) |
 
 **Sem IA** (sempre disponíveis): avisos de risco no SQL (UPDATE/DELETE sem WHERE, JOIN sem ON, SELECT *, NOT IN com
@@ -446,6 +447,14 @@ muda.
 - **Cabeçalho**: saudação conforme a hora do dia, a data e o resumo do que vence ("1 tarefa vencida · 2 tarefas para hoje")
 - **Status**: quantidade de notas, estado do cofre (aberto → clique bloqueia; bloqueado → abre o Vault), aviso quando
   outro app ocupa `Ctrl+Alt+Space` e a atualização disponível/baixada (um clique baixa ou reinicia já na versão nova)
+- **Standup**: o texto da sua daily, montado sozinho — **Ontem** (o dia útil anterior; na segunda, a sexta): seus commits por
+  repositório, as tarefas que você concluiu nas Notes e as sessões do Monitor de IA; **Hoje**: tarefas vencidas, de hoje e
+  as de prioridade `!1` sem prazo; **Impedimentos**: repositórios em conflito/merge e tarefas vencidas. **Copiar**,
+  **Salvar como nota** (tag `standup`) e, com a IA ligada, **✦ Reescrever** (só o texto já montado é enviado, com o filtro
+  de segredos; **Ver o que é enviado** mostra o pedido). Carrega ao abrir e no **Atualizar**. De onde vem cada coisa: commits
+  do `user.name`/`user.email` do repositório, pela data do commit (um rebase reaplica a data); tarefas concluídas pela
+  comparação das **versões guardadas da nota** (o histórico das Notes — uma tarefa marcada numa nota sem versão no dia não
+  aparece); sessões de IA só se o Monitor de IA já as acompanhava (não liga o acompanhamento sozinho)
 - **Tarefas**: vencidas, de hoje e dos próximos 7 dias, mais as sem prazo que têm prioridade. Marcar grava na nota;
   clicar no texto abre a nota; o campo no topo captura uma tarefa no **Inbox** (`@hoje`/`@amanha` viram a data)
 - **Notas**: as **fixadas** em cima (sempre no mesmo lugar) e as **recentes** (editadas e vistas) embaixo; **Nova** abre uma nota em branco; o ícone que aparece ao passar o

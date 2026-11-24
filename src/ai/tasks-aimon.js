@@ -84,6 +84,21 @@ module.exports = function aimonTasks({ clip, tidy, PT, MD, redact }) {
       clean: tidy,
     },
 
+    standup: {
+      label: 'Standup do dia', maxTokens: 600,
+      build(i) {
+        const text = String(i.text == null ? '' : i.text).trim();
+        if (!text) throw new Error('Não há atividade para o standup');
+        return {
+          system: ['Você reescreve o standup diário de uma pessoa desenvolvedora para ela falar ou colar no chat da equipe.', PT, MD,
+            'Mantenha as seções "## Ontem", "## Hoje" e "## Impedimentos" que existirem, em tópicos curtos, em primeira pessoa e tom natural. Agrupe itens parecidos.',
+            'Use SOMENTE os itens fornecidos: não invente trabalho, prazos nem impedimentos. Não acrescente seções que não existem no texto.'].join('\n'),
+          user: `${i.date ? `Data: ${safe(i.date, 12)}\n\n` : ''}${safe(text, 6000)}`,
+        };
+      },
+      clean: tidy,
+    },
+
     aimonPr: {
       label: 'Descrição de PR', maxTokens: 800,
       build(i) {

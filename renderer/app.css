@@ -1839,7 +1839,7 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 
 /* Início: pontos de cor. Cada painel ganha uma --hue tirada da paleta de sintaxe do tema (--tk-syn-*), que todos
    os temas redefinem — então as cores acompanham Hacking, Dracula, Tokyo Night, Claro etc. */
-.home-panel.is-tasks, .home-tool.is-code { --hue: var(--tk-syn-keyword); }
+.home-panel.is-tasks, .home-panel.is-standup, .home-tool.is-code { --hue: var(--tk-syn-keyword); }
 .home-panel.is-notes, .home-tool.is-know { --hue: var(--tk-syn-string); }
 .home-panel.is-links { --hue: var(--tk-syn-bool); }
 .home-panel.is-dc, .home-tool.is-core { --hue: var(--tk-syn-number); }
@@ -2252,3 +2252,9 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
   padding-top: 10px;
   margin-top: -4px;
 }
+
+/* Início — painel Standup (ocupa a linha toda) */
+.home-panel.is-standup { grid-column: 1 / -1; }
+.home-standup { font-size: 13px; }
+.home-standup .ai-md > :first-child { margin-top: 0; }
+.home-standup__bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }

@@ -150,3 +150,36 @@ test('PANELS tem ids únicos', () => {
   const ids = H.PANELS.map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length);
 });
+
+test('standupYesterdayRange: dia útil anterior (segunda olha a sexta)', () => {
+  const k = (d) => H.standupYesterdayRange(d).key;
+  assert.equal(k(new Date(2026, 9, 6, 9)), '2026-10-05');   // terça → segunda
+  assert.equal(k(new Date(2026, 9, 5, 9)), '2026-10-02');   // segunda → sexta
+  assert.equal(k(new Date(2026, 9, 4, 9)), '2026-10-02');   // domingo → sexta
+  assert.equal(k(new Date(2026, 9, 3, 9)), '2026-10-02');   // sábado → sexta
+  const r = H.standupYesterdayRange(new Date(2026, 9, 5, 9));
+  assert.equal(r.from, new Date(2026, 9, 2).getTime());
+  assert.equal(r.to, new Date(2026, 9, 3).getTime());
+});
+
+test('standupText: ontem por repositório, hoje por urgência e impedimentos', () => {
+  const t = H.standupText({
+    yesterday: {
+      commits: [{ repo: 'api', subject: 'fix a' }, { repo: 'api', subject: 'add b' }, { repo: 'web', subject: 'ui' }],
+      tasksDone: [{ text: 'Revisar PR' }],
+      aiSessions: [{ project: 'api', title: 'Refatora' }, { project: 'api', title: 'Refatora' }],
+    },
+    today: { tasks: [{ text: 'B', due: '2026-10-10', priority: 1 }, { text: 'A', due: '2026-10-01', priority: 3 }, { text: 'C', due: null, priority: null }] },
+    blockers: ['repo x: conflito'],
+  }, { today: '2026-10-05' });
+  assert.equal(t, [
+    '## Ontem', '- **api**: fix a; add b', '- **web**: ui', '- Concluí: Revisar PR', '- Sessão com IA: api — Refatora', '',
+    '## Hoje', '- !3 A', '- !1 B', '- C', '',
+    '## Impedimentos', '- repo x: conflito', '- Tarefa vencida: A',
+  ].join('\n'));
+});
+
+test('standupText: vazio quando não há nada a contar', () => {
+  assert.equal(H.standupText({}), '');
+  assert.equal(H.standupText({ yesterday: { commits: [], tasksDone: [], aiSessions: [] }, today: { tasks: [] }, blockers: [] }), '');
+});
