@@ -372,15 +372,16 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
   /** Visão geral: números, atividade dos últimos 90 dias, autores e arquivos mais alterados. */
   async function overview(repo) {
     const s = await status(repo);
-    if (s.unborn) return { status: s, commits: 0, branches: 0, tags: 0, activity: [], authors: [], hotspots: [], last: null };
-    const [count, br, tags, act, authors, hot, last] = await Promise.all([
+    if (s.unborn) return { status: s, commits: 0, branches: 0, tags: 0, activity: [], authors: [], hotspots: [], last: null, recent: [], lastFetch: null };
+    const [count, br, tags, act, authors, hot, recent, lastFetch] = await Promise.all([
       git(repo, ['rev-list', '--count', 'HEAD']),
       git(repo, ['for-each-ref', '--format=x', 'refs/heads']),
       git(repo, ['for-each-ref', '--format=x', 'refs/tags']),
       git(repo, ['log', '--since=90.days.ago', '--format=%at', 'HEAD']),
       git(repo, ['shortlog', '-sne', 'HEAD']),
       git(repo, ['log', '--since=180.days.ago', '--format=', '--name-only', 'HEAD']),
-      log(repo, { limit: 1, ref: 'HEAD' }),
+      log(repo, { limit: 5, ref: 'HEAD' }),
+      fetchTime(repo),
     ]);
     const days = new Map();
     // Dia LOCAL (não UTC): no Brasil, commit depois das 21h ia para o dia seguinte no mapa.
@@ -397,10 +398,22 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       branches: br.stdout.split('\n').filter(Boolean).length,
       tags: tags.stdout.split('\n').filter(Boolean).length,
       activity,
-      authors: authors.stdout.split('\n').filter(Boolean).map((l) => { const m = /^\s*(\d+)\t(.*?)(?: <(.*)>)?$/.exec(l); return m ? { n: +m[1], name: m[2], email: m[3] || '' } : null; }).filter(Boolean).slice(0, 8),
+      authors: P.mergeAuthors(authors.stdout.split('\n').filter(Boolean).map((l) => { const m = /^\s*(\d+)\t(.*?)(?: <(.*)>)?$/.exec(l); return m ? { n: +m[1], name: m[2], email: m[3] || '' } : null; }).filter(Boolean)).slice(0, 8),
       hotspots: [...fileCount].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([p, n]) => ({ path: p, n })),
-      last: last[0] || null,
+      last: recent[0] || null,
+      recent,
+      lastFetch,
     };
+  }
+
+  /** Quando foi o último fetch (mtime do FETCH_HEAD, em segundos) — null se nunca buscou. */
+  async function fetchTime(repo) {
+    const r = await repoOf(repo);
+    // --git-path acha o FETCH_HEAD certo também numa worktree (a pasta .git dela não é a do repositório principal).
+    const out = await run(r.top, ['rev-parse', '--git-path', 'FETCH_HEAD'], { ok: [0, 128] }).catch(() => null);
+    const p = out && out.stdout.trim();
+    if (!p) return null;
+    return fs.stat(path.resolve(r.top, p)).then((st) => Math.floor(st.mtimeMs / 1000), () => null);
   }
 
   /* ─────────────── Pontos de volta ─────────────── */

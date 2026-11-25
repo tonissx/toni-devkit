@@ -596,6 +596,10 @@ test('serviço: repositório sem commits e visão geral', async () => {
     assert.equal(ov.activity.at(-1).n, 1);
     assert.equal(ov.authors[0].name, 'Teste');
     assert.deepEqual(ov.hotspots, [{ path: 'x.txt', n: 1 }]);
+    assert.equal(ov.recent.length, 1);
+    assert.equal(ov.recent[0].subject, 'primeiro');
+    assert.equal(ov.last.hash, ov.recent[0].hash);
+    assert.equal(ov.lastFetch, null); // nunca buscou
     const sum = await t.svc.summaries();
     assert.equal(sum[0].branch, 'main');
     assert.equal(sum[0].changes, 0);
@@ -1177,4 +1181,22 @@ test('serviço: status informa o remoto e push -u dá upstream à branch nova', 
     st = await t.svc.status(repo);
     assert.equal(st.branch.upstream, 'origin/feat/nova');
   } finally { t.done(); }
+});
+
+test('mergeAuthors: junta a mesma pessoa com e-mails ou grafias diferentes', () => {
+  const out = P.mergeAuthors([
+    { n: 703, name: 'Gabriel Costa Damasceno', email: 'gabriel@empresa.com' },
+    { n: 120, name: 'Gabriel Costa Damasceno', email: 'gabriel@gmail.com' },
+    { n: 50, name: 'leonardo.anacleto', email: 'leo@empresa.com' },
+    { n: 900, name: 'Leonardo Anacleto', email: 'leo@empresa.com' },
+    { n: 10, name: 'antonio  gonçalves', email: 'a@x.com' },
+    { n: 30, name: 'Antonio Gonçalves', email: 'b@x.com' },
+    { n: 5, name: 'Outra Pessoa', email: 'outra@x.com' },
+  ]);
+  assert.deepEqual(out.map((a) => [a.name, a.n]), [
+    ['Leonardo Anacleto', 950],
+    ['Gabriel Costa Damasceno', 823],
+    ['Antonio Gonçalves', 40],
+    ['Outra Pessoa', 5],
+  ]);
 });

@@ -5,9 +5,9 @@ import { gitApi, useRepoData, ago, short, FilePath, RefBadges, OpButton } from '
 
 const { Icon, Spinner } = DS;
 
-function Kpi({ icon, label, value, tone, onClick }) {
+function Kpi({ icon, label, value, tone, onClick, title }) {
   return (
-    <button type="button" className={'gt-kpi' + (tone ? ' is-' + tone : '')} onClick={onClick} disabled={!onClick}>
+    <button type="button" className={'gt-kpi' + (tone ? ' is-' + tone : '')} onClick={onClick} disabled={!onClick} title={title}>
       <span className="gt-kpi__icon"><Icon name={icon} size={16} /></span>
       <span className="gt-kpi__value">{value}</span>
       <span className="gt-kpi__label">{label}</span>
@@ -60,6 +60,17 @@ function Bars({ items, label, value, onClick }) {
   );
 }
 
+/** Situação da branch em relação à remota — o ahead/behind vale para o último fetch, por isso mostra quando foi. */
+function syncInfo(s, lastFetch) {
+  const b = s.branch;
+  const when = lastFetch ? 'busca ' + ago(lastFetch) : 'nunca buscou';
+  if (!s.remote) return { value: 'só local', label: 'repositório sem remoto' };
+  if (b.detached) return { value: '—', label: 'HEAD solto, sem branch remota' };
+  if (!b.upstream) return { value: 'não publicada', label: `branch ainda não está em ${s.remote}`, tone: 'warn' };
+  const parts = [b.behind ? `↓${b.behind}` : '', b.ahead ? `↑${b.ahead}` : ''].filter(Boolean);
+  return { value: parts.length ? parts.join(' ') : 'em dia', label: `${b.upstream} · ${when}`, tone: b.behind ? 'warn' : '' };
+}
+
 const DAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
 /** Quando os commits acontecem: dias da semana × horas (180 dias). */
@@ -89,7 +100,7 @@ function Rhythm({ repo }) {
   );
 }
 
-export function Overview({ repo, status, go, run }) {
+export function Overview({ repo, status, go, run, net }) {
   const { data: ov, error } = useRepoData(repo, (r) => gitApi().overview(r));
   if (error) return <div className="gt-msg is-error">{error}</div>;
   if (!ov) return <div className="gt-msg"><Spinner size={14} /> Lendo o repositório…</div>;
@@ -99,7 +110,12 @@ export function Overview({ repo, status, go, run }) {
     <div className="gt-overview tk-scroll">
       <div className="gt-kpis">
         <Kpi icon="file-diff" label="mudanças pendentes" value={changes} tone={changes ? 'warn' : ''} onClick={() => go('changes')} />
-        <Kpi icon="git-commit-horizontal" label="commits na branch" value={ov.commits} onClick={() => go('history')} />
+        {(() => {
+          const sync = syncInfo(s, ov.lastFetch);
+          return <Kpi icon="refresh-cw" label={sync.label} value={sync.value} tone={sync.tone}
+            onClick={s.remote ? () => (net || run)({ op: 'fetch' }) : undefined}
+            title={s.remote ? 'Clique para buscar da remota agora (git fetch)' : undefined} />;
+        })()}
         <Kpi icon="git-branch" label="branches" value={ov.branches} onClick={() => go('branches')} />
         <Kpi icon="archive" label="stashes" value={s.stashes} onClick={() => go('stash')} />
         <Kpi icon="tag" label="tags" value={ov.tags} />
@@ -120,7 +136,7 @@ export function Overview({ repo, status, go, run }) {
           <Rhythm repo={repo} />
           {ov.last && (
             <section className="gt-card gt-ov-last">
-              <h3><Icon name="git-commit-horizontal" size={14} /> Último commit</h3>
+              <h3><Icon name="git-commit-horizontal" size={14} /> Últimos commits</h3>
               <div className="gt-last">
                 <div className="gt-last__subject">{ov.last.subject}</div>
                 <RefBadges refs={ov.last.refs} />
@@ -130,6 +146,16 @@ export function Overview({ repo, status, go, run }) {
                   <button type="button" className="gt-op is-ghost is-sm" onClick={() => go('history', { hash: ov.last.hash })}><Icon name="eye" size={13} /><span>Ver</span></button>
                 </div>
               </div>
+              {(ov.recent || []).length > 1 && (
+                <div className="gt-recent">
+                  {ov.recent.slice(1).map((c) => (
+                    <button type="button" key={c.hash} className="gt-recent__row" onClick={() => go('history', { hash: c.hash })} title={c.subject}>
+                      <span className="gt-recent__subject">{c.subject}</span>
+                      <span className="gt-recent__meta">{c.author} · {ago(c.time)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </section>
           )}
           <section className="gt-card gt-ov-authors">

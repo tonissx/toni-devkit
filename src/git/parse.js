@@ -309,7 +309,30 @@ function lockOwnerPid(reason) {
   return m ? Number(m[1]) : null;
 }
 
+/**
+ * Junta as linhas do `git shortlog -sne` que são a mesma pessoa: o shortlog separa por nome+e-mail, então quem
+ * commitou com dois e-mails (ou o mesmo e-mail com o nome escrito diferente) aparecia duas vezes. Mesma pessoa =
+ * mesmo nome (sem caixa/acentos/espaços extras) OU mesmo e-mail. Fica o nome da variante com mais commits.
+ */
+function mergeAuthors(list) {
+  const norm = (x) => String(x || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const groups = [];
+  const byName = new Map();
+  const byEmail = new Map();
+  for (const a of [...list].sort((x, y) => y.n - x.n)) {
+    const nk = norm(a.name);
+    const ek = norm(a.email);
+    const g = (nk && byName.get(nk)) || (ek && byEmail.get(ek));
+    if (g) { g.n += a.n; g.emails.add(a.email); } else groups.push({ n: a.n, name: a.name, email: a.email, emails: new Set([a.email]) });
+    const target = g || groups[groups.length - 1];
+    if (nk && !byName.has(nk)) byName.set(nk, target);
+    if (ek && !byEmail.has(ek)) byEmail.set(ek, target);
+  }
+  return groups.map(({ emails, ...g }) => g).sort((x, y) => y.n - x.n);
+}
+
 module.exports = {
+  mergeAuthors,
   parseWorktrees, lockOwnerPid,
   parseBlame, PICKAXE_FORMAT, parsePickaxe, parseBisectLog, parseCleanPreview,
   US, RS, LOG_FORMAT, BRANCH_FORMAT, REFLOG_FORMAT, STASH_FORMAT,
