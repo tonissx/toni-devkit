@@ -69,7 +69,7 @@ function Rhythm({ repo }) {
   const max = Math.max(1, ...data.grid.flat());
   const peak = data.grid.flatMap((row, d) => row.map((n, h) => ({ n, d, h }))).sort((a, b) => b.n - a.n)[0];
   return (
-    <section className="gt-card is-wide">
+    <section className="gt-card gt-ov-rhythm">
       <h3><Icon name="clock" size={14} /> Ritmo (últimos 180 dias)</h3>
       <div className="gt-rhythm">
         <div className="gt-rhythm__hours">{Array.from({ length: 24 }, (_, h) => <span key={h}>{h % 3 === 0 ? h + 'h' : ''}</span>)}</div>
@@ -108,12 +108,12 @@ export function Overview({ repo, status, go, run }) {
         </div>
       ) : (
         <div className="gt-ov-grid">
-          <section className="gt-card is-wide">
+          <section className="gt-card gt-ov-heat">
             <h3><Icon name="activity" size={14} /> Atividade</h3>
             <Heatmap activity={ov.activity} />
           </section>
           {ov.last && (
-            <section className="gt-card">
+            <section className="gt-card gt-ov-last">
               <h3><Icon name="git-commit-horizontal" size={14} /> Último commit</h3>
               <div className="gt-last">
                 <div className="gt-last__subject">{ov.last.subject}</div>
@@ -127,11 +127,11 @@ export function Overview({ repo, status, go, run }) {
             </section>
           )}
           <Rhythm repo={repo} />
-          <section className="gt-card">
+          <section className="gt-card gt-ov-authors">
             <h3><Icon name="users" size={14} /> Quem mais commitou</h3>
             <Bars items={ov.authors} label={(a) => a.name} value={(a) => a.n} />
           </section>
-          <section className="gt-card">
+          <section className="gt-card gt-ov-hot">
             <h3><Icon name="flame" size={14} /> Arquivos mais alterados (180 dias)</h3>
             {ov.hotspots.length ? <Bars items={ov.hotspots} label={(h) => <FilePath path={h.path} />} value={(h) => h.n} /> : <div className="gt-msg">Nenhum ainda.</div>}
           </section>

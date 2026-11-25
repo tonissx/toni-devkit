@@ -149,6 +149,11 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .home-dc__alert.is-bad { background: var(--tk-red-a12); color: var(--tk-red); }
 .home-dc__alert.is-ok { background: var(--tk-green-a12); color: var(--tk-accent-text); }
 
+/* Configurações: duas colunas independentes (cada uma empilha seus cards, sem buracos) a partir de ~1100px. */
+.set-screen { container-type: inline-size; container-name: settings; }
+.set-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; padding: 24px; max-width: 1640px; }
+.set-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@container settings (min-width: 1100px) { .set-page { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 14px 0; border-bottom: 1px solid var(--tk-border); }
 .set-row:last-child { border-bottom: 0; }
 .set-row__label { font-size: 13px; color: var(--tk-text); }

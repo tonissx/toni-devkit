@@ -185,9 +185,11 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater, toast }) 
     ['Ferramenta anterior', 'Ctrl+Shift+Tab'],
   ];
   return (
-    <div>
+    <div className="set-screen">
       <PageHeader icon="settings" title="Configurações" subtitle="Preferências salvas localmente neste computador" />
-      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 820 }}>
+      {/* Duas colunas de cards quando há largura (ver .set-page no app.css); numa janela estreita, uma só. */}
+      <div className="set-page">
+        <div className="set-col">
         <Card padding={24}>
           <div className="tk-card__title">Aparência</div>
           <Row label="Tema" hint="Hacking é o padrão do Toni Devkit">
@@ -201,13 +203,16 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater, toast }) 
           </Row>
         </Card>
         <PaletteCard />
-        <LinksCard toast={toast} />
         <BindsCard onChange={setBinds} />
-        <AiCard toast={toast} />
         <Card padding={24}>
           <div className="tk-card__title">Atalhos</div>
           {shortcuts.map(([a, k]) => <Row key={a} label={a}><Kbd size="sm">{k}</Kbd></Row>)}
         </Card>
+        </div>
+        <div className="set-col">
+        <LinksCard toast={toast} />
+        <AiCard toast={toast} />
+        <UpdaterCard updater={updater} />
         <Card padding={24}>
           <div className="tk-card__title">Sobre</div>
           <Row label="Toni Devkit" hint="Ferramentas para devs"><Badge size="sm" mono>v{info?.version || '—'}</Badge></Row>
@@ -220,7 +225,7 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater, toast }) 
             <Badge size="sm" mono variant={sqlVersion ? 'ok' : 'neutral'} dot>{sqlVersion ? 'sqlparse ' + sqlVersion : 'carregando…'}</Badge>
           </Row>
         </Card>
-        <UpdaterCard updater={updater} />
+        </div>
       </div>
     </div>
   );
