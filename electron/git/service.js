@@ -394,18 +394,19 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       .filter((c) => c.hash && !seen.has(c.hash) && seen.add(c.hash));
   }
 
-  /** Visão geral: números, atividade dos últimos 90 dias, autores e arquivos mais alterados. */
+  /** Visão geral: números, atividade do último ano (52 semanas), autores e arquivos mais alterados. */
   async function overview(repo) {
     const s = await status(repo);
-    if (s.unborn) return { status: s, commits: 0, branches: 0, tags: 0, activity: [], authors: [], hotspots: [], last: null };
-    const [count, br, tags, act, authors, hot, last] = await Promise.all([
+    if (s.unborn) return { status: s, commits: 0, branches: 0, tags: 0, activity: [], authors: [], hotspots: [], last: null, recent: [], lastFetch: null };
+    const [count, br, tags, act, authors, hot, recent, lastFetch] = await Promise.all([
       git(repo, ['rev-list', '--count', 'HEAD']),
       git(repo, ['for-each-ref', '--format=x', 'refs/heads']),
       git(repo, ['for-each-ref', '--format=x', 'refs/tags']),
-      git(repo, ['log', '--since=90.days.ago', '--format=%at', 'HEAD']),
+      git(repo, ['log', '--since=365.days.ago', '--format=%at', 'HEAD']),
       git(repo, ['shortlog', '-sne', 'HEAD']),
       git(repo, ['log', '--since=180.days.ago', '--format=', '--name-only', 'HEAD']),
-      log(repo, { limit: 1, ref: 'HEAD' }),
+      log(repo, { limit: 5, ref: 'HEAD' }),
+      fetchTime(repo),
     ]);
     const days = new Map();
     // Dia LOCAL (não UTC): no Brasil, commit depois das 21h ia para o dia seguinte no mapa.
@@ -413,7 +414,8 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     for (const t of act.stdout.split('\n').filter(Boolean)) { const k = dayKey(new Date(+t * 1000)); days.set(k, (days.get(k) || 0) + 1); }
     const activity = [];
     const today = now();
-    for (let i = 89; i >= 0; i--) { const k = dayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)); activity.push({ day: k, n: days.get(k) || 0 }); }
+    // Um ano: a tela mostra só as semanas mais recentes que cabem no card.
+    for (let i = 363; i >= 0; i--) { const k = dayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)); activity.push({ day: k, n: days.get(k) || 0 }); }
     const fileCount = new Map();
     for (const f of hot.stdout.split('\n').filter(Boolean)) fileCount.set(f, (fileCount.get(f) || 0) + 1);
     return {
@@ -422,10 +424,55 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       branches: br.stdout.split('\n').filter(Boolean).length,
       tags: tags.stdout.split('\n').filter(Boolean).length,
       activity,
-      authors: authors.stdout.split('\n').filter(Boolean).map((l) => { const m = /^\s*(\d+)\t(.*?)(?: <(.*)>)?$/.exec(l); return m ? { n: +m[1], name: m[2], email: m[3] || '' } : null; }).filter(Boolean).slice(0, 8),
+      authors: P.mergeAuthors(authors.stdout.split('\n').filter(Boolean).map((l) => { const m = /^\s*(\d+)\t(.*?)(?: <(.*)>)?$/.exec(l); return m ? { n: +m[1], name: m[2], email: m[3] || '' } : null; }).filter(Boolean)).slice(0, 8),
       hotspots: [...fileCount].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([p, n]) => ({ path: p, n })),
-      last: last[0] || null,
+      last: recent[0] || null,
+      recent,
+      lastFetch,
     };
+  }
+
+  /**
+   * Fetch automático (Configurações › Git): a tela chama de minuto em minuto e no foco; aqui decide se é hora.
+   * Só busca se o último fetch (e a última tentativa) tem mais de maxAge segundos — várias janelas chamando não
+   * multiplicam a busca, e sem rede ele espera o intervalo inteiro antes de tentar de novo. Nunca pede login
+   * (falha calado), não faz --prune por conta própria e pula repositório com merge/rebase parado.
+   */
+  const autoState = new Map(); // repo -> { busy, tried }
+  async function autoFetch(repo, maxAge = 15 * 60) {
+    const r = await repoOf(repo);
+    const st = autoState.get(r.path) || { busy: false, tried: 0 };
+    autoState.set(r.path, st);
+    const nowSec = now().getTime() / 1000;
+    const age = Math.max(60, Number(maxAge) || 15 * 60);
+    if (st.busy) return { ran: false, reason: 'busy' };
+    if (nowSec - st.tried < age) return { ran: false, reason: 'recent' };
+    const last = await fetchTime(repo);
+    if (last && nowSec - last < age) return { ran: false, reason: 'recent' };
+    const remotes = await run(r.top, ['remote'], { ok: [0, 128] }).then((x) => x.stdout.trim(), () => '');
+    if (!remotes) return { ran: false, reason: 'no-remote' };
+    if (await inProgress(r.gitDir)) return { ran: false, reason: 'operation' };
+    st.busy = true;
+    st.tried = nowSec;
+    try {
+      await queue.run('repo:' + r.path, () => run(r.top, ['fetch', '--all', '--quiet'], {
+        read: false, timeout: 60e3, env: { GCM_INTERACTIVE: 'never', SSH_ASKPASS_REQUIRE: 'never' },
+      }));
+      broadcast({ type: 'changed', repo: r.path });
+      return { ran: true };
+    } catch (e) {
+      return { ran: false, reason: 'error', error: friendly(e.message) || e.message };
+    } finally { st.busy = false; }
+  }
+
+  /** Quando foi o último fetch (mtime do FETCH_HEAD, em segundos) — null se nunca buscou. */
+  async function fetchTime(repo) {
+    const r = await repoOf(repo);
+    // --git-path acha o FETCH_HEAD certo também numa worktree (a pasta .git dela não é a do repositório principal).
+    const out = await run(r.top, ['rev-parse', '--git-path', 'FETCH_HEAD'], { ok: [0, 128] }).catch(() => null);
+    const p = out && out.stdout.trim();
+    if (!p) return null;
+    return fs.stat(path.resolve(r.top, p)).then((st) => Math.floor(st.mtimeMs / 1000), () => null);
   }
 
   /* ─────────────── Pontos de volta ─────────────── */
@@ -833,7 +880,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
   return {
     init, version, list, add, remove, scan, open, summaries, activity,
     status, log, commit, diff, branches, compare, stashes, stashFiles, reflog, overview, backups,
-    exec, restoreBackup, mergePreview, conflictFile, rebaseInfo, files,
+    exec, autoFetch, restoreBackup, mergePreview, conflictFile, rebaseInfo, files,
     blame, searchText, bisectState, tags, cleanPreview, gitignore, rhythm, fileVersions, worktrees,
     unwatch, top: async (repo) => (await repoOf(repo)).top,
     flush: () => queue.flush(),

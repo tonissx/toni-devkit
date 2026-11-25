@@ -6,6 +6,8 @@ import { AiCard } from './AiCard.jsx';
 
 const { PageHeader, Card, Select, Kbd, Badge, Toggle, Alert, Button } = DS;
 
+const FETCH_EVERY = [5, 15, 30, 60].map((m) => ({ value: String(m), label: m === 60 ? 'a cada 1 h' : `a cada ${m} min` }));
+
 const Row = ({ label, hint, children }) => (
   <div className="set-row">
     <div><div className="set-row__label">{label}</div>{hint && <div className="set-row__hint">{hint}</div>}</div>
@@ -185,9 +187,11 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater, toast }) 
     ['Ferramenta anterior', 'Ctrl+Shift+Tab'],
   ];
   return (
-    <div>
+    <div className="set-screen">
       <PageHeader icon="settings" title="Configurações" subtitle="Preferências salvas localmente neste computador" />
-      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 820 }}>
+      {/* Duas colunas de cards quando há largura (ver .set-page no app.css); numa janela estreita, uma só. */}
+      <div className="set-page">
+        <div className="set-col">
         <Card padding={24}>
           <div className="tk-card__title">Aparência</div>
           <Row label="Tema" hint="Hacking é o padrão do Toni Devkit">
@@ -196,18 +200,30 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater, toast }) 
           <Row label="Sidebar recolhida" hint="Mostra só os ícones das ferramentas">
             <Toggle checked={prefs.collapsed} onChange={(collapsed) => setPrefs((p) => ({ ...p, collapsed }))} />
           </Row>
-          <Row label="Foto do Gravatar no histórico do Git" hint="Mostra a foto de cada autor no grafo. Envia ao gravatar.com só o hash do e-mail (nunca o e-mail); quem não tem foto fica com as iniciais">
+        </Card>
+        <Card padding={24}>
+          <div className="tk-card__title">Git</div>
+          <Row label="Buscar atualizações automaticamente" hint="Faz git fetch no repositório aberto de tempos em tempos e ao voltar para a janela — só atualiza o que o Devkit sabe da remota, nunca mexe nos seus arquivos nem faz pull. Pausa com a janela escondida; se pedir senha ou faltar rede, não insiste">
+            {prefs.gitAutoFetch !== false && (
+              <Select options={FETCH_EVERY} value={String(prefs.gitAutoFetchMin || 15)} onChange={(v) => setPrefs((p) => ({ ...p, gitAutoFetchMin: Number(v) }))} style={{ width: 140 }} />
+            )}
+            <Toggle checked={prefs.gitAutoFetch !== false} onChange={(gitAutoFetch) => setPrefs((p) => ({ ...p, gitAutoFetch }))} />
+          </Row>
+          <Row label="Foto do Gravatar no histórico" hint="Mostra a foto de cada autor no grafo. Envia ao gravatar.com só o hash do e-mail (nunca o e-mail); quem não tem foto fica com as iniciais">
             <Toggle checked={!!prefs.gitAvatars} onChange={(gitAvatars) => setPrefs((p) => ({ ...p, gitAvatars }))} />
           </Row>
         </Card>
         <PaletteCard />
-        <LinksCard toast={toast} />
         <BindsCard onChange={setBinds} />
-        <AiCard toast={toast} />
         <Card padding={24}>
           <div className="tk-card__title">Atalhos</div>
           {shortcuts.map(([a, k]) => <Row key={a} label={a}><Kbd size="sm">{k}</Kbd></Row>)}
         </Card>
+        </div>
+        <div className="set-col">
+        <LinksCard toast={toast} />
+        <AiCard toast={toast} />
+        <UpdaterCard updater={updater} />
         <Card padding={24}>
           <div className="tk-card__title">Sobre</div>
           <Row label="Toni Devkit" hint="Ferramentas para devs"><Badge size="sm" mono>v{info?.version || '—'}</Badge></Row>
@@ -220,7 +236,7 @@ export function Settings({ prefs, setPrefs, info, sqlVersion, updater, toast }) 
             <Badge size="sm" mono variant={sqlVersion ? 'ok' : 'neutral'} dot>{sqlVersion ? 'sqlparse ' + sqlVersion : 'carregando…'}</Badge>
           </Row>
         </Card>
-        <UpdaterCard updater={updater} />
+        </div>
       </div>
     </div>
   );

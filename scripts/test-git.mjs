@@ -592,10 +592,15 @@ test('serviço: repositório sem commits e visão geral', async () => {
     const ov = await t.svc.overview(repo);
     assert.equal(ov.commits, 1);
     assert.equal(ov.branches, 1);
-    assert.equal(ov.activity.length, 90);
+    assert.equal(ov.activity.length, 364);
     assert.equal(ov.activity.at(-1).n, 1);
     assert.equal(ov.authors[0].name, 'Teste');
     assert.deepEqual(ov.hotspots, [{ path: 'x.txt', n: 1 }]);
+    assert.equal(ov.recent.length, 1);
+    assert.equal(ov.recent[0].subject, 'primeiro');
+    assert.equal(ov.last.hash, ov.recent[0].hash);
+    assert.equal(ov.lastFetch, null); // nunca buscou
+    assert.deepEqual(await t.svc.autoFetch(repo), { ran: false, reason: 'no-remote' });
     const sum = await t.svc.summaries();
     assert.equal(sum[0].branch, 'main');
     assert.equal(sum[0].changes, 0);
@@ -1176,6 +1181,44 @@ test('serviço: status informa o remoto e push -u dá upstream à branch nova', 
     await t.svc.exec(repo, { op: 'push', setUpstream: true, remote: st.remote, branch: st.branch.head });
     st = await t.svc.status(repo);
     assert.equal(st.branch.upstream, 'origin/feat/nova');
+  } finally { t.done(); }
+});
+
+test('mergeAuthors: junta a mesma pessoa com e-mails ou grafias diferentes', () => {
+  const out = P.mergeAuthors([
+    { n: 703, name: 'Gabriel Costa Damasceno', email: 'gabriel@empresa.com' },
+    { n: 120, name: 'Gabriel Costa Damasceno', email: 'gabriel@gmail.com' },
+    { n: 50, name: 'leonardo.anacleto', email: 'leo@empresa.com' },
+    { n: 900, name: 'Leonardo Anacleto', email: 'leo@empresa.com' },
+    { n: 10, name: 'antonio  gonçalves', email: 'a@x.com' },
+    { n: 30, name: 'Antonio Gonçalves', email: 'b@x.com' },
+    { n: 5, name: 'Outra Pessoa', email: 'outra@x.com' },
+  ]);
+  assert.deepEqual(out.map((a) => [a.name, a.n]), [
+    ['Leonardo Anacleto', 950],
+    ['Gabriel Costa Damasceno', 823],
+    ['Antonio Gonçalves', 40],
+    ['Outra Pessoa', 5],
+  ]);
+});
+
+test('autoFetch: busca quando a última é velha, pula quando é recente e traz o commit novo da remota', async () => {
+  const t = await setup();
+  try {
+    const origin = makeRepo(t.root, 'origem');
+    const dir = path.join(t.root, 'clone');
+    execFileSync('git', ['clone', '-q', origin, dir]);
+    sh(dir, 'config', 'user.name', 'Teste');
+    sh(dir, 'config', 'user.email', 'teste@devkit');
+    const repo = await t.svc.add(dir);
+    write(origin, 'novo.txt', 'novo\n');
+    sh(origin, 'add', '-A');
+    sh(origin, 'commit', '-q', '-m', 'novo na remota');
+
+    assert.deepEqual(await t.svc.autoFetch(repo, 0), { ran: true }); // o clone não grava FETCH_HEAD: conta como nunca buscou
+    assert.equal((await t.svc.status(repo)).branch.behind, 1);
+    assert.equal((await t.svc.autoFetch(repo, 60)).reason, 'recent');
+    assert.ok((await t.svc.overview(repo)).lastFetch > 0);
   } finally { t.done(); }
 });
 

@@ -44,11 +44,16 @@
 .gt-rail.is-collapsed .gt-rail__head { flex-direction: column-reverse; gap: 4px; padding: 12px 0 8px; }
 .gt-rail.is-collapsed .gt-rail__tools { flex-direction: column; margin-left: 0; }
 .gt-rail.is-collapsed .gt-rail__menu { right: auto; left: calc(100% - 4px); top: 0; }
+.gt-rail__menu.gt-ctxmenu { position: fixed; right: auto; z-index: 60; }
+.gt-ctxmenu button.is-danger:hover { color: var(--tk-red); }
 .gt-rail.is-collapsed .gt-rail__list { padding: 0 6px; overflow-x: hidden; }
 .gt-rail.is-collapsed .gt-repo { justify-content: center; padding: 6px 0; }
 .gt-rail.is-collapsed .gt-repo.is-sel { box-shadow: none; }
 .gt-rail.is-collapsed .gt-repo.is-sel .gt-repo__abbr { border-color: var(--tk-accent); color: var(--tk-accent-text); }
-.gt-rail.is-collapsed .gt-repo__main, .gt-rail.is-collapsed .gt-repo__rm { display: none; }
+.gt-rail.is-collapsed .gt-repo__main { display: none; }
+/* Recolhida não tem X: ele cairia em cima da sigla (fácil remover sem querer). Remover = botão direito ou cabeçalho.
+   O seletor repete o :hover para vencer a regra que mostra o X no hover (mesma especificidade, vinha depois). */
+.gt-rail.is-collapsed .gt-repo__rm, .gt-rail.is-collapsed .gt-repo-wrap:hover .gt-repo__rm, .gt-rail.is-collapsed .gt-repo-wrap:focus-within .gt-repo__rm { display: none; }
 .gt-rail.is-collapsed .gt-repo__badge { position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; padding: 0 4px; font-size: 9.5px; line-height: 16px; pointer-events: none; }
 .gt-rail.is-collapsed .gt-repo-wrap:hover .gt-repo__badge, .gt-rail.is-collapsed .gt-repo-wrap:focus-within .gt-repo__badge { visibility: visible; }
 .gt-repo__abbr { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1.5px solid var(--tk-border); border-radius: var(--tk-radius-md);
@@ -197,7 +202,7 @@
 
 /* visão geral */
 .gt-overview { overflow: auto; padding: 14px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
-.gt-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.gt-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
 .gt-kpi { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; padding: 12px 14px; border: 1px solid var(--tk-border);
   border-radius: var(--tk-radius-lg); background: var(--tk-surface-2); text-align: left; cursor: pointer; color: var(--tk-text); }
 .gt-kpi:disabled { cursor: default; }
@@ -206,12 +211,27 @@
   color: var(--tk-accent-text); background: color-mix(in srgb, var(--tk-accent) 12%, transparent); }
 .gt-kpi.is-warn .gt-kpi__icon { color: var(--tk-amber); background: color-mix(in srgb, var(--tk-amber) 14%, transparent); }
 .gt-kpi__value { font: 600 20px var(--tk-font-mono); }
-.gt-kpi__label { font-size: 11.5px; color: var(--tk-text-3); }
-.gt-ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; align-items: start; }
+.gt-kpi__label { font-size: 11.5px; color: var(--tk-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Grade da visão geral: 1 coluna (estreito) → 2 → 3 (largo). Os cards de uma linha ficam com a mesma altura;
+   "dense" fecha buracos quando um card some (repo sem ritmo, sem último commit). */
+.gt-ov-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-flow: row dense; gap: 12px; align-items: stretch; }
+.gt-ov-grid > .gt-card { min-width: 0; display: flex; flex-direction: column; }
+.gt-ov-grid .gt-heat, .gt-ov-grid .gt-rhythm { flex: 1; }
+.gt-ov-grid .gt-heat__foot { margin-top: auto; }
+@container gtmain (min-width: 760px) {
+  .gt-ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gt-ov-hot { grid-column: span 2; }
+}
+@container gtmain (min-width: 1320px) {
+  .gt-ov-grid { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr) minmax(0, 0.95fr); }
+  .gt-ov-hot { grid-column: span 2; }
+}
 .gt-card.is-wide { grid-column: 1 / -1; }
 .gt-heat { display: flex; flex-direction: column; gap: 8px; }
-.gt-heat__grid { display: flex; gap: 4px; overflow-x: auto; }
-.gt-heat__week { display: flex; flex-direction: column; gap: 4px; }
+/* Mapas fluidos: as células crescem com o card (quadradas); a Atividade usa o tamanho das do Ritmo. */
+.gt-heat__grid { display: grid; align-items: center; } /* colunas e gap no style: o tamanho vem do Ritmo (Overview.jsx) */
+.gt-heat__grid > .gt-heat__cell { width: 100%; height: auto; aspect-ratio: 1; }
+.gt-heat__month { font-size: 10px; color: var(--tk-text-3); white-space: nowrap; overflow: visible; width: 0; }
 .gt-heat__cell { display: inline-block; width: 15px; height: 15px; border-radius: 3px; background: var(--tk-surface-3); }
 .gt-heat__cell.is-pad { background: none; }
 .gt-heat__cell.l1 { background: color-mix(in srgb, var(--tk-accent) 30%, var(--tk-surface-3)); }
@@ -234,6 +254,12 @@
 .gt-last__meta { font-size: 12px; color: var(--tk-text-3); }
 .gt-last__meta code { font-family: var(--tk-font-mono); }
 .gt-last__actions { display: flex; gap: 6px; margin-top: 4px; }
+.gt-recent { display: flex; flex-direction: column; margin-top: 10px; padding-top: 6px; border-top: 1px solid var(--tk-border); }
+.gt-recent__row { display: flex; align-items: baseline; gap: 10px; min-width: 0; padding: 5px 6px; margin: 0 -6px; border: 0; border-radius: var(--tk-radius-sm);
+  background: none; color: var(--tk-text-2); text-align: left; font-size: 12.5px; cursor: pointer; }
+.gt-recent__row:hover { background: var(--tk-surface-3); color: var(--tk-text); }
+.gt-recent__subject { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.gt-recent__meta { flex-shrink: 0; font-size: 11.5px; color: var(--tk-text-3); }
 .gt-welcome { display: flex; align-items: center; gap: 12px; color: var(--tk-text-2); font-size: 13px; }
 .gt-welcome svg { color: var(--tk-accent-text); }
 .gt-welcome a { color: var(--tk-accent-text); }
@@ -622,8 +648,10 @@ body.gt-resizing { cursor: col-resize; user-select: none; }
 
 /* ritmo na visão geral */
 .gt-rhythm { display: flex; flex-direction: column; gap: 3px; overflow-x: auto; }
-.gt-rhythm__row, .gt-rhythm__hours { display: grid; grid-template-columns: 34px repeat(24, 15px); gap: 3px; align-items: center; }
-.gt-rhythm__hours { padding-left: 37px; grid-template-columns: repeat(24, 15px); font-size: 10px; color: var(--tk-text-3); }
+.gt-rhythm__row, .gt-rhythm__hours { display: grid; grid-template-columns: 34px repeat(24, minmax(0, 24px)); gap: 3px; align-items: center; }
+.gt-rhythm__hours { font-size: 10px; color: var(--tk-text-3); }
+.gt-rhythm__hours > span { white-space: nowrap; overflow: visible; width: 0; }
+.gt-rhythm__row > .gt-heat__cell { width: 100%; height: auto; aspect-ratio: 1; }
 .gt-rhythm__day { font-size: 11px; color: var(--tk-text-3); }
 
 /* ── IA: "Sugerir mensagem" (o botão e o painel vêm de renderer/ai.css) ── */
