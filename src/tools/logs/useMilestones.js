@@ -2,7 +2,7 @@
 // Devolve a lista já filtrada por `meta.show`, a lista completa (para achar o deploy anterior), o repositório ligado
 // e a sugestão de repositório. Os marcos nunca afirmam causa: quem desenha diz "depois de" / "suspeito".
 import { logsApi } from './shared.jsx';
-import { mergeMilestones, suggestRepo, commitsInDeploy, previousSameArtifact } from '../../logs/milestones.js';
+import { mergeMilestones, suggestRepo, foldersOf, commitsInDeploy, previousSameArtifact } from '../../logs/milestones.js';
 
 const DAY = 86400e3;
 const HOUR = 3600e3;
@@ -10,18 +10,6 @@ const EMPTY_META = { repo: null, manual: [], show: { deploy: true, merge: true, 
 const ALL_ON = { deploy: true, merge: true, manual: true };
 const baseName = (p) => String(p || '').split(/[\\/]/).filter(Boolean).pop() || String(p || '');
 const normMeta = (m) => ({ ...EMPTY_META, ...m, show: { ...EMPTY_META.show, ...((m && m.show) || {}) } });
-
-// Só os dois primeiros segmentos de pasta de cada arquivo (ex.: "app/src/x.js" → "app" e "app/src").
-function foldersOf(files) {
-  const set = new Set();
-  for (const f of files || []) {
-    const parts = String(f).split('/');
-    if (parts.length < 2) continue;
-    set.add(parts[0]);
-    if (parts.length > 2) set.add(parts[0] + '/' + parts[1]);
-  }
-  return [...set];
-}
 
 export function useMilestones({ id, spec, tsMin, tsMax, appendedNonce = 0 }) {
   const api = logsApi();

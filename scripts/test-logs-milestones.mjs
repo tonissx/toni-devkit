@@ -121,3 +121,13 @@ test('previousSameArtifact: deploy anterior com artefato em comum', () => {
   assert.equal(M.previousSameArtifact(list, list[3]).id, 'b');
   assert.equal(M.previousSameArtifact(list, list[0]), null);
 });
+
+test('foldersOf: nomes dos dois primeiros níveis, sem raiz e sem repetir', () => {
+  assert.deepEqual(M.foldersOf(['wgPortalRH/a.js']), ['wgPortalRH']);
+  const f = M.foldersOf(['widgets/wgPortalRH/src/a.js']);
+  assert.ok(f.includes('widgets') && f.includes('wgPortalRH'));
+  assert.ok(!f.includes('src'));
+  assert.deepEqual(M.foldersOf(['README.md']), []);
+  assert.deepEqual(M.foldersOf(['x/a.js', 'x/b.js', 'x/y/c.js', 'x/y/d.js']).sort(), ['x', 'y']);
+  assert.equal(M.suggestRepo(['wgPortalRH'], [{ path: 'r', folders: M.foldersOf(['widgets/wgPortalRH/src/a.js']) }]), 'r');
+});

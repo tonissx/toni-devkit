@@ -140,7 +140,18 @@ function previousSameArtifact(sorted, deploy) {
   return best;
 }
 
+/** Nomes das pastas dos dois primeiros níveis dos caminhos (sem repetir); arquivo na raiz não contribui. */
+function foldersOf(paths) {
+  const set = new Set();
+  for (const p of paths || []) {
+    const parts = String(p).split('/');
+    if (parts.length > 1) set.add(parts[0]);
+    if (parts.length > 2) set.add(parts[1]);
+  }
+  return [...set];
+}
+
 module.exports = {
-  DEPLOY_RULES, matchDeploy, groupBursts,
+  foldersOf, DEPLOY_RULES, matchDeploy, groupBursts,
   prNumber, frameBase, touchesFrame, previousMilestone, commitsInDeploy, attribute, mergeMilestones, suggestRepo, previousSameArtifact,
 };
