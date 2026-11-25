@@ -6,7 +6,7 @@ import { usePersisted } from '../../lib/store.js';
 import { logsApi, errText, fmtNum, fmtBytes, ago } from './shared.jsx';
 import { LogView } from './LogView.jsx';
 
-const { Icon, Spinner, EmptyState } = DS;
+const { Icon, Spinner } = DS;
 
 const keyOf = (spec) => (spec ? `${spec.kind}:${String(spec.path).toLowerCase()}|${String(spec.family || '').toLowerCase()}` : '');
 
@@ -28,30 +28,55 @@ class Boundary extends React.Component {
   }
 }
 
+/**
+ * Separa o caminho de um recente em servidor (caminho de rede \\host\...) e pasta, sem o nome do arquivo — o servidor
+ * é o que diferencia dois server.log iguais de máquinas diferentes, então ganha coluna própria.
+ */
+function splitPath(r) {
+  let p = String(r.path || '');
+  let host = null;
+  const unc = /^[\\/]{2}([^\\/]+)[\\/]?(.*)$/.exec(p);
+  if (unc) { host = unc[1]; p = unc[2]; }
+  if (r.kind !== 'folder') p = p.replace(/[\\/][^\\/]*$/, '');
+  return { host, dir: p };
+}
+
 function Start({ recents, onOpen, onPickFile, onPickFolder, onForget, busy }) {
   return (
     <div className="lg-start">
-      <EmptyState title="Abra um log" animate="none"
-        description="Arraste um arquivo ou pasta para cá. O Devkit detecta o formato (Fluig/JBoss, JSON por linha, IIS, Nginx/Apache, texto com data), junta stack traces numa entrada só, agrupa os erros repetidos e acompanha o arquivo ao vivo." />
-      <div className="lg-start__acts">
-        <button type="button" className="lg-btn is-primary is-lg" onClick={onPickFile} disabled={busy}><Icon name="file-text" size={15} /><span>Abrir arquivo</span></button>
-        <button type="button" className="lg-btn is-lg" onClick={onPickFolder} disabled={busy} title="Junta os arquivos rotacionados (server.log, server.log.2026-10-10, app.log.1, .gz…)"><Icon name="folder-open" size={15} /><span>Abrir pasta de logs</span></button>
-      </div>
-      {recents.length > 0 && (
-        <div className="lg-recents">
-          <span className="home-section__title">Recentes</span>
-          {recents.map((r) => (
-            <div key={keyOf(r)} className="lg-recent">
-              <button type="button" className="lg-recent__main" onClick={() => onOpen(r)} title={r.path} disabled={busy}>
-                <Icon name={r.kind === 'folder' ? 'folder-open' : 'file-text'} size={14} />
-                <span className="lg-recent__name">{r.name}</span>
-                <span className="lg-recent__path">{r.path}</span>
-                <span className="lg-muted">{ago(r.at)}</span>
-              </button>
-              <button type="button" className="lg-icon" title="Tirar dos recentes" aria-label={`Tirar ${r.name} dos recentes`} onClick={() => onForget(r.path)}><Icon name="x" size={13} /></button>
-            </div>
-          ))}
+      <header className="lg-start__head">
+        <span className="lg-start__icon"><Icon name="scroll-text" size={20} /></span>
+        <div className="lg-start__intro">
+          <b>Abra um log</b>
+          <span>Arraste um arquivo ou pasta para cá. O Devkit detecta o formato (Fluig/JBoss, JSON por linha, IIS, Nginx/Apache, texto com data), junta stack traces numa entrada só, agrupa os erros repetidos e acompanha o arquivo ao vivo.</span>
         </div>
+        <div className="lg-start__acts">
+          <button type="button" className="lg-btn is-primary is-lg" onClick={onPickFile} disabled={busy}><Icon name="file-text" size={15} /><span>Abrir arquivo</span></button>
+          <button type="button" className="lg-btn is-lg" onClick={onPickFolder} disabled={busy} title="Junta os arquivos rotacionados (server.log, server.log.2026-10-10, app.log.1, .gz…)"><Icon name="folder-open" size={15} /><span>Abrir pasta de logs</span></button>
+        </div>
+      </header>
+      {recents.length > 0 && (
+        <section className="lg-recents">
+          <span className="home-section__title">Recentes</span>
+          <div className="lg-recents__list">
+            {recents.map((r) => {
+              const { host, dir } = splitPath(r);
+              return (
+                <div key={keyOf(r)} className="lg-recents__row">
+                  <button type="button" className="lg-recents__main" onClick={() => onOpen(r)} title={r.path} disabled={busy}>
+                    <Icon name={r.kind === 'folder' ? 'folder-open' : 'file-text'} size={14} />
+                    <span className="lg-recents__name">{r.name}</span>
+                    <span>{host ? <span className="lg-recents__host" title={`Servidor ${host}`}>{host}</span> : <span className="lg-recents__local">local</span>}</span>
+                    {/* rtl corta o começo da pasta com "…"; o bdi mantém a ordem do texto (senão o \ do início ia para o fim). */}
+                    <span className="lg-recents__dir"><bdi dir="ltr">{dir}</bdi></span>
+                    <span className="lg-recents__when">{ago(r.at)}</span>
+                  </button>
+                  <button type="button" className="lg-icon lg-recents__rm" title="Tirar dos recentes" aria-label={`Tirar ${r.name} dos recentes`} onClick={() => onForget(r.path)}><Icon name="x" size={13} /></button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
       <div className="lg-start__tips">
         <span><Icon name="keyboard" size={12} /> n / N pulam para o próximo/anterior erro · Ctrl+F filtra</span>
