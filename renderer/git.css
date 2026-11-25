@@ -44,11 +44,16 @@
 .gt-rail.is-collapsed .gt-rail__head { flex-direction: column-reverse; gap: 4px; padding: 12px 0 8px; }
 .gt-rail.is-collapsed .gt-rail__tools { flex-direction: column; margin-left: 0; }
 .gt-rail.is-collapsed .gt-rail__menu { right: auto; left: calc(100% - 4px); top: 0; }
+.gt-rail__menu.gt-ctxmenu { position: fixed; right: auto; z-index: 60; }
+.gt-ctxmenu button.is-danger:hover { color: var(--tk-red); }
 .gt-rail.is-collapsed .gt-rail__list { padding: 0 6px; overflow-x: hidden; }
 .gt-rail.is-collapsed .gt-repo { justify-content: center; padding: 6px 0; }
 .gt-rail.is-collapsed .gt-repo.is-sel { box-shadow: none; }
 .gt-rail.is-collapsed .gt-repo.is-sel .gt-repo__abbr { border-color: var(--tk-accent); color: var(--tk-accent-text); }
-.gt-rail.is-collapsed .gt-repo__main, .gt-rail.is-collapsed .gt-repo__rm { display: none; }
+.gt-rail.is-collapsed .gt-repo__main { display: none; }
+/* Recolhida não tem X: ele cairia em cima da sigla (fácil remover sem querer). Remover = botão direito ou cabeçalho.
+   O seletor repete o :hover para vencer a regra que mostra o X no hover (mesma especificidade, vinha depois). */
+.gt-rail.is-collapsed .gt-repo__rm, .gt-rail.is-collapsed .gt-repo-wrap:hover .gt-repo__rm, .gt-rail.is-collapsed .gt-repo-wrap:focus-within .gt-repo__rm { display: none; }
 .gt-rail.is-collapsed .gt-repo__badge { position: absolute; top: 0; right: 0; min-width: 16px; height: 16px; padding: 0 4px; font-size: 9.5px; line-height: 16px; pointer-events: none; }
 .gt-rail.is-collapsed .gt-repo-wrap:hover .gt-repo__badge, .gt-rail.is-collapsed .gt-repo-wrap:focus-within .gt-repo__badge { visibility: visible; }
 .gt-repo__abbr { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border: 1.5px solid var(--tk-border); border-radius: var(--tk-radius-md);

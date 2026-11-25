@@ -81,6 +81,24 @@ function RepoRail({ repos, current, width, onResize, onOpen, onAddDone, onRemove
     document.addEventListener('keydown', esc);
     return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
   }, [menu]);
+  // Menu de botão direito num repositório (recolhida, é o único jeito de remover pela lista — sem X sobre a sigla).
+  const [ctx, setCtx] = React.useState(null); // { x, y, repo }
+  const ctxRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!ctx) return undefined;
+    const close = (e) => { if (!ctxRef.current || !ctxRef.current.contains(e.target)) setCtx(null); };
+    const esc = (e) => { if (e.key === 'Escape') setCtx(null); };
+    const off = () => setCtx(null);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    window.addEventListener('blur', off);
+    window.addEventListener('resize', off);
+    document.addEventListener('scroll', off, true);
+    return () => {
+      document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc);
+      window.removeEventListener('blur', off); window.removeEventListener('resize', off); document.removeEventListener('scroll', off, true);
+    };
+  }, [ctx]);
   const api = gitApi();
   const addFolder = async () => {
     const dir = await api.pick();
@@ -116,7 +134,8 @@ function RepoRail({ repos, current, width, onResize, onOpen, onAddDone, onRemove
       </div>
       <div className="gt-rail__list tk-scroll">
         {repos && repos.map((r) => (
-          <div key={r.path} className="gt-repo-wrap">
+          <div key={r.path} className="gt-repo-wrap"
+            onContextMenu={(e) => { e.preventDefault(); setCtx({ x: Math.min(e.clientX, window.innerWidth - 220), y: Math.min(e.clientY, window.innerHeight - 140), repo: r }); }}>
             <button type="button" className={'gt-repo' + (r.path === current ? ' is-sel' : '')} onClick={() => onOpen(r.path)}
               title={collapsed ? `${r.name} — ${r.error || (r.detached ? 'HEAD solto' : r.branch || '—')}${r.conflicts > 0 ? ` · ${r.conflicts} em conflito` : r.changes > 0 ? ` · ${r.changes} mudança(s)` : ''}\n${r.path}` : r.path}
               aria-label={collapsed ? r.name : undefined}>
@@ -134,6 +153,13 @@ function RepoRail({ repos, current, width, onResize, onOpen, onAddDone, onRemove
         ))}
         {repos && !repos.length && <div className="gt-msg">Nenhum repositório ainda.</div>}
       </div>
+      {ctx && (
+        <div ref={ctxRef} className="gt-rail__menu gt-ctxmenu" role="menu" style={{ left: ctx.x, top: ctx.y }}>
+          <button type="button" role="menuitem" onClick={() => { setCtx(null); api.openIn(ctx.repo.path, 'explorer'); }}><Icon name="folder-open" size={14} /><span>Abrir no Explorer</span></button>
+          <button type="button" role="menuitem" onClick={() => { setCtx(null); api.openIn(ctx.repo.path, 'vscode'); }}><Icon name="code" size={14} /><span>Abrir no VS Code</span></button>
+          <button type="button" role="menuitem" className="is-danger" title="Não apaga nada do disco" onClick={() => { const r = ctx.repo; setCtx(null); onRemove(r); }}><Icon name="x" size={14} /><span>Remover da lista</span></button>
+        </div>
+      )}
       <div className="gt-rail__grip" role="separator" aria-orientation="vertical" aria-label="Largura da lista de repositórios (arraste; duplo clique alterna entre siglas e padrão)"
         aria-valuemin={RAIL_COMPACT} aria-valuemax={RAIL_MAX} aria-valuenow={w} tabIndex={0} title="Arraste para ajustar a largura · duplo clique alterna" {...drag} />
       {found && <AddModal found={found} onClose={() => setFound(null)} onAdd={addMany} />}
