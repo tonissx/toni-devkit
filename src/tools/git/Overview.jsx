@@ -110,6 +110,9 @@ export function Overview({ repo, status, go, run, net }) {
     <div className="gt-overview tk-scroll">
       <div className="gt-kpis">
         <Kpi icon="file-diff" label="mudanças pendentes" value={changes} tone={changes ? 'warn' : ''} onClick={() => go('changes')} />
+        {/* rev-list --count HEAD: commits alcançáveis da branch atual (inclui os herdados da base), não só os dela. */}
+        <Kpi icon="git-commit-horizontal" label={s.branch.detached ? 'commits até o HEAD' : `commits em ${s.branch.head}`} value={ov.commits}
+          onClick={() => go('history')} title="Total de commits no histórico da branch atual" />
         {(() => {
           const sync = syncInfo(s, ov.lastFetch);
           return <Kpi icon="refresh-cw" label={sync.label} value={sync.value} tone={sync.tone}
