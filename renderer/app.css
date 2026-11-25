@@ -178,7 +178,21 @@ html, body { margin: 0; height: 100%; background: var(--tk-bg); }
 .dfc-bar__nav { margin-left: auto; display: flex; align-items: center; gap: 4px; }
 .dfc-bar__nav > span { margin-right: 4px; font-variant-numeric: tabular-nums; }
 .dfc-center { flex: 1; display: flex; align-items: center; justify-content: center; }
-.dfc-scroll { flex: 1; min-height: 0; overflow: auto; }
+.dfc-wrap { flex: 1; min-height: 0; display: flex; }
+.dfc-scroll { flex: 1; min-width: 0; min-height: 0; overflow: auto; position: relative; }
+
+/* Minimap das diferenças: faixa à direita com um marcador por trecho e a janela visível. */
+.dfc-mini { flex: none; width: 16px; padding: 2px 0; border-left: 1px solid var(--tk-border); background: var(--tk-surface-1); cursor: pointer; touch-action: none; user-select: none; }
+.dfc-mini__track { position: relative; height: 100%; margin: 0 2px; }
+.dfc-mini__mk { position: absolute; left: 0; right: 0; border-radius: 1px; opacity: .85; }
+.dfc-mini__mk.is-add { background: #3ddc84; }
+.dfc-mini__mk.is-del { background: #ff5c5c; }
+.dfc-mini__mk.is-mod { background: #5aa7ff; }
+.dfc-mini__mk.is-cur { opacity: 1; box-shadow: 0 0 0 1px var(--tk-text-2); z-index: 1; }
+[data-theme="light"] .dfc-mini__mk.is-add { background: #16a34a; }
+[data-theme="light"] .dfc-mini__mk.is-del { background: #dc2626; }
+[data-theme="light"] .dfc-mini__mk.is-mod { background: #2563eb; }
+.dfc-mini__view { position: absolute; left: -2px; right: -2px; min-height: 8px; background: rgba(128, 128, 128, .22); border-block: 1px solid rgba(128, 128, 128, .45); pointer-events: none; }
 
 /* Lado a lado: uma linha de grid por item → os dois lados sempre alinhados. Linhas longas quebram. */
 .dfc-row[data-split] { display: grid; grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr); }
