@@ -519,3 +519,9 @@
 @media (forced-colors: active) {
   .lg-row__bar, .lg-chip__dot, .lg-prob__bar { forced-color-adjust: none; }
 }
+
+/* Repositório ligado ao log (marcos de merge) */
+.lg-select.lg-repo.is-warn { border-color: var(--tk-amber); }
+.lg-repo__warn { font-size: 11px; color: var(--tk-amber); white-space: nowrap; }
+.lg-repo__suggest { height: 26px; padding: 0 9px; border: 1px dashed var(--tk-border); border-radius: var(--tk-radius-sm); background: transparent; color: var(--tk-text-2); font: 12px var(--tk-font-sans); cursor: pointer; white-space: nowrap; }
+.lg-repo__suggest:hover { background: var(--tk-surface-2); color: var(--tk-text); }

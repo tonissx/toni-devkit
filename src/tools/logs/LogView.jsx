@@ -23,6 +23,7 @@ import { escapeRe } from '../../logs/query.js';
 import { usePersisted } from '../../lib/store.js';
 import { detailWidth, hitsHeight, DETAIL_DEFAULT, DETAIL_WIDE, DETAIL_MIN, DETAIL_MAX, HITS_DEFAULT, HITS_TALL } from '../../logs/panel.js';
 import { useSplit } from './useSplit.js';
+import { useMilestones } from './useMilestones.js';
 
 const HITS_HEAD = 31; // altura do cabeçalho do painel de baixo (30 + a linha de cima)
 
@@ -101,6 +102,7 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
   const [live, setLive] = React.useState(src.live);
   const latest = React.useRef(0);
   const appended = React.useRef(false);
+  const [appendedNonce, setAppendedNonce] = React.useState(0); // muda a cada `appended`/`reset`: refaz os marcos de deploy
   const first = React.useRef(true);
   const searchRef = React.useRef(null);
   const listRef = React.useRef(null);
@@ -177,9 +179,11 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
       if (!evt || evt.id !== id) return;
       if (evt.type === 'appended') {
         appended.current = true;
+        setAppendedNonce((n) => n + 1);
         if (!t) t = setTimeout(() => { t = null; runRef.current(); }, 450);
       } else if (evt.type === 'reset') {
         if (evt.info) onInfo(evt.info);
+        setAppendedNonce((n) => n + 1);
         setSel(null);
         setPins([]);
         first.current = true;
@@ -377,6 +381,9 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
   const detach = () => { setDetached(true); window.devkit.popout.open(popState()); };
   const fmtOptions = FORMAT_IDS.map((f) => [f, FORMATS[f].label]);
   const truncNote = src.truncated ? 'Arquivo grande: mostrando só o final (1,5 GB). Os arquivos/trechos mais antigos ficaram de fora.' : null;
+  const ms = useMilestones({ id, spec: src.spec, tsMin: sum ? sum.tsMin : null, tsMax: sum ? sum.tsMax : null, appendedNonce });
+  const repoName = ms.meta.repo ? ms.meta.repo.split(/[\\/]/).filter(Boolean).pop() : null;
+  const sugName = ms.suggestion ? (ms.repos.find((r) => r.path === ms.suggestion) || { name: ms.suggestion }).name : null;
   const errorsTotal = sum ? sum.levelTotals[5] + sum.levelTotals[6] : 0;
 
   return (
@@ -397,6 +404,16 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
           <select className="lg-select" value={src.format} onChange={(e) => reformat({ format: e.target.value })} title={`Formato${src.detected ? ` (detectado: ${FORMATS[src.detected.format] ? FORMATS[src.detected.format].label : src.detected.format})` : ''}`}>
             {fmtOptions.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
+          <select className={'lg-select lg-repo' + (ms.repoError ? ' is-warn' : '')} value={ms.meta.repo || ''} onChange={(e) => ms.setMeta({ repo: e.target.value || null })}
+            title="Repositório Git usado para mostrar os merges da main na linha do tempo">
+            <option value="">Repositório: Nenhum</option>
+            {ms.meta.repo && !ms.repos.some((r) => r.path === ms.meta.repo) && <option value={ms.meta.repo}>Repositório: {repoName}</option>}
+            {ms.repos.map((r) => <option key={r.path} value={r.path}>Repositório: {r.name}</option>)}
+          </select>
+          {ms.repoError && <span className="lg-repo__warn" title={ms.meta.repo}>{ms.repoError}</span>}
+          {ms.suggestion && !ms.meta.repo && (
+            <button type="button" className="lg-repo__suggest" onClick={() => ms.setMeta({ repo: ms.suggestion })} title={ms.suggestion + ' — tem pastas com o nome dos artefatos publicados (estimativa)'}>Ligar a {sugName}?</button>
+          )}
           <select className="lg-select" value={src.encoding} onChange={(e) => reformat({ encoding: e.target.value })} title="Codificação do texto (troque se aparecerem acentos estranhos)">
             {ENCODINGS.map(([v, l]) => <option key={v} value={v}>{v === 'auto' ? 'Auto' : l}</option>)}
             {!ENCODINGS.some(([v]) => v === src.encoding) && <option value={src.encoding}>{src.encoding}</option>}
