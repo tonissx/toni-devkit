@@ -389,3 +389,47 @@ test('Início: erros novos desde a última vez que a aba foi vista', async () =>
   assert.equal((await svc.summaries())[0].newErrors, 0);
   svc.unwatch();
 });
+
+const DEP = (s, a) => line(s, 'INFO', `WFLYSRV0010: Deployed "${a}.war" (runtime-name : "${a}.war")`);
+
+test('deploys: acha os deploys, agrupa e continua do ponto onde parou', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  fs.writeFileSync(f, DEP(1, 'wgA') + line(2, 'ERROR', 'falha'));
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  let r = e.call('deploys', { id: 'a' });
+  assert.equal(r.milestones.length, 1);
+  assert.equal(r.milestones[0].label, 'deploy wgA');
+  fs.appendFileSync(f, line(3, 'INFO', 'ok') + DEP(59, 'wgB') + line(59, 'INFO', 'fim'));
+  // wgB a 58 s do wgA: mesma rajada (< 2 min)
+  await e.call('grow', { id: 'a' });
+  r = e.call('deploys', { id: 'a' });
+  assert.equal(r.milestones.length, 1);
+  assert.deepEqual(r.milestones[0].artifacts, ['wgA', 'wgB']);
+  assert.equal(r.scanned, e.call('info', { id: 'a' }).n);
+});
+
+test('deploys: usa o ts do índice', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  fs.writeFileSync(f, '10:00:01,000 INFO  [org.jboss.as.server] (MSC) WFLYSRV0010: Deployed "wgA.war" (runtime-name : "wgA.war")\n');
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  e.call('query', { id: 'a', qid: 1, q: '' });
+  const ts = e.call('rows', { id: 'a', qid: 1, from: 0, count: 1 }).rows[0].ts;
+  assert.ok(Number.isFinite(ts));
+  assert.equal(e.call('deploys', { id: 'a' }).milestones[0].ts, ts);
+});
+
+test('deploys: reset recomeça a varredura', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  fs.writeFileSync(f, DEP(1, 'wgA'));
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  assert.equal(e.call('deploys', { id: 'a' }).milestones.length, 1);
+  fs.writeFileSync(f, line(1, 'INFO', 'sem deploy'));
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false }); // o serviço reabre assim no reset
+  assert.equal(e.call('deploys', { id: 'a' }).milestones.length, 0);
+});

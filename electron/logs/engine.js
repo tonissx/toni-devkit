@@ -13,6 +13,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const zlib = require('node:zlib');
 const { LogIndex } = require('../../src/logs/index.js');
+const { matchDeploy, groupBursts } = require('../../src/logs/milestones.js');
 const { detect, FORMATS, LEVEL_LABEL } = require('../../src/logs/parse.js');
 const { compile } = require('../../src/logs/query.js');
 const A = require('../../src/logs/aggregate.js');
@@ -146,6 +147,7 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
     const s = {
       id, files: use, format: fmt, detected: det, encoding: enc, truncated, chain: Promise.resolve(), last: null,
       index: new LogIndex({ format: fmt }), bytes: 0, total: use.reduce((t, f) => t + (f.size - (f.start || 0)), 0), loading: true,
+      deployScan: { upto: 0, events: [] }, // recomeça do zero sempre que o índice é recriado
     };
     sources.set(id, s);
     await serial(s, async () => {
@@ -525,7 +527,24 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
 
   function close({ id }) { sources.delete(id); return true; }
 
-  const OPS = { open, grow, info: ({ id }) => info(id), query, rows, entry, context, locate, seekTime, next, hitNear, hitSub, marks, sparks, charts, exportTo, textOf, close };
+  /** Marcos de deploy do WildFly: varre só o que chegou desde a última chamada (INFO ou sem nível). */
+  function deploys({ id }) {
+    const s = get(id);
+    const ix = s.index;
+    const sc = s.deployScan;
+    for (let i = sc.upto; i < ix.n; i++) {
+      const lv = ix.level[i];
+      if (lv !== 3 && lv !== 0) continue;
+      const ts = ix.ts[i];
+      if (!Number.isFinite(ts)) continue;
+      const m = matchDeploy(ix.firstLine(i, 400));
+      if (m) sc.events.push({ kind: m.kind, artifact: m.artifact, ts, i });
+    }
+    sc.upto = ix.n;
+    return { milestones: groupBursts(sc.events), scanned: ix.n };
+  }
+
+  const OPS = { open, grow, info: ({ id }) => info(id), query, rows, entry, context, locate, seekTime, next, hitNear, hitSub, marks, sparks, charts, deploys, exportTo, textOf, close };
   return {
     call(op, args) {
       const fn = OPS[op];

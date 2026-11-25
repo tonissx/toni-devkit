@@ -478,6 +478,7 @@ contextBridge.exposeInMainWorld('devkit', {
     switchFamily: (id, family) => ipcRenderer.invoke('logs:switchFamily', id, family),
     setLive: (id, on) => ipcRenderer.invoke('logs:setLive', id, on),
     close: (id) => ipcRenderer.invoke('logs:close', id),
+    deploys: (args) => ipcRenderer.invoke('logs:deploys', args),
     list: () => ipcRenderer.invoke('logs:list'),
     summaries: () => ipcRenderer.invoke('logs:summaries'),
     markSeen: (id) => ipcRenderer.invoke('logs:markSeen', id),
