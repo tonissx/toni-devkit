@@ -28,7 +28,7 @@ const detachedTool = (() => {
   const t = id && findTool(id);
   return t && t.detachable !== false ? id : null;
 })();
-const DEFAULT_PREFS = { theme: 'dark', collapsed: false, route: 'sql' };
+const DEFAULT_PREFS = { theme: 'dark', collapsed: false, route: 'sql', gitAutoFetch: true, gitAutoFetchMin: 15 };
 /** Ferramentas com estado de tela (diagrama, zoom…) que não pode se perder ao navegar: ficam montadas, só escondidas. */
 const KEEP_ALIVE = ['sqlviz'];
 /** Vale durante toda a vida da janela, então a escolha do hook não muda entre renders. */

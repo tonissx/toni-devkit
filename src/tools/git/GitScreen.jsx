@@ -3,7 +3,7 @@
 // comando, pede confirmação quando reescreve/descarta, executa e deixa na barra de baixo o comando que rodou, a
 // explicação e o Desfazer (pelo ponto de volta). Nada de rede: só o que está no disco.
 import { DS } from '../../lib/ds.js';
-import { usePersisted } from '../../lib/store.js';
+import { usePersisted, load } from '../../lib/store.js';
 import { RISK_LABEL } from '../../git/ops.js';
 import { gitApi, useRepoData, errText, preview, RiskBadge, OpButton } from './shared.jsx';
 import { Overview } from './Overview.jsx';
@@ -299,6 +299,26 @@ export function GitScreen({ toast, request }) {
     setNetBusy(op.op);
     try { return await run(op); } finally { setNetBusy(null); }
   }, [run]);
+
+  // Busca automática (Configurações › Git): confere a cada minuto e ao voltar para a janela; o serviço só busca
+  // quando a última busca ficou velha. Com a janela escondida (bandeja/minimizada) ou rede em uso, não faz nada.
+  const netBusyRef = React.useRef(null);
+  netBusyRef.current = netBusy;
+  React.useEffect(() => {
+    if (!repo) return undefined;
+    const tick = (onFocus) => {
+      const p = load('prefs', {});
+      if (p.gitAutoFetch === false || document.visibilityState !== 'visible' || netBusyRef.current) return;
+      const every = Math.max(1, Number(p.gitAutoFetchMin) || 15) * 60;
+      api.autoFetch(repo, onFocus ? Math.min(every, 5 * 60) : every).catch(() => {});
+    };
+    const iv = setInterval(() => tick(false), 60e3);
+    const focus = () => tick(true);
+    window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', focus);
+    tick(true);
+    return () => { clearInterval(iv); window.removeEventListener('focus', focus); document.removeEventListener('visibilitychange', focus); };
+  }, [repo]);
 
   // Sem upstream: "Publicar branch" cria a branch no remoto (push -u). Sem remoto nenhum, não há o que enviar.
   const pushOp = s && (s.branch.upstream ? { op: 'push' } : s.remote && s.branch.head ? { op: 'push', setUpstream: true, remote: s.remote, branch: s.branch.head } : null);

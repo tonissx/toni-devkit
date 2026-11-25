@@ -336,6 +336,8 @@ contextBridge.exposeInMainWorld('devkit', {
     overview: (repo) => ipcRenderer.invoke('git:overview', repo),
     backups: (repo) => ipcRenderer.invoke('git:backups', repo),
     exec: (repo, op) => ipcRenderer.invoke('git:exec', repo, op),
+    /** Fetch em segundo plano, só se o último tem mais de maxAge segundos: { ran, reason?, error? }. */
+    autoFetch: (repo, maxAge) => ipcRenderer.invoke('git:autoFetch', repo, maxAge),
     restoreBackup: (repo, id) => ipcRenderer.invoke('git:restoreBackup', repo, id),
     /** Antes de mesclar: commits que entram, avanço direto e arquivos que vão conflitar (sem mexer em nada). */
     mergePreview: (repo, branch) => ipcRenderer.invoke('git:mergePreview', repo, branch),

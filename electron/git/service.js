@@ -406,6 +406,39 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     };
   }
 
+  /**
+   * Fetch automático (Configurações › Git): a tela chama de minuto em minuto e no foco; aqui decide se é hora.
+   * Só busca se o último fetch (e a última tentativa) tem mais de maxAge segundos — várias janelas chamando não
+   * multiplicam a busca, e sem rede ele espera o intervalo inteiro antes de tentar de novo. Nunca pede login
+   * (falha calado), não faz --prune por conta própria e pula repositório com merge/rebase parado.
+   */
+  const autoState = new Map(); // repo -> { busy, tried }
+  async function autoFetch(repo, maxAge = 15 * 60) {
+    const r = await repoOf(repo);
+    const st = autoState.get(r.path) || { busy: false, tried: 0 };
+    autoState.set(r.path, st);
+    const nowSec = now().getTime() / 1000;
+    const age = Math.max(60, Number(maxAge) || 15 * 60);
+    if (st.busy) return { ran: false, reason: 'busy' };
+    if (nowSec - st.tried < age) return { ran: false, reason: 'recent' };
+    const last = await fetchTime(repo);
+    if (last && nowSec - last < age) return { ran: false, reason: 'recent' };
+    const remotes = await run(r.top, ['remote'], { ok: [0, 128] }).then((x) => x.stdout.trim(), () => '');
+    if (!remotes) return { ran: false, reason: 'no-remote' };
+    if (await inProgress(r.gitDir)) return { ran: false, reason: 'operation' };
+    st.busy = true;
+    st.tried = nowSec;
+    try {
+      await queue.run('repo:' + r.path, () => run(r.top, ['fetch', '--all', '--quiet'], {
+        read: false, timeout: 60e3, env: { GCM_INTERACTIVE: 'never', SSH_ASKPASS_REQUIRE: 'never' },
+      }));
+      broadcast({ type: 'changed', repo: r.path });
+      return { ran: true };
+    } catch (e) {
+      return { ran: false, reason: 'error', error: friendly(e.message) || e.message };
+    } finally { st.busy = false; }
+  }
+
   /** Quando foi o último fetch (mtime do FETCH_HEAD, em segundos) — null se nunca buscou. */
   async function fetchTime(repo) {
     const r = await repoOf(repo);
@@ -821,7 +854,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
   return {
     init, version, list, add, remove, scan, open, summaries,
     status, log, commit, diff, branches, compare, stashes, stashFiles, reflog, overview, backups,
-    exec, restoreBackup, mergePreview, conflictFile, rebaseInfo, files,
+    exec, autoFetch, restoreBackup, mergePreview, conflictFile, rebaseInfo, files,
     blame, searchText, bisectState, tags, cleanPreview, gitignore, rhythm, fileVersions, worktrees,
     unwatch, top: async (repo) => (await repoOf(repo)).top,
     flush: () => queue.flush(),

@@ -600,6 +600,7 @@ test('serviço: repositório sem commits e visão geral', async () => {
     assert.equal(ov.recent[0].subject, 'primeiro');
     assert.equal(ov.last.hash, ov.recent[0].hash);
     assert.equal(ov.lastFetch, null); // nunca buscou
+    assert.deepEqual(await t.svc.autoFetch(repo), { ran: false, reason: 'no-remote' });
     const sum = await t.svc.summaries();
     assert.equal(sum[0].branch, 'main');
     assert.equal(sum[0].changes, 0);
@@ -1199,4 +1200,24 @@ test('mergeAuthors: junta a mesma pessoa com e-mails ou grafias diferentes', () 
     ['Antonio Gonçalves', 40],
     ['Outra Pessoa', 5],
   ]);
+});
+
+test('autoFetch: busca quando a última é velha, pula quando é recente e traz o commit novo da remota', async () => {
+  const t = await setup();
+  try {
+    const origin = makeRepo(t.root, 'origem');
+    const dir = path.join(t.root, 'clone');
+    execFileSync('git', ['clone', '-q', origin, dir]);
+    sh(dir, 'config', 'user.name', 'Teste');
+    sh(dir, 'config', 'user.email', 'teste@devkit');
+    const repo = await t.svc.add(dir);
+    write(origin, 'novo.txt', 'novo\n');
+    sh(origin, 'add', '-A');
+    sh(origin, 'commit', '-q', '-m', 'novo na remota');
+
+    assert.deepEqual(await t.svc.autoFetch(repo, 0), { ran: true }); // o clone não grava FETCH_HEAD: conta como nunca buscou
+    assert.equal((await t.svc.status(repo)).branch.behind, 1);
+    assert.equal((await t.svc.autoFetch(repo, 60)).reason, 'recent');
+    assert.ok((await t.svc.overview(repo)).lastFetch > 0);
+  } finally { t.done(); }
 });
