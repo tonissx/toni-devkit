@@ -50,4 +50,97 @@ function toMilestone(g) {
   return { id: first.kind + ':' + first.ts, kind: first.kind, ts: first.ts, i: first.i, artifacts: names, label };
 }
 
-module.exports = { DEPLOY_RULES, matchDeploy, groupBursts };
+const DAY = 86400e3;
+
+/** Número da PR no assunto do commit (merge do GitHub ou squash). */
+function prNumber(subject) {
+  const s = String(subject || '');
+  const m = /^Merge pull request #(\d+)\b/.exec(s) || /\(#(\d+)\)\s*$/.exec(s);
+  return m ? Number(m[1]) : null;
+}
+
+/** `com.x.WorkflowService$Inner.start` → `WorkflowService` (penúltimo segmento, sem `$…`). */
+function frameBase(frame) {
+  const parts = String(frame || '').split('.').filter(Boolean);
+  if (parts.length < 2) return '';
+  return parts[parts.length - 2].split('$')[0];
+}
+
+/** Algum arquivo tem o nome (sem extensão) igual à classe do frame. */
+function touchesFrame(files, frame) {
+  const base = frameBase(frame).toLowerCase();
+  if (!base) return false;
+  return (files || []).some((f) => {
+    const name = String(f).split(/[\\/]/).pop().replace(/\.[^.]*$/, '');
+    return name.toLowerCase() === base;
+  });
+}
+
+/** Marco com maior `ts <= t` (busca binária; `sorted` por `ts`). */
+function previousMilestone(sorted, t) {
+  let lo = 0;
+  let hi = (sorted || []).length - 1;
+  let found = null;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid].ts <= t) { found = sorted[mid]; lo = mid + 1; } else hi = mid - 1;
+  }
+  return found;
+}
+
+/** Commits entre o deploy anterior e este, em pastas iguais aos artefatos do deploy. */
+function commitsInDeploy(deploy, prev, commits) {
+  const arts = new Set(((deploy && deploy.artifacts) || []).map((a) => String(a).toLowerCase()));
+  const lower = prev ? prev.ts : deploy.ts - 7 * DAY;
+  return (commits || []).filter((c) => {
+    if (!(c.ts > lower && c.ts <= deploy.ts)) return false;
+    return (c.files || []).some((f) => {
+      const segs = String(f).split(/[\\/]/);
+      segs.pop();
+      return segs.some((s) => arts.has(s.toLowerCase()));
+    });
+  });
+}
+
+/** Marco anterior a uma ocorrência, com intervalo e força do indício. Não afirma causa. */
+function attribute(group, sorted, logStart, related) {
+  const milestone = previousMilestone(sorted, group.first);
+  if (!milestone) return null;
+  if (milestone.ts <= logStart || group.first < logStart + 60000) return { preexisting: true };
+  const gapMs = group.first - milestone.ts;
+  const strong = touchesFrame(related(milestone), group.frame);
+  return { milestone, gapMs, strong, faded: gapMs > DAY };
+}
+
+/** Junta as três fontes de marcos, ordenadas por `ts`, respeitando os tipos ligados. */
+function mergeMilestones(deploys, manual, merges, enabled = { deploy: true, merge: true, manual: true }) {
+  return [
+    ...(enabled.deploy ? deploys || [] : []),
+    ...(enabled.manual ? manual || [] : []),
+    ...(enabled.merge ? merges || [] : []),
+  ].sort((a, b) => a.ts - b.ts);
+}
+
+/** Primeiro repositório com pasta igual (sem diferenciar maiúsculas) a algum artefato. */
+function suggestRepo(artifacts, repos) {
+  const arts = new Set((artifacts || []).map((a) => String(a).toLowerCase()));
+  const r = (repos || []).find((x) => (x.folders || []).some((f) => arts.has(String(f).toLowerCase())));
+  return r ? r.path : null;
+}
+
+/** Deploy/undeploy/restart anterior que compartilha algum artefato com este. */
+function previousSameArtifact(sorted, deploy) {
+  const arts = new Set(((deploy && deploy.artifacts) || []).map((a) => String(a).toLowerCase()));
+  let best = null;
+  for (const m of sorted || []) {
+    if (m.ts >= deploy.ts || !['deploy', 'undeploy', 'restart'].includes(m.kind)) continue;
+    if (!(m.artifacts || []).some((a) => arts.has(String(a).toLowerCase()))) continue;
+    if (!best || m.ts >= best.ts) best = m;
+  }
+  return best;
+}
+
+module.exports = {
+  DEPLOY_RULES, matchDeploy, groupBursts,
+  prNumber, frameBase, touchesFrame, previousMilestone, commitsInDeploy, attribute, mergeMilestones, suggestRepo, previousSameArtifact,
+};
