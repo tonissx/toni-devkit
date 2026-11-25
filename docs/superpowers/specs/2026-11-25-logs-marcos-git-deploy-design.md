@@ -25,7 +25,7 @@ Tem que ser **fácil e claro de enxergar**: o antes/depois visível na Linha do 
 4. Deploy detectado sem configuração nenhuma (linhas do WildFly); marco manual como reserva (datasets, formulários,
    eventos de processo publicados pelo Studio, que podem não deixar linha no log).
 5. No marco de deploy: os commits na main que mexeram naquela widget desde o deploy anterior (estimativa).
-6. Clique no marco ou no commit leva à ferramenta Git, no commit (e no diff do arquivo, quando houver).
+6. Clique no marco ou no commit leva à ferramenta Git, no commit.
 
 ## Não-metas
 
@@ -74,7 +74,8 @@ Módulo puro novo `src/logs/milestones.js`:
     houver um exemplo real.
 - **Agrupar rajadas**: um restart publica dezenas de `.war` em segundos. Deploys a menos de 2 min uns dos outros
   viram **um marco** com a lista de artefatos ("restart · 38 apps"), para não poluir.
-- Roda no worker junto com a indexação (incremental no modo ao vivo: só as entradas novas).
+- Operação própria do worker (`deploys`), incremental: guarda até onde já varreu e, no ao vivo, lê só as entradas
+  novas; recomeça do zero quando o índice é recriado (rotação/reabrir).
 
 ### 2. Marcos manuais
 
@@ -148,13 +149,13 @@ Módulo puro novo `src/logs/milestones.js`:
 **Investigação**: "Adicionar à investigação" também aceita um marco (vira item com tag `suspeita` e o texto do marco),
 para o relatório trazer "começou depois do deploy X".
 
-**Ir para o Git**: hoje não existe navegação entre ferramentas. Criar uma peça mínima: um evento
-(`devkit:open-tool` com `{ tool: 'git', repo, commit, path? }`) que a casca troca de ferramenta e o `GitScreen`
-consome ao montar/receber (abre o repo, aba Histórico, seleciona o commit e, com `path`, o diff do arquivo).
+**Ir para o Git**: usa o comando que o Monitor de IA já usa —
+`window.devkit.app.command({ type: 'go', route: 'git', params: { repo, tab: 'history', hash } })`; o `GitScreen` abre o
+commit no Histórico pelo `hash`. (Abrir direto no diff de um arquivo fica para depois.)
 
 ### 6. Desempenho
 
-- Detecção de deploy dentro da indexação no worker: um teste de prefixo (`WFLYSRV00`) antes do regex.
+- Detecção de deploy no worker, incremental, com um teste de prefixo (`WFLYSRV00`) antes do regex.
 - Git roda depois que o log aparece, em segundo plano; marcos de merge chegam depois e a tela se atualiza.
 - No ao vivo: deploys novos entram com a leitura incremental; o git é consultado de novo só quando o ref muda
   (o watcher do Git já avisa) ou a cada fetch automático.
