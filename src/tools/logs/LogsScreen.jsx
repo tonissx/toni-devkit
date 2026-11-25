@@ -41,7 +41,7 @@ function splitPath(r) {
   return { host, dir: p };
 }
 
-function Start({ recents, onCancel, onOpen, onPickFile, onPickFolder, onForget, busy }) {
+function Start({ recents, onCancel, onOpen, onPickFile, onPickFolder, onForget }) {
   return (
     <div className="lg-start">
       <header className="lg-start__head">
@@ -51,8 +51,8 @@ function Start({ recents, onCancel, onOpen, onPickFile, onPickFolder, onForget, 
           <span>Arraste um arquivo ou pasta para cá. O Devkit detecta o formato (Fluig/JBoss, JSON por linha, IIS, Nginx/Apache, texto com data), junta stack traces numa entrada só, agrupa os erros repetidos e acompanha o arquivo ao vivo.</span>
         </div>
         <div className="lg-start__acts">
-          <button type="button" className="lg-btn is-primary is-lg" onClick={onPickFile} disabled={busy}><Icon name="file-text" size={15} /><span>Abrir arquivo</span></button>
-          <button type="button" className="lg-btn is-lg" onClick={onPickFolder} disabled={busy} title="Junta os arquivos rotacionados (server.log, server.log.2026-10-10, app.log.1, .gz…)"><Icon name="folder-open" size={15} /><span>Abrir pasta de logs</span></button>
+          <button type="button" className="lg-btn is-primary is-lg" onClick={onPickFile}><Icon name="file-text" size={15} /><span>Abrir arquivo</span></button>
+          <button type="button" className="lg-btn is-lg" onClick={onPickFolder} title="Junta os arquivos rotacionados (server.log, server.log.2026-10-10, app.log.1, .gz…)"><Icon name="folder-open" size={15} /><span>Abrir pasta de logs</span></button>
           {onCancel && <button type="button" className="lg-btn is-lg" onClick={onCancel}><Icon name="x" size={15} /><span>Voltar ao log</span></button>}
         </div>
       </header>
@@ -64,7 +64,7 @@ function Start({ recents, onCancel, onOpen, onPickFile, onPickFolder, onForget, 
               const { host, dir } = splitPath(r);
               return (
                 <div key={keyOf(r)} className="lg-recents__row">
-                  <button type="button" className="lg-recents__main" onClick={() => onOpen(r)} title={r.path} disabled={busy}>
+                  <button type="button" className="lg-recents__main" onClick={() => onOpen(r)} title={r.path}>
                     <Icon name={r.kind === 'folder' ? 'folder-open' : 'file-text'} size={14} />
                     <span className="lg-recents__name">{r.name}</span>
                     <span>{host ? <span className="lg-recents__host" title={`Servidor ${host}`}>{host}</span> : <span className="lg-recents__local">local</span>}</span>
@@ -121,8 +121,20 @@ export function LogsScreen({ toast, request }) {
     saveT.current = setTimeout(saveCases, 400);
   };
   React.useEffect(() => () => { if (saveT.current) saveCases(); }, []);
-  const [opening, setOpening] = React.useState({}); // id → { name, done, total }
-  const [busy, setBusy] = React.useState(false);
+  // Aberturas em andamento — várias ao mesmo tempo: req (marca desta tela) → { id, name, key, done, total, n }.
+  // O `id` do processo principal chega no evento 'opening'; até lá a entrada já aparece como aba "lendo…".
+  const [opening, setOpening] = React.useState({});
+  const openingRef = React.useRef({});
+  const patchOpening = (fn) => { openingRef.current = fn(openingRef.current); setOpening(openingRef.current); };
+  const dropOpening = (req) => patchOpening((o) => { if (!o[req]) return o; const n = { ...o }; delete n[req]; return n; });
+  // Abertura que a pessoa está acompanhando no palco (o cartão de progresso). Ao terminar, só ela vira a aba ativa;
+  // as outras terminam em segundo plano, sem tirar a pessoa do log que está lendo.
+  const [watching, setWatchingState] = React.useState(null);
+  const watchingRef = React.useRef(null);
+  const watch = (req) => { watchingRef.current = req; setWatchingState(req); };
+  const reqSeq = React.useRef(0);
+  const sourcesRef = React.useRef(null);
+  sourcesRef.current = sources;
   const [adding, setAdding] = React.useState(false); // "+" da barra: mostra a tela inicial (com recentes) em vez do explorador
   const [drag, setDrag] = React.useState(false);
   const openedAt = React.useRef({});
@@ -154,31 +166,49 @@ export function LogsScreen({ toast, request }) {
     loadCases();
     const off = api.onChanged((evt) => {
       if (!evt) return;
-      if (evt.type === 'opening') setOpening((o) => ({ ...o, [evt.id]: { name: evt.name, done: 0, total: 0 } }));
-      else if (evt.type === 'progress') setOpening((o) => (o[evt.id] ? { ...o, [evt.id]: { ...o[evt.id], done: evt.done, total: evt.total, n: evt.n } } : o));
-      else if (evt.type === 'investigations') loadCases(); // outra janela (ou esta mesma) gravou: pega a versão mesclada
-      else if (evt.type === 'crashed') { setSources([]); toast('O leitor de logs parou', 'Provavelmente faltou memória com um arquivo enorme. Abra de novo.', 'error'); }
+      // Só as aberturas pedidas por esta tela (com `req`); reaberturas de um log já aberto não viram aba "lendo…".
+      if (evt.type === 'opening') patchOpening((o) => (evt.req && o[evt.req] ? { ...o, [evt.req]: { ...o[evt.req], id: evt.id, name: evt.name } } : o));
+      else if (evt.type === 'progress') {
+        patchOpening((o) => {
+          const req = Object.keys(o).find((k) => o[k].id === evt.id);
+          return req ? { ...o, [req]: { ...o[req], done: evt.done, total: evt.total, n: evt.n } } : o;
+        });
+      // 'opened' chega antes da resposta de api.open: quem tira a entrada é o doOpen, junto com a aba nova (sem piscar).
+      } else if (evt.type === 'investigations') loadCases(); // outra janela (ou esta mesma) gravou: pega a versão mesclada
+      else if (evt.type === 'crashed') { setSources([]); patchOpening(() => ({})); watch(null); toast('O leitor de logs parou', 'Provavelmente faltou memória com um arquivo enorme. Abra de novo.', 'error'); }
     });
     return () => { alive = false; off(); };
   }, []);
 
   const doOpen = async (spec) => {
-    const existing = (sources || []).find((s) => keyOf(s.spec) === keyOf({ ...spec, path: spec.path }));
-    if (existing) { setUi((u) => ({ ...u, active: existing.id })); setAdding(false); return; }
-    setBusy(true);
+    const key = keyOf(spec);
+    const existing = (sourcesRef.current || []).find((s) => keyOf(s.spec) === key);
+    if (existing) { setUi((u) => ({ ...u, active: existing.id })); setAdding(false); watch(null); return; }
+    // O mesmo log já está sendo lido: só mostra o progresso dele.
+    const inflight = Object.keys(openingRef.current).find((k) => openingRef.current[k].key === key);
+    if (inflight) { setAdding(false); watch(inflight); return; }
+    const req = 'r' + (++reqSeq.current);
+    patchOpening((o) => ({ ...o, [req]: { id: null, name: String(spec.path).split(/[\\/]/).filter(Boolean).pop() || spec.path, key, done: 0, total: 0 } }));
+    setAdding(false);
+    watch(req);
     try {
-      const info = await api.open(spec);
+      const info = await api.open({ ...spec, req });
       openedAt.current[info.id] = Date.now();
+      const hadActive = (sourcesRef.current || []).length > 0;
       setSources((s) => [...(s || []).filter((x) => x.id !== info.id), info]);
-      setUi((u) => ({ ...u, active: info.id }));
-      setAdding(false);
+      if (watchingRef.current === req || !hadActive) {
+        setUi((u) => ({ ...u, active: info.id }));
+      } else {
+        // A pessoa foi ler outro log (ou abrir mais um) enquanto este carregava: não tira ela de lá.
+        toast('Log pronto', `${String(info.name).split(/[\\/]/).pop()} já pode ser lido — está nas abas.`, 'ok');
+      }
       refreshRecents();
       if (info.truncated) toast('Arquivo grande', 'Abrindo só o final (1,5 GB) para caber na memória.', 'ok');
     } catch (e) {
       toast('Não foi possível abrir', errText(e), 'error');
     } finally {
-      setBusy(false);
-      setOpening({});
+      dropOpening(req);
+      if (watchingRef.current === req) watch(null);
     }
   };
   const pickFile = async () => { const p = await api.pickFile(); if (p) doOpen({ kind: 'file', path: p }); };
@@ -200,7 +230,7 @@ export function LogsScreen({ toast, request }) {
     if (request.action === 'openFile') pickFile();
     else if (request.action === 'openFolder') pickFolder();
     else if (request.action === 'open' && request.spec) doOpen(request.spec);
-    else if (request.action === 'show' && request.id) setUi((u) => ({ ...u, active: request.id }));
+    else if (request.action === 'show' && request.id) { setAdding(false); watch(null); setUi((u) => ({ ...u, active: request.id })); }
   }, [request && request.nonce, !!sources]);
 
   // Arrastar e soltar arquivo/pasta.
@@ -215,6 +245,7 @@ export function LogsScreen({ toast, request }) {
 
   const active = sources && (sources.find((s) => s.id === ui.active) || sources[sources.length - 1]);
   const pending = Object.entries(opening);
+  const watched = (watching && opening[watching]) || null;
 
   return (
     <div className={'lg' + (drag ? ' is-drag' : '')}
@@ -224,23 +255,26 @@ export function LogsScreen({ toast, request }) {
       {sources && (sources.length > 0 || pending.length > 0) && (
         <nav className="lg-srcs" role="tablist" aria-label="Logs abertos">
           {sources.map((s) => (
-            <SourceTab key={s.id} s={s} active={active && active.id === s.id} onClick={() => { setAdding(false); setUi((u) => ({ ...u, active: s.id })); }} onClose={() => close(s.id)} />
+            <SourceTab key={s.id} s={s} active={!!active && active.id === s.id && !watched} onClick={() => { setAdding(false); watch(null); setUi((u) => ({ ...u, active: s.id })); }} onClose={() => close(s.id)} />
           ))}
-          {pending.filter(([id]) => !sources.some((s) => s.id === id)).map(([id, o]) => (
-            <span key={id} className="lg-src is-opening">
-              <Spinner size={11} /><span className="lg-src__name">{o.name}</span>
-              <small>{o.total ? `${Math.round((o.done / o.total) * 100)}%` : 'lendo…'}{o.n ? ` · ${fmtNum(o.n)}` : ''}</small>
+          {pending.filter(([, o]) => !(o.id && sources.some((s) => s.id === o.id))).map(([req, o]) => (
+            <span key={req} className={'lg-src is-opening' + (watching === req && !adding ? ' is-on' : '')} role="tab" aria-selected={watching === req && !adding}>
+              <button type="button" className="lg-src__main" onClick={() => { setAdding(false); watch(req); }} title={`Lendo ${o.name} — ver o progresso`}>
+                <Spinner size={11} /><span className="lg-src__name">{o.name}</span>
+                <small>{o.total ? `${Math.round((o.done / o.total) * 100)}%` : 'lendo…'}{o.n ? ` · ${fmtNum(o.n)}` : ''}</small>
+              </button>
             </span>
           ))}
-          <button type="button" className={'lg-src is-add' + (adding ? ' is-on' : '')} onClick={() => { refreshRecents(); setAdding(true); }} title="Abrir outro log" aria-label="Abrir outro log" disabled={busy}><Icon name="plus" size={14} /></button>
+          <button type="button" className={'lg-src is-add' + (adding ? ' is-on' : '')} onClick={() => { refreshRecents(); watch(null); setAdding(true); }} title="Abrir outro log" aria-label="Abrir outro log"><Icon name="plus" size={14} /></button>
         </nav>
       )}
       <div className="lg-stage">
         {!sources ? <div className="lg-muted lg-pad"><Spinner size={12} /> Carregando…</div>
-          : (!active || adding) ? (
-            pending.length ? <OpeningCard o={pending[0][1]} />
-              : <Start recents={recents} busy={busy} onCancel={active ? () => setAdding(false) : null} onOpen={(r) => doOpen({ kind: r.kind, path: r.path, family: r.family })} onPickFile={pickFile} onPickFolder={pickFolder}
-                onForget={async (p) => setRecents(await api.forgetRecent(p))} />
+          : (adding || (!active && !pending.length)) ? (
+            <Start recents={recents} onCancel={active ? () => setAdding(false) : null} onOpen={(r) => doOpen({ kind: r.kind, path: r.path, family: r.family })} onPickFile={pickFile} onPickFolder={pickFolder}
+              onForget={async (p) => setRecents(await api.forgetRecent(p))} />
+          ) : (watched || !active) ? (
+            <OpeningCard o={watched || pending[0][1]} />
           ) : (
             <Boundary resetKey={active.id}>
               <LogView key={active.id} src={active} toast={toast} openedAt={openedAt.current[active.id] || Date.now()}

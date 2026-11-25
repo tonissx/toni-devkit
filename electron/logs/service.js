@@ -82,6 +82,8 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
    * → info do worker + { id, name, spec, families, family, live }
    */
   async function openSource(spec, reuseId) {
+    // `req`: marca de quem pediu (a tela), devolvida nos eventos para ela saber qual das aberturas em andamento é esta.
+    const req = spec.req ? String(spec.req) : null;
     spec = { kind: spec.kind === 'folder' || spec.kind === 'file' ? spec.kind : 'auto', path: String(spec.path || ''), family: spec.family || null, format: spec.format, encoding: spec.encoding, tail: spec.tail !== false };
     const r = await resolve(spec);
     spec.kind = r.families ? 'folder' : 'file'; // 'auto' (arrastar e soltar): decide pelo que existe no disco
@@ -96,13 +98,15 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
     if (prev) stopTail(prev);
     const src = { id, spec, name: r.name, files: r.files, families: r.families || null, family: r.family || null, live, watcher: null, timer: null, ino: null, busy: false, seenErrors: prev ? prev.seenErrors : null, errors: 0, info: null };
     open.set(id, src);
-    broadcast({ type: 'opening', id, name: r.name });
+    broadcast({ type: 'opening', id, name: r.name, req });
     let info;
     try {
       info = await callWorker('open', { id, files: r.files, format, encoding, tail: live });
     } catch (e) {
       open.delete(id);
       throw e;
+    } finally {
+      broadcast({ type: 'opened', id, req });
     }
     src.info = info;
     src.errors = info.levelTotals[5] + info.levelTotals[6];
