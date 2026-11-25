@@ -442,7 +442,13 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
 
       <Timeline hist={sum && sum.hist} range={range} onRange={(r) => set({ range: r })} onSeek={seek} spikes={tlMode === 'problems' || errorsTotal ? sum && sum.spikes : []}
         mode={tlMode} onMode={(m) => set({ tlMode: m })} loading={dimmed}
-        collapsed={tlFolded} onCollapse={(v) => set({ tlFolded: v })} />
+        collapsed={tlFolded} onCollapse={(v) => set({ tlFolded: v })}
+        milestones={ms.list} allMilestones={ms.all} show={ms.meta.show} onShow={(s) => ms.setMeta({ show: s })}
+        repo={ms.meta.repo} commitsOf={ms.commitsOf}
+        onMarkHere={(ts, label) => ms.setMeta({ manual: [...ms.meta.manual, { ts, label }] })}
+        onMilestone={(a) => ms.setMeta({ manual: a.type === 'delete'
+          ? ms.meta.manual.filter((m) => m.id !== a.m.id)
+          : ms.meta.manual.map((m) => (m.id === a.m.id ? { ...m, label: a.label } : m)) })} />
 
       <div className="lg-tabs" role="tablist">
         {[

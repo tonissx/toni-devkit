@@ -151,7 +151,64 @@ function foldersOf(paths) {
   return [...set];
 }
 
+/* ── Desenho na linha do tempo ─────────────────────────────────────────────── */
+
+const KIND_GROUP = { deploy: 'deploy', undeploy: 'deploy', restart: 'deploy', merge: 'merge', manual: 'manual' };
+const KIND_PRIORITY = ['restart', 'deploy', 'undeploy', 'merge', 'manual'];
+
+/** Grupo do marco para cor/ícone/liga-desliga: 'deploy' (deploy/undeploy/restart), 'merge' ou 'manual'. */
+function kindGroup(kind) {
+  return KIND_GROUP[kind] || 'manual';
+}
+
+/**
+ * Agrupa os marcos por coluna do histograma (`Math.floor((ts - start) / step)`). Marcos a até `gap` colunas do
+ * grupo anterior entram nele (para os ícones não se sobreporem quando as colunas são estreitas). Marcos fora do
+ * histograma ficam de fora. → [{ b, b1, bs: [colunas], items, kind }] — `kind` é o grupo do marco mais importante.
+ */
+function clusterMilestones(list, hist, gap = 0) {
+  if (!hist || !(hist.buckets > 0) || !(hist.step > 0)) return [];
+  const B = hist.buckets;
+  const out = [];
+  for (const m of (list || []).slice().sort((a, b) => a.ts - b.ts)) {
+    let b = Math.floor((m.ts - hist.start) / hist.step);
+    if (b === B && m.ts <= hist.start + B * hist.step) b = B - 1; // o último instante do log fecha a última coluna
+    if (!(b >= 0 && b < B)) continue;
+    const last = out[out.length - 1];
+    if (last && b - last.b1 <= gap) {
+      last.items.push(m);
+      if (b !== last.b1) { last.bs.push(b); last.b1 = b; }
+    } else out.push({ b, b1: b, bs: [b], items: [m] });
+  }
+  for (const c of out) {
+    let best = c.items[0];
+    for (const m of c.items) if (KIND_PRIORITY.indexOf(m.kind) < KIND_PRIORITY.indexOf(best.kind)) best = m;
+    c.kind = kindGroup(best.kind);
+  }
+  return out;
+}
+
+/** Rótulo curto ao lado do ícone: `restart·38`, `wgPortalRH +2`, `#126`, `a1b2c3d` ou o texto do marco manual. */
+function shortLabel(m, max = 18) {
+  if (!m) return '';
+  let s;
+  const arts = m.artifacts || [];
+  if (m.kind === 'restart') s = 'restart·' + arts.length;
+  else if (m.kind === 'deploy' || m.kind === 'undeploy') s = arts.length ? arts[0] + (arts.length > 1 ? ' +' + (arts.length - 1) : '') : m.kind;
+  else if (m.kind === 'merge') s = m.pr ? '#' + m.pr : String(m.hash || m.label || '').slice(0, 7);
+  else s = String(m.label || '');
+  return s.length > max ? s.slice(0, max - 1) + '…' : s;
+}
+
+/** Quantos marcos de cada grupo há em [from, to]. → { deploy, merge, manual } */
+function countMilestones(list, from = -Infinity, to = Infinity) {
+  const n = { deploy: 0, merge: 0, manual: 0 };
+  for (const m of list || []) if (m.ts >= from && m.ts <= to) n[kindGroup(m.kind)]++;
+  return n;
+}
+
 module.exports = {
   foldersOf, DEPLOY_RULES, matchDeploy, groupBursts,
   prNumber, frameBase, touchesFrame, previousMilestone, commitsInDeploy, attribute, mergeMilestones, suggestRepo, previousSameArtifact,
+  kindGroup, clusterMilestones, shortLabel, countMilestones,
 };

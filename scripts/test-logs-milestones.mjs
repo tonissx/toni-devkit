@@ -131,3 +131,43 @@ test('foldersOf: nomes dos dois primeiros níveis, sem raiz e sem repetir', () =
   assert.deepEqual(M.foldersOf(['x/a.js', 'x/b.js', 'x/y/c.js', 'x/y/d.js']).sort(), ['x', 'y']);
   assert.equal(M.suggestRepo(['wgPortalRH'], [{ path: 'r', folders: M.foldersOf(['widgets/wgPortalRH/src/a.js']) }]), 'r');
 });
+
+test('clusterMilestones: mesma coluna vira um grupo; fora do histograma fica de fora', () => {
+  const hist = { start: 1000, step: 100, buckets: 10 };
+  const list = [
+    { id: 'm', kind: 'merge', ts: 1210 },
+    { id: 'r', kind: 'restart', ts: 1250 },
+    { id: 'x', kind: 'manual', ts: 1500 },
+    { id: 'antes', kind: 'deploy', ts: 999 },
+    { id: 'depois', kind: 'deploy', ts: 2101 },
+    { id: 'fim', kind: 'deploy', ts: 2000 },
+  ];
+  const c = M.clusterMilestones(list, hist);
+  assert.deepEqual(c.map((g) => g.b), [2, 5, 9]);
+  assert.deepEqual(c[0].items.map((m) => m.id), ['m', 'r']);
+  assert.equal(c[0].kind, 'deploy'); // o restart pesa mais que o merge
+  assert.equal(c[1].kind, 'manual');
+  assert.deepEqual(c[2].items.map((m) => m.id), ['fim']);
+  assert.deepEqual(M.clusterMilestones(list, null), []);
+});
+
+test('clusterMilestones: gap junta colunas vizinhas e guarda as colunas de cada um', () => {
+  const hist = { start: 0, step: 10, buckets: 20 };
+  const list = [{ id: 'a', kind: 'merge', ts: 5 }, { id: 'b', kind: 'merge', ts: 15 }, { id: 'c', kind: 'merge', ts: 35 }, { id: 'd', kind: 'merge', ts: 90 }];
+  assert.equal(M.clusterMilestones(list, hist).length, 4);
+  const g = M.clusterMilestones(list, hist, 2);
+  assert.equal(g.length, 2);
+  assert.deepEqual(g[0].bs, [0, 1, 3]);
+  assert.equal(g[0].b, 0);
+  assert.equal(g[0].items.length, 3);
+});
+
+test('shortLabel e countMilestones', () => {
+  assert.equal(M.shortLabel({ kind: 'restart', artifacts: Array(38).fill('a') }), 'restart·38');
+  assert.equal(M.shortLabel({ kind: 'deploy', artifacts: ['wgPortalRH', 'wgB', 'wgC'] }), 'wgPortalRH +2');
+  assert.equal(M.shortLabel({ kind: 'merge', pr: 126, hash: 'abcdef123' }), '#126');
+  assert.equal(M.shortLabel({ kind: 'merge', pr: null, hash: 'abcdef123' }), 'abcdef1');
+  assert.equal(M.shortLabel({ kind: 'manual', label: 'publiquei o formulário de férias' }), 'publiquei o formu…');
+  const n = M.countMilestones([{ kind: 'deploy', ts: 1 }, { kind: 'restart', ts: 2 }, { kind: 'merge', ts: 3 }, { kind: 'manual', ts: 9 }], 0, 5);
+  assert.deepEqual(n, { deploy: 2, merge: 1, manual: 0 });
+});
