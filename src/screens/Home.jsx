@@ -8,7 +8,9 @@ import { needsValue } from '../links/link.js';
 import { TaskText } from '../tools/notes/TaskText.jsx';
 import { PriorityTag } from '../tools/notes/PriorityTag.jsx';
 import { formatNum } from '../devcore/engine/format.js';
-import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, logsAttention, dbAttention, PANELS } from '../home/dashboard.js';
+import { greeting, longDate, dueLabel, agenda, daySummaryParts, recentNotes, dashboardLinks, repoAttention, repoStatusChip, logsAttention, dbAttention, standupText, PANELS } from '../home/dashboard.js';
+import { useAiMode, useAiTask, AiButton, AiPanel, AiMarkdown, aiOn } from '../ai/ui.jsx';
+import { copyText } from '../lib/fmt.jsx';
 
 const { PageHeader, ToolCard, Button, Card, Icon, Badge, Checkbox, EmptyState, Spinner } = DS;
 
@@ -271,6 +273,54 @@ function GitPanel({ repos, open }) {
   );
 }
 
+/* ─────────────── Standup ─────────────── */
+
+/**
+ * Standup do dia: o que foi feito no dia útil anterior (commits seus, tarefas concluídas, sessões de IA) e o que há para
+ * hoje, em texto para copiar ou salvar. O texto sai sempre do que o Devkit já sabe; a IA (opcional) só reescreve esse texto.
+ * Carrega ao abrir e no botão Atualizar — varrer repositórios e versões de notas não é para rodar a cada mudança.
+ */
+function StandupPanel({ today, toast }) {
+  const [data, setData] = React.useState(null);
+  const load = React.useCallback(() => {
+    setData(null);
+    window.devkit.standup.today().then(setData, (e) => { toast('Não foi possível montar o standup', cleanError(e), 'error'); setData({}); });
+  }, []);
+  React.useEffect(() => { load(); }, []);
+  const cfg = useAiMode();
+  const ai = useAiTask('standup', cfg);
+  const text = React.useMemo(() => (data && data.today ? standupText(data, { today }) : ''), [data, today]);
+  const ready = data !== null;
+  const title = `Standup — ${new Date().toLocaleDateString('pt-BR')}`;
+  const rewrite = () => ai.start(() => {
+    if (!text) { toast('Nada para reescrever', 'O standup está vazio.', 'warn'); return null; }
+    return { text, date: today };
+  });
+  const saveNote = async (content) => {
+    try {
+      await window.devkit.notes.create({ title, content, tags: ['standup'] });
+      toast('Nota criada', `“${title}” está nas Notes.`, 'ok');
+    } catch (e) { toast('Não foi possível criar a nota', cleanError(e), 'error'); }
+  };
+  return (
+    <Card className="home-panel is-standup" padding={16} icon="clipboard-list" title="Standup"
+      subtitle={ready ? (text ? 'ontem, hoje e impedimentos' : 'nada registrado ainda') : 'montando…'}
+      actions={<Button size="sm" variant="ghost" onClick={load} disabled={!ready}>Atualizar</Button>}>
+      {!ready ? <span className="home-row__sub"><Spinner size={11} /> juntando commits, tarefas e sessões…</span>
+        : text ? <div className="home-standup"><AiMarkdown text={text} /></div>
+          : <span className="home-row__sub">Sem commits seus, tarefas concluídas nem tarefas para hoje. Commite, marque tarefas nas Notes ou abra o Monitor de IA para alimentar o standup.</span>}
+      {ready && text && (
+        <div className="home-standup__bar">
+          <Button size="sm" variant="secondary" icon="copy" onClick={() => copyText(text, toast, 'Standup')}>Copiar</Button>
+          <Button size="sm" variant="ghost" icon="notebook-pen" onClick={() => saveNote(text)}>Salvar como nota</Button>
+          {aiOn(cfg) && <AiButton ai={ai} label="Reescrever" onClick={rewrite} title="A IA reescreve este texto em tom de standup; só ele é enviado" />}
+        </div>
+      )}
+      {aiOn(cfg) && <AiPanel ai={ai} actions={[{ label: 'Salvar como nota', icon: 'notebook-pen', onClick: () => ai.st && ai.st.text && saveNote(ai.st.text) }]} />}
+    </Card>
+  );
+}
+
 /* ─────────────── Logs ─────────────── */
 
 const LOG_ICON = { new: 'circle-x', errors: 'triangle-alert', ok: 'circle-check' };
@@ -502,6 +552,7 @@ export function Home({ go, open, openPalette, updater, toast, theme, setTheme })
       <StatusStrip noteCount={noteCount} vault={vault} palette={palette} updater={updater} go={go} open={open} repos={shows('git') ? repos : null} />
 
       <div className="home-dash">
+        {shows('standup') && <StandupPanel today={today} toast={toast} />}
         {shows('tasks') && <TasksPanel tasks={tasks} today={today} open={open} toast={toast} />}
         {shows('notes') && <NotesPanel recent={recent} pinned={pinned} open={open} toast={toast} />}
         {shows('git') && <GitPanel repos={repos} open={open} />}

@@ -41,7 +41,7 @@ function splitPath(r) {
   return { host, dir: p };
 }
 
-function Start({ recents, onOpen, onPickFile, onPickFolder, onForget, busy }) {
+function Start({ recents, onCancel, onOpen, onPickFile, onPickFolder, onForget, busy }) {
   return (
     <div className="lg-start">
       <header className="lg-start__head">
@@ -53,6 +53,7 @@ function Start({ recents, onOpen, onPickFile, onPickFolder, onForget, busy }) {
         <div className="lg-start__acts">
           <button type="button" className="lg-btn is-primary is-lg" onClick={onPickFile} disabled={busy}><Icon name="file-text" size={15} /><span>Abrir arquivo</span></button>
           <button type="button" className="lg-btn is-lg" onClick={onPickFolder} disabled={busy} title="Junta os arquivos rotacionados (server.log, server.log.2026-10-10, app.log.1, .gz…)"><Icon name="folder-open" size={15} /><span>Abrir pasta de logs</span></button>
+          {onCancel && <button type="button" className="lg-btn is-lg" onClick={onCancel}><Icon name="x" size={15} /><span>Voltar ao log</span></button>}
         </div>
       </header>
       {recents.length > 0 && (
@@ -122,6 +123,7 @@ export function LogsScreen({ toast, request }) {
   React.useEffect(() => () => { if (saveT.current) saveCases(); }, []);
   const [opening, setOpening] = React.useState({}); // id → { name, done, total }
   const [busy, setBusy] = React.useState(false);
+  const [adding, setAdding] = React.useState(false); // "+" da barra: mostra a tela inicial (com recentes) em vez do explorador
   const [drag, setDrag] = React.useState(false);
   const openedAt = React.useRef({});
   const handled = React.useRef(null);
@@ -162,13 +164,14 @@ export function LogsScreen({ toast, request }) {
 
   const doOpen = async (spec) => {
     const existing = (sources || []).find((s) => keyOf(s.spec) === keyOf({ ...spec, path: spec.path }));
-    if (existing) { setUi((u) => ({ ...u, active: existing.id })); return; }
+    if (existing) { setUi((u) => ({ ...u, active: existing.id })); setAdding(false); return; }
     setBusy(true);
     try {
       const info = await api.open(spec);
       openedAt.current[info.id] = Date.now();
       setSources((s) => [...(s || []).filter((x) => x.id !== info.id), info]);
       setUi((u) => ({ ...u, active: info.id }));
+      setAdding(false);
       refreshRecents();
       if (info.truncated) toast('Arquivo grande', 'Abrindo só o final (1,5 GB) para caber na memória.', 'ok');
     } catch (e) {
@@ -221,7 +224,7 @@ export function LogsScreen({ toast, request }) {
       {sources && (sources.length > 0 || pending.length > 0) && (
         <nav className="lg-srcs" role="tablist" aria-label="Logs abertos">
           {sources.map((s) => (
-            <SourceTab key={s.id} s={s} active={active && active.id === s.id} onClick={() => setUi((u) => ({ ...u, active: s.id }))} onClose={() => close(s.id)} />
+            <SourceTab key={s.id} s={s} active={active && active.id === s.id} onClick={() => { setAdding(false); setUi((u) => ({ ...u, active: s.id })); }} onClose={() => close(s.id)} />
           ))}
           {pending.filter(([id]) => !sources.some((s) => s.id === id)).map(([id, o]) => (
             <span key={id} className="lg-src is-opening">
@@ -229,15 +232,14 @@ export function LogsScreen({ toast, request }) {
               <small>{o.total ? `${Math.round((o.done / o.total) * 100)}%` : 'lendo…'}{o.n ? ` · ${fmtNum(o.n)}` : ''}</small>
             </span>
           ))}
-          <button type="button" className="lg-src is-add" onClick={pickFile} title="Abrir outro arquivo" disabled={busy}><Icon name="file-plus" size={14} /></button>
-          <button type="button" className="lg-src is-add" onClick={pickFolder} title="Abrir uma pasta de logs" disabled={busy}><Icon name="folder-plus" size={14} /></button>
+          <button type="button" className={'lg-src is-add' + (adding ? ' is-on' : '')} onClick={() => { refreshRecents(); setAdding(true); }} title="Abrir outro log" aria-label="Abrir outro log" disabled={busy}><Icon name="plus" size={14} /></button>
         </nav>
       )}
       <div className="lg-stage">
         {!sources ? <div className="lg-muted lg-pad"><Spinner size={12} /> Carregando…</div>
-          : !active ? (
+          : (!active || adding) ? (
             pending.length ? <OpeningCard o={pending[0][1]} />
-              : <Start recents={recents} busy={busy} onOpen={(r) => doOpen({ kind: r.kind, path: r.path, family: r.family })} onPickFile={pickFile} onPickFolder={pickFolder}
+              : <Start recents={recents} busy={busy} onCancel={active ? () => setAdding(false) : null} onOpen={(r) => doOpen({ kind: r.kind, path: r.path, family: r.family })} onPickFile={pickFile} onPickFolder={pickFolder}
                 onForget={async (p) => setRecents(await api.forgetRecent(p))} />
           ) : (
             <Boundary resetKey={active.id}>
