@@ -64,13 +64,17 @@ const DAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
 /** Quando os commits acontecem: dias da semana × horas (180 dias). */
 function Rhythm({ repo }) {
-  const { data } = useRepoData(repo, (r) => gitApi().rhythm(r));
-  if (!data || !data.total) return null;
+  const { data, error } = useRepoData(repo, (r) => gitApi().rhythm(r));
+  const title = <h3><Icon name="clock" size={14} /> Ritmo (últimos 180 dias)</h3>;
+  // Card com spinner enquanto carrega: sem ele o último commit ocupa esta vaga e pula de lugar quando o ritmo chega.
+  if (error && !data) return null;
+  if (!data) return <section className="gt-card gt-ov-rhythm">{title}<div className="gt-msg"><Spinner size={14} /></div></section>;
+  if (!data.total) return null;
   const max = Math.max(1, ...data.grid.flat());
   const peak = data.grid.flatMap((row, d) => row.map((n, h) => ({ n, d, h }))).sort((a, b) => b.n - a.n)[0];
   return (
     <section className="gt-card gt-ov-rhythm">
-      <h3><Icon name="clock" size={14} /> Ritmo (últimos 180 dias)</h3>
+      {title}
       <div className="gt-rhythm">
         <div className="gt-rhythm__hours">{Array.from({ length: 24 }, (_, h) => <span key={h}>{h % 3 === 0 ? h + 'h' : ''}</span>)}</div>
         {data.grid.map((row, d) => (
@@ -112,6 +116,8 @@ export function Overview({ repo, status, go, run }) {
             <h3><Icon name="activity" size={14} /> Atividade</h3>
             <Heatmap activity={ov.activity} />
           </section>
+          {/* Os dois mapas de calor ficam juntos; o último commit vem depois. */}
+          <Rhythm repo={repo} />
           {ov.last && (
             <section className="gt-card gt-ov-last">
               <h3><Icon name="git-commit-horizontal" size={14} /> Último commit</h3>
@@ -126,7 +132,6 @@ export function Overview({ repo, status, go, run }) {
               </div>
             </section>
           )}
-          <Rhythm repo={repo} />
           <section className="gt-card gt-ov-authors">
             <h3><Icon name="users" size={14} /> Quem mais commitou</h3>
             <Bars items={ov.authors} label={(a) => a.name} value={(a) => a.n} />
