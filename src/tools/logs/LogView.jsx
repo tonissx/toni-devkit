@@ -103,7 +103,7 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
   const [live, setLive] = React.useState(src.live);
   const latest = React.useRef(0);
   const appended = React.useRef(false);
-  const [appendedNonce, setAppendedNonce] = React.useState(0); // muda a cada `appended`/`reset`: refaz os marcos de deploy
+  const [appendedNonce, setAppendedNonce] = React.useState(0); // muda a cada `appended`/`reset`/reabertura: refaz os marcos de deploy
   const first = React.useRef(true);
   const searchRef = React.useRef(null);
   const listRef = React.useRef(null);
@@ -330,10 +330,10 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
     try { const on = await api.setLive(id, !live); setLive(on); toast(on ? 'Acompanhando ao vivo' : 'Parou de acompanhar', on ? 'Linhas novas entram sozinhas.' : 'O log fica como está agora.', 'ok'); } catch (e) { toast('Não foi possível', errText(e), 'error'); }
   };
   const reformat = async (patch) => {
-    try { const info = await api.reformat(id, patch); onInfo(info); first.current = true; setSel(null); runRef.current(); } catch (e) { toast('Não foi possível reabrir', errText(e), 'error'); }
+    try { const info = await api.reformat(id, patch); onInfo(info); setAppendedNonce((n) => n + 1); first.current = true; setSel(null); runRef.current(); } catch (e) { toast('Não foi possível reabrir', errText(e), 'error'); }
   };
   const switchFamily = async (family) => {
-    try { const info = await api.switchFamily(id, family); onInfo(info); first.current = true; setSel(null); runRef.current(); } catch (e) { toast('Não foi possível abrir', errText(e), 'error'); }
+    try { const info = await api.switchFamily(id, family); onInfo(info); setAppendedNonce((n) => n + 1); first.current = true; setSel(null); runRef.current(); } catch (e) { toast('Não foi possível abrir', errText(e), 'error'); }
   };
   const doExport = async (kind) => {
     if (!sum) return;
@@ -462,7 +462,7 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
         mode={tlMode} onMode={(m) => set({ tlMode: m })} loading={dimmed}
         collapsed={tlFolded} onCollapse={(v) => set({ tlFolded: v })}
         milestones={ms.list} allMilestones={ms.all} show={ms.meta.show} onShow={(s) => ms.setMeta({ show: s })}
-        repo={ms.meta.repo} commitsOf={ms.commitsOf}
+        repo={ms.meta.repo} commitsOf={ms.commitsOf} commitsState={ms.commitsState}
         onMarkHere={(ts, label) => ms.setMeta({ manual: [...ms.meta.manual, { ts, label }] })}
         onMilestone={(a) => ms.setMeta({ manual: a.type === 'delete'
           ? ms.meta.manual.filter((m) => m.id !== a.m.id)
@@ -535,7 +535,7 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
             ) : tab === 'problems' ? (
               <Problems id={id} sum={sum} openedAt={openedAt} res={res} selKey={null}
                 onPick={(g) => setSel({ pos: null, i: g.lastIdx })} onFilter={addFilter}
-                milestones={ms.list} logStart={sum ? sum.tsMin : null} related={ms.related} repo={ms.meta.repo} commitsOf={ms.commitsOf}
+                milestones={ms.list} logStart={sum ? sum.tsMin : null} related={ms.related} repo={ms.meta.repo} commitsOf={ms.commitsOf} commitsState={ms.commitsState}
                 onSeek={seek} onRange={(r) => set({ range: r })} onMilestone={(a) => { if (a.type === 'investigate') markToCase(a); }}
                 aiSlot={aiOn(cfg) ? (groups) => (
                   <>

@@ -6,7 +6,7 @@
 import { DS } from '../../lib/ds.js';
 import { LEVEL_BY_ID, levelColor, fmtTick, fmtStep, fmtTime, fmtNum, fmtCompact, sameDay } from './shared.jsx';
 import { clusterMilestones, shortLabel, countMilestones, kindGroup } from '../../logs/milestones.js';
-import { MilestoneMenu, MarkHereMenu, MilestoneIcon, KIND_LABEL, useDismiss } from './MilestoneMenu.jsx';
+import { MilestoneMenu, MarkHereMenu, MilestoneIcon, kindLabel, commitsPending, useDismiss } from './MilestoneMenu.jsx';
 
 const { Icon } = DS;
 
@@ -30,17 +30,20 @@ function detailOf(m) {
 }
 
 /** Tooltip dos marcos de uma coluna (todos, até 6). */
-function MilestoneTip({ items, repo, commitsOf, multiDay, style }) {
+function MilestoneTip({ items, repo, commitsOf, commitsState, multiDay, style }) {
   const shown = items.slice(0, 6);
+  const pending = commitsPending(commitsState);
   return (
     <div className="lg-tip lg-mtip" style={style} role="tooltip">
       {shown.map((m) => {
         const n = repo && commitsOf && kindGroup(m.kind) === 'deploy' ? commitsOf(m).length : null;
+        // Sem a resposta do repositório, "0 commits" seria falso: mostra o estado em vez do número.
+        const note = n == null ? null : n === 0 && pending ? 'Commits da main: ' + pending : plural(n, 'commit', 'commits') + ' na main desde o deploy anterior (estimativa)';
         return (
           <div key={m.id} className="lg-mtip__item">
-            <div className="lg-mtip__head"><MilestoneIcon kind={m.kind} /><b>{KIND_LABEL[m.kind] || 'Marco'}</b><span className="lg-tip__when">{fmtTime(m.ts, { date: multiDay, millis: false })}</span></div>
+            <div className="lg-mtip__head"><MilestoneIcon kind={m.kind} /><b>{kindLabel(m)}</b><span className="lg-tip__when">{fmtTime(m.ts, { date: multiDay, millis: false })}</span></div>
             <div className="lg-mtip__txt">{detailOf(m)}</div>
-            {n != null && <div className="lg-mtip__note">{plural(n, 'commit', 'commits')} na main desde o deploy anterior (estimativa)</div>}
+            {note && <div className="lg-mtip__note">{note}</div>}
           </div>
         );
       })}
@@ -81,11 +84,11 @@ function topRounded(x, y, w, h, r) {
  * props: hist { start, step, buckets, data }, range { from, to } | null, onRange(range|null), onSeek(ms),
  * spikes [b], mode 'all'|'problems', onMode, loading, collapsed, onCollapse(bool)
  * marcos: milestones (já filtrados por `show`), allMilestones (todos, para as contagens do menu "Marcos"),
- * show { deploy, merge, manual }, onShow(patch), repo, commitsOf(m), onMarkHere(ts, label),
+ * show { deploy, merge, manual }, onShow(patch), repo, commitsOf(m), commitsState, onMarkHere(ts, label),
  * onMilestone({ type: 'edit', m, label } | { type: 'delete', m })
  */
 export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, loading, collapsed, onCollapse,
-  milestones = [], allMilestones, show, onShow, repo, commitsOf, onMarkHere, onMilestone }) {
+  milestones = [], allMilestones, show, onShow, repo, commitsOf, commitsState, onMarkHere, onMilestone }) {
   const ref = React.useRef(null);
   const svgRef = React.useRef(null);
   const width = useWidth(ref);
@@ -330,7 +333,7 @@ export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, l
             return (
               <button key={id} type="button" data-mm-anchor="" className={'lg-mark is-' + c.kind + (open || (hoverC && hoverC === c) ? ' is-hot' : '')} style={{ left: cx }}
                 aria-haspopup="menu" aria-expanded={!!open}
-                aria-label={(n > 1 ? `${n} marcos: ` : '') + c.items.map((m) => `${KIND_LABEL[m.kind] || 'Marco'} ${shortLabel(m, 40)} às ${fmtTime(m.ts, { date: multiDay, millis: false })}`).join('; ')}
+                aria-label={(n > 1 ? `${n} marcos: ` : '') + c.items.map((m) => `${kindLabel(m)} ${shortLabel(m, 40)} às ${fmtTime(m.ts, { date: multiDay, millis: false })}`).join('; ')}
                 onClick={() => { setCtx(null); setMHover(null); setMenu(open ? null : { id, items: c.items, x: cx }); }}
                 onMouseEnter={() => setMHover(id)} onMouseLeave={() => setMHover((h) => (h === id ? null : h))}
                 onFocus={() => setMHover(id)} onBlur={() => setMHover((h) => (h === id ? null : h))}>
@@ -370,9 +373,9 @@ export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, l
           <text key={'t' + b} x={xOf(b) + barW / 2} y={H - 3} className="lg-tick" textAnchor={b === 0 ? 'start' : 'middle'}>{fmtTick(tOf(b), multiDay && hist.step < 3600e3 && b === 0 ? 3600e3 : hist.step)}</text>
         ))}
       </svg>
-      {hoverC && <MilestoneTip items={hoverC.items} repo={repo} commitsOf={commitsOf} multiDay={multiDay} style={popAt(cxOf(hoverC.b), width, STRIP + 2, 330)} />}
+      {hoverC && <MilestoneTip items={hoverC.items} repo={repo} commitsOf={commitsOf} commitsState={commitsState} multiDay={multiDay} style={popAt(cxOf(hoverC.b), width, STRIP + 2, 330)} />}
       {menu && (
-        <MilestoneMenu key={menu.id} milestones={menu.items} repo={repo} commitsOf={commitsOf} multiDay={multiDay} style={popAt(menu.x, width, STRIP + 2)}
+        <MilestoneMenu key={menu.id} milestones={menu.items} repo={repo} commitsOf={commitsOf} commitsState={commitsState} multiDay={multiDay} style={popAt(menu.x, width, STRIP + 2)}
           onSeek={onSeek} onRange={onRange} onClose={() => setMenu(null)}
           onEdit={onMilestone ? (m, label) => onMilestone({ type: 'edit', m, label }) : null}
           onDelete={onMilestone ? (m) => onMilestone({ type: 'delete', m }) : null} />

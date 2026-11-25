@@ -21,7 +21,7 @@ const SORTS = [
  */
 function AfterTag({ a, open, onToggle }) {
   if (a.preexisting) {
-    return <span className="lg-after is-pre" title="A primeira ocorrência está no começo do log, antes de qualquer marco: o erro já acontecia antes">já existia no início do log</span>;
+    return <span className="lg-after is-pre" title="A primeira ocorrência está no primeiro minuto do log — pode ter começado antes dele.">já existia no início do log</span>;
   }
   const { milestone: m, gapMs } = a;
   const text = afterText(m, gapMs);
@@ -41,11 +41,11 @@ function AfterTag({ a, open, onToggle }) {
 
 /**
  * props: id, sum (resultado da consulta), openedAt (ms), res, selKey, onPick(group), onFilter(term, replace), aiSlot
- * Marcos: milestones (já filtrados pelo que o usuário quer ver), logStart (ms), related(m) → arquivos, repo, commitsOf,
+ * Marcos: milestones (já filtrados pelo que o usuário quer ver), logStart (ms), related(m) → arquivos, repo, commitsOf, commitsState,
  * onSeek(ts), onRange(range), onMilestone({ type: 'investigate', m, group, gapMs })
  */
 export function Problems({ id, sum, openedAt, res, selKey, onPick, onFilter, aiSlot, aiPanel,
-  milestones = [], logStart = null, related, repo, commitsOf, onSeek, onRange, onMilestone }) {
+  milestones = [], logStart = null, related, repo, commitsOf, commitsState, onSeek, onRange, onMilestone }) {
   const [sort, setSort] = React.useState('count');
   const [sparks, setSparks] = React.useState({});
   const [menu, setMenu] = React.useState(null); // { gid, m, group, gapMs, style }
@@ -178,7 +178,7 @@ export function Problems({ id, sum, openedAt, res, selKey, onPick, onFilter, aiS
         {sum.groupsTotal > groups.length && <div className="lg-muted lg-pad">Mostrando os {groups.length} mais frequentes de {fmtNum(sum.groupsTotal)}.</div>}
       </div>
       {menu && (
-        <MilestoneMenu key={menu.gid + '|' + menu.m.id} milestones={[menu.m]} repo={repo} commitsOf={commitsOf} style={menu.style}
+        <MilestoneMenu key={menu.gid + '|' + menu.m.id} milestones={[menu.m]} repo={repo} commitsOf={commitsOf} commitsState={commitsState} style={menu.style}
           multiDay={sum.tsMin != null && !sameDay(sum.tsMin, latest)} onSeek={onSeek} onRange={onRange} onClose={() => setMenu(null)}
           extra={onMilestone ? [{ icon: 'clipboard-plus', label: 'Adicionar à investigação', hint: 'como suspeita', onClick: (m) => onMilestone({ type: 'investigate', m, group: menu.group, gapMs: menu.gapMs }) }] : null} />
       )}

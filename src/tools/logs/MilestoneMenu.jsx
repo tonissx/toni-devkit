@@ -3,11 +3,25 @@
 // Os textos nunca afirmam causa: os commits de um deploy são uma estimativa.
 import { DS } from '../../lib/ds.js';
 import { fmtTime } from './shared.jsx';
-import { kindGroup, shortLabel } from '../../logs/milestones.js';
+import { kindGroup, shortLabel, isMergeCommit } from '../../logs/milestones.js';
 
 const { Icon } = DS;
 
 export const KIND_LABEL = { deploy: 'Deploy', undeploy: 'Undeploy', restart: 'Restart do servidor', merge: 'Merge na main', manual: 'Marco manual' };
+
+/** Nome do tipo do marco. A main vem com --first-parent: commit direto (sem PR, sem "Merge ") é "Commit na main". */
+export function kindLabel(m) {
+  if (!m) return 'Marco';
+  if (m.kind === 'merge' && !isMergeCommit(m)) return 'Commit na main';
+  return KIND_LABEL[m.kind] || 'Marco';
+}
+
+/** Enquanto os commits do repositório ligado não chegaram (ou não deu para ler), não dá para dizer "nenhum commit". */
+export function commitsPending(commitsState) {
+  if (commitsState === 'loading') return 'carregando commits…';
+  if (commitsState === 'error') return 'repositório indisponível';
+  return null;
+}
 
 /** Ícone do marco (▲ deploy, ◆ merge, ✎ manual), na cor do tipo. */
 export function MilestoneIcon({ kind }) {
@@ -77,12 +91,13 @@ const MAX_COMMITS = 5;
  *  - milestones: Milestone[] (um ou vários — vários = os da mesma coluna; primeiro escolhe-se qual)
  *  - repo: caminho do repositório ligado (sem ele não há "Abrir no Git")
  *  - commitsOf(m) → Commit[] (commits da main no widget desde o deploy anterior — estimativa)
+ *  - commitsState: 'idle' | 'loading' | 'ok' | 'error' (de useMilestones) — sem 'ok', não mostra "nenhum commit"
  *  - onSeek(ts), onRange({ from, to }), onEdit(m, label), onDelete(m) — todos opcionais; sem o callback, o item some
  *  - extra: [{ icon, label, hint?, onClick(m) }] ou (m) => itens — entram depois dos itens fixos (ex.: investigação)
  *  - multiDay: mostra a data junto da hora
  *  - onClose(), style, className — o menu se posiciona por `style` (sem ele vale o `.lg-pop` padrão: abaixo, à direita)
  */
-export function MilestoneMenu({ milestones, repo, commitsOf, onSeek, onRange, onEdit, onDelete, extra, multiDay = false, onClose, style, className = '' }) {
+export function MilestoneMenu({ milestones, repo, commitsOf, commitsState = 'ok', onSeek, onRange, onEdit, onDelete, extra, multiDay = false, onClose, style, className = '' }) {
   const ref = React.useRef(null);
   const list = milestones || [];
   const [pick, setPick] = React.useState(list.length === 1 ? list[0] : null);
@@ -122,11 +137,12 @@ export function MilestoneMenu({ milestones, repo, commitsOf, onSeek, onRange, on
     const g = kindGroup(m.kind);
     const commits = g === 'deploy' && repo && commitsOf ? commitsOf(m) : [];
     const more = typeof extra === 'function' ? extra(m) : extra;
+    const pending = commitsPending(commitsState);
     body = (
       <>
         <div className="lg-mmenu__head">
           {list.length > 1 && <button type="button" className="lg-mmenu__back" onClick={() => setPick(null)} title="Voltar à lista" aria-label="Voltar à lista de marcos"><Icon name="arrow-left" size={13} /></button>}
-          <MilestoneIcon kind={m.kind} /><b>{KIND_LABEL[m.kind] || 'Marco'}</b><small>{when(m)}</small>
+          <MilestoneIcon kind={m.kind} /><b>{kindLabel(m)}</b><small>{when(m)}</small>
         </div>
         <div className="lg-mmenu__label" title={m.label}>{m.label}{m.author ? ' · ' + m.author : ''}</div>
         {onSeek && (
@@ -150,7 +166,7 @@ export function MilestoneMenu({ milestones, repo, commitsOf, onSeek, onRange, on
               ))}
               {commits.length > MAX_COMMITS && <div className="lg-mmenu__note">+{commits.length - MAX_COMMITS} mais antigos</div>}
             </>
-          ) : <div className="lg-mmenu__note">Nenhum commit da main nas pastas deste deploy desde o anterior.</div>
+          ) : <div className="lg-mmenu__note">{pending ? 'Commits da main: ' + pending : 'Nenhum commit da main nas pastas deste deploy desde o anterior.'}</div>
         )}
         {onRange && (
           <button type="button" role="menuitem" onClick={run(() => onRange({ from: m.ts, to: null }))}>

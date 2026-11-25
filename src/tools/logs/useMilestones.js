@@ -10,6 +10,9 @@ const EMPTY_META = { repo: null, manual: [], show: { deploy: true, merge: true, 
 const ALL_ON = { deploy: true, merge: true, manual: true };
 const baseName = (p) => String(p || '').split(/[\\/]/).filter(Boolean).pop() || String(p || '');
 const normMeta = (m) => ({ ...EMPTY_META, ...m, show: { ...EMPTY_META.show, ...((m && m.show) || {}) } });
+const normDir = (p) => String(p || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+const sameDir = (a, b) => !!a && !!b && normDir(a) === normDir(b);
+const REFRESH_MS = 15 * 60e3; // além do aviso do Git, relê os merges de tempos em tempos (fetch automático, outra janela)
 
 export function useMilestones({ id, spec, tsMin, tsMax, appendedNonce = 0 }) {
   const api = logsApi();
@@ -17,18 +20,24 @@ export function useMilestones({ id, spec, tsMin, tsMax, appendedNonce = 0 }) {
   const [deploys, setDeploys] = React.useState([]);
   const [repos, setRepos] = React.useState([]);
   const [commits, setCommits] = React.useState([]);
+  const [commitsState, setCommitsState] = React.useState('idle'); // 'idle' (sem repositório) | 'loading' | 'ok' | 'error'
+  const [gitNonce, setGitNonce] = React.useState(0); // muda quando o repositório ligado mudou (aviso do Git ou intervalo)
   const [repoError, setRepoError] = React.useState(null);
   const [suggestion, setSuggestion] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const folderCache = React.useRef(new Map()); // path → pastas; uma vez por sessão do hook
+  // Identidade do log: trocar de família (outro log da pasta) reabre com o mesmo `id`, mas é outro log.
+  const specKey = spec ? spec.kind + '|' + spec.path + '|' + (spec.family || '') : '';
+  const specRef = React.useRef(spec);
+  specRef.current = spec;
 
   // Metadados salvos deste log (repositório ligado, marcos manuais, o que mostrar).
   React.useEffect(() => {
     let alive = true;
     setMetaState(EMPTY_META);
-    api.meta(spec).then((m) => { if (alive && m) setMetaState(normMeta(m)); }).catch(() => {});
+    api.meta(specRef.current).then((m) => { if (alive && m) setMetaState(normMeta(m)); }).catch(() => {});
     return () => { alive = false; };
-  }, [id]);
+  }, [id, specKey]);
 
   // Repositórios conhecidos do Git.
   React.useEffect(() => {
@@ -39,7 +48,15 @@ export function useMilestones({ id, spec, tsMin, tsMax, appendedNonce = 0 }) {
     return () => { alive = false; };
   }, [id]);
 
-  // Deploys: ao abrir e a cada `appended`/`reset` do log.
+  // Outro log no mesmo `id`: os deploys do anterior não valem mais.
+  const shownKey = React.useRef(id + '|' + specKey);
+  React.useEffect(() => {
+    if (shownKey.current === id + '|' + specKey) return;
+    shownKey.current = id + '|' + specKey;
+    setDeploys([]);
+  }, [id, specKey]);
+
+  // Deploys: ao abrir, ao trocar de log/formato e a cada `appended`/`reset` do log.
   React.useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -48,24 +65,46 @@ export function useMilestones({ id, spec, tsMin, tsMax, appendedNonce = 0 }) {
       .catch(() => { if (alive) setDeploys([]); })
       .then(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [id, appendedNonce]);
+  }, [id, specKey, appendedNonce]);
 
-  // Merges da main: quando o repositório ou a janela do log (arredondada para a hora) muda.
+  // O repositório ligado mudou (commit, merge, pull, fetch automático — o Git avisa) ou passou o intervalo: relê.
+  React.useEffect(() => {
+    const git = window.devkit && window.devkit.git;
+    if (!meta.repo || !git) return undefined;
+    let t = null;
+    const bump = () => setGitNonce((n) => n + 1);
+    const off = git.onChanged ? git.onChanged((evt) => {
+      if (!evt || evt.type !== 'changed' || !sameDir(evt.repo, meta.repo)) return;
+      clearTimeout(t);
+      t = setTimeout(bump, 1500); // o watcher avisa em rajadas enquanto o git mexe nos arquivos
+    }) : null;
+    const iv = setInterval(bump, REFRESH_MS);
+    return () => { if (off) off(); clearTimeout(t); clearInterval(iv); };
+  }, [meta.repo]);
+
+  // Merges da main: quando o repositório, a janela do log (arredondada para a hora) ou o repositório em si muda.
   const minH = tsMin != null ? Math.floor(tsMin / HOUR) : null;
   const maxH = tsMax != null ? Math.ceil(tsMax / HOUR) : null;
+  const queryKey = React.useRef('');
   React.useEffect(() => {
     let alive = true;
-    setRepoError(null);
     const git = window.devkit && window.devkit.git;
-    if (!meta.repo || minH == null || maxH == null || !git) { setCommits([]); return undefined; }
+    if (!meta.repo || minH == null || maxH == null || !git) {
+      queryKey.current = '';
+      setRepoError(null); setCommits([]); setCommitsState('idle');
+      return undefined;
+    }
+    // Só a releitura do mesmo repositório/janela mantém os commits na tela enquanto pergunta.
+    const key = meta.repo + '|' + minH + '|' + maxH;
+    if (queryKey.current !== key) { queryKey.current = key; setRepoError(null); setCommits([]); setCommitsState('loading'); }
     git.milestones(meta.repo, { since: minH * HOUR - 7 * DAY, until: maxH * HOUR + HOUR })
       .then((r) => {
         if (!alive) return;
-        if (r && r.error) { setRepoError(r.error); setCommits([]); } else setCommits((r && r.commits) || []);
+        if (r && r.error) { setRepoError(r.error); setCommits([]); setCommitsState('error'); } else { setRepoError(null); setCommits((r && r.commits) || []); setCommitsState('ok'); }
       })
-      .catch(() => { if (alive) { setRepoError('Repositório não encontrado'); setCommits([]); } });
+      .catch(() => { if (alive) { setRepoError('Não deu para ler o repositório'); setCommits([]); setCommitsState('error'); } });
     return () => { alive = false; };
-  }, [meta.repo, minH, maxH]);
+  }, [meta.repo, minH, maxH, gitNonce]);
 
   // Sugestão: sem repositório ligado e com deploys, procura um repo com pasta de nome igual ao de algum artefato.
   const artifactKey = React.useMemo(() => {
@@ -94,7 +133,7 @@ export function useMilestones({ id, spec, tsMin, tsMax, appendedNonce = 0 }) {
   }, [meta.repo, artifactKey, repoKey]);
 
   const merges = React.useMemo(() => commits.map((c) => ({
-    id: 'merge:' + c.hash, kind: 'merge', ts: c.ts, hash: c.hash, pr: c.pr,
+    id: 'merge:' + c.hash, kind: 'merge', ts: c.ts, hash: c.hash, pr: c.pr, subject: c.subject,
     label: c.pr ? '#' + c.pr + ' ' + c.title : c.title, author: c.author, files: c.files,
   })), [commits]);
 
@@ -116,11 +155,11 @@ export function useMilestones({ id, spec, tsMin, tsMax, appendedNonce = 0 }) {
     const clean = {};
     for (const k of Object.keys(patch || {})) if (patch[k] !== undefined) clean[k] = patch[k];
     try {
-      const m = await api.saveMeta(spec, clean);
+      const m = await api.saveMeta(specRef.current, clean);
       if (m) setMetaState(normMeta(m));
       return m;
     } catch { return null; }
-  }, [id]);
+  }, [id, specKey]);
 
-  return { list, all, meta, setMeta, repos, suggestion, repoError, related, commitsOf, loading };
+  return { list, all, meta, setMeta, repos, suggestion, repoError, related, commitsOf, commitsState, loading };
 }
