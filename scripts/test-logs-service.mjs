@@ -52,6 +52,24 @@ test('serviço abre o arquivo, detecta o formato e começa ao vivo', async () =>
   svc.unwatch();
 });
 
+test('serviço abre dois logs ao mesmo tempo e devolve o req nos eventos de cada um', async () => {
+  const { dir, svc, events } = setup();
+  const a = path.join(dir, 'a.log');
+  const b = path.join(dir, 'b.log');
+  fs.writeFileSync(a, line(1, 'ERROR', 'a falhou') + line(2, 'INFO', 'ok'));
+  fs.writeFileSync(b, line(1, 'WARN', 'b lento'));
+  const [ia, ib] = await Promise.all([svc.open({ kind: 'file', path: a, req: 'r1' }), svc.open({ kind: 'file', path: b, req: 'r2' })]);
+  assert.notEqual(ia.id, ib.id);
+  assert.equal(ia.n, 2);
+  assert.equal(ib.n, 1);
+  for (const [info, req] of [[ia, 'r1'], [ib, 'r2']]) {
+    assert.ok(events.some((e) => e.type === 'opening' && e.id === info.id && e.req === req));
+    assert.ok(events.some((e) => e.type === 'opened' && e.id === info.id && e.req === req));
+  }
+  assert.equal(ia.spec.req, undefined); // o req não entra no spec guardado (recentes / reabrir)
+  svc.unwatch();
+});
+
 test('engine: consulta, linhas, detalhe, contexto, próximo erro, exportar', async () => {
   const dir = tmp();
   const f = path.join(dir, 'server.log');

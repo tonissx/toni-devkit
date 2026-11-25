@@ -92,7 +92,7 @@
 .lg-src__x:hover { background: var(--tk-surface-3); color: var(--tk-text); }
 .lg-src.is-add { width: 30px; justify-content: center; padding: 0; border: 0; background: none; cursor: pointer; }
 .lg-src.is-add:hover { color: var(--tk-text); }
-.lg-src.is-opening { gap: 6px; padding: 0 10px; }
+.lg-src.is-opening .lg-src__main { padding-right: 10px; }
 .lg-src.is-opening small { color: var(--tk-text-3); font: 11px var(--tk-font-mono); }
 
 /* início */
