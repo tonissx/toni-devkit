@@ -18,6 +18,7 @@ import { Hits } from './Hits.jsx';
 import { Marks } from './Marks.jsx';
 import { Investigation } from './Investigation.jsx';
 import { normalizeCase, addItem, removeItem, relatedCases, MAX_ITEMS } from '../../logs/investigation.js';
+import { afterText } from '../../logs/milestones.js';
 import { useSameText, filterTermFor } from './sameText.js';
 import { escapeRe } from '../../logs/query.js';
 import { usePersisted } from '../../lib/store.js';
@@ -274,17 +275,20 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
   const caseObj = cases.find((x) => x.id === activeCase) || null;
   const inCase = (i) => !!caseObj && caseObj.items.some((x) => x.path === logKey && x.i === i);
   // Guarda / tira a entrada (a selecionada, ou a que vier em `entry`) da investigação ativa; sem caso, cria um.
+  // A investigação ativa; sem caso, cria um (e o deixa ativo).
+  const ensureCase = () => {
+    if (caseObj) return caseObj;
+    const target = normalizeCase({ title: `Investigação — ${src.name} ${new Date().toLocaleDateString('pt-BR')}` });
+    onCases((l) => [...l, target]);
+    onActiveCase(target.id);
+    return target;
+  };
   const toggleCase = async (entry) => {
     const i = entry ? entry.i : sel ? sel.i : null;
     if (i == null) return;
     let e = entry;
     if (!e || e.text == null) { try { e = await api.entry({ id, i }); } catch { return; } }
-    let target = caseObj;
-    if (!target) {
-      target = normalizeCase({ title: `Investigação — ${src.name} ${new Date().toLocaleDateString('pt-BR')}` });
-      onCases((l) => [...l, target]);
-      onActiveCase(target.id);
-    }
+    const target = ensureCase();
     const existing = target.items.find((x) => x.path === logKey && x.i === i);
     if (existing) {
       onCases((l) => l.map((c) => (c.id === target.id ? { ...c, items: removeItem(c.items, existing.id), updatedAt: Date.now() } : c)));
@@ -299,6 +303,20 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
     const rel = relatedCases(cases, [r.item], target.id);
     const note = rel.length ? ` · Parecido com «${rel[0].c.title}»${rel[0].c.status === 'done' ? ' (resolvida)' : ''}${rel.length > 1 ? ` e mais ${rel.length - 1}` : ''}` : '';
     toast(`Guardado na investigação (${r.items.length})`, target.title + note, 'ok');
+  };
+  // Um marco (deploy, merge, manual) vira passo da investigação com a tag Suspeita — só a ordem no tempo, não a causa.
+  const markToCase = ({ m, group, gapMs }) => {
+    const target = ensureCase();
+    const title = group ? String(group.title || '').split('\n')[0].slice(0, 120) : '';
+    const raw = {
+      i: m.i != null ? m.i : null, ts: m.ts, level: 3, tag: 'suspeita', text: 'Marco: ' + m.label, log: src.name, path: logKey,
+      note: title && gapMs != null ? `«${title}» apareceu pela primeira vez ${afterText(m, gapMs)} (ordem no tempo, não indica causa).` : '',
+    };
+    const r = addItem(target.items, raw);
+    if (r.full) { toast('Investigação cheia', `O limite é de ${MAX_ITEMS} passos por investigação.`, 'error'); return; }
+    if (!r.added) { toast('Já está na investigação', target.title, 'ok'); return; }
+    onCases((l) => l.map((c) => (c.id === target.id ? { ...c, items: addItem(c.items, raw).items, updatedAt: Date.now() } : c)));
+    toast(`Marco guardado como suspeita (${r.items.length})`, target.title, 'ok');
   };
   const jumpFromCase = (item) => { set({ tab: 'lines' }); jumpToEntry(item.i); };
   // Faixa de marcadores ao lado da rolagem: onde estão os achados e os fixados.
@@ -517,6 +535,8 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
             ) : tab === 'problems' ? (
               <Problems id={id} sum={sum} openedAt={openedAt} res={res} selKey={null}
                 onPick={(g) => setSel({ pos: null, i: g.lastIdx })} onFilter={addFilter}
+                milestones={ms.list} logStart={sum ? sum.tsMin : null} related={ms.related} repo={ms.meta.repo} commitsOf={ms.commitsOf}
+                onSeek={seek} onRange={(r) => set({ range: r })} onMilestone={(a) => { if (a.type === 'investigate') markToCase(a); }}
                 aiSlot={aiOn(cfg) ? (groups) => (
                   <>
                     <AiButton ai={aiInc} label="Resumir" onClick={() => summarize(groups)} title="Resumir os problemas do filtro com IA (os textos passam pelo filtro de segredos)" />

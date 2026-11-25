@@ -171,3 +171,39 @@ test('shortLabel e countMilestones', () => {
   const n = M.countMilestones([{ kind: 'deploy', ts: 1 }, { kind: 'restart', ts: 2 }, { kind: 'merge', ts: 3 }, { kind: 'manual', ts: 9 }], 0, 5);
   assert.deepEqual(n, { deploy: 2, merge: 1, manual: 0 });
 });
+
+test('fmtGap: minutos, horas e dias', () => {
+  assert.equal(M.fmtGap(30e3), 'menos de 1 min');
+  assert.equal(M.fmtGap(14 * 60e3 + 59e3), '14 min');
+  assert.equal(M.fmtGap(2 * 3600e3 + 5 * 60e3), '2 h');
+  assert.equal(M.fmtGap(86400e3 + 1), '1 dia');
+  assert.equal(M.fmtGap(3 * 86400e3), '3 dias');
+  assert.equal(M.fmtGap(-1), '');
+});
+
+test('afterText: deploy, merge com título cortado em 40, restart e manual', () => {
+  assert.equal(M.afterText({ kind: 'deploy', artifacts: ['wgPortalRH'] }, 14 * 60e3), '14 min depois do deploy de wgPortalRH');
+  assert.equal(M.afterText({ kind: 'deploy', artifacts: ['wgA', 'wgB', 'wgC'] }, 60e3), '1 min depois do deploy de wgA +2');
+  assert.equal(M.afterText({ kind: 'restart', artifacts: ['a', 'b'] }, 3600e3), '1 h depois do restart do servidor');
+  const title = 'Logs: abrir outro arquivo quando o anterior rotaciona no servidor';
+  const t = M.afterText({ kind: 'merge', pr: 126, label: '#126 ' + title }, 2 * 3600e3);
+  assert.equal(t, '2 h depois do #126 ' + title.slice(0, 39).trimEnd() + '…');
+  assert.equal(M.afterText({ kind: 'merge', pr: 126, label: '#126 Logs: abrir' }, 2 * 3600e3), '2 h depois do #126 Logs: abrir');
+  assert.equal(M.afterText({ kind: 'merge', pr: null, hash: 'abcdef1234', label: 'Ajusta X' }, 60e3), '1 min depois do abcdef1 Ajusta X');
+  assert.equal(M.afterText({ kind: 'manual', label: 'publiquei o formulário' }, 60e3), '1 min depois do marco «publiquei o formulário»');
+  assert.ok(!/causad/i.test(t));
+});
+
+test('touchedFile e strongHint', () => {
+  assert.equal(M.touchedFile(['src/x/Outro.java', 'src/com/x/WorkflowService.java'], 'com.x.WorkflowService.start'), 'WorkflowService.java');
+  assert.equal(M.touchedFile(['src/Outro.java'], 'com.x.WorkflowService.start'), null);
+  assert.equal(M.strongHint({ kind: 'merge', pr: 126 }, 'WorkflowService.java'), 'O #126 alterou WorkflowService.java, onde este erro acontece');
+  assert.equal(M.strongHint({ kind: 'merge', pr: null, hash: 'abcdef1234' }, 'A.java'), 'O commit abcdef1 alterou A.java, onde este erro acontece');
+  assert.equal(M.strongHint({ kind: 'deploy', artifacts: ['wgPortalRH'] }, 'A.java'), 'Um commit na main desde o deploy anterior de wgPortalRH alterou A.java, onde este erro acontece (estimativa)');
+});
+
+test('sortAfterLatest: depois do último marco primeiro, depois por count', () => {
+  const g = [{ id: 'a', first: 10, count: 9 }, { id: 'b', first: 500, count: 1 }, { id: 'c', first: 600, count: 5 }, { id: 'd', first: 20, count: 50 }];
+  assert.deepEqual(M.sortAfterLatest(g, 400).map((x) => x.id), ['c', 'b', 'd', 'a']);
+  assert.deepEqual(M.sortAfterLatest(g, null).map((x) => x.id), ['d', 'a', 'c', 'b']);
+});

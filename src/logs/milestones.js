@@ -66,14 +66,20 @@ function frameBase(frame) {
   return parts[parts.length - 2].split('$')[0];
 }
 
+/** Nome do primeiro arquivo (sem a pasta) cujo nome sem extensão é a classe do frame, ou null. */
+function touchedFile(files, frame) {
+  const base = frameBase(frame).toLowerCase();
+  if (!base) return null;
+  for (const f of files || []) {
+    const name = String(f).split(/[\\/]/).pop();
+    if (name.replace(/\.[^.]*$/, '').toLowerCase() === base) return name;
+  }
+  return null;
+}
+
 /** Algum arquivo tem o nome (sem extensão) igual à classe do frame. */
 function touchesFrame(files, frame) {
-  const base = frameBase(frame).toLowerCase();
-  if (!base) return false;
-  return (files || []).some((f) => {
-    const name = String(f).split(/[\\/]/).pop().replace(/\.[^.]*$/, '');
-    return name.toLowerCase() === base;
-  });
+  return touchedFile(files, frame) != null;
 }
 
 /** Marco com maior `ts <= t` (busca binária; `sorted` por `ts`). */
@@ -207,7 +213,60 @@ function countMilestones(list, from = -Infinity, to = Infinity) {
   return n;
 }
 
+/* ── Etiqueta "depois de…" na aba Problemas ───────────────────────────────── */
+
+/** Intervalo curto e redondo para baixo: `menos de 1 min`, `14 min`, `2 h`, `1 dia`, `3 dias`. */
+function fmtGap(ms) {
+  if (!(ms >= 0)) return '';
+  if (ms < 60000) return 'menos de 1 min';
+  if (ms < 3600e3) return Math.floor(ms / 60000) + ' min';
+  if (ms < DAY) return Math.floor(ms / 3600e3) + ' h';
+  const d = Math.floor(ms / DAY);
+  return d + (d === 1 ? ' dia' : ' dias');
+}
+
+const clip = (s, max) => (s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s);
+
+/** Título do merge (sem o `#126 ` que o rótulo leva na frente). */
+function mergeTitle(m) {
+  const label = String(m.title || m.label || '');
+  return m.pr && !m.title ? label.replace(new RegExp('^#' + m.pr + '\\s*'), '') : label;
+}
+
+/** Nome do marco depois de "do": `deploy de wgPortalRH`, `#126 Logs: abrir…`, `restart do servidor`, `marco «…»`. */
+function milestoneName(m) {
+  const arts = m.artifacts || [];
+  if (m.kind === 'restart') return 'restart do servidor';
+  if (m.kind === 'deploy' || m.kind === 'undeploy') return arts.length ? m.kind + ' de ' + arts[0] + (arts.length > 1 ? ' +' + (arts.length - 1) : '') : m.kind;
+  if (m.kind === 'merge') {
+    const ref = m.pr ? '#' + m.pr : String(m.hash || '').slice(0, 7);
+    const title = clip(mergeTitle(m).trim(), 40);
+    return title ? ref + ' ' + title : ref;
+  }
+  return 'marco «' + clip(String(m.label || '').trim(), 40) + '»';
+}
+
+/** `14 min depois do deploy de wgPortalRH`. Diz só a ordem no tempo, nunca a causa. */
+function afterText(m, gapMs) {
+  return fmtGap(gapMs) + ' depois do ' + milestoneName(m);
+}
+
+/** Dica do suspeito forte: qual arquivo do marco é o do frame do erro. */
+function strongHint(m, file) {
+  if (m.kind === 'merge') return 'O ' + (m.pr ? '#' + m.pr : 'commit ' + String(m.hash || '').slice(0, 7)) + ' alterou ' + file + ', onde este erro acontece';
+  const arts = m.artifacts || [];
+  const of = m.kind === 'restart' || !arts.length ? '' : ' de ' + arts[0];
+  return 'Um commit na main desde o deploy anterior' + of + ' alterou ' + file + ', onde este erro acontece (estimativa)';
+}
+
+/** Ordem "Depois do último marco": grupos com `first >= latestTs` primeiro; dentro de cada parte, por `count`. */
+function sortAfterLatest(groups, latestTs) {
+  const after = (g) => (latestTs != null && g.first != null && g.first >= latestTs ? 1 : 0);
+  return (groups || []).slice().sort((a, b) => after(b) - after(a) || (b.count || 0) - (a.count || 0));
+}
+
 module.exports = {
+  touchedFile, fmtGap, milestoneName, afterText, strongHint, sortAfterLatest,
   foldersOf, DEPLOY_RULES, matchDeploy, groupBursts,
   prNumber, frameBase, touchesFrame, previousMilestone, commitsInDeploy, attribute, mergeMilestones, suggestRepo, previousSameArtifact,
   kindGroup, clusterMilestones, shortLabel, countMilestones,
