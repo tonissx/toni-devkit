@@ -326,6 +326,7 @@ contextBridge.exposeInMainWorld('devkit', {
     summaries: () => ipcRenderer.invoke('git:summaries'),
     /** Commits da pessoa num intervalo (ms; until exclusivo) em um repositório. */
     activity: (repo, opts) => ipcRenderer.invoke('git:activity', repo, opts),
+    milestones: (repo, opts) => ipcRenderer.invoke('git:milestones', repo, opts),
     status: (repo) => ipcRenderer.invoke('git:status', repo),
     log: (repo, opts) => ipcRenderer.invoke('git:log', repo, opts),
     /** Fotos do Gravatar por e-mail → { [email]: data URL | null }. Só o hash do e-mail sai da máquina. */
