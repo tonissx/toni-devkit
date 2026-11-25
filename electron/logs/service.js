@@ -21,7 +21,7 @@ const MAX_PRESETS = 40;
 const MAX_TOMBS = 200;
 
 function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss.watch, pollMs = 1000, now = () => Date.now() }) {
-  let state = { recents: [], presets: [], investigations: [], removed: {}, overrides: {} };
+  let state = { recents: [], presets: [], investigations: [], removed: {}, overrides: {}, meta: {} };
   const queue = createQueue();
   const open = new Map(); // id → { id, spec, name, files, live, watcher, timer, ino, busy, seenErrors, errors }
   let seq = 0;
@@ -35,8 +35,22 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
         investigations: normalizeCases(raw.investigations),
         removed: raw.removed && typeof raw.removed === 'object' && !Array.isArray(raw.removed) ? raw.removed : {},
         overrides: raw.overrides && typeof raw.overrides === 'object' ? raw.overrides : {},
+        meta: raw.meta && typeof raw.meta === 'object' && !Array.isArray(raw.meta) ? raw.meta : {},
       };
     } catch { /* primeira vez */ }
+  }
+  /** Normaliza o que fica guardado por log: repositório ligado, marcos manuais e o que mostrar. */
+  function normalizeMeta(m) {
+    const src = m && typeof m === 'object' ? m : {};
+    const show = { deploy: true, merge: true, manual: true };
+    const sh = src.show && typeof src.show === 'object' ? src.show : {};
+    for (const k of Object.keys(show)) if (typeof sh[k] === 'boolean') show[k] = sh[k];
+    const manual = (Array.isArray(src.manual) ? src.manual : [])
+      .filter((x) => x && typeof x.ts === 'number' && Number.isFinite(x.ts) && typeof x.label === 'string' && x.label.trim())
+      .slice(0, 200)
+      .map((x) => ({ id: String(x.id || Math.random().toString(36).slice(2, 10)).slice(0, 40), kind: 'manual', ts: x.ts, label: x.label.trim().slice(0, 200) }));
+    const repo = typeof src.repo === 'string' && src.repo.trim() ? src.repo.trim().slice(0, 500) : null;
+    return { repo, manual, show };
   }
   const persist = () => queue.run('save', () => atomicWrite(file, JSON.stringify(state, null, 2)));
 
@@ -235,6 +249,16 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
       state.recents = state.recents.filter((r) => r.path.toLowerCase() !== String(p || '').toLowerCase());
       await persist();
       return state.recents;
+    },
+    /** Repositório ligado, marcos manuais e filtros de marcos de um log. */
+    meta: (spec) => normalizeMeta(state.meta[keyOf(spec)]),
+    async saveMeta(spec, patch) {
+      const key = keyOf(spec);
+      const cur = normalizeMeta(state.meta[key]);
+      const p = patch && typeof patch === 'object' ? patch : {};
+      state.meta[key] = normalizeMeta({ ...cur, ...p, show: { ...cur.show, ...(p.show && typeof p.show === 'object' ? p.show : {}) } });
+      await persist();
+      return state.meta[key];
     },
     presets: () => state.presets,
     async savePresets(list) {

@@ -433,3 +433,19 @@ test('deploys: reset recomeça a varredura', async () => {
   await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false }); // o serviço reabre assim no reset
   assert.equal(e.call('deploys', { id: 'a' }).milestones.length, 0);
 });
+
+test('meta: padrão, salvar repo e marcos manuais, e reabrir o serviço', async () => {
+  const t = setup();
+  await t.svc.init();
+  const spec = { kind: 'file', path: path.join(t.dir, 'server.log') };
+  assert.deepEqual(t.svc.meta(spec), { repo: null, manual: [], show: { deploy: true, merge: true, manual: true } });
+  await t.svc.saveMeta(spec, { repo: 'C:/repos/fluig', manual: [{ ts: 1000, label: 'dsPedido' }, { ts: 'x', label: '' }] });
+  await t.svc.flush?.();
+  const again = createLogsService({ file: path.join(t.dir, 'logs.json'), callWorker: async () => ({}), watch: () => ({ close() {}, on() {} }), pollMs: 3600e3 });
+  await again.init();
+  const m = again.meta(spec);
+  assert.equal(m.repo, 'C:/repos/fluig');
+  assert.equal(m.manual.length, 1);
+  assert.equal(m.manual[0].kind, 'manual');
+  assert.ok(m.manual[0].id);
+});

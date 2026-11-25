@@ -1216,7 +1216,7 @@ ipcMain.handle('aimon:lanes', async (_e, opts) => {
 ipcMain.handle('aimon:timeline', (_e, key, opts) => aimon().timeline(String(key || ''), opts && typeof opts === 'object' ? opts : {}));
 
 // Serviço (abrir, ao vivo, recentes, filtros salvos).
-const LOGS_SVC_API = ['open', 'reformat', 'switchFamily', 'setLive', 'close', 'list', 'summaries', 'markSeen', 'recents', 'forgetRecent', 'presets', 'savePresets', 'investigations', 'saveInvestigations', 'scanFolder'];
+const LOGS_SVC_API = ['open', 'reformat', 'switchFamily', 'setLive', 'close', 'list', 'summaries', 'markSeen', 'recents', 'forgetRecent', 'presets', 'savePresets', 'investigations', 'saveInvestigations', 'scanFolder', 'meta', 'saveMeta'];
 for (const fn of LOGS_SVC_API) {
   ipcMain.handle('logs:' + fn, async (_e, ...args) => { await logsReady; return logsSvc[fn](...args); });
 }

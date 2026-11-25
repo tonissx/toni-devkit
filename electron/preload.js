@@ -488,6 +488,8 @@ contextBridge.exposeInMainWorld('devkit', {
     savePresets: (list) => ipcRenderer.invoke('logs:savePresets', list),
     investigations: () => ipcRenderer.invoke('logs:investigations'),
     saveInvestigations: (list) => ipcRenderer.invoke('logs:saveInvestigations', list),
+    meta: (spec) => ipcRenderer.invoke('logs:meta', spec),
+    saveMeta: (spec, m) => ipcRenderer.invoke('logs:saveMeta', spec, m),
     scanFolder: (dir) => ipcRenderer.invoke('logs:scanFolder', dir),
     info: (args) => ipcRenderer.invoke('logs:info', args),
     query: (args) => ipcRenderer.invoke('logs:query', args),
