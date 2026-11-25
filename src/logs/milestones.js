@@ -8,6 +8,9 @@
 
 const DEPLOY_RULES = [
   { re: /WFLYSRV0010: Deployed "([^"]+?)(?:\.(?:war|ear|jar))?"/, kind: 'deploy' },
+  // Republicação: o artefato é o NOVO (o segundo nome).
+  { re: /WFLYSRV0016: Replaced deployment "[^"]*" with deployment "([^"]+?)(?:\.(?:war|ear|jar))?"/, kind: 'deploy' },
+  { re: /WFLYSRV0013: Redeployed "([^"]+?)(?:\.(?:war|ear|jar))?"/, kind: 'deploy' },
   { re: /WFLYSRV0009: Undeployed "([^"]+?)(?:\.(?:war|ear|jar))?"/, kind: 'undeploy' },
   { re: /WFLYSRV0025:/, kind: 'restart' },
   { re: /WFLYSRV0026:/, kind: 'restart' },
@@ -36,6 +39,7 @@ function groupBursts(events, gapMs = 120000) {
   return groups.map(toMilestone);
 }
 
+/** Restart vence; senão, qualquer deploy na rajada faz dela um deploy (undeploy + deploy = republicação). */
 function toMilestone(g) {
   const first = g[0];
   const artifacts = [];
@@ -46,8 +50,9 @@ function toMilestone(g) {
   const names = [];
   for (const e of g) if (e.artifact && !names.includes(e.artifact)) names.push(e.artifact);
   const extra = names.length - 2;
-  const label = first.kind + ' ' + names.slice(0, 2).join(', ') + (extra > 0 ? ' +' + extra : '');
-  return { id: first.kind + ':' + first.ts, kind: first.kind, ts: first.ts, i: first.i, artifacts: names, label };
+  const kind = g.some((e) => e.kind === 'deploy') ? 'deploy' : first.kind;
+  const label = kind + ' ' + names.slice(0, 2).join(', ') + (extra > 0 ? ' +' + extra : '');
+  return { id: kind + ':' + first.ts, kind, ts: first.ts, i: first.i, artifacts: names, label };
 }
 
 const DAY = 86400e3;
@@ -92,6 +97,16 @@ function previousMilestone(sorted, t) {
     if (sorted[mid].ts <= t) { found = sorted[mid]; lo = mid + 1; } else hi = mid - 1;
   }
   return found;
+}
+
+/**
+ * Commit da main que é um merge de fato (tem número de PR ou o assunto começa com "Merge "). Com --first-parent,
+ * commits diretos e squash sem PR também aparecem — esses são "Commit na main".
+ */
+function isMergeCommit(m) {
+  if (!m) return false;
+  if (m.pr) return true;
+  return /^Merge /.test(String(m.subject || m.title || m.label || ''));
 }
 
 /** Commits entre o deploy anterior e este, em pastas iguais aos artefatos do deploy. */
@@ -268,6 +283,6 @@ function sortAfterLatest(groups, latestTs) {
 module.exports = {
   touchedFile, fmtGap, milestoneName, afterText, strongHint, sortAfterLatest,
   foldersOf, DEPLOY_RULES, matchDeploy, groupBursts,
-  prNumber, frameBase, touchesFrame, previousMilestone, commitsInDeploy, attribute, mergeMilestones, suggestRepo, previousSameArtifact,
+  prNumber, isMergeCommit, frameBase, touchesFrame, previousMilestone, commitsInDeploy, attribute, mergeMilestones, suggestRepo, previousSameArtifact,
   kindGroup, clusterMilestones, shortLabel, countMilestones,
 };

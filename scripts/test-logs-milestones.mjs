@@ -207,3 +207,46 @@ test('sortAfterLatest: depois do último marco primeiro, depois por count', () =
   assert.deepEqual(M.sortAfterLatest(g, 400).map((x) => x.id), ['c', 'b', 'd', 'a']);
   assert.deepEqual(M.sortAfterLatest(g, null).map((x) => x.id), ['d', 'a', 'c', 'b']);
 });
+
+test('matchDeploy: republicação (WFLYSRV0016 e 0013), restart 0026, .ear e .jar', () => {
+  assert.deepEqual(M.matchDeploy('WFLYSRV0016: Replaced deployment "wgPortalRH.war" with deployment "wgPortalRH2.war"'), { kind: 'deploy', artifact: 'wgPortalRH2' });
+  assert.deepEqual(M.matchDeploy('WFLYSRV0013: Redeployed "wgPortalRH.war"'), { kind: 'deploy', artifact: 'wgPortalRH' });
+  assert.deepEqual(M.matchDeploy('WFLYSRV0026: WildFly Full parado em 1234ms'), { kind: 'restart', artifact: null });
+  assert.deepEqual(M.matchDeploy('WFLYSRV0010: Deployed "fluig.ear" (runtime-name : "fluig.ear")'), { kind: 'deploy', artifact: 'fluig' });
+  assert.deepEqual(M.matchDeploy('WFLYSRV0009: Undeployed "lib-util.jar"'), { kind: 'undeploy', artifact: 'lib-util' });
+});
+
+test('groupBursts: undeploy seguido de deploy na mesma rajada é deploy (republicação)', () => {
+  const r = M.groupBursts([
+    { kind: 'undeploy', artifact: 'wgPortalRH', ts: 1000, i: 1 },
+    { kind: 'deploy', artifact: 'wgPortalRH', ts: 4000, i: 5 },
+  ]);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].kind, 'deploy');
+  assert.equal(r[0].id, 'deploy:1000');
+  assert.equal(r[0].label, 'deploy wgPortalRH');
+  assert.deepEqual(r[0].artifacts, ['wgPortalRH']);
+});
+
+test('groupBursts: só undeploys continua undeploy', () => {
+  assert.equal(M.groupBursts([{ kind: 'undeploy', artifact: 'wgA', ts: 0, i: 1 }])[0].kind, 'undeploy');
+});
+
+test('groupBursts: intervalo de exatamente 120000 ms separa', () => {
+  assert.equal(M.groupBursts([{ kind: 'deploy', artifact: 'wgA', ts: 0, i: 1 }, { kind: 'deploy', artifact: 'wgB', ts: 120000, i: 2 }]).length, 2);
+  assert.equal(M.groupBursts([{ kind: 'deploy', artifact: 'wgA', ts: 0, i: 1 }, { kind: 'deploy', artifact: 'wgB', ts: 119999, i: 2 }]).length, 1);
+});
+
+test('groupBursts: entrada fora de ordem é ordenada; vazia dá []', () => {
+  const r = M.groupBursts([{ kind: 'deploy', artifact: 'wgB', ts: 10 * 60e3, i: 9 }, { kind: 'deploy', artifact: 'wgA', ts: 0, i: 1 }]);
+  assert.deepEqual(r.map((m) => m.artifacts[0]), ['wgA', 'wgB']);
+  assert.deepEqual(M.groupBursts([]), []);
+  assert.deepEqual(M.groupBursts(null), []);
+});
+
+test('isMergeCommit: PR ou assunto "Merge "; commit direto não', () => {
+  assert.equal(M.isMergeCommit({ pr: 126, subject: 'Logs: x (#126)' }), true);
+  assert.equal(M.isMergeCommit({ pr: null, subject: "Merge branch 'dev'" }), true);
+  assert.equal(M.isMergeCommit({ pr: null, subject: 'ajuste no formulário' }), false);
+  assert.equal(M.isMergeCommit(null), false);
+});

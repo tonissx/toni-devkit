@@ -532,7 +532,9 @@ function createEngine({ emit = () => {}, maxBytes = MAX_BYTES } = {}) {
     const s = get(id);
     const ix = s.index;
     const sc = s.deployScan;
-    for (let i = sc.upto; i < ix.n; i++) {
+    // Pré-filtro barato: só as entradas com "WFLYSRV00" no texto (uma varredura dos trechos); a primeira linha só é
+    // montada para essas — num log de milhões de entradas, montar a linha de cada INFO travava o worker.
+    for (const i of ix.entriesMatching(/WFLYSRV00/g, sc.upto, ix.n)) {
       const lv = ix.level[i];
       if (lv !== 3 && lv !== 0) continue;
       const ts = ix.ts[i];

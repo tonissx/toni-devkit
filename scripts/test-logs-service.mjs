@@ -422,6 +422,19 @@ test('deploys: usa o ts do índice', async () => {
   assert.equal(e.call('deploys', { id: 'a' }).milestones[0].ts, ts);
 });
 
+test('deploys: WFLYSRV00 fora da primeira linha não vira marco; republicação conta como deploy', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  fs.writeFileSync(f, line(1, 'INFO', 'resumo') + '  WFLYSRV0010: Deployed "wgX.war"\n'
+    + line(50, 'INFO', 'WFLYSRV0009: Undeployed "wgB.war"') + line(55, 'INFO', 'WFLYSRV0016: Replaced deployment "wgB.war" with deployment "wgB.war"'));
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  const r = e.call('deploys', { id: 'a' });
+  assert.equal(r.milestones.length, 1);
+  assert.equal(r.milestones[0].kind, 'deploy');
+  assert.deepEqual(r.milestones[0].artifacts, ['wgB']);
+});
+
 test('deploys: reset recomeça a varredura', async () => {
   const dir = tmp();
   const f = path.join(dir, 'server.log');
