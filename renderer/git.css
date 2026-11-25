@@ -223,8 +223,8 @@
 }
 .gt-card.is-wide { grid-column: 1 / -1; }
 .gt-heat { display: flex; flex-direction: column; gap: 8px; }
-/* Grade fluida: as células crescem com o card (quadradas, até 26px), com dias à esquerda e meses no topo. */
-.gt-heat__grid { display: grid; grid-template-columns: 30px repeat(var(--weeks, 13), minmax(0, 26px)); gap: 4px; align-items: center; }
+/* Mapas fluidos: as células crescem com o card (quadradas); a Atividade usa o tamanho das do Ritmo. */
+.gt-heat__grid { display: grid; align-items: center; } /* colunas e gap no style: o tamanho vem do Ritmo (Overview.jsx) */
 .gt-heat__grid > .gt-heat__cell { width: 100%; height: auto; aspect-ratio: 1; }
 .gt-heat__month { font-size: 10px; color: var(--tk-text-3); white-space: nowrap; overflow: visible; width: 0; }
 .gt-heat__cell { display: inline-block; width: 15px; height: 15px; border-radius: 3px; background: var(--tk-surface-3); }

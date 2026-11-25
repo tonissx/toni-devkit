@@ -592,7 +592,7 @@ test('serviço: repositório sem commits e visão geral', async () => {
     const ov = await t.svc.overview(repo);
     assert.equal(ov.commits, 1);
     assert.equal(ov.branches, 1);
-    assert.equal(ov.activity.length, 90);
+    assert.equal(ov.activity.length, 364);
     assert.equal(ov.activity.at(-1).n, 1);
     assert.equal(ov.authors[0].name, 'Teste');
     assert.deepEqual(ov.hotspots, [{ path: 'x.txt', n: 1 }]);

@@ -1,4 +1,4 @@
-// Git — Visão geral do repositório: números, atividade dos últimos 90 dias (mapa de calor), autores, arquivos mais
+// Git — Visão geral do repositório: números, atividade do último ano (mapa de calor), autores, arquivos mais
 // alterados, último commit e atalhos para o que mais se faz.
 import { DS } from '../../lib/ds.js';
 import { gitApi, useRepoData, ago, short, FilePath, RefBadges, OpButton } from './shared.jsx';
@@ -16,17 +16,42 @@ function Kpi({ icon, label, value, tone, onClick, title }) {
 }
 
 const DAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+/** Espaço entre as células dos dois mapas e largura da coluna dos dias — iguais nos dois para as alturas baterem. */
+const GAP = 3;
+const DAY_COL = 34;
 
-/** Mapa de calor: colunas = semanas, linhas = dias da semana (como o do GitHub). */
-function Heatmap({ activity }) {
-  const max = Math.max(1, ...activity.map((a) => a.n));
-  const total = activity.reduce((s, a) => s + a.n, 0);
+/** Largura atual de um elemento (ResizeObserver). */
+function useWidth() {
+  const [el, setEl] = React.useState(null);
+  const [w, setW] = React.useState(0);
+  React.useEffect(() => {
+    if (!el) return undefined;
+    const ro = new ResizeObserver(([e]) => setW(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el]);
+  return [setEl, w];
+}
+
+/**
+ * Mapa de calor: colunas = semanas, linhas = dias da semana (como o do GitHub). As células têm o tamanho das do
+ * Ritmo (`cell`), para os dois cards terem a mesma altura, e cabem tantas semanas quantas a largura permitir.
+ */
+function Heatmap({ activity, cell }) {
+  const [ref, width] = useWidth();
   // Alinha a 1ª coluna no domingo.
   const first = new Date(activity[0].day + 'T12:00:00');
   const pad = first.getDay();
   const cells = [...Array(pad).fill(null), ...activity];
-  const weeks = [];
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  const all = [];
+  for (let i = 0; i < cells.length; i += 7) all.push(cells.slice(i, i + 7));
+  // Sem o Ritmo para copiar, a célula preenche a largura com ~16 semanas (até 26px).
+  const size = cell || (width ? Math.min(26, (width - DAY_COL) / 16 - GAP) : 18);
+  const fit = width ? Math.max(4, Math.floor((width - DAY_COL) / (size + GAP))) : 13;
+  const weeks = all.slice(-fit);
+  const shown = weeks.flat().filter(Boolean);
+  const max = Math.max(1, ...shown.map((a) => a.n));
+  const total = shown.reduce((s, a) => s + a.n, 0);
   const level = (n) => (n === 0 ? 0 : Math.min(4, Math.ceil((n / max) * 4)));
   // Mês no topo da semana em que ele começa (a 1ª coluna sempre ganha o seu).
   const monthOf = (w) => { const c = w.find(Boolean); return c ? new Date(c.day + 'T12:00:00').getMonth() : null; };
@@ -34,10 +59,9 @@ function Heatmap({ activity }) {
     const m = monthOf(w);
     return i === 0 || m !== monthOf(weeks[i - 1]) ? new Date(2000, m, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') : '';
   });
-  // Linhas = dias da semana, colunas = semanas: mesma grade do Ritmo, com as células crescendo com o card.
   return (
-    <div className="gt-heat">
-      <div className="gt-heat__grid" style={{ '--weeks': weeks.length }}>
+    <div className="gt-heat" ref={ref}>
+      <div className="gt-heat__grid" style={{ gridTemplateColumns: `${DAY_COL - GAP}px repeat(${weeks.length}, ${size}px)`, gap: GAP }}>
         <span />
         {months.map((m, i) => <span key={'m' + i} className="gt-heat__month">{m}</span>)}
         {DAYS.map((d, j) => (
@@ -53,7 +77,7 @@ function Heatmap({ activity }) {
         ))}
       </div>
       <div className="gt-heat__foot">
-        <span>{total} commit{total === 1 ? '' : 's'} nos últimos 90 dias (na branch atual)</span>
+        <span>{total} commit{total === 1 ? '' : 's'} nas últimas {weeks.length} semanas (na branch atual)</span>
         <span className="gt-heat__legend">menos {[0, 1, 2, 3, 4].map((l) => <span key={l} className={'gt-heat__cell l' + l} />)} mais</span>
       </div>
     </div>
@@ -87,8 +111,14 @@ function syncInfo(s, lastFetch) {
 }
 
 /** Quando os commits acontecem: dias da semana × horas (180 dias). */
-function Rhythm({ repo }) {
+function Rhythm({ repo, onCell }) {
   const { data, error } = useRepoData(repo, (r) => gitApi().rhythm(r));
+  // Informa o tamanho da célula para a Atividade usar o mesmo (e os dois cards terem a mesma altura).
+  const [ref, width] = useWidth();
+  React.useEffect(() => {
+    if (!onCell) return;
+    onCell(width ? Math.min(24, (width - DAY_COL) / 24 - GAP) : null);
+  }, [width, !!(data && data.total)]);
   const title = <h3><Icon name="clock" size={14} /> Ritmo (últimos 180 dias)</h3>;
   // Card com spinner enquanto carrega: sem ele o último commit ocupa esta vaga e pula de lugar quando o ritmo chega.
   if (error && !data) return null;
@@ -99,7 +129,7 @@ function Rhythm({ repo }) {
   return (
     <section className="gt-card gt-ov-rhythm">
       {title}
-      <div className="gt-rhythm">
+      <div className="gt-rhythm" ref={ref}>
         <div className="gt-rhythm__hours"><span />{Array.from({ length: 24 }, (_, h) => <span key={h}>{h % 3 === 0 ? h + 'h' : ''}</span>)}</div>
         {data.grid.map((row, d) => (
           <div key={d} className="gt-rhythm__row">
@@ -115,6 +145,7 @@ function Rhythm({ repo }) {
 
 export function Overview({ repo, status, go, run, net }) {
   const { data: ov, error } = useRepoData(repo, (r) => gitApi().overview(r));
+  const [cell, setCell] = React.useState(null); // tamanho da célula do Ritmo, copiado pela Atividade
   if (error) return <div className="gt-msg is-error">{error}</div>;
   if (!ov) return <div className="gt-msg"><Spinner size={14} /> Lendo o repositório…</div>;
   const s = ov.status;
@@ -146,10 +177,10 @@ export function Overview({ repo, status, go, run, net }) {
         <div className="gt-ov-grid">
           <section className="gt-card gt-ov-heat">
             <h3><Icon name="activity" size={14} /> Atividade</h3>
-            <Heatmap activity={ov.activity} />
+            <Heatmap activity={ov.activity} cell={cell} />
           </section>
           {/* Os dois mapas de calor ficam juntos; o último commit vem depois. */}
-          <Rhythm repo={repo} />
+          <Rhythm repo={repo} onCell={setCell} />
           {ov.last && (
             <section className="gt-card gt-ov-last">
               <h3><Icon name="git-commit-horizontal" size={14} /> Últimos commits</h3>

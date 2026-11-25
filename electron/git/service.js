@@ -369,7 +369,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     return P.parseReflog((await git(repo, ['reflog', '--date=unix', `--format=${P.REFLOG_FORMAT}`, `-n${Math.min(1000, limit | 0 || 150)}`], { ok: [0, 128] })).stdout);
   }
 
-  /** Visão geral: números, atividade dos últimos 90 dias, autores e arquivos mais alterados. */
+  /** Visão geral: números, atividade do último ano (52 semanas), autores e arquivos mais alterados. */
   async function overview(repo) {
     const s = await status(repo);
     if (s.unborn) return { status: s, commits: 0, branches: 0, tags: 0, activity: [], authors: [], hotspots: [], last: null, recent: [], lastFetch: null };
@@ -377,7 +377,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       git(repo, ['rev-list', '--count', 'HEAD']),
       git(repo, ['for-each-ref', '--format=x', 'refs/heads']),
       git(repo, ['for-each-ref', '--format=x', 'refs/tags']),
-      git(repo, ['log', '--since=90.days.ago', '--format=%at', 'HEAD']),
+      git(repo, ['log', '--since=365.days.ago', '--format=%at', 'HEAD']),
       git(repo, ['shortlog', '-sne', 'HEAD']),
       git(repo, ['log', '--since=180.days.ago', '--format=', '--name-only', 'HEAD']),
       log(repo, { limit: 5, ref: 'HEAD' }),
@@ -389,7 +389,8 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
     for (const t of act.stdout.split('\n').filter(Boolean)) { const k = dayKey(new Date(+t * 1000)); days.set(k, (days.get(k) || 0) + 1); }
     const activity = [];
     const today = now();
-    for (let i = 89; i >= 0; i--) { const k = dayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)); activity.push({ day: k, n: days.get(k) || 0 }); }
+    // Um ano: a tela mostra só as semanas mais recentes que cabem no card.
+    for (let i = 363; i >= 0; i--) { const k = dayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)); activity.push({ day: k, n: days.get(k) || 0 }); }
     const fileCount = new Map();
     for (const f of hot.stdout.split('\n').filter(Boolean)) fileCount.set(f, (fileCount.get(f) || 0) + 1);
     return {
