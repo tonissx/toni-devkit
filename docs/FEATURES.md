@@ -254,6 +254,17 @@ Para achar rápido o que deu errado num log. Abre arquivos de centenas de MB em 
   (pela exceção, a causa raiz, o primeiro frame do sistema e a mensagem sem as partes que variam). Cada grupo mostra
   quantas vezes (no filtro e no total), desde quando, a última vez, o desenho no tempo e **novo** (apareceu depois que o
   log foi aberto ou só na última hora). **Só este problema** / **Esconder** viram filtro (`group:…`)
+- **Marcos** (só em logs do Fluig/WildFly): a linha do tempo ganha uma faixa fina com o que mudou no servidor, para ligar
+  "o erro começou" a "o que foi publicado". **▲ deploys** vêm do próprio `server.log` (WFLYSRV0010 / WFLYSRV0009; um restart,
+  com vários deploys seguidos, vira **um marco só**); **◆ merges na main** vêm do **repositório ligado** ao log (seletor
+  **Repositório** no cabeçalho — a sugestão automática usa o nome das pastas do widget; fica lembrado); **✎ marcos manuais**
+  com o botão direito na linha do tempo, **Marcar deploy aqui…** — necessário para datasets e formulários publicados pelo
+  Fluig Studio, que não deixam rastro no log. O menu **Marcos** liga e desliga cada tipo; clicar num marco abre o menu
+  (ir até a linha, abrir o commit/PR no Git, filtrar a partir dali, editar ou apagar o manual). Em **Problemas**, cada grupo
+  mostra **"N min depois de …"** o marco anterior à primeira ocorrência — em destaque forte quando o commit mexeu no arquivo
+  do erro —, ou **"já existia no início do log"**. A ordenação **Depois do último marco** põe no topo o que começou logo
+  depois, e **Adicionar à investigação** guarda o marco como suspeita. É uma **suspeita/estimativa pela proximidade no tempo,
+  não uma causa**: confirme no stack e no commit
 - **Gráficos** (respeitam o filtro): erros por minuto, níveis e loggers mais frequentes; nos logs de acesso, **respostas
   por classe** (2xx–5xx) no tempo, **tempo de resposta p50/p95**, e os endpoints mais chamados, com mais 5xx e mais
   lentos (ids no caminho viram `:id`). Clicar filtra. Ao vivo, recalculam no máximo a cada 3 s
