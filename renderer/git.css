@@ -223,8 +223,10 @@
 }
 .gt-card.is-wide { grid-column: 1 / -1; }
 .gt-heat { display: flex; flex-direction: column; gap: 8px; }
-.gt-heat__grid { display: flex; gap: 4px; overflow-x: auto; }
-.gt-heat__week { display: flex; flex-direction: column; gap: 4px; }
+/* Grade fluida: as células crescem com o card (quadradas, até 26px), com dias à esquerda e meses no topo. */
+.gt-heat__grid { display: grid; grid-template-columns: 30px repeat(var(--weeks, 13), minmax(0, 26px)); gap: 4px; align-items: center; }
+.gt-heat__grid > .gt-heat__cell { width: 100%; height: auto; aspect-ratio: 1; }
+.gt-heat__month { font-size: 10px; color: var(--tk-text-3); white-space: nowrap; overflow: visible; width: 0; }
 .gt-heat__cell { display: inline-block; width: 15px; height: 15px; border-radius: 3px; background: var(--tk-surface-3); }
 .gt-heat__cell.is-pad { background: none; }
 .gt-heat__cell.l1 { background: color-mix(in srgb, var(--tk-accent) 30%, var(--tk-surface-3)); }
@@ -641,8 +643,10 @@ body.gt-resizing { cursor: col-resize; user-select: none; }
 
 /* ritmo na visão geral */
 .gt-rhythm { display: flex; flex-direction: column; gap: 3px; overflow-x: auto; }
-.gt-rhythm__row, .gt-rhythm__hours { display: grid; grid-template-columns: 34px repeat(24, 15px); gap: 3px; align-items: center; }
-.gt-rhythm__hours { padding-left: 37px; grid-template-columns: repeat(24, 15px); font-size: 10px; color: var(--tk-text-3); }
+.gt-rhythm__row, .gt-rhythm__hours { display: grid; grid-template-columns: 34px repeat(24, minmax(0, 24px)); gap: 3px; align-items: center; }
+.gt-rhythm__hours { font-size: 10px; color: var(--tk-text-3); }
+.gt-rhythm__hours > span { white-space: nowrap; overflow: visible; width: 0; }
+.gt-rhythm__row > .gt-heat__cell { width: 100%; height: auto; aspect-ratio: 1; }
 .gt-rhythm__day { font-size: 11px; color: var(--tk-text-3); }
 
 /* ── IA: "Sugerir mensagem" (o botão e o painel vêm de renderer/ai.css) ── */

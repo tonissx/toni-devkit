@@ -15,6 +15,8 @@ function Kpi({ icon, label, value, tone, onClick, title }) {
   );
 }
 
+const DAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
 /** Mapa de calor: colunas = semanas, linhas = dias da semana (como o do GitHub). */
 function Heatmap({ activity }) {
   const max = Math.max(1, ...activity.map((a) => a.n));
@@ -26,15 +28,28 @@ function Heatmap({ activity }) {
   const weeks = [];
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
   const level = (n) => (n === 0 ? 0 : Math.min(4, Math.ceil((n / max) * 4)));
+  // Mês no topo da semana em que ele começa (a 1ª coluna sempre ganha o seu).
+  const monthOf = (w) => { const c = w.find(Boolean); return c ? new Date(c.day + 'T12:00:00').getMonth() : null; };
+  const months = weeks.map((w, i) => {
+    const m = monthOf(w);
+    return i === 0 || m !== monthOf(weeks[i - 1]) ? new Date(2000, m, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') : '';
+  });
+  // Linhas = dias da semana, colunas = semanas: mesma grade do Ritmo, com as células crescendo com o card.
   return (
     <div className="gt-heat">
-      <div className="gt-heat__grid">
-        {weeks.map((w, i) => (
-          <div key={i} className="gt-heat__week">
-            {w.map((c, j) => c
-              ? <span key={j} className={'gt-heat__cell l' + level(c.n)} title={`${new Date(c.day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}: ${c.n} commit${c.n === 1 ? '' : 's'}`} />
-              : <span key={j} className="gt-heat__cell is-pad" />)}
-          </div>
+      <div className="gt-heat__grid" style={{ '--weeks': weeks.length }}>
+        <span />
+        {months.map((m, i) => <span key={'m' + i} className="gt-heat__month">{m}</span>)}
+        {DAYS.map((d, j) => (
+          <React.Fragment key={d}>
+            <span className="gt-rhythm__day">{d}</span>
+            {weeks.map((w, i) => {
+              const c = w[j];
+              return c
+                ? <span key={i} className={'gt-heat__cell l' + level(c.n)} title={`${new Date(c.day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}: ${c.n} commit${c.n === 1 ? '' : 's'}`} />
+                : <span key={i} className="gt-heat__cell is-pad" />;
+            })}
+          </React.Fragment>
         ))}
       </div>
       <div className="gt-heat__foot">
@@ -71,8 +86,6 @@ function syncInfo(s, lastFetch) {
   return { value: parts.length ? parts.join(' ') : 'em dia', label: `${b.upstream} · ${when}`, tone: b.behind ? 'warn' : '' };
 }
 
-const DAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
-
 /** Quando os commits acontecem: dias da semana × horas (180 dias). */
 function Rhythm({ repo }) {
   const { data, error } = useRepoData(repo, (r) => gitApi().rhythm(r));
@@ -87,7 +100,7 @@ function Rhythm({ repo }) {
     <section className="gt-card gt-ov-rhythm">
       {title}
       <div className="gt-rhythm">
-        <div className="gt-rhythm__hours">{Array.from({ length: 24 }, (_, h) => <span key={h}>{h % 3 === 0 ? h + 'h' : ''}</span>)}</div>
+        <div className="gt-rhythm__hours"><span />{Array.from({ length: 24 }, (_, h) => <span key={h}>{h % 3 === 0 ? h + 'h' : ''}</span>)}</div>
         {data.grid.map((row, d) => (
           <div key={d} className="gt-rhythm__row">
             <span className="gt-rhythm__day">{DAYS[d]}</span>
