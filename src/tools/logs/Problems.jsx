@@ -3,8 +3,8 @@
 // tempo e se é nova (apareceu depois que o log foi aberto, ou hoje).
 import { DS } from '../../lib/ds.js';
 import { logsApi, LevelBadge, Highlight, Sparkline, fmtNum, fmtTime, ago, levelColor, sameDay } from './shared.jsx';
-import { attribute, previousMilestone, afterText, strongHint, touchedFile, sortAfterLatest } from '../../logs/milestones.js';
-import { MilestoneMenu, MilestoneIcon } from './MilestoneMenu.jsx';
+import { attribute, previousMilestone, afterText, strongHint, touchedFile, sortAfterLatest, indexCommitsByFile, fileCommitBefore, fileHintText, fmtGap } from '../../logs/milestones.js';
+import { MilestoneMenu, MilestoneIcon, openInGit } from './MilestoneMenu.jsx';
 
 const { Icon } = DS;
 
@@ -40,12 +40,32 @@ function AfterTag({ a, open, onToggle }) {
 }
 
 /**
+ * Dica de arquivo: um commit da main (de qualquer repositório cadastrado) mexeu no arquivo do frame do erro pouco
+ * antes da primeira ocorrência. Diz "mudou … antes", nunca a causa. Clicar abre o commit no Git.
+ */
+function FileHint({ h }) {
+  const { c, file, gapMs } = h;
+  const text = fileHintText(c, file, gapMs);
+  const ref = c.pr ? '#' + c.pr : String(c.hash).slice(0, 7);
+  const tip = `${file} mudou no ${ref}${c.repoName ? ' (' + c.repoName + ')' : ''} em ${fmtTime(c.ts, { date: true, millis: false })}, ${fmtGap(gapMs)} antes da primeira ocorrência`
+    + `${c.title || c.subject ? ' — ' + (c.title || c.subject) : ''}${c.author ? ' · ' + c.author : ''}. Mostra só a ordem no tempo, não a causa. Clique para abrir no Git.`;
+  return (
+    <button type="button" className="lg-after is-merge is-file" title={tip} aria-label={text + '. Abrir o commit no Git'}
+      onClick={(e) => { e.stopPropagation(); openInGit(c.repo, c.hash); }}>
+      <MilestoneIcon kind="merge" />
+      <span className="lg-after__txt">{text}</span>
+    </button>
+  );
+}
+
+/**
  * props: id, sum (resultado da consulta), openedAt (ms), res, selKey, onPick(group), onFilter(term, replace), aiSlot
- * Marcos: milestones (já filtrados pelo que o usuário quer ver), logStart (ms), related(m) → arquivos, repo, commitsOf, commitsState,
+ * Marcos: milestones (já filtrados pelo que o usuário quer ver), logStart (ms), related(m) → arquivos, repos (ligados), commitsOf, commitsState,
+ * allCommits (commits da main de todos os repositórios cadastrados, com `repo` — dica "arquivo mudou … antes"),
  * onSeek(ts), onRange(range), onMilestone({ type: 'investigate', m, group, gapMs })
  */
 export function Problems({ id, sum, openedAt, res, selKey, onPick, onFilter, aiSlot, aiPanel,
-  milestones = [], logStart = null, related, repo, commitsOf, commitsState, onSeek, onRange, onMilestone }) {
+  milestones = [], logStart = null, related, repos = [], allCommits, commitsOf, commitsState, onSeek, onRange, onMilestone }) {
   const [sort, setSort] = React.useState('count');
   const [sparks, setSparks] = React.useState({});
   const [menu, setMenu] = React.useState(null); // { gid, m, group, gapMs, style }
@@ -82,6 +102,24 @@ export function Problems({ id, sum, openedAt, res, selKey, onPick, onFilter, aiS
     }
     return out;
   }, [sum, milestones, logStart, related]);
+
+  // Dica de arquivo por grupo (índice por nome de arquivo montado uma vez; até 300 grupos). Sem repetir o que a
+  // etiqueta forte já diz (o marco atribuído é o mesmo commit).
+  const fileIdx = React.useMemo(() => indexCommitsByFile(allCommits || []), [allCommits]);
+  const hints = React.useMemo(() => {
+    const out = new Map();
+    if (!sum || !fileIdx.size) return out;
+    for (const g of sum.groups || []) {
+      if (!g.frame || g.first == null) continue;
+      const c = fileCommitBefore(fileIdx, g.frame, g.first);
+      if (!c) continue;
+      const a = attrs.get(g.id);
+      const m = a && a.milestone;
+      if (m && a.strong && !a.faded && a.file && m.kind === 'merge' && m.hash === c.hash && (!m.repo || !c.repo || m.repo === c.repo)) continue;
+      out.set(g.id, { c, file: touchedFile(c.files, g.frame), gapMs: g.first - c.ts });
+    }
+    return out;
+  }, [sum, fileIdx, attrs]);
 
   React.useEffect(() => {
     if (!sum || !groups.length) { setSparks({}); return undefined; }
@@ -144,6 +182,7 @@ export function Problems({ id, sum, openedAt, res, selKey, onPick, onFilter, aiS
         {groups.map((g) => {
           const isNew = g.first != null && (g.first >= openedAt || g.first >= recentFrom);
           const a = attrs.get(g.id);
+          const h = hints.get(g.id);
           const newWhy = g.first >= openedAt ? 'Apareceu depois que você abriu o log' : 'Apareceu pela primeira vez na última hora do log';
           return (
             <div key={g.id} role="listitem" className={'lg-prob' + (selKey === g.key ? ' is-sel' : '')} onClick={() => onPick(g)}>
@@ -161,6 +200,7 @@ export function Problems({ id, sum, openedAt, res, selKey, onPick, onFilter, aiS
                   <span title={`Primeira: ${fmtTime(g.first, { date: true })}`}>desde {sameDay(g.first, latest) ? fmtTime(g.first, { millis: false }) : fmtTime(g.first, { date: true, millis: false })}</span>
                   <span title={`Última: ${fmtTime(g.last, { date: true })}`}>última {ago(g.last, latest) === 'agora' ? 'no fim do log' : fmtTime(g.last, { date: !sameDay(g.last, latest), millis: false })}</span>
                   {a && <AfterTag a={a} open={!!menu && menu.gid === g.id} onToggle={(el) => toggleMenu(g, a, el)} />}
+                  {h && h.file && <FileHint h={h} />}
                 </div>
               </div>
               <span className="lg-prob__spark" style={{ color: levelColor(g.level) }}><Sparkline data={sparks[g.id]} title={`Ocorrências de ${g.title} no tempo`} /></span>
@@ -178,7 +218,7 @@ export function Problems({ id, sum, openedAt, res, selKey, onPick, onFilter, aiS
         {sum.groupsTotal > groups.length && <div className="lg-muted lg-pad">Mostrando os {groups.length} mais frequentes de {fmtNum(sum.groupsTotal)}.</div>}
       </div>
       {menu && (
-        <MilestoneMenu key={menu.gid + '|' + menu.m.id} milestones={[menu.m]} repo={repo} commitsOf={commitsOf} commitsState={commitsState} style={menu.style}
+        <MilestoneMenu key={menu.gid + '|' + menu.m.id} milestones={[menu.m]} repos={repos} commitsOf={commitsOf} commitsState={commitsState} style={menu.style}
           multiDay={sum.tsMin != null && !sameDay(sum.tsMin, latest)} onSeek={onSeek} onRange={onRange} onClose={() => setMenu(null)}
           extra={onMilestone ? [{ icon: 'clipboard-plus', label: 'Adicionar à investigação', hint: 'como suspeita', onClick: (m) => onMilestone({ type: 'investigate', m, group: menu.group, gapMs: menu.gapMs }) }] : null} />
       )}
