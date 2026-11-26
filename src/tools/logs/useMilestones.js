@@ -5,7 +5,7 @@
 // repositórios cadastrados (`allCommits`, para a dica "arquivo mudou … antes" da aba Problemas).
 // Os marcos nunca afirmam causa: quem desenha diz "depois de" / "mudou … antes" / "suspeita".
 import { logsApi } from './shared.jsx';
-import { mergeMilestones, rankRepos, autoRepo, foldersOf, commitsInDeploy, previousSameArtifact } from '../../logs/milestones.js';
+import { mergeMilestones, pickRepo, sortByTs, foldersOf, commitsInDeploy, previousSameArtifact } from '../../logs/milestones.js';
 
 const DAY = 86400e3;
 const HOUR = 3600e3;
@@ -138,60 +138,70 @@ export function useMilestones({ id, spec, tsMin, tsMax, appendedNonce = 0 }) {
   const commitsState = !linked.length || !win ? 'idle'
     : linked.some((p) => !byRepo[p]) ? 'loading'
       : linked.every((p) => byRepo[p].error) ? 'error' : 'ok';
-  const commits = React.useMemo(() => linked.flatMap((p) => (byRepo[p] && byRepo[p].commits) || []), [linkedKey, byRepo]);
-  const repoError = React.useMemo(() => {
-    const errs = linked.filter((p) => byRepo[p] && byRepo[p].error).map((p) => baseName(p) + ': ' + byRepo[p].error);
-    return errs.length ? errs.join(' · ') : null;
-  }, [linkedKey, byRepo]);
+  // Juntos em ordem de ts: o menu do deploy pega os 5 mais novos do fim da lista.
+  const commits = React.useMemo(() => sortByTs(linked.map((p) => byRepo[p] && byRepo[p].commits)), [linkedKey, byRepo]);
+  const failed = linked.filter((p) => byRepo[p] && byRepo[p].error);
+  const failedKey = failed.join('\n');
+  const repoError = React.useMemo(() => (failed.length ? failed.map((p) => baseName(p) + ': ' + byRepo[p].error).join(' · ') : null), [failedKey, byRepo]);
+  const failedRepos = React.useMemo(() => failed.map(baseName), [failedKey]);
 
   // Dica de arquivo: a main dos outros repositórios cadastrados, um por vez, só depois que os ligados responderam.
-  // Guardado por repositório/janela; falha vira lista vazia, sem aviso.
+  // Guardado por repositório e por dia (início da janela; o fim fica aberto quando o log chega até hoje — um log ao
+  // vivo não relê tudo de hora em hora; um commit novo chega pelo aviso do Git). Falha vira lista vazia, sem aviso.
   const linkedDone = commitsState !== 'loading';
+  const sinceDay = win ? Math.floor(win.since / DAY) * DAY : null;
+  const untilDay = win ? Math.ceil(win.until / DAY) * DAY : null;
+  const openEnd = untilDay != null && untilDay >= Date.now();
+  const otherWin = win ? sinceDay + '|' + (openEnd ? 'aberto' : untilDay) : '';
   React.useEffect(() => {
     let alive = true;
     const git = window.devkit && window.devkit.git;
     const rest = repos.filter((r) => !linked.some((p) => sameDir(p, r.path)));
-    if (!win || !git || !rest.length) { setOthers({}); return undefined; }
+    if (!otherWin || !git || !rest.length) { setOthers({}); return undefined; }
     if (!linkedDone) return undefined; // os ligados primeiro (a dica antiga fica até lá)
+    const opts = openEnd ? { since: sinceDay } : { since: sinceDay, until: untilDay };
     (async () => {
       const out = {};
       for (const r of rest) {
-        const k = r.path + '|' + minH + '|' + maxH;
+        const k = r.path + '|' + otherWin;
         if (!otherCache.current.has(k)) {
           let list = [];
           try {
-            const res = await git.milestones(r.path, win);
+            const res = await git.milestones(r.path, opts);
             if (res && !res.error) list = tagCommits(r.path, res.commits);
           } catch { /* repositório sumiu ou não abre: sem dica dele */ }
-          // Guarda mesmo se a resposta chegou tarde (a próxima rodada aproveita); janelas antigas do mesmo repo saem.
+          // Rodada velha (janela/lista mudou enquanto perguntava) não mexe no cache: a nova cuida dele.
+          if (!alive) return;
           for (const old of [...otherCache.current.keys()]) if (old.startsWith(r.path + '|')) otherCache.current.delete(old);
           otherCache.current.set(k, list);
-          if (!alive) return;
         }
         out[r.path] = otherCache.current.get(k);
       }
       if (alive) setOthers(out);
     })();
     return () => { alive = false; };
-  }, [repoKey, linkedKey, minH, maxH, linkedDone, otherNonce]);
+  }, [repoKey, linkedKey, otherWin, linkedDone, otherNonce]);
 
   const allCommits = React.useMemo(() => {
     const rest = Object.keys(others).filter((p) => !linked.some((l) => sameDir(l, p)));
-    return [...commits, ...rest.flatMap((p) => others[p])];
+    return sortByTs([commits, ...rest.map((p) => others[p])]);
   }, [commits, others, linkedKey]);
 
-  // Repositório pelas pastas: com deploys e sem escolha ainda, liga sozinho quem vence sem empate; no empate, sugere
-  // os dois primeiros. Depois que o usuário mexeu no seletor (até "Nenhum"), não liga mais sozinho.
-  const artifactKey = React.useMemo(() => {
+  // Repositório pelas pastas: com deploys e sem escolha ainda, liga sozinho quem vence sem empate (só por deploy de
+  // verdade, sem nomes genéricos — `pickRepo`); senão sugere até dois. Depois que o usuário mexeu no seletor (até
+  // "Nenhum"), não liga mais sozinho — e o serviço recusa (`ifUnset`) se ele mexeu enquanto o Devkit olhava as pastas.
+  const deployKey = React.useMemo(() => {
     const set = new Set();
-    for (const d of deploys) for (const a of d.artifacts || []) set.add(String(a).replace(/\.(war|ear|jar)$/i, ''));
+    for (const d of deploys) for (const a of d.artifacts || []) set.add(d.kind + ':' + a);
     return [...set].sort().join('\n');
   }, [deploys]);
+  const deploysRef = React.useRef(deploys);
+  deploysRef.current = deploys;
   const neverChosen = metaFor === logKey && meta.repos === null;
   React.useEffect(() => {
     let alive = true;
     const git = window.devkit && window.devkit.git;
-    if (!neverChosen || !artifactKey || !repos.length || !git) { setSuggestions(NONE); return undefined; }
+    if (!neverChosen || !deployKey || !repos.length || !git) { setSuggestions(NONE); return undefined; }
     (async () => {
       const rows = [];
       for (const r of repos) {
@@ -203,20 +213,19 @@ export function useMilestones({ id, spec, tsMin, tsMax, appendedNonce = 0 }) {
         rows.push({ path: r.path, folders: folderCache.current.get(r.path) });
       }
       if (!alive) return;
-      const ranked = rankRepos(artifactKey.split('\n'), rows);
-      const auto = autoRepo(ranked);
+      const { auto, suggestions: sug } = pickRepo(deploysRef.current, rows);
       if (auto && autoDone.current !== logKey) {
         autoDone.current = logKey;
         setSuggestions(NONE);
         // Não deu para salvar: em vez de ligar, volta a perguntar.
-        setMeta({ repos: [auto], repoAuto: true }).then((m) => { if (!m && logKeyRef.current === logKey) setSuggestions([auto]); });
+        setMeta({ repos: [auto], repoAuto: true, ifUnset: true }).then((m) => { if (!m && logKeyRef.current === logKey) setSuggestions([auto]); });
         return;
       }
-      // Empate: os dois primeiros. Com vencedor aqui, é porque ligar sozinho já falhou neste log: pergunta por ele.
-      setSuggestions(auto ? [auto] : ranked.slice(0, 2).map((x) => x.path));
+      // Com vencedor aqui, é porque ligar sozinho já falhou neste log: pergunta por ele.
+      setSuggestions(auto ? [auto] : sug);
     })();
     return () => { alive = false; };
-  }, [neverChosen, artifactKey, repoKey, logKey]);
+  }, [neverChosen, deployKey, repoKey, logKey]);
 
   const merges = React.useMemo(() => commits.map((c) => ({
     id: 'merge:' + c.repo + ':' + c.hash, kind: 'merge', ts: c.ts, hash: c.hash, pr: c.pr, subject: c.subject,
@@ -248,5 +257,5 @@ export function useMilestones({ id, spec, tsMin, tsMax, appendedNonce = 0 }) {
   const setMetaCb = React.useCallback(setMeta, [id, specKey]);
 
   const suggestion = suggestions[0] || null;
-  return { list, all, meta, setMeta: setMetaCb, repos, linked, suggestion, suggestions, repoError, related, commitsOf, commitsState, loading, allCommits };
+  return { list, all, meta, setMeta: setMetaCb, repos, linked, suggestion, suggestions, repoError, failedRepos, related, commitsOf, commitsState, loading, allCommits };
 }

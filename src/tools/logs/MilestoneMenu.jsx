@@ -23,6 +23,13 @@ export function commitsPending(commitsState) {
   return null;
 }
 
+/** Algum repositório ligado não respondeu: "nenhum commit" pode estar faltando os dele. → ` (fluig não respondeu)` ou '' */
+export function failedNote(failedRepos) {
+  const f = failedRepos || [];
+  if (!f.length) return '';
+  return ' (' + f.join(', ') + (f.length === 1 ? ' não respondeu)' : ' não responderam)');
+}
+
 /** Ícone do marco (▲ deploy, ◆ merge, ✎ manual), na cor do tipo. */
 export function MilestoneIcon({ kind }) {
   const g = kindGroup(kind);
@@ -92,12 +99,13 @@ const MAX_COMMITS = 5;
  *  - repos: caminhos dos repositórios ligados (sem nenhum não há "Abrir no Git"; cada merge/commit abre no seu, `m.repo`/`c.repo`)
  *  - commitsOf(m) → Commit[] (commits da main no widget desde o deploy anterior — estimativa)
  *  - commitsState: 'idle' | 'loading' | 'ok' | 'error' (de useMilestones) — sem 'ok', não mostra "nenhum commit"
+ *  - failedRepos: nomes dos ligados que não responderam (o "nenhum commit" avisa que pode faltar os deles)
  *  - onSeek(ts), onRange({ from, to }), onEdit(m, label), onDelete(m) — todos opcionais; sem o callback, o item some
  *  - extra: [{ icon, label, hint?, onClick(m) }] ou (m) => itens — entram depois dos itens fixos (ex.: investigação)
  *  - multiDay: mostra a data junto da hora
  *  - onClose(), style, className — o menu se posiciona por `style` (sem ele vale o `.lg-pop` padrão: abaixo, à direita)
  */
-export function MilestoneMenu({ milestones, repos = [], commitsOf, commitsState = 'ok', onSeek, onRange, onEdit, onDelete, extra, multiDay = false, onClose, style, className = '' }) {
+export function MilestoneMenu({ milestones, repos = [], failedRepos, commitsOf, commitsState = 'ok', onSeek, onRange, onEdit, onDelete, extra, multiDay = false, onClose, style, className = '' }) {
   const ref = React.useRef(null);
   const list = milestones || [];
   const [pick, setPick] = React.useState(list.length === 1 ? list[0] : null);
@@ -169,7 +177,7 @@ export function MilestoneMenu({ milestones, repos = [], commitsOf, commitsState 
               ))}
               {commits.length > MAX_COMMITS && <div className="lg-mmenu__note">+{commits.length - MAX_COMMITS} mais antigos</div>}
             </>
-          ) : <div className="lg-mmenu__note">{pending ? 'Commits da main: ' + pending : 'Nenhum commit da main nas pastas deste deploy desde o anterior.'}</div>
+          ) : <div className="lg-mmenu__note">{pending ? 'Commits da main: ' + pending : 'Nenhum commit da main nas pastas deste deploy desde o anterior' + failedNote(failedRepos) + '.'}</div>
         )}
         {onRange && (
           <button type="button" role="menuitem" onClick={run(() => onRange({ from: m.ts, to: null }))}>

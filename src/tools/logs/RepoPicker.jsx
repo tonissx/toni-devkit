@@ -17,6 +17,7 @@ export function RepoPicker({ repos = [], linked = [], auto = false, error = null
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
   const menuRef = React.useRef(null);
+  const btnRef = React.useRef(null);
   useDismiss(ref, () => setOpen(false), open);
   React.useEffect(() => {
     if (!open || !menuRef.current) return;
@@ -31,11 +32,11 @@ export function RepoPicker({ repos = [], linked = [], auto = false, error = null
   const label = !linked.length ? 'Nenhum' : linked.length === 1 ? baseName(linked[0]) : String(linked.length);
   const title = (linked.length ? 'Repositórios Git ligados a este log: ' + linked.map(baseName).join(', ') : 'Repositórios Git usados para mostrar os merges da main na linha do tempo')
     + (auto ? '\n' + AUTO_HINT : '') + (error ? '\n' + error : '');
-  const nameOf = (p) => (repos.find((r) => r.path === p) || { name: baseName(p) }).name;
+  const nameOf = (p) => (repos.find((r) => r.path.toLowerCase() === String(p).toLowerCase()) || { name: baseName(p) }).name;
 
   const keys = (e) => {
     e.stopPropagation(); // os atalhos da lista não valem com o menu em foco
-    if (e.key === 'Escape') { e.preventDefault(); setOpen(false); return; }
+    if (e.key === 'Escape') { e.preventDefault(); setOpen(false); if (btnRef.current) btnRef.current.focus(); return; }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     const items = [...e.currentTarget.querySelectorAll('button:not(:disabled)')];
     if (!items.length) return;
@@ -47,7 +48,7 @@ export function RepoPicker({ repos = [], linked = [], auto = false, error = null
   return (
     <>
       <div className="lg-pop-wrap" ref={ref}>
-        <button type="button" className={'lg-select lg-repo' + (error ? ' is-warn' : '')} onClick={() => setOpen((o) => !o)}
+        <button ref={btnRef} type="button" className={'lg-select lg-repo' + (error ? ' is-warn' : '')} onClick={() => setOpen((o) => !o)}
           aria-haspopup="menu" aria-expanded={open} title={title}>
           <span className="lg-repo__label">Repositórios: {label}</span>
           {auto && <small className="lg-repo__auto">(automático)</small>}

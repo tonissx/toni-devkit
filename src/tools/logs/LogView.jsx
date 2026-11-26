@@ -453,7 +453,7 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
         mode={tlMode} onMode={(m) => set({ tlMode: m })} loading={dimmed}
         collapsed={tlFolded} onCollapse={(v) => set({ tlFolded: v })}
         milestones={ms.list} allMilestones={ms.all} show={ms.meta.show} onShow={(s) => ms.setMeta({ show: s })}
-        repos={ms.linked} commitsOf={ms.commitsOf} commitsState={ms.commitsState}
+        repos={ms.linked} failedRepos={ms.failedRepos} commitsOf={ms.commitsOf} commitsState={ms.commitsState}
         onMarkHere={(ts, label) => ms.setMeta({ manual: [...ms.meta.manual, { ts, label }] })}
         onMilestone={(a) => ms.setMeta({ manual: a.type === 'delete'
           ? ms.meta.manual.filter((m) => m.id !== a.m.id)
@@ -526,7 +526,7 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
             ) : tab === 'problems' ? (
               <Problems id={id} sum={sum} openedAt={openedAt} res={res} selKey={null}
                 onPick={(g) => setSel({ pos: null, i: g.lastIdx })} onFilter={addFilter}
-                milestones={ms.list} logStart={sum ? sum.tsMin : null} related={ms.related} repos={ms.linked} allCommits={ms.allCommits} commitsOf={ms.commitsOf} commitsState={ms.commitsState}
+                milestones={ms.list} logStart={sum ? sum.tsMin : null} related={ms.related} repos={ms.linked} failedRepos={ms.failedRepos} allCommits={ms.allCommits} commitsOf={ms.commitsOf} commitsState={ms.commitsState}
                 onSeek={seek} onRange={(r) => set({ range: r })} onMilestone={(a) => { if (a.type === 'investigate') markToCase(a); }}
                 aiSlot={aiOn(cfg) ? (groups) => (
                   <>

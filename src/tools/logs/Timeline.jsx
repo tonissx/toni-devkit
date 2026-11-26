@@ -6,7 +6,7 @@
 import { DS } from '../../lib/ds.js';
 import { LEVEL_BY_ID, levelColor, fmtTick, fmtStep, fmtTime, fmtNum, fmtCompact, sameDay } from './shared.jsx';
 import { clusterMilestones, shortLabel, countMilestones, kindGroup } from '../../logs/milestones.js';
-import { MilestoneMenu, MarkHereMenu, MilestoneIcon, kindLabel, commitsPending, useDismiss } from './MilestoneMenu.jsx';
+import { MilestoneMenu, MarkHereMenu, MilestoneIcon, kindLabel, commitsPending, failedNote, useDismiss } from './MilestoneMenu.jsx';
 
 const { Icon } = DS;
 
@@ -30,7 +30,7 @@ function detailOf(m, multiRepo = false) {
 }
 
 /** Tooltip dos marcos de uma coluna (todos, até 6). */
-function MilestoneTip({ items, repos = [], commitsOf, commitsState, multiDay, style }) {
+function MilestoneTip({ items, repos = [], failedRepos, commitsOf, commitsState, multiDay, style }) {
   const shown = items.slice(0, 6);
   const pending = commitsPending(commitsState);
   return (
@@ -38,7 +38,7 @@ function MilestoneTip({ items, repos = [], commitsOf, commitsState, multiDay, st
       {shown.map((m) => {
         const n = repos.length && commitsOf && kindGroup(m.kind) === 'deploy' ? commitsOf(m).length : null;
         // Sem a resposta do repositório, "0 commits" seria falso: mostra o estado em vez do número.
-        const note = n == null ? null : n === 0 && pending ? 'Commits da main: ' + pending : plural(n, 'commit', 'commits') + ' na main desde o deploy anterior (estimativa)';
+        const note = n == null ? null : n === 0 && pending ? 'Commits da main: ' + pending : plural(n, 'commit', 'commits') + ' na main desde o deploy anterior (estimativa)' + (n === 0 ? failedNote(failedRepos) : '');
         return (
           <div key={m.id} className="lg-mtip__item">
             <div className="lg-mtip__head"><MilestoneIcon kind={m.kind} /><b>{kindLabel(m)}</b><span className="lg-tip__when">{fmtTime(m.ts, { date: multiDay, millis: false })}</span></div>
@@ -88,7 +88,7 @@ function topRounded(x, y, w, h, r) {
  * onMilestone({ type: 'edit', m, label } | { type: 'delete', m })
  */
 export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, loading, collapsed, onCollapse,
-  milestones = [], allMilestones, show, onShow, repos = [], commitsOf, commitsState, onMarkHere, onMilestone }) {
+  milestones = [], allMilestones, show, onShow, repos = [], failedRepos, commitsOf, commitsState, onMarkHere, onMilestone }) {
   const ref = React.useRef(null);
   const svgRef = React.useRef(null);
   const width = useWidth(ref);
@@ -373,9 +373,9 @@ export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, l
           <text key={'t' + b} x={xOf(b) + barW / 2} y={H - 3} className="lg-tick" textAnchor={b === 0 ? 'start' : 'middle'}>{fmtTick(tOf(b), multiDay && hist.step < 3600e3 && b === 0 ? 3600e3 : hist.step)}</text>
         ))}
       </svg>
-      {hoverC && <MilestoneTip items={hoverC.items} repos={repos} commitsOf={commitsOf} commitsState={commitsState} multiDay={multiDay} style={popAt(cxOf(hoverC.b), width, STRIP + 2, 330)} />}
+      {hoverC && <MilestoneTip items={hoverC.items} repos={repos} failedRepos={failedRepos} commitsOf={commitsOf} commitsState={commitsState} multiDay={multiDay} style={popAt(cxOf(hoverC.b), width, STRIP + 2, 330)} />}
       {menu && (
-        <MilestoneMenu key={menu.id} milestones={menu.items} repos={repos} commitsOf={commitsOf} commitsState={commitsState} multiDay={multiDay} style={popAt(menu.x, width, STRIP + 2)}
+        <MilestoneMenu key={menu.id} milestones={menu.items} repos={repos} failedRepos={failedRepos} commitsOf={commitsOf} commitsState={commitsState} multiDay={multiDay} style={popAt(menu.x, width, STRIP + 2)}
           onSeek={onSeek} onRange={onRange} onClose={() => setMenu(null)}
           onEdit={onMilestone ? (m, label) => onMilestone({ type: 'edit', m, label }) : null}
           onDelete={onMilestone ? (m) => onMilestone({ type: 'delete', m }) : null} />

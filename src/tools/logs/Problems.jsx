@@ -65,7 +65,7 @@ function FileHint({ h }) {
  * onSeek(ts), onRange(range), onMilestone({ type: 'investigate', m, group, gapMs })
  */
 export function Problems({ id, sum, openedAt, res, selKey, onPick, onFilter, aiSlot, aiPanel,
-  milestones = [], logStart = null, related, repos = [], allCommits, commitsOf, commitsState, onSeek, onRange, onMilestone }) {
+  milestones = [], logStart = null, related, repos = [], failedRepos, allCommits, commitsOf, commitsState, onSeek, onRange, onMilestone }) {
   const [sort, setSort] = React.useState('count');
   const [sparks, setSparks] = React.useState({});
   const [menu, setMenu] = React.useState(null); // { gid, m, group, gapMs, style }
@@ -218,7 +218,7 @@ export function Problems({ id, sum, openedAt, res, selKey, onPick, onFilter, aiS
         {sum.groupsTotal > groups.length && <div className="lg-muted lg-pad">Mostrando os {groups.length} mais frequentes de {fmtNum(sum.groupsTotal)}.</div>}
       </div>
       {menu && (
-        <MilestoneMenu key={menu.gid + '|' + menu.m.id} milestones={[menu.m]} repos={repos} commitsOf={commitsOf} commitsState={commitsState} style={menu.style}
+        <MilestoneMenu key={menu.gid + '|' + menu.m.id} milestones={[menu.m]} repos={repos} failedRepos={failedRepos} commitsOf={commitsOf} commitsState={commitsState} style={menu.style}
           multiDay={sum.tsMin != null && !sameDay(sum.tsMin, latest)} onSeek={onSeek} onRange={onRange} onClose={() => setMenu(null)}
           extra={onMilestone ? [{ icon: 'clipboard-plus', label: 'Adicionar à investigação', hint: 'como suspeita', onClick: (m) => onMilestone({ type: 'investigate', m, group: menu.group, gapMs: menu.gapMs }) }] : null} />
       )}

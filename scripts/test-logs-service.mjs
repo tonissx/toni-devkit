@@ -485,6 +485,25 @@ test('meta: vários repositórios, sem repetir (maiúsculas), até 10, ligado so
   assert.equal(m.repoAuto, false);
 });
 
+test('meta: ifUnset só liga sozinho se ninguém escolheu ainda', async () => {
+  const t = setup();
+  await t.svc.init();
+  const spec = { kind: 'file', path: path.join(t.dir, 'server.log') };
+  let m = await t.svc.saveMeta(spec, { repos: ['C:/auto'], repoAuto: true, ifUnset: true });
+  assert.deepEqual(m.repos, ['C:/auto']);
+  assert.equal(m.repoAuto, true);
+  assert.equal('ifUnset' in m, false);
+  // O usuário escolheu "Nenhum" antes de a ligação automática chegar: ela não sobrescreve.
+  await t.svc.saveMeta(spec, { repos: [] });
+  m = await t.svc.saveMeta(spec, { repos: ['C:/auto'], repoAuto: true, ifUnset: true });
+  assert.deepEqual(m.repos, []);
+  assert.equal(m.repoAuto, false);
+  await t.svc.saveMeta(spec, { repos: ['C:/meu'] });
+  m = await t.svc.saveMeta(spec, { repos: ['C:/auto'], repoAuto: true, ifUnset: true });
+  assert.deepEqual(m.repos, ['C:/meu']);
+  assert.deepEqual(t.svc.meta(spec).repos, ['C:/meu']);
+});
+
 test('meta: o "repo" antigo (um só) vira repos', async () => {
   const dir = tmp();
   const file = path.join(dir, 'logs.json');

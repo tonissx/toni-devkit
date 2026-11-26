@@ -275,6 +275,11 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
       const p = {};
       // Chave `undefined` não apaga nada (`{ repos: undefined }` não desliga os repositórios).
       if (patch && typeof patch === 'object') for (const k of Object.keys(patch)) if (patch[k] !== undefined) p[k] = patch[k];
+      // Ligação automática: só vale se ninguém escolheu nada ainda (o usuário pode ter mexido enquanto o Devkit
+      // olhava as pastas). Senão, devolve o que está salvo sem mudar nada.
+      const ifUnset = p.ifUnset === true;
+      delete p.ifUnset;
+      if (ifUnset && cur.repos !== null) return cur;
       // Escolher repositórios sem dizer que foi automático é escolha do usuário.
       if ('repos' in p && !('repoAuto' in p)) p.repoAuto = false;
       state.meta[key] = normalizeMeta({ ...cur, ...p, show: { ...cur.show, ...(p.show && typeof p.show === 'object' ? p.show : {}) } });
