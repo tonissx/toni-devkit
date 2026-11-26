@@ -282,11 +282,11 @@ test('fileCommitBefore: commit mais recente que mexeu no arquivo do frame, dentr
   const H = 3600e3;
   const t = 100 * 86400e3;
   const commits = [
-    { hash: 'old', ts: t - 8 * 86400e3, files: ['src/WorkflowService.java'], repo: 'r1' },
-    { hash: 'a', ts: t - 5 * H, files: ['src/WorkflowService.java'], repo: 'r1' },
-    { hash: 'b', ts: t - 2 * H, files: ['x/workflowservice.java', 'y.js'], repo: 'r2' },
-    { hash: 'other', ts: t - 1 * H, files: ['src/Outro.java'], repo: 'r1' },
-    { hash: 'later', ts: t + H, files: ['src/WorkflowService.java'], repo: 'r1' },
+    { hash: 'old', ts: t - 8 * 86400e3, files: ['src/com/x/WorkflowService.java'], repo: 'r1' },
+    { hash: 'a', ts: t - 5 * H, files: ['src/main/java/com/x/WorkflowService.java'], repo: 'r1' },
+    { hash: 'b', ts: t - 2 * H, files: ['x/com/x/WorkflowService.kt', 'y.js'], repo: 'r2' },
+    { hash: 'other', ts: t - 1 * H, files: ['src/com/x/Outro.java'], repo: 'r1' },
+    { hash: 'later', ts: t + H, files: ['com/x/WorkflowService.java'], repo: 'r1' },
   ];
   const frame = 'com.x.WorkflowService$Inner.start';
   assert.equal(M.fileCommitBefore(commits, frame, t).hash, 'b');
@@ -297,14 +297,14 @@ test('fileCommitBefore: commit mais recente que mexeu no arquivo do frame, dentr
   assert.equal(M.fileCommitBefore(commits, 'semponto', t), null);
   assert.equal(M.fileCommitBefore([], frame, t), null);
   // Exatamente no instante da primeira ocorrência conta; exatamente no limite da janela não.
-  assert.equal(M.fileCommitBefore([{ hash: 'eq', ts: t, files: ['WorkflowService.java'] }], frame, t).hash, 'eq');
-  assert.equal(M.fileCommitBefore([{ hash: 'edge', ts: t - 7 * 86400e3, files: ['WorkflowService.java'] }], frame, t), null);
+  assert.equal(M.fileCommitBefore([{ hash: 'eq', ts: t, files: ['com/x/WorkflowService.java'] }], frame, t).hash, 'eq');
+  assert.equal(M.fileCommitBefore([{ hash: 'edge', ts: t - 7 * 86400e3, files: ['com/x/WorkflowService.java'] }], frame, t), null);
 });
 
 test('indexCommitsByFile: nome do arquivo em minúsculas → commits por ts; o índice serve no fileCommitBefore', () => {
   const idx = M.indexCommitsByFile([
-    { hash: '2', ts: 20, files: ['a/Foo.java', 'b\\Foo.java'] },
-    { hash: '1', ts: 10, files: ['Foo.java', 'Bar.js'] },
+    { hash: '2', ts: 20, files: ['a/com/x/Foo.java', 'b\\com\\x\\Foo.java'] },
+    { hash: '1', ts: 10, files: ['com/x/Foo.java', 'Bar.js'] },
   ]);
   assert.deepEqual(idx.get('foo').map((c) => c.hash), ['1', '2']); // sem repetir o commit que mexeu em dois Foo
   assert.deepEqual(idx.get('bar').map((c) => c.hash), ['1']);
@@ -318,4 +318,49 @@ test('fileHintText: "mudou … antes", nunca causa', () => {
   assert.equal(M.fileHintText({ hash: 'abcdef1234', pr: 2194, repoName: 'fluig-navship' }, 'WorkflowService.java', 2 * 3600e3),
     'WorkflowService.java mudou no #2194 (fluig-navship) 2 h antes');
   assert.equal(M.fileHintText({ hash: 'abcdef1234' }, 'A.java', 30e3), 'A.java mudou no abcdef1 menos de 1 min antes');
+});
+
+test('frameFileMatcher/fileCommitBefore: frame com pacote exige pacote + classe + extensão da JVM', () => {
+  const H = 3600e3;
+  const t = 10 * 86400e3;
+  const frame = 'com.x.Utils.run';
+  const js = [{ hash: 'js', ts: t - H, files: ['wgOutro/src/main/resources/js/Utils.js'], repo: 'outro' }];
+  assert.equal(M.fileCommitBefore(js, frame, t), null); // Utils.js de outro repositório não conta
+  const java = [{ hash: 'jv', ts: t - 2 * H, files: ['src/main/java/com/x/Utils.java'], repo: 'r' }];
+  assert.equal(M.fileCommitBefore([...js, ...java], frame, t).hash, 'jv');
+  // O mais novo pelo nome não serve: continua até o mais velho que bate o caminho.
+  assert.equal(M.fileCommitBefore(M.indexCommitsByFile([...java, ...js]), frame, t).hash, 'jv');
+  assert.equal(M.fileCommitBefore(java, 'com.x.Utils$1.run', t).hash, 'jv'); // classe interna
+  assert.equal(M.fileCommitBefore([{ hash: 'k', ts: t - H, files: ['com/x/Utils.kt'] }], frame, t).hash, 'k');
+  assert.equal(M.fileCommitBefore([{ hash: 'g', ts: t - H, files: ['com\\x\\Utils.groovy'] }], frame, t).hash, 'g');
+  assert.equal(M.fileCommitBefore([{ hash: 'p', ts: t - H, files: ['com/y/Utils.java'] }], frame, t), null); // outro pacote
+  assert.equal(M.fileCommitBefore([{ hash: 'c', ts: t - H, files: ['com/x/utils.java'] }], frame, t), null); // maiúsculas da classe
+  assert.equal(M.fileCommitBefore([{ hash: 'pre', ts: t - H, files: ['xcom/x/Utils.java'] }], frame, t), null); // pasta não termina no pacote
+  // Sem pacote: só o nome do arquivo, sem diferenciar maiúsculas (widgets JS).
+  assert.equal(M.fileCommitBefore(js, 'x.utils.run', t).hash, 'js');
+  assert.equal(M.touchedFile(['wgA/Utils.js', 'src/main/java/com/x/Utils.java'], 'com.x.Utils$1.run'), 'Utils.java');
+  assert.equal(M.touchesFrame(['wgA/Utils.js'], 'com.x.Utils.run'), false);
+});
+
+test('rankRepos ignora nomes de pasta genéricos', () => {
+  assert.ok(M.GENERIC_FOLDERS.has('api') && M.GENERIC_FOLDERS.has('web-inf'));
+  assert.deepEqual(M.rankRepos(['api', 'SRC', 'wgA'], [{ path: 'r', folders: ['api', 'src'] }, { path: 's', folders: ['wgA'] }]), [{ path: 's', matches: 1 }]);
+});
+
+test('pickRepo: liga sozinho só por deploy de verdade; restart só sugere; nome genérico nada', () => {
+  const repos = [{ path: 'C:/fluig', folders: ['wcm', 'widget', 'wgPortalRH', 'api'] }, { path: 'C:/outro', folders: ['api', 'wgOutro'] }];
+  assert.deepEqual(M.pickRepo([{ kind: 'deploy', artifacts: ['wgPortalRH.war'] }], repos), { auto: 'C:/fluig', suggestions: [] });
+  assert.deepEqual(M.pickRepo([{ kind: 'restart', artifacts: ['wgPortalRH', 'wgOutro', 'x'] }], repos), { auto: null, suggestions: ['C:/fluig', 'C:/outro'] });
+  assert.deepEqual(M.pickRepo([{ kind: 'restart', artifacts: ['wgPortalRH'] }], repos), { auto: null, suggestions: ['C:/fluig'] });
+  assert.deepEqual(M.pickRepo([{ kind: 'deploy', artifacts: ['api'] }], repos), { auto: null, suggestions: [] });
+  assert.equal(M.pickRepo([{ kind: 'restart', artifacts: ['wgOutro'] }, { kind: 'deploy', artifacts: ['wgPortalRH'] }], repos).auto, 'C:/fluig');
+  assert.deepEqual(M.pickRepo([], repos), { auto: null, suggestions: [] });
+});
+
+test('sortByTs: junta as listas de cada repositório em ordem de ts', () => {
+  const a = [{ hash: 'a1', ts: 1 }, { hash: 'a3', ts: 30 }];
+  const b = [{ hash: 'b2', ts: 20 }, { hash: 'b4', ts: 40 }];
+  assert.deepEqual(M.sortByTs([a, b]).map((c) => c.hash), ['a1', 'b2', 'a3', 'b4']);
+  assert.deepEqual(M.sortByTs([a, b]).slice(-2).reverse().map((c) => c.hash), ['b4', 'a3']); // os mais novos do menu
+  assert.deepEqual(M.sortByTs([null, []]), []);
 });

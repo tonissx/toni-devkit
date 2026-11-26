@@ -71,14 +71,36 @@ function frameBase(frame) {
   return parts[parts.length - 2].split('$')[0];
 }
 
-/** Nome do primeiro arquivo (sem a pasta) cujo nome sem extensão é a classe do frame, ou null. */
-function touchedFile(files, frame) {
-  const base = frameBase(frame).toLowerCase();
-  if (!base) return null;
-  for (const f of files || []) {
-    const name = String(f).split(/[\\/]/).pop();
-    if (name.replace(/\.[^.]*$/, '').toLowerCase() === base) return name;
+const JVM_EXT = /\.(?:java|kt|groovy|scala)$/;
+
+/**
+ * Teste "este arquivo é o do frame?" (ou null sem frame). Com pacote (`com.x.Utils$1.run`: 3+ segmentos antes do
+ * método), o caminho tem de terminar em `com/x/Utils` + `.java|.kt|.groovy|.scala`, com as maiúsculas exatas — um
+ * `Utils.js` de outro projeto não conta. Sem pacote, vale o nome do arquivo sem extensão (sem diferenciar maiúsculas).
+ */
+function frameFileMatcher(frame) {
+  const parts = String(frame || '').split('.').filter(Boolean);
+  if (parts.length < 2) return null;
+  const cls = parts[parts.length - 2].split('$')[0];
+  if (!cls) return null;
+  if (parts.length >= 4) {
+    const suffix = parts.slice(0, -2).join('/') + '/' + cls;
+    return (f) => {
+      const p = String(f).replace(/\\/g, '/');
+      if (!JVM_EXT.test(p)) return false;
+      const noExt = p.replace(JVM_EXT, '');
+      return noExt === suffix || noExt.endsWith('/' + suffix);
+    };
   }
+  const low = cls.toLowerCase();
+  return (f) => String(f).split(/[\\/]/).pop().replace(/\.[^.]*$/, '').toLowerCase() === low;
+}
+
+/** Nome (sem a pasta) do primeiro arquivo que é o do frame (ver `frameFileMatcher`), ou null. */
+function touchedFile(files, frame) {
+  const match = frameFileMatcher(frame);
+  if (!match) return null;
+  for (const f of files || []) if (match(f)) return String(f).split(/[\\/]/).pop();
   return null;
 }
 
@@ -142,12 +164,19 @@ function mergeMilestones(deploys, manual, merges, enabled = { deploy: true, merg
   ].sort((a, b) => a.ts - b.ts);
 }
 
+/** Nomes de pasta genéricos demais para dizer de qual repositório é um artefato (sem diferenciar maiúsculas). */
+const GENERIC_FOLDERS = new Set(['src', 'main', 'java', 'resources', 'webapp', 'web-inf', 'meta-inf', 'api', 'portal', 'wcm',
+  'widget', 'widgets', 'content', 'test', 'tests', 'lib', 'libs', 'dist', 'build', 'target', 'bin', 'obj', 'node_modules',
+  'public', 'static', 'assets', 'js', 'css', 'img', 'images', 'docs', 'scripts', 'config', 'root', 'app', 'apps', 'server',
+  'client', 'common', 'core', 'util', 'utils']);
+
 /**
  * Repositórios por quantos artefatos distintos (sem diferenciar maiúsculas) têm uma pasta de mesmo nome, do que mais
- * bate para o que menos bate; os que não batem nenhum ficam de fora. → [{ path, matches }]
+ * bate para o que menos bate; os que não batem nenhum ficam de fora. Nomes genéricos (`GENERIC_FOLDERS`) não contam.
+ * → [{ path, matches }]
  */
 function rankRepos(artifacts, repos) {
-  const arts = [...new Set((artifacts || []).map((a) => String(a).toLowerCase()))];
+  const arts = [...new Set((artifacts || []).map((a) => String(a).toLowerCase()))].filter((a) => a && !GENERIC_FOLDERS.has(a));
   if (!arts.length) return [];
   const out = [];
   for (const r of repos || []) {
@@ -163,6 +192,27 @@ function autoRepo(ranked) {
   const [a, b] = ranked || [];
   if (!a || !(a.matches >= 1)) return null;
   return !b || a.matches > b.matches ? a.path : null;
+}
+
+const stripExt = (a) => String(a).replace(/\.(war|ear|jar)$/i, '');
+
+/**
+ * Qual repositório ligar a um log pelos deploys dele. → { auto: path|null, suggestions: path[] (até 2) }
+ * Ligar sozinho só conta artefatos de `deploy` (inclui republicação); os de um restart (o servidor sobe dezenas de
+ * apps, inclusive de outros times) e de undeploy só entram na sugestão "Ligar a X?".
+ */
+function pickRepo(deploys, repos) {
+  const own = [];
+  const any = [];
+  for (const d of deploys || []) {
+    for (const a of d.artifacts || []) {
+      any.push(stripExt(a));
+      if (d.kind === 'deploy') own.push(stripExt(a));
+    }
+  }
+  const auto = autoRepo(rankRepos(own, repos));
+  if (auto) return { auto, suggestions: [] };
+  return { auto: null, suggestions: rankRepos(any, repos).slice(0, 2).map((r) => r.path) };
 }
 
 /** Repositório com mais pastas iguais (sem diferenciar maiúsculas) aos artefatos, ou null. */
@@ -297,6 +347,11 @@ function strongHint(m, file) {
   return 'Um commit na main desde o deploy anterior' + of + ' alterou ' + file + ', onde este erro acontece (estimativa)';
 }
 
+/** Junta listas de commits (uma por repositório) numa só, do mais antigo ao mais novo (estável no empate). */
+function sortByTs(lists) {
+  return [].concat(...(lists || []).map((l) => l || [])).sort((a, b) => a.ts - b.ts);
+}
+
 /* ── Dica de arquivo (commits de qualquer repositório cadastrado) ─────────── */
 
 const fileKey = (f) => String(f).split(/[\\/]/).pop().replace(/\.[^.]*$/, '').toLowerCase();
@@ -324,10 +379,19 @@ function indexCommitsByFile(commits) {
  */
 function fileCommitBefore(commits, frame, first, windowMs = 7 * DAY) {
   const base = frameBase(frame).toLowerCase();
-  if (!base || first == null) return null;
+  const match = frameFileMatcher(frame);
+  if (!base || !match || first == null) return null;
   const list = commits instanceof Map ? commits.get(base) || [] : indexCommitsByFile(commits).get(base) || [];
-  const c = previousMilestone(list, first);
-  return c && c.ts > first - windowMs ? c : null;
+  // O índice junta pelo nome; o caminho (pacote + extensão da JVM) decide, do mais novo para o mais velho.
+  let lo = 0;
+  let hi = list.length - 1;
+  let k = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (list[mid].ts <= first) { k = mid; lo = mid + 1; } else hi = mid - 1;
+  }
+  for (; k >= 0 && list[k].ts > first - windowMs; k--) if ((list[k].files || []).some(match)) return list[k];
+  return null;
 }
 
 /** `WorkflowService.java mudou no #2194 (fluig-navship) 2 h antes`. Só a ordem no tempo, nunca a causa. */
@@ -343,7 +407,7 @@ function sortAfterLatest(groups, latestTs) {
 }
 
 module.exports = {
-  rankRepos, autoRepo, indexCommitsByFile, fileCommitBefore, fileHintText,
+  rankRepos, autoRepo, pickRepo, GENERIC_FOLDERS, frameFileMatcher, sortByTs, indexCommitsByFile, fileCommitBefore, fileHintText,
   touchedFile, fmtGap, milestoneName, afterText, strongHint, sortAfterLatest,
   foldersOf, DEPLOY_RULES, matchDeploy, groupBursts,
   prNumber, isMergeCommit, frameBase, touchesFrame, previousMilestone, commitsInDeploy, attribute, mergeMilestones, suggestRepo, previousSameArtifact,
