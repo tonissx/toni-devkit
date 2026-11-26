@@ -92,8 +92,10 @@ Módulo puro novo `src/logs/milestones.js`:
   maiúsculas) e `repoAuto`. `null` = nunca escolhido; `[]` = o usuário escolheu nenhum. O `repo` antigo (um só) migra
   para `repos: [repo]`.
   - **Ligação automática**: `rankRepos(artefatos, [{ path, folders }])` conta quantos artefatos dos deploys têm pasta de
-    mesmo nome (em qualquer nível, `foldersOf(git.files(repo, 'HEAD'))`) em cada repositório; `autoRepo` liga sozinho o
-    primeiro quando ele vence sem empate (`repos: [path], repoAuto: true` — o seletor mostra "(automático)" e explica
+    mesmo nome (em qualquer nível, `foldersOf(git.files(repo, 'HEAD'))`) em cada repositório, ignorando nomes genéricos
+    (`GENERIC_FOLDERS`: src, api, wcm, widget…); `pickRepo` liga sozinho (`autoRepo`) só pelos artefatos de `deploy`
+    (os de restart só sugerem) e quando o primeiro vence sem empate — o serviço só aceita com `ifUnset` (se o usuário
+    escolheu nesse meio-tempo, vale a escolha dele) (`repos: [path], repoAuto: true` — o seletor mostra "(automático)" e explica
     que as pastas batem com as widgets publicadas). No empate, pergunta: até dois botões "Ligar a X?". Depois que o
     usuário mexe no seletor (inclusive "Nenhum"), não liga mais sozinho.
   - Cada repositório ligado é lido por conta própria (`git.milestones`, mesma janela); "carregando" até todos
@@ -161,7 +163,9 @@ de um merge mostram o nome do repositório, e na lista de commits de um deploy c
   ligados, um por vez, em cache, falhas ignoradas), a main de **todos os repositórios cadastrados**. `fileCommitBefore`
   (com o índice `indexCommitsByFile`, montado uma vez) acha o commit mais recente que mexeu no arquivo do frame até 7
   dias antes da primeira ocorrência → etiqueta discreta `◆ WorkflowService.java mudou no #2194 (fluig-navship) 2 h
-  antes`; clicar abre o commit no Git. Não aparece quando o marco atribuído já é esse commit em destaque forte.
+  antes`; clicar abre o commit no Git. Frame com pacote (`com.x.Utils.run`) exige caminho terminado em
+  `com/x/Utils.java|.kt|.groovy|.scala` (vale também para o destaque forte); sem pacote, só o nome do arquivo. Os
+  cadastrados ficam em cache por dia, com o fim aberto quando o log chega até hoje. Não aparece quando o marco atribuído já é esse commit em destaque forte.
 
 **Investigação**: "Adicionar à investigação" também aceita um marco (vira item com tag `suspeita` e o texto do marco),
 para o relatório trazer "começou depois do deploy X".

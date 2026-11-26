@@ -259,7 +259,8 @@ Para achar rápido o que deu errado num log. Abre arquivos de centenas de MB em 
   restart, com vários deploys seguidos, vira **um marco só**, e undeploy + deploy em seguida conta como deploy); merges e
   marcos manuais valem para qualquer log. **◆ merges na main** vêm dos **repositórios ligados** ao log (seletor
   **Repositórios** no cabeçalho, com caixas de marcar — dá para ligar vários; fica lembrado). Quando as pastas de um só
-  repositório batem com as widgets publicadas no log, ele é **ligado sozinho** (aparece "(automático)"); no empate, o
+  repositório batem com as widgets publicadas no log (só deploys, não restart; nomes genéricos como `api` e `src` não
+  contam), ele é **ligado sozinho** (aparece "(automático)"); no empate, o
   Devkit pergunta ("Ligar a X?"), e depois que você mexe no seletor não liga mais sozinho; **✎ marcos manuais**
   com o botão direito na linha do tempo, **Marcar deploy aqui…** — necessário para datasets e formulários publicados pelo
   Fluig Studio, que não deixam rastro no log. O menu **Marcos** liga e desliga cada tipo; clicar num marco abre o menu
@@ -267,7 +268,8 @@ Para achar rápido o que deu errado num log. Abre arquivos de centenas de MB em 
   mostra **"N min depois de …"** o marco anterior à primeira ocorrência — em destaque forte quando o commit mexeu no arquivo
   do erro —, ou **"já existia no início do log"**. Também avisa quando um commit da main de **qualquer repositório
   cadastrado** mexeu no arquivo do erro até 7 dias antes (**"WorkflowService.java mudou no #2194 (fluig-navship) 2 h
-  antes"**; clicar abre o commit no Git). A ordenação **Depois do último marco** põe no topo o que começou logo
+  antes"**; clicar abre o commit no Git). Frame Java com pacote (`com.x.Utils.run`) só bate com `com/x/Utils.java`
+  (ou `.kt`, `.groovy`, `.scala`) — um `Utils.js` de outro projeto não conta. A ordenação **Depois do último marco** põe no topo o que começou logo
   depois, e **Adicionar à investigação** guarda o marco como suspeita. É uma **suspeita/estimativa pela proximidade no tempo,
   não uma causa**: confirme no stack e no commit
 - **Gráficos** (respeitam o filtro): erros por minuto, níveis e loggers mais frequentes; nos logs de acesso, **respostas
