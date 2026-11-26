@@ -161,13 +161,14 @@ function previousSameArtifact(sorted, deploy) {
   return best;
 }
 
-/** Nomes das pastas dos dois primeiros níveis dos caminhos (sem repetir); arquivo na raiz não contribui. */
+/** Nomes das pastas dos caminhos, em qualquer nível (sem repetir); arquivo na raiz não contribui. */
 function foldersOf(paths) {
   const set = new Set();
   for (const p of paths || []) {
+    // Todas as pastas do caminho (o nome do arquivo fica de fora): no monorepo do Fluig as widgets ficam em
+    // wcm/widget/<nome>/, no 3º nível.
     const parts = String(p).split('/');
-    if (parts.length > 1) set.add(parts[0]);
-    if (parts.length > 2) set.add(parts[1]);
+    for (let k = 0; k < parts.length - 1; k++) if (parts[k]) set.add(parts[k]);
   }
   return [...set];
 }

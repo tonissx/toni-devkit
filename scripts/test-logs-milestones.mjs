@@ -122,14 +122,16 @@ test('previousSameArtifact: deploy anterior com artefato em comum', () => {
   assert.equal(M.previousSameArtifact(list, list[0]), null);
 });
 
-test('foldersOf: nomes dos dois primeiros níveis, sem raiz e sem repetir', () => {
+test('foldersOf: nomes das pastas em qualquer nível, sem raiz e sem repetir', () => {
   assert.deepEqual(M.foldersOf(['wgPortalRH/a.js']), ['wgPortalRH']);
   const f = M.foldersOf(['widgets/wgPortalRH/src/a.js']);
-  assert.ok(f.includes('widgets') && f.includes('wgPortalRH'));
-  assert.ok(!f.includes('src'));
+  assert.ok(f.includes('widgets') && f.includes('wgPortalRH') && f.includes('src'));
   assert.deepEqual(M.foldersOf(['README.md']), []);
   assert.deepEqual(M.foldersOf(['x/a.js', 'x/b.js', 'x/y/c.js', 'x/y/d.js']).sort(), ['x', 'y']);
-  assert.equal(M.suggestRepo(['wgPortalRH'], [{ path: 'r', folders: M.foldersOf(['widgets/wgPortalRH/src/a.js']) }]), 'r');
+  // Monorepo do Fluig: as widgets ficam no 3º nível (wcm/widget/<nome>/…).
+  const fluig = M.foldersOf(['wcm/widget/wgPortalRH/src/main/resources/edit.ftl', 'datasets/ds_wgPortalRH.js']);
+  assert.ok(fluig.includes('wgPortalRH'));
+  assert.equal(M.suggestRepo(['wgPortalRH'], [{ path: 'r', folders: fluig }]), 'r');
 });
 
 test('clusterMilestones: mesma coluna vira um grupo; fora do histograma fica de fora', () => {
