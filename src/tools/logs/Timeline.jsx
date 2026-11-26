@@ -16,33 +16,33 @@ const ORDER_ALL = [6, 5, 4, 3, 2, 1, 0];
 const ORDER_PROBLEMS = [6, 5, 4];
 const STRIP = 14;        // altura da faixa dos marcos
 const MARK_MIN_PX = 16;  // ícones mais perto que isso viram um só (com contador)
-const MARK_KINDS = [['deploy', 'Deploys', 'deploy/undeploy/restart lidos do log'], ['merge', 'Merges', 'da main do repositório ligado'], ['manual', 'Manuais', 'marcados por você (botão direito nas colunas)']];
+const MARK_KINDS = [['deploy', 'Deploys', 'deploy/undeploy/restart lidos do log'], ['merge', 'Merges', 'da main dos repositórios ligados'], ['manual', 'Manuais', 'marcados por você (botão direito nas colunas)']];
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /** Detalhe de um marco no tooltip: artefatos, ou PR/título/autor, ou o texto do marco manual. */
-function detailOf(m) {
+function detailOf(m, multiRepo = false) {
   const arts = m.artifacts || [];
   const list = arts.slice(0, 6).join(', ') + (arts.length > 6 ? ` +${arts.length - 6}` : '');
   if (m.kind === 'restart') return arts.length ? `${plural(arts.length, 'app', 'apps')}: ${list}` : 'servidor reiniciado';
   if (m.kind === 'deploy' || m.kind === 'undeploy') return list || m.label;
-  if (m.kind === 'merge') return m.label + (m.author ? ' · ' + m.author : '');
+  if (m.kind === 'merge') return m.label + (m.author ? ' · ' + m.author : '') + (multiRepo && m.repoName ? ' · ' + m.repoName : '');
   return m.label;
 }
 
 /** Tooltip dos marcos de uma coluna (todos, até 6). */
-function MilestoneTip({ items, repo, commitsOf, commitsState, multiDay, style }) {
+function MilestoneTip({ items, repos = [], commitsOf, commitsState, multiDay, style }) {
   const shown = items.slice(0, 6);
   const pending = commitsPending(commitsState);
   return (
     <div className="lg-tip lg-mtip" style={style} role="tooltip">
       {shown.map((m) => {
-        const n = repo && commitsOf && kindGroup(m.kind) === 'deploy' ? commitsOf(m).length : null;
+        const n = repos.length && commitsOf && kindGroup(m.kind) === 'deploy' ? commitsOf(m).length : null;
         // Sem a resposta do repositório, "0 commits" seria falso: mostra o estado em vez do número.
         const note = n == null ? null : n === 0 && pending ? 'Commits da main: ' + pending : plural(n, 'commit', 'commits') + ' na main desde o deploy anterior (estimativa)';
         return (
           <div key={m.id} className="lg-mtip__item">
             <div className="lg-mtip__head"><MilestoneIcon kind={m.kind} /><b>{kindLabel(m)}</b><span className="lg-tip__when">{fmtTime(m.ts, { date: multiDay, millis: false })}</span></div>
-            <div className="lg-mtip__txt">{detailOf(m)}</div>
+            <div className="lg-mtip__txt">{detailOf(m, repos.length > 1)}</div>
             {note && <div className="lg-mtip__note">{note}</div>}
           </div>
         );
@@ -84,11 +84,11 @@ function topRounded(x, y, w, h, r) {
  * props: hist { start, step, buckets, data }, range { from, to } | null, onRange(range|null), onSeek(ms),
  * spikes [b], mode 'all'|'problems', onMode, loading, collapsed, onCollapse(bool)
  * marcos: milestones (já filtrados por `show`), allMilestones (todos, para as contagens do menu "Marcos"),
- * show { deploy, merge, manual }, onShow(patch), repo, commitsOf(m), commitsState, onMarkHere(ts, label),
+ * show { deploy, merge, manual }, onShow(patch), repos (ligados), commitsOf(m), commitsState, onMarkHere(ts, label),
  * onMilestone({ type: 'edit', m, label } | { type: 'delete', m })
  */
 export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, loading, collapsed, onCollapse,
-  milestones = [], allMilestones, show, onShow, repo, commitsOf, commitsState, onMarkHere, onMilestone }) {
+  milestones = [], allMilestones, show, onShow, repos = [], commitsOf, commitsState, onMarkHere, onMilestone }) {
   const ref = React.useRef(null);
   const svgRef = React.useRef(null);
   const width = useWidth(ref);
@@ -306,7 +306,7 @@ export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, l
                       <Icon name={show[k] ? 'square-check' : 'square'} size={14} className={show[k] ? 'lg-mmenu__on' : ''} /><MilestoneIcon kind={k} /><span>{label}</span><small>{fmtNum(n[k])}</small>
                     </button>
                   ))}
-                  <div className="lg-mmenu__note">{repo ? 'Merges: só os da main, a partir do repositório ligado.' : 'Ligue um repositório no cabeçalho para ver os merges da main.'} Botão direito nas colunas marca um deploy à mão.</div>
+                  <div className="lg-mmenu__note">{repos.length ? 'Merges: só os da main, a partir ' + (repos.length > 1 ? 'dos repositórios ligados.' : 'do repositório ligado.') : 'Ligue um repositório no cabeçalho para ver os merges da main.'} Botão direito nas colunas marca um deploy à mão.</div>
                 </div>
               );
             })()}
@@ -373,9 +373,9 @@ export function Timeline({ hist, range, onRange, onSeek, spikes, mode, onMode, l
           <text key={'t' + b} x={xOf(b) + barW / 2} y={H - 3} className="lg-tick" textAnchor={b === 0 ? 'start' : 'middle'}>{fmtTick(tOf(b), multiDay && hist.step < 3600e3 && b === 0 ? 3600e3 : hist.step)}</text>
         ))}
       </svg>
-      {hoverC && <MilestoneTip items={hoverC.items} repo={repo} commitsOf={commitsOf} commitsState={commitsState} multiDay={multiDay} style={popAt(cxOf(hoverC.b), width, STRIP + 2, 330)} />}
+      {hoverC && <MilestoneTip items={hoverC.items} repos={repos} commitsOf={commitsOf} commitsState={commitsState} multiDay={multiDay} style={popAt(cxOf(hoverC.b), width, STRIP + 2, 330)} />}
       {menu && (
-        <MilestoneMenu key={menu.id} milestones={menu.items} repo={repo} commitsOf={commitsOf} commitsState={commitsState} multiDay={multiDay} style={popAt(menu.x, width, STRIP + 2)}
+        <MilestoneMenu key={menu.id} milestones={menu.items} repos={repos} commitsOf={commitsOf} commitsState={commitsState} multiDay={multiDay} style={popAt(menu.x, width, STRIP + 2)}
           onSeek={onSeek} onRange={onRange} onClose={() => setMenu(null)}
           onEdit={onMilestone ? (m, label) => onMilestone({ type: 'edit', m, label }) : null}
           onDelete={onMilestone ? (m) => onMilestone({ type: 'delete', m }) : null} />

@@ -589,8 +589,19 @@ svg.lg-mico.is-manual { width: 10px; height: 10px; background: none; color: var(
   .lg-row__bar, .lg-chip__dot, .lg-prob__bar { forced-color-adjust: none; }
 }
 
-/* Repositório ligado ao log (marcos de merge) */
+/* Repositórios ligados ao log (marcos de merge) */
+.lg-select.lg-repo { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.lg-select.lg-repo:hover, .lg-select.lg-repo[aria-expanded="true"] { color: var(--tk-text); border-color: var(--tk-border-strong, var(--tk-border)); }
+.lg-select.lg-repo:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 1px; }
 .lg-select.lg-repo.is-warn { border-color: var(--tk-amber); }
-.lg-repo__warn { font-size: 11px; color: var(--tk-amber); white-space: nowrap; }
+.lg-repo__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-repo__auto { flex-shrink: 0; color: var(--tk-text-3); font-size: 11px; }
+.lg-repo__menu { min-width: 240px; max-height: 360px; overflow-y: auto; }
+.lg-repo__menu .lg-repo__err { color: var(--tk-amber); }
+.lg-repo__warn { max-width: 260px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--tk-amber); white-space: nowrap; }
+.lg-mmenu__repo { padding: 0 5px; border-radius: var(--tk-radius-sm); background: var(--tk-surface-3); color: var(--tk-text-2); font-size: 10.5px; white-space: nowrap; }
+/* Dica de arquivo na aba Problemas: mais discreta que a etiqueta "depois de…". */
+.lg-after.is-file { border-style: dashed; color: var(--tk-text-3); }
+.lg-after.is-file:hover { color: var(--tk-text); }
 .lg-repo__suggest { height: 26px; padding: 0 9px; border: 1px dashed var(--tk-border); border-radius: var(--tk-radius-sm); background: transparent; color: var(--tk-text-2); font: 12px var(--tk-font-sans); cursor: pointer; white-space: nowrap; }
 .lg-repo__suggest:hover { background: var(--tk-surface-2); color: var(--tk-text); }

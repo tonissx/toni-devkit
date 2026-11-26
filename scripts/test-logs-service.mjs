@@ -451,14 +451,62 @@ test('meta: padrão, salvar repo e marcos manuais, e reabrir o serviço', async 
   const t = setup();
   await t.svc.init();
   const spec = { kind: 'file', path: path.join(t.dir, 'server.log') };
-  assert.deepEqual(t.svc.meta(spec), { repo: null, manual: [], show: { deploy: true, merge: true, manual: true } });
-  await t.svc.saveMeta(spec, { repo: 'C:/repos/fluig', manual: [{ ts: 1000, label: 'dsPedido' }, { ts: 'x', label: '' }] });
+  assert.deepEqual(t.svc.meta(spec), { repos: null, repoAuto: false, manual: [], show: { deploy: true, merge: true, manual: true } });
+  await t.svc.saveMeta(spec, { repos: ['C:/repos/fluig'], manual: [{ ts: 1000, label: 'dsPedido' }, { ts: 'x', label: '' }] });
   await t.svc.flush?.();
   const again = createLogsService({ file: path.join(t.dir, 'logs.json'), callWorker: async () => ({}), watch: () => ({ close() {}, on() {} }), pollMs: 3600e3 });
   await again.init();
   const m = again.meta(spec);
-  assert.equal(m.repo, 'C:/repos/fluig');
+  assert.deepEqual(m.repos, ['C:/repos/fluig']);
+  assert.equal(m.repoAuto, false);
   assert.equal(m.manual.length, 1);
   assert.equal(m.manual[0].kind, 'manual');
   assert.ok(m.manual[0].id);
+});
+
+test('meta: vários repositórios, sem repetir (maiúsculas), até 10, ligado sozinho e "nenhum"', async () => {
+  const t = setup();
+  await t.svc.init();
+  const spec = { kind: 'file', path: path.join(t.dir, 'server.log') };
+  const many = Array.from({ length: 14 }, (_, k) => 'C:/r/' + k);
+  let m = await t.svc.saveMeta(spec, { repos: ['C:/A', 'c:/a', ' C:/B ', '', 42, 'x'.repeat(600), ...many] });
+  assert.equal(m.repos.length, 10);
+  assert.deepEqual(m.repos.slice(0, 3), ['C:/A', 'C:/B', 'x'.repeat(500)]);
+  m = await t.svc.saveMeta(spec, { repos: ['C:/A'], repoAuto: true });
+  assert.deepEqual(m, { ...m, repos: ['C:/A'], repoAuto: true });
+  // Mexer em outra coisa (ou mandar `repos: undefined`) não mexe nos repositórios nem no "automático".
+  m = await t.svc.saveMeta(spec, { show: { merge: false }, repos: undefined });
+  assert.deepEqual(m.repos, ['C:/A']);
+  assert.equal(m.repoAuto, true);
+  assert.equal(m.show.merge, false);
+  // Escolher no seletor (sem repoAuto) é escolha do usuário; [] = nenhum, diferente de null (nunca escolhido).
+  m = await t.svc.saveMeta(spec, { repos: [] });
+  assert.deepEqual(m.repos, []);
+  assert.equal(m.repoAuto, false);
+});
+
+test('meta: o "repo" antigo (um só) vira repos', async () => {
+  const dir = tmp();
+  const file = path.join(dir, 'logs.json');
+  const spec = { kind: 'file', path: path.join(dir, 'server.log') };
+  const spec2 = { kind: 'file', path: path.join(dir, 'outro.log') };
+  const mk = () => createLogsService({ file, callWorker: async () => ({}), watch: () => ({ close() {}, on() {} }), pollMs: 3600e3 });
+  // Grava um meta no formato novo para descobrir a chave de cada log, depois reescreve no formato antigo.
+  const s0 = mk();
+  await s0.init();
+  await s0.saveMeta(spec, { manual: [{ ts: 1, label: 'a' }] });
+  await s0.saveMeta(spec2, { manual: [{ ts: 1, label: 'b' }] });
+  await s0.flush?.();
+  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const [k1, k2] = Object.keys(raw.meta);
+  const [ka, kb] = raw.meta[k1].manual[0].label === 'a' ? [k1, k2] : [k2, k1];
+  raw.meta[ka] = { repo: 'C:/repos/fluig', manual: [], show: {} };
+  raw.meta[kb] = { repo: null, manual: [], show: {} };
+  fs.writeFileSync(file, JSON.stringify(raw));
+  const s1 = mk();
+  await s1.init();
+  assert.deepEqual(s1.meta(spec).repos, ['C:/repos/fluig']);
+  assert.equal(s1.meta(spec).repoAuto, false);
+  assert.equal(s1.meta(spec2).repos, null);
+  assert.equal('repo' in s1.meta(spec), false);
 });

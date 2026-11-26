@@ -49,8 +49,25 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
       .filter((x) => x && typeof x.ts === 'number' && Number.isFinite(x.ts) && typeof x.label === 'string' && x.label.trim())
       .slice(0, 200)
       .map((x) => ({ id: String(x.id || Math.random().toString(36).slice(2, 10)).slice(0, 40), kind: 'manual', ts: x.ts, label: x.label.trim().slice(0, 200) }));
-    const repo = typeof src.repo === 'string' && src.repo.trim() ? src.repo.trim().slice(0, 500) : null;
-    return { repo, manual, show };
+    // `repos`: null = nunca escolhido (pode ligar sozinho); [] = o usuário escolheu nenhum. O `repo` antigo (um só)
+    // vira `repos: [repo]`, escolhido à mão.
+    let repos = null;
+    let repoAuto = false;
+    if (Array.isArray(src.repos)) {
+      const seen = new Set();
+      repos = [];
+      for (const r of src.repos) {
+        const s = typeof r === 'string' ? r.trim().slice(0, 500) : '';
+        if (!s || seen.has(s.toLowerCase())) continue;
+        seen.add(s.toLowerCase());
+        repos.push(s);
+        if (repos.length >= 10) break;
+      }
+      repoAuto = src.repoAuto === true && repos.length > 0;
+    } else if (src.repos === undefined && typeof src.repo === 'string' && src.repo.trim()) {
+      repos = [src.repo.trim().slice(0, 500)];
+    }
+    return { repos, repoAuto, manual, show };
   }
   const persist = () => queue.run('save', () => atomicWrite(file, JSON.stringify(state, null, 2)));
 
@@ -255,7 +272,11 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
     async saveMeta(spec, patch) {
       const key = keyOf(spec);
       const cur = normalizeMeta(state.meta[key]);
-      const p = patch && typeof patch === 'object' ? patch : {};
+      const p = {};
+      // Chave `undefined` não apaga nada (`{ repos: undefined }` não desliga os repositórios).
+      if (patch && typeof patch === 'object') for (const k of Object.keys(patch)) if (patch[k] !== undefined) p[k] = patch[k];
+      // Escolher repositórios sem dizer que foi automático é escolha do usuário.
+      if ('repos' in p && !('repoAuto' in p)) p.repoAuto = false;
       state.meta[key] = normalizeMeta({ ...cur, ...p, show: { ...cur.show, ...(p.show && typeof p.show === 'object' ? p.show : {}) } });
       await persist();
       return state.meta[key];

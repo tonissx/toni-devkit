@@ -89,7 +89,7 @@ const MAX_COMMITS = 5;
 /**
  * props:
  *  - milestones: Milestone[] (um ou vários — vários = os da mesma coluna; primeiro escolhe-se qual)
- *  - repo: caminho do repositório ligado (sem ele não há "Abrir no Git")
+ *  - repos: caminhos dos repositórios ligados (sem nenhum não há "Abrir no Git"; cada merge/commit abre no seu, `m.repo`/`c.repo`)
  *  - commitsOf(m) → Commit[] (commits da main no widget desde o deploy anterior — estimativa)
  *  - commitsState: 'idle' | 'loading' | 'ok' | 'error' (de useMilestones) — sem 'ok', não mostra "nenhum commit"
  *  - onSeek(ts), onRange({ from, to }), onEdit(m, label), onDelete(m) — todos opcionais; sem o callback, o item some
@@ -97,7 +97,7 @@ const MAX_COMMITS = 5;
  *  - multiDay: mostra a data junto da hora
  *  - onClose(), style, className — o menu se posiciona por `style` (sem ele vale o `.lg-pop` padrão: abaixo, à direita)
  */
-export function MilestoneMenu({ milestones, repo, commitsOf, commitsState = 'ok', onSeek, onRange, onEdit, onDelete, extra, multiDay = false, onClose, style, className = '' }) {
+export function MilestoneMenu({ milestones, repos = [], commitsOf, commitsState = 'ok', onSeek, onRange, onEdit, onDelete, extra, multiDay = false, onClose, style, className = '' }) {
   const ref = React.useRef(null);
   const list = milestones || [];
   const [pick, setPick] = React.useState(list.length === 1 ? list[0] : null);
@@ -111,6 +111,9 @@ export function MilestoneMenu({ milestones, repo, commitsOf, commitsState = 'ok'
   }, [pick, editing]);
 
   const when = (m) => fmtTime(m.ts, { date: multiDay, millis: false });
+  const hasRepo = repos.length > 0;
+  const multi = repos.length > 1;
+  const repoOf = (x) => x.repo || repos[0];
   const run = (fn) => () => { onClose(); fn(); };
 
   let body;
@@ -135,14 +138,14 @@ export function MilestoneMenu({ milestones, repo, commitsOf, commitsState = 'ok'
   } else {
     const m = pick;
     const g = kindGroup(m.kind);
-    const commits = g === 'deploy' && repo && commitsOf ? commitsOf(m) : [];
+    const commits = g === 'deploy' && hasRepo && commitsOf ? commitsOf(m) : [];
     const more = typeof extra === 'function' ? extra(m) : extra;
     const pending = commitsPending(commitsState);
     body = (
       <>
         <div className="lg-mmenu__head">
           {list.length > 1 && <button type="button" className="lg-mmenu__back" onClick={() => setPick(null)} title="Voltar à lista" aria-label="Voltar à lista de marcos"><Icon name="arrow-left" size={13} /></button>}
-          <MilestoneIcon kind={m.kind} /><b>{kindLabel(m)}</b><small>{when(m)}</small>
+          <MilestoneIcon kind={m.kind} /><b>{kindLabel(m)}</b>{multi && m.repoName && <span className="lg-mmenu__repo" title={m.repo}>{m.repoName}</span>}<small>{when(m)}</small>
         </div>
         <div className="lg-mmenu__label" title={m.label}>{m.label}{m.author ? ' · ' + m.author : ''}</div>
         {onSeek && (
@@ -150,18 +153,18 @@ export function MilestoneMenu({ milestones, repo, commitsOf, commitsState = 'ok'
             <Icon name="corner-down-right" size={14} /><span>{m.i != null ? 'Ir para esta linha no log' : 'Ir até este momento no log'}</span>
           </button>
         )}
-        {g === 'merge' && repo && m.hash && (
-          <button type="button" role="menuitem" onClick={run(() => openInGit(repo, m.hash))}>
+        {g === 'merge' && hasRepo && m.hash && (
+          <button type="button" role="menuitem" onClick={run(() => openInGit(repoOf(m), m.hash))}>
             <Icon name="git-merge" size={14} /><span>Abrir no Git</span><small>{m.pr ? '#' + m.pr : m.hash.slice(0, 7)}</small>
           </button>
         )}
-        {g === 'deploy' && repo && (
+        {g === 'deploy' && hasRepo && (
           commits.length ? (
             <>
               <div className="lg-mmenu__sep">Abrir no Git — commits na main desde o deploy anterior (estimativa)</div>
               {commits.slice(-MAX_COMMITS).reverse().map((c) => (
-                <button key={c.hash} type="button" role="menuitem" onClick={run(() => openInGit(repo, c.hash))} title={c.subject}>
-                  <Icon name="git-commit-horizontal" size={14} /><span className="lg-mmenu__txt">{c.title || c.subject}</span><small>{c.pr ? '#' + c.pr : c.hash.slice(0, 7)}</small>
+                <button key={(c.repo || '') + c.hash} type="button" role="menuitem" onClick={run(() => openInGit(repoOf(c), c.hash))} title={c.subject + (multi && c.repoName ? ' · ' + c.repoName : '')}>
+                  <Icon name="git-commit-horizontal" size={14} /><span className="lg-mmenu__txt">{c.title || c.subject}</span><small>{(c.pr ? '#' + c.pr : c.hash.slice(0, 7)) + (multi && c.repoName ? ' · ' + c.repoName : '')}</small>
                 </button>
               ))}
               {commits.length > MAX_COMMITS && <div className="lg-mmenu__note">+{commits.length - MAX_COMMITS} mais antigos</div>}
