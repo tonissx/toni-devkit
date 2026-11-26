@@ -241,6 +241,16 @@ class LogIndex {
 
   /* ─────────────── Consulta ─────────────── */
 
+  /** Entradas de from a to (exclusivo) cujo texto casa a regex (global) — uma varredura por trecho, sem montar strings. */
+  entriesMatching(re, from, to) {
+    const out = [];
+    if (!(to > from)) return out;
+    const M = new Uint8Array(to - from);
+    this._searchInto(re, M, from, to, 1, from);
+    for (let k = 0; k < M.length; k++) if (M[k]) out.push(from + k);
+    return out;
+  }
+
   /** Marca em M[i - off] (i de from a to) as entradas que casam a regex (global) em algum ponto do texto. */
   _searchInto(re, M, from, to, val, off = 0) {
     if (from >= to) return;

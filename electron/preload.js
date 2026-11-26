@@ -326,6 +326,7 @@ contextBridge.exposeInMainWorld('devkit', {
     summaries: () => ipcRenderer.invoke('git:summaries'),
     /** Commits da pessoa num intervalo (ms; until exclusivo) em um repositório. */
     activity: (repo, opts) => ipcRenderer.invoke('git:activity', repo, opts),
+    milestones: (repo, opts) => ipcRenderer.invoke('git:milestones', repo, opts),
     status: (repo) => ipcRenderer.invoke('git:status', repo),
     log: (repo, opts) => ipcRenderer.invoke('git:log', repo, opts),
     /** Fotos do Gravatar por e-mail → { [email]: data URL | null }. Só o hash do e-mail sai da máquina. */
@@ -478,6 +479,7 @@ contextBridge.exposeInMainWorld('devkit', {
     switchFamily: (id, family) => ipcRenderer.invoke('logs:switchFamily', id, family),
     setLive: (id, on) => ipcRenderer.invoke('logs:setLive', id, on),
     close: (id) => ipcRenderer.invoke('logs:close', id),
+    deploys: (args) => ipcRenderer.invoke('logs:deploys', args),
     list: () => ipcRenderer.invoke('logs:list'),
     summaries: () => ipcRenderer.invoke('logs:summaries'),
     markSeen: (id) => ipcRenderer.invoke('logs:markSeen', id),
@@ -487,6 +489,8 @@ contextBridge.exposeInMainWorld('devkit', {
     savePresets: (list) => ipcRenderer.invoke('logs:savePresets', list),
     investigations: () => ipcRenderer.invoke('logs:investigations'),
     saveInvestigations: (list) => ipcRenderer.invoke('logs:saveInvestigations', list),
+    meta: (spec) => ipcRenderer.invoke('logs:meta', spec),
+    saveMeta: (spec, m) => ipcRenderer.invoke('logs:saveMeta', spec, m),
     scanFolder: (dir) => ipcRenderer.invoke('logs:scanFolder', dir),
     info: (args) => ipcRenderer.invoke('logs:info', args),
     query: (args) => ipcRenderer.invoke('logs:query', args),

@@ -195,6 +195,7 @@ like `tail -f`. Stack traces become a single entry, the same failure with differ
 - Formats detected automatically: Fluig/JBoss, JSON lines, IIS, Nginx/Apache, log4j/Spring and plain text
 - Folders of rotated logs (`server.log.2026-10-10`, `app.log.1`, `.gz`) become a single log
 - Search with `level:error+ logger:fluig status:5xx "phrase" /regex/ -hide`, saved filters, `n`/`N` for the next error
+- **Milestones** on the timeline: deploys read from `server.log` (Fluig/WildFly), merges on main from the linked repository and manual marks (on any log); problems show "N min after …" (a suspicion, not a cause)
 - Errors-per-minute charts and, for access logs, status, p50/p95 latency and slowest endpoints
 - Copy without secrets and, with AI on, **explain the error** (passwords and tokens are stripped before sending)
 

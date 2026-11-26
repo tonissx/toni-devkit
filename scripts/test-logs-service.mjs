@@ -389,3 +389,143 @@ test('Início: erros novos desde a última vez que a aba foi vista', async () =>
   assert.equal((await svc.summaries())[0].newErrors, 0);
   svc.unwatch();
 });
+
+const DEP = (s, a) => line(s, 'INFO', `WFLYSRV0010: Deployed "${a}.war" (runtime-name : "${a}.war")`);
+
+test('deploys: acha os deploys, agrupa e continua do ponto onde parou', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  fs.writeFileSync(f, DEP(1, 'wgA') + line(2, 'ERROR', 'falha'));
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  let r = e.call('deploys', { id: 'a' });
+  assert.equal(r.milestones.length, 1);
+  assert.equal(r.milestones[0].label, 'deploy wgA');
+  fs.appendFileSync(f, line(3, 'INFO', 'ok') + DEP(59, 'wgB') + line(59, 'INFO', 'fim'));
+  // wgB a 58 s do wgA: mesma rajada (< 2 min)
+  await e.call('grow', { id: 'a' });
+  r = e.call('deploys', { id: 'a' });
+  assert.equal(r.milestones.length, 1);
+  assert.deepEqual(r.milestones[0].artifacts, ['wgA', 'wgB']);
+  assert.equal(r.scanned, e.call('info', { id: 'a' }).n);
+});
+
+test('deploys: usa o ts do índice', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  fs.writeFileSync(f, '10:00:01,000 INFO  [org.jboss.as.server] (MSC) WFLYSRV0010: Deployed "wgA.war" (runtime-name : "wgA.war")\n');
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  e.call('query', { id: 'a', qid: 1, q: '' });
+  const ts = e.call('rows', { id: 'a', qid: 1, from: 0, count: 1 }).rows[0].ts;
+  assert.ok(Number.isFinite(ts));
+  assert.equal(e.call('deploys', { id: 'a' }).milestones[0].ts, ts);
+});
+
+test('deploys: WFLYSRV00 fora da primeira linha não vira marco; republicação conta como deploy', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  fs.writeFileSync(f, line(1, 'INFO', 'resumo') + '  WFLYSRV0010: Deployed "wgX.war"\n'
+    + line(50, 'INFO', 'WFLYSRV0009: Undeployed "wgB.war"') + line(55, 'INFO', 'WFLYSRV0016: Replaced deployment "wgB.war" with deployment "wgB.war"'));
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  const r = e.call('deploys', { id: 'a' });
+  assert.equal(r.milestones.length, 1);
+  assert.equal(r.milestones[0].kind, 'deploy');
+  assert.deepEqual(r.milestones[0].artifacts, ['wgB']);
+});
+
+test('deploys: reset recomeça a varredura', async () => {
+  const dir = tmp();
+  const f = path.join(dir, 'server.log');
+  fs.writeFileSync(f, DEP(1, 'wgA'));
+  const e = createEngine();
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false });
+  assert.equal(e.call('deploys', { id: 'a' }).milestones.length, 1);
+  fs.writeFileSync(f, line(1, 'INFO', 'sem deploy'));
+  await e.call('open', { id: 'a', files: [{ path: f, name: 'server.log' }], tail: false }); // o serviço reabre assim no reset
+  assert.equal(e.call('deploys', { id: 'a' }).milestones.length, 0);
+});
+
+test('meta: padrão, salvar repo e marcos manuais, e reabrir o serviço', async () => {
+  const t = setup();
+  await t.svc.init();
+  const spec = { kind: 'file', path: path.join(t.dir, 'server.log') };
+  assert.deepEqual(t.svc.meta(spec), { repos: null, repoAuto: false, manual: [], show: { deploy: true, merge: true, manual: true } });
+  await t.svc.saveMeta(spec, { repos: ['C:/repos/fluig'], manual: [{ ts: 1000, label: 'dsPedido' }, { ts: 'x', label: '' }] });
+  await t.svc.flush?.();
+  const again = createLogsService({ file: path.join(t.dir, 'logs.json'), callWorker: async () => ({}), watch: () => ({ close() {}, on() {} }), pollMs: 3600e3 });
+  await again.init();
+  const m = again.meta(spec);
+  assert.deepEqual(m.repos, ['C:/repos/fluig']);
+  assert.equal(m.repoAuto, false);
+  assert.equal(m.manual.length, 1);
+  assert.equal(m.manual[0].kind, 'manual');
+  assert.ok(m.manual[0].id);
+});
+
+test('meta: vários repositórios, sem repetir (maiúsculas), até 10, ligado sozinho e "nenhum"', async () => {
+  const t = setup();
+  await t.svc.init();
+  const spec = { kind: 'file', path: path.join(t.dir, 'server.log') };
+  const many = Array.from({ length: 14 }, (_, k) => 'C:/r/' + k);
+  let m = await t.svc.saveMeta(spec, { repos: ['C:/A', 'c:/a', ' C:/B ', '', 42, 'x'.repeat(600), ...many] });
+  assert.equal(m.repos.length, 10);
+  assert.deepEqual(m.repos.slice(0, 3), ['C:/A', 'C:/B', 'x'.repeat(500)]);
+  m = await t.svc.saveMeta(spec, { repos: ['C:/A'], repoAuto: true });
+  assert.deepEqual(m, { ...m, repos: ['C:/A'], repoAuto: true });
+  // Mexer em outra coisa (ou mandar `repos: undefined`) não mexe nos repositórios nem no "automático".
+  m = await t.svc.saveMeta(spec, { show: { merge: false }, repos: undefined });
+  assert.deepEqual(m.repos, ['C:/A']);
+  assert.equal(m.repoAuto, true);
+  assert.equal(m.show.merge, false);
+  // Escolher no seletor (sem repoAuto) é escolha do usuário; [] = nenhum, diferente de null (nunca escolhido).
+  m = await t.svc.saveMeta(spec, { repos: [] });
+  assert.deepEqual(m.repos, []);
+  assert.equal(m.repoAuto, false);
+});
+
+test('meta: ifUnset só liga sozinho se ninguém escolheu ainda', async () => {
+  const t = setup();
+  await t.svc.init();
+  const spec = { kind: 'file', path: path.join(t.dir, 'server.log') };
+  let m = await t.svc.saveMeta(spec, { repos: ['C:/auto'], repoAuto: true, ifUnset: true });
+  assert.deepEqual(m.repos, ['C:/auto']);
+  assert.equal(m.repoAuto, true);
+  assert.equal('ifUnset' in m, false);
+  // O usuário escolheu "Nenhum" antes de a ligação automática chegar: ela não sobrescreve.
+  await t.svc.saveMeta(spec, { repos: [] });
+  m = await t.svc.saveMeta(spec, { repos: ['C:/auto'], repoAuto: true, ifUnset: true });
+  assert.deepEqual(m.repos, []);
+  assert.equal(m.repoAuto, false);
+  await t.svc.saveMeta(spec, { repos: ['C:/meu'] });
+  m = await t.svc.saveMeta(spec, { repos: ['C:/auto'], repoAuto: true, ifUnset: true });
+  assert.deepEqual(m.repos, ['C:/meu']);
+  assert.deepEqual(t.svc.meta(spec).repos, ['C:/meu']);
+});
+
+test('meta: o "repo" antigo (um só) vira repos', async () => {
+  const dir = tmp();
+  const file = path.join(dir, 'logs.json');
+  const spec = { kind: 'file', path: path.join(dir, 'server.log') };
+  const spec2 = { kind: 'file', path: path.join(dir, 'outro.log') };
+  const mk = () => createLogsService({ file, callWorker: async () => ({}), watch: () => ({ close() {}, on() {} }), pollMs: 3600e3 });
+  // Grava um meta no formato novo para descobrir a chave de cada log, depois reescreve no formato antigo.
+  const s0 = mk();
+  await s0.init();
+  await s0.saveMeta(spec, { manual: [{ ts: 1, label: 'a' }] });
+  await s0.saveMeta(spec2, { manual: [{ ts: 1, label: 'b' }] });
+  await s0.flush?.();
+  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const [k1, k2] = Object.keys(raw.meta);
+  const [ka, kb] = raw.meta[k1].manual[0].label === 'a' ? [k1, k2] : [k2, k1];
+  raw.meta[ka] = { repo: 'C:/repos/fluig', manual: [], show: {} };
+  raw.meta[kb] = { repo: null, manual: [], show: {} };
+  fs.writeFileSync(file, JSON.stringify(raw));
+  const s1 = mk();
+  await s1.init();
+  assert.deepEqual(s1.meta(spec).repos, ['C:/repos/fluig']);
+  assert.equal(s1.meta(spec).repoAuto, false);
+  assert.equal(s1.meta(spec2).repos, null);
+  assert.equal('repo' in s1.meta(spec), false);
+});

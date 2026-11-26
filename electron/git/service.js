@@ -394,6 +394,32 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
       .filter((c) => c.hash && !seen.has(c.hash) && seen.add(c.hash));
   }
 
+  /**
+   * Marcos da main para o Logs: merges (primeiro pai) com os arquivos que cada um trouxe, do mais antigo ao mais novo.
+   * `ref` (validado) ou o primeiro que existir entre origin/main, main, origin/master, master e HEAD; só refs locais.
+   * `since`/`until` em ms. Até 500 commits. → { ref, commits } | { error }
+   */
+  async function milestones(repo, { since, until, ref } = {}) {
+    try { await repoOf(repo); } catch { return { error: 'Repositório não encontrado' }; }
+    if (!(await hasHead(repo))) return { ref: '', commits: [] };
+    let use = '';
+    if (ref) {
+      if (!validRev(ref)) throw new Error('Revisão inválida');
+      use = ref;
+    } else {
+      for (const r of ['origin/main', 'main', 'origin/master', 'master', 'HEAD']) {
+        if ((await git(repo, ['rev-parse', '--verify', '--quiet', `${r}^{commit}`], { ok: [0, 1] })).code === 0) { use = r; break; }
+      }
+    }
+    if (!use) return { ref: '', commits: [] };
+    const args = ['log', '--first-parent', '-m', '--name-only', '--max-count=500', `--format=${P.MILESTONE_FORMAT}`];
+    if (Number.isFinite(since)) args.push(`--since=${new Date(since).toISOString()}`);
+    if (Number.isFinite(until)) args.push(`--until=${new Date(until).toISOString()}`);
+    args.push(use);
+    const out = (await git(repo, args)).stdout;
+    return { ref: use, commits: P.parseMilestones(out).reverse() };
+  }
+
   /** Visão geral: números, atividade do último ano (52 semanas), autores e arquivos mais alterados. */
   async function overview(repo) {
     const s = await status(repo);
@@ -878,7 +904,7 @@ function createGitService({ file, run = defaultRun, broadcast = () => {}, now = 
   }
 
   return {
-    init, version, list, add, remove, scan, open, summaries, activity,
+    init, version, list, add, remove, scan, open, summaries, activity, milestones,
     status, log, commit, diff, branches, compare, stashes, stashFiles, reflog, overview, backups,
     exec, autoFetch, restoreBackup, mergePreview, conflictFile, rebaseInfo, files,
     blame, searchText, bisectState, tags, cleanPreview, gitignore, rhythm, fileVersions, worktrees,

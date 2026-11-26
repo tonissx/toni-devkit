@@ -191,6 +191,7 @@ agrupado, e a linha do tempo mostra os picos de erro — arraste nela para filtr
 - Formatos detectados sozinhos: Fluig/JBoss, JSON por linha, IIS, Nginx/Apache, log4j/Spring e texto
 - Pastas de logs rotacionados (`server.log.2026-10-10`, `app.log.1`, `.gz`) viram um log só
 - Busca com `level:error+ logger:fluig status:5xx "frase" /regex/ -esconder`, filtros salvos, `n`/`N` para o próximo erro
+- **Marcos** na linha do tempo: deploys lidos do `server.log` (Fluig/WildFly), merges na main dos repositórios ligados (ligados sozinhos pelo nome das widgets) e marcos manuais (em qualquer log); os problemas mostram "N min depois de …" e "arquivo mudou … antes" (suspeita, não causa)
 - Gráficos de erros por minuto e, em logs de acesso, status, latência p50/p95 e endpoints mais lentos
 - Copiar sem segredos e, com a IA ligada, **explicar o erro** (senhas e tokens saem antes do envio)
 

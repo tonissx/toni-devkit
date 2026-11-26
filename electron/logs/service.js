@@ -21,7 +21,7 @@ const MAX_PRESETS = 40;
 const MAX_TOMBS = 200;
 
 function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss.watch, pollMs = 1000, now = () => Date.now() }) {
-  let state = { recents: [], presets: [], investigations: [], removed: {}, overrides: {} };
+  let state = { recents: [], presets: [], investigations: [], removed: {}, overrides: {}, meta: {} };
   const queue = createQueue();
   const open = new Map(); // id → { id, spec, name, files, live, watcher, timer, ino, busy, seenErrors, errors }
   let seq = 0;
@@ -35,8 +35,39 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
         investigations: normalizeCases(raw.investigations),
         removed: raw.removed && typeof raw.removed === 'object' && !Array.isArray(raw.removed) ? raw.removed : {},
         overrides: raw.overrides && typeof raw.overrides === 'object' ? raw.overrides : {},
+        meta: raw.meta && typeof raw.meta === 'object' && !Array.isArray(raw.meta) ? raw.meta : {},
       };
     } catch { /* primeira vez */ }
+  }
+  /** Normaliza o que fica guardado por log: repositório ligado, marcos manuais e o que mostrar. */
+  function normalizeMeta(m) {
+    const src = m && typeof m === 'object' ? m : {};
+    const show = { deploy: true, merge: true, manual: true };
+    const sh = src.show && typeof src.show === 'object' ? src.show : {};
+    for (const k of Object.keys(show)) if (typeof sh[k] === 'boolean') show[k] = sh[k];
+    const manual = (Array.isArray(src.manual) ? src.manual : [])
+      .filter((x) => x && typeof x.ts === 'number' && Number.isFinite(x.ts) && typeof x.label === 'string' && x.label.trim())
+      .slice(0, 200)
+      .map((x) => ({ id: String(x.id || Math.random().toString(36).slice(2, 10)).slice(0, 40), kind: 'manual', ts: x.ts, label: x.label.trim().slice(0, 200) }));
+    // `repos`: null = nunca escolhido (pode ligar sozinho); [] = o usuário escolheu nenhum. O `repo` antigo (um só)
+    // vira `repos: [repo]`, escolhido à mão.
+    let repos = null;
+    let repoAuto = false;
+    if (Array.isArray(src.repos)) {
+      const seen = new Set();
+      repos = [];
+      for (const r of src.repos) {
+        const s = typeof r === 'string' ? r.trim().slice(0, 500) : '';
+        if (!s || seen.has(s.toLowerCase())) continue;
+        seen.add(s.toLowerCase());
+        repos.push(s);
+        if (repos.length >= 10) break;
+      }
+      repoAuto = src.repoAuto === true && repos.length > 0;
+    } else if (src.repos === undefined && typeof src.repo === 'string' && src.repo.trim()) {
+      repos = [src.repo.trim().slice(0, 500)];
+    }
+    return { repos, repoAuto, manual, show };
   }
   const persist = () => queue.run('save', () => atomicWrite(file, JSON.stringify(state, null, 2)));
 
@@ -235,6 +266,25 @@ function createLogsService({ file, callWorker, broadcast = () => {}, watch = fss
       state.recents = state.recents.filter((r) => r.path.toLowerCase() !== String(p || '').toLowerCase());
       await persist();
       return state.recents;
+    },
+    /** Repositório ligado, marcos manuais e filtros de marcos de um log. */
+    meta: (spec) => normalizeMeta(state.meta[keyOf(spec)]),
+    async saveMeta(spec, patch) {
+      const key = keyOf(spec);
+      const cur = normalizeMeta(state.meta[key]);
+      const p = {};
+      // Chave `undefined` não apaga nada (`{ repos: undefined }` não desliga os repositórios).
+      if (patch && typeof patch === 'object') for (const k of Object.keys(patch)) if (patch[k] !== undefined) p[k] = patch[k];
+      // Ligação automática: só vale se ninguém escolheu nada ainda (o usuário pode ter mexido enquanto o Devkit
+      // olhava as pastas). Senão, devolve o que está salvo sem mudar nada.
+      const ifUnset = p.ifUnset === true;
+      delete p.ifUnset;
+      if (ifUnset && cur.repos !== null) return cur;
+      // Escolher repositórios sem dizer que foi automático é escolha do usuário.
+      if ('repos' in p && !('repoAuto' in p)) p.repoAuto = false;
+      state.meta[key] = normalizeMeta({ ...cur, ...p, show: { ...cur.show, ...(p.show && typeof p.show === 'object' ? p.show : {}) } });
+      await persist();
+      return state.meta[key];
     },
     presets: () => state.presets,
     async savePresets(list) {

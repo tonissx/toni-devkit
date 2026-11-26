@@ -194,6 +194,58 @@
 .lg-dim { fill: var(--tk-surface-2); opacity: .7; pointer-events: none; }
 .lg-brush { fill: color-mix(in srgb, var(--tk-accent) 10%, transparent); stroke: var(--tk-accent); stroke-width: 1; pointer-events: none; }
 .lg-spike { fill: var(--lg-error); }
+
+/* marcos (deploy ▲, merge ◆, manual ✎): faixa de 14px acima das colunas + linha tracejada fina atravessando o gráfico.
+   Cores dos temas: deploy = destaque, merge = a mesma do Git (gt-tl merge), manual = texto neutro. */
+.lg-timeline, .lg-problems { --lg-m-deploy: var(--tk-accent); --lg-m-merge: var(--tk-syn-number); --lg-m-manual: var(--tk-text-2); }
+.lg-timeline__plot { position: relative; }
+.lg-mstrip { position: relative; height: 14px; }
+.lg-mark { position: absolute; top: 0; height: 14px; display: inline-flex; align-items: center; gap: 3px; padding: 0 3px 0 2px; transform: translateX(-6.5px);
+  border: 0; border-radius: 3px; background: none; color: var(--tk-text-3); font: 500 10.5px var(--tk-font-sans); line-height: 1; white-space: nowrap; cursor: pointer; }
+.lg-mark:hover, .lg-mark.is-hot { background: var(--tk-surface-3); color: var(--tk-text); }
+.lg-mark:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 0; }
+.lg-mark__n { min-width: 12px; padding: 0 3px; border-radius: 6px; background: var(--tk-surface-4); color: var(--tk-text); font: 600 9.5px var(--tk-font-mono); line-height: 12px; text-align: center; }
+.lg-mark__label { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.lg-mico { display: inline-block; flex-shrink: 0; width: 9px; height: 8px; }
+.lg-mico.is-deploy { background: var(--lg-m-deploy, var(--tk-accent)); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.lg-mico.is-merge { width: 9px; height: 9px; background: var(--lg-m-merge, var(--tk-syn-number)); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+svg.lg-mico.is-manual { width: 10px; height: 10px; background: none; color: var(--lg-m-manual, var(--tk-text-2)); }
+.lg-mline { stroke-width: 1; stroke-dasharray: 2 3; opacity: .35; pointer-events: none; transition: opacity .12s; }
+.lg-mline.is-deploy { stroke: var(--lg-m-deploy); }
+.lg-mline.is-merge { stroke: var(--lg-m-merge); }
+.lg-mline.is-manual { stroke: var(--lg-m-manual); }
+.lg-mline.is-hot { opacity: .9; }
+.lg-mtip { max-width: 330px; display: flex; flex-direction: column; gap: 6px; }
+.lg-mtip__head { display: flex; align-items: center; gap: 6px; }
+.lg-mtip__head b { color: var(--tk-text); font-weight: 600; }
+.lg-mtip__head .lg-tip__when { margin: 0 0 0 auto; }
+.lg-mtip__txt { color: var(--tk-text-2); overflow-wrap: anywhere; }
+.lg-mtip__note { color: var(--tk-text-3); font-size: 11px; }
+.lg-mtip__hint { padding-top: 4px; border-top: 1px solid var(--tk-border); color: var(--tk-text-3); font-size: 10.5px; }
+.lg-tlbtn { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 6px; border: 0; border-radius: var(--tk-radius-sm); background: none; color: var(--tk-text-3); font: 500 11.5px var(--tk-font-sans); cursor: pointer; white-space: nowrap; }
+.lg-tlbtn:hover, .lg-tlbtn[aria-expanded="true"] { background: var(--tk-surface-3); color: var(--tk-text); }
+.lg-tlbtn.is-partial > svg:first-child { color: var(--tk-accent-text); }
+.lg-timeline__marks { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--tk-text); white-space: nowrap; }
+.lg-timeline__marks > span { display: inline-flex; align-items: center; gap: 4px; }
+/* menu de um marco (também usado pela aba Problemas) */
+.lg-mmenu { max-width: 360px; }
+.lg-mmenu__head { display: flex; align-items: center; gap: 6px; padding: 4px 8px 2px; font-size: 12px; color: var(--tk-text); }
+.lg-mmenu__head small { margin-left: auto; color: var(--tk-text-3); font: 11px var(--tk-font-mono); }
+.lg-menu .lg-mmenu__back { padding: 2px; margin-left: -4px; color: var(--tk-text-3); }
+.lg-mmenu__label { padding: 0 8px 6px; margin-bottom: 4px; border-bottom: 1px solid var(--tk-border); color: var(--tk-text-2); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lg-mmenu__txt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-mmenu__sep { padding: 6px 8px 2px; color: var(--tk-text-3); font-size: 10.5px; }
+.lg-mmenu__note { padding: 6px 8px 2px; color: var(--tk-text-3); font-size: 11px; line-height: 1.4; }
+.lg-menu button.is-danger { color: var(--lg-error); }
+.lg-menu button:disabled { opacity: .5; cursor: default; }
+.lg-menu button:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: -2px; }
+.lg-mmenu__on { color: var(--tk-accent-text); }
+.lg-mmenu__form { display: flex; gap: 6px; padding: 4px; }
+.lg-mmenu__form input { flex: 1; min-width: 0; height: 26px; padding: 0 8px; border: 1px solid var(--tk-border); border-radius: var(--tk-radius-sm); background: var(--tk-surface-1); color: var(--tk-text); font: 12.5px var(--tk-font-sans); }
+.lg-mmenu__form input:focus { outline: none; border-color: var(--tk-accent); }
+.lg-menu .lg-mmenu__form .lg-btn { height: 26px; padding: 0 10px; color: var(--tk-accent-text); border: 1px solid color-mix(in srgb, var(--tk-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--tk-accent) 10%, transparent); }
+.lg-menu .lg-mmenu__form .lg-btn:disabled { opacity: .45; }
 .lg-timeline g.is-hover { filter: brightness(1.2); }
 .lg-timeline g.is-dim { opacity: .45; }
 .lg-timeline__svg:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 2px; border-radius: 4px; }
@@ -421,7 +473,8 @@
 .lg-ai { margin: 0; }
 
 /* problemas */
-.lg-problems { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.lg-problems { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.lg-problems__head .lg-seg button:disabled { opacity: .45; cursor: default; }
 .lg-problems__head { display: flex; align-items: center; gap: 10px; padding: 8px 16px; font-size: 12.5px; color: var(--tk-text-2); }
 .lg-problems__head b { color: var(--tk-text); }
 .lg-problems > .lg-ai { margin: 0 16px 8px; }
@@ -435,6 +488,22 @@
 .lg-prob__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12.5px var(--tk-font-mono); color: var(--tk-text); }
 .lg-prob__meta { display: flex; flex-wrap: wrap; gap: 4px 14px; padding-left: 19px; font: 11px var(--tk-font-mono); color: var(--tk-text-3); }
 .lg-prob__meta span { display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* etiqueta "depois de…": o marco que veio antes da primeira ocorrência (ordem no tempo, não causa) */
+.lg-after { --lg-m: var(--lg-m-deploy); display: inline-flex; align-items: center; gap: 5px; min-width: 0; max-width: 360px; height: 17px; margin: -1px 0; padding: 0 7px;
+  border: 1px solid var(--tk-border); border-radius: var(--tk-radius-pill); background: none; color: var(--tk-text-2); font: inherit; cursor: pointer; }
+.lg-after.is-merge { --lg-m: var(--lg-m-merge); }
+.lg-after.is-manual { --lg-m: var(--lg-m-manual); }
+.lg-after:hover { border-color: color-mix(in srgb, var(--lg-m) 55%, var(--tk-border)); color: var(--tk-text); }
+.lg-after:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 1px; }
+.lg-after[aria-expanded="true"] { border-color: var(--lg-m); color: var(--tk-text); }
+.lg-prob__meta .lg-after__txt { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-after.is-strong { border-color: color-mix(in srgb, var(--lg-m) 45%, transparent); background: color-mix(in srgb, var(--lg-m) 16%, transparent); color: var(--tk-text); font-weight: 600; }
+.lg-after.is-strong:hover { background: color-mix(in srgb, var(--lg-m) 24%, transparent); }
+.lg-after__aim { flex-shrink: 0; color: var(--lg-m); }
+.lg-after.is-faded { padding: 0 2px; border-color: transparent; color: var(--tk-text-3); }
+.lg-after.is-faded .lg-mico { opacity: .6; }
+.lg-after.is-faded:hover { border-color: transparent; color: var(--tk-text-2); text-decoration: underline; }
+.lg-prob__meta .lg-after.is-pre { height: auto; margin: 0; padding: 0; border: 0; color: var(--tk-text-3); font-style: italic; cursor: inherit; }
 .lg-prob__spark { flex-shrink: 0; }
 .lg-prob__count { flex-shrink: 0; width: 72px; display: flex; flex-direction: column; align-items: flex-end; }
 .lg-prob__count b { font: 600 15px var(--tk-font-sans); color: var(--tk-text); }
@@ -519,3 +588,20 @@
 @media (forced-colors: active) {
   .lg-row__bar, .lg-chip__dot, .lg-prob__bar { forced-color-adjust: none; }
 }
+
+/* Repositórios ligados ao log (marcos de merge) */
+.lg-select.lg-repo { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.lg-select.lg-repo:hover, .lg-select.lg-repo[aria-expanded="true"] { color: var(--tk-text); border-color: var(--tk-border-strong, var(--tk-border)); }
+.lg-select.lg-repo:focus-visible { outline: 2px solid var(--tk-accent); outline-offset: 1px; }
+.lg-select.lg-repo.is-warn { border-color: var(--tk-amber); }
+.lg-repo__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-repo__auto { flex-shrink: 0; color: var(--tk-text-3); font-size: 11px; }
+.lg-repo__menu { min-width: 240px; max-height: 360px; overflow-y: auto; }
+.lg-repo__menu .lg-repo__err { color: var(--tk-amber); }
+.lg-repo__warn { max-width: 260px; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: var(--tk-amber); white-space: nowrap; }
+.lg-mmenu__repo { padding: 0 5px; border-radius: var(--tk-radius-sm); background: var(--tk-surface-3); color: var(--tk-text-2); font-size: 10.5px; white-space: nowrap; }
+/* Dica de arquivo na aba Problemas: mais discreta que a etiqueta "depois de…". */
+.lg-after.is-file { border-style: dashed; color: var(--tk-text-3); }
+.lg-after.is-file:hover { color: var(--tk-text); }
+.lg-repo__suggest { height: 26px; padding: 0 9px; border: 1px dashed var(--tk-border); border-radius: var(--tk-radius-sm); background: transparent; color: var(--tk-text-2); font: 12px var(--tk-font-sans); cursor: pointer; white-space: nowrap; }
+.lg-repo__suggest:hover { background: var(--tk-surface-2); color: var(--tk-text); }

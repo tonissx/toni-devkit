@@ -331,7 +331,32 @@ function mergeAuthors(list) {
   return groups.map(({ emails, ...g }) => g).sort((x, y) => y.n - x.n);
 }
 
+/* ─────────────── marcos da main (merges com arquivos) ─────────────── */
+
+/** log --first-parent -m --name-only: registro = %x1e hash, ts, autor, assunto, corpo, %x1d e depois os arquivos. */
+const MILESTONE_FORMAT = '%x1e%H%x1f%ct%x1f%an%x1f%s%x1f%b%x1d';
+
+/** → [{ hash, ts (ms), subject, title, author, pr, files }] na ordem da saída do git. */
+function parseMilestones(stdout) {
+  const { prNumber } = require('../logs/milestones.js');
+  const out = [];
+  for (const rec of String(stdout || '').replace(/\r/g, '').split(RS)) {
+    if (!rec.trim()) continue;
+    const end = rec.indexOf('\x1d');
+    const head = end < 0 ? rec : rec.slice(0, end);
+    const [hash, ct, author, subject, body] = head.split(US);
+    if (!hash || !hash.trim()) continue;
+    const sub = subject || '';
+    const first = String(body || '').split('\n').map((l) => l.trim()).find(Boolean);
+    const title = /^Merge pull request /.test(sub) && first ? first : sub;
+    const files = end < 0 ? [] : rec.slice(end + 1).split('\n').map((l) => l.trim()).filter(Boolean);
+    out.push({ hash: hash.trim(), ts: Number(ct) * 1000, subject: sub, title, author: author || '', pr: prNumber(sub), files });
+  }
+  return out;
+}
+
 module.exports = {
+  MILESTONE_FORMAT, parseMilestones,
   mergeAuthors,
   parseWorktrees, lockOwnerPid,
   parseBlame, PICKAXE_FORMAT, parsePickaxe, parseBisectLog, parseCleanPreview,

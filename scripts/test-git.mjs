@@ -1248,3 +1248,43 @@ test('serviço: activity lista só os commits da pessoa no intervalo', async () 
     assert.deepEqual(await t.svc.activity(await t.svc.add(empty), { since: 0 }), []);
   } finally { t.done(); }
 });
+
+test('milestones: merges da main com arquivos da PR e número', async () => {
+  const t = await setup();
+  try {
+    const dir = makeRepo(t.root);
+    const repo = await t.svc.add(dir); // caminho devolvido (no Windows o tmp pode vir em nome curto 8.3)
+    sh(dir, 'checkout', '-q', '-b', 'feat');
+    write(dir, 'wgPortalRH/src/a.js', 'x');
+    sh(dir, 'add', '-A'); sh(dir, 'commit', '-q', '-m', 'mexe na widget');
+    sh(dir, 'checkout', '-q', 'main');
+    sh(dir, 'merge', '--no-ff', '-q', '-m', 'Merge pull request #7 from x/feat\n\nWidget nova', 'feat');
+    const r = await t.svc.milestones(repo, {});
+    assert.equal(r.ref, 'main');
+    const m = r.commits[r.commits.length - 1];
+    assert.equal(m.pr, 7);
+    assert.equal(m.title, 'Widget nova');
+    assert.deepEqual(m.files, ['wgPortalRH/src/a.js']);
+    assert.equal(r.commits.length, 2); // inicial + merge (first-parent: o commit da feat não aparece)
+  } finally { t.done(); }
+});
+
+test('milestones: sem origin usa main/master; vazio devolve []', async () => {
+  const t = await setup();
+  try {
+    const empty = makeRepo(t.root, 'vazio', { empty: true });
+    const re = await t.svc.add(empty);
+    assert.deepEqual(await t.svc.milestones(re, {}), { ref: '', commits: [] });
+    const m = makeRepo(t.root, 'velho');
+    sh(m, 'branch', '-m', 'main', 'master');
+    const rm = await t.svc.add(m);
+    assert.equal((await t.svc.milestones(rm, {})).ref, 'master');
+  } finally { t.done(); }
+});
+
+test('milestones: repo inexistente devolve erro claro', async () => {
+  const t = await setup();
+  try {
+    assert.deepEqual(await t.svc.milestones(path.join(t.root, 'nada'), {}), { error: 'Repositório não encontrado' });
+  } finally { t.done(); }
+});

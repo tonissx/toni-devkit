@@ -853,7 +853,7 @@ function initGit() {
   gitReady = gitSvc.init().catch((e) => { console.error('[git]', e); });
 }
 
-const GIT_API = ['version', 'list', 'add', 'remove', 'scan', 'open', 'summaries', 'activity', 'status', 'log', 'commit', 'diff', 'branches', 'compare', 'stashes', 'stashFiles', 'reflog', 'overview', 'backups', 'exec', 'autoFetch', 'restoreBackup', 'mergePreview', 'conflictFile', 'rebaseInfo', 'files', 'blame', 'searchText', 'bisectState', 'tags', 'cleanPreview', 'gitignore', 'rhythm', 'fileVersions', 'worktrees'];
+const GIT_API = ['version', 'list', 'add', 'remove', 'scan', 'open', 'summaries', 'activity', 'milestones', 'status', 'log', 'commit', 'diff', 'branches', 'compare', 'stashes', 'stashFiles', 'reflog', 'overview', 'backups', 'exec', 'autoFetch', 'restoreBackup', 'mergePreview', 'conflictFile', 'rebaseInfo', 'files', 'blame', 'searchText', 'bisectState', 'tags', 'cleanPreview', 'gitignore', 'rhythm', 'fileVersions', 'worktrees'];
 for (const fn of GIT_API) {
   ipcMain.handle('git:' + fn, async (_e, ...args) => { await gitReady; return gitSvc[fn](...args); });
 }
@@ -1216,12 +1216,12 @@ ipcMain.handle('aimon:lanes', async (_e, opts) => {
 ipcMain.handle('aimon:timeline', (_e, key, opts) => aimon().timeline(String(key || ''), opts && typeof opts === 'object' ? opts : {}));
 
 // Serviço (abrir, ao vivo, recentes, filtros salvos).
-const LOGS_SVC_API = ['open', 'reformat', 'switchFamily', 'setLive', 'close', 'list', 'summaries', 'markSeen', 'recents', 'forgetRecent', 'presets', 'savePresets', 'investigations', 'saveInvestigations', 'scanFolder'];
+const LOGS_SVC_API = ['open', 'reformat', 'switchFamily', 'setLive', 'close', 'list', 'summaries', 'markSeen', 'recents', 'forgetRecent', 'presets', 'savePresets', 'investigations', 'saveInvestigations', 'scanFolder', 'meta', 'saveMeta'];
 for (const fn of LOGS_SVC_API) {
   ipcMain.handle('logs:' + fn, async (_e, ...args) => { await logsReady; return logsSvc[fn](...args); });
 }
 // Consultas: vão direto ao worker (args: { id, qid, ... }).
-const LOGS_WORKER_API = ['query', 'rows', 'entry', 'context', 'locate', 'seekTime', 'next', 'hitNear', 'hitSub', 'marks', 'sparks', 'charts', 'textOf', 'info'];
+const LOGS_WORKER_API = ['query', 'rows', 'entry', 'context', 'locate', 'seekTime', 'next', 'hitNear', 'hitSub', 'marks', 'sparks', 'charts', 'textOf', 'info', 'deploys'];
 for (const op of LOGS_WORKER_API) {
   ipcMain.handle('logs:' + op, (_e, args) => callLogs(op, args && typeof args === 'object' ? args : {}));
 }

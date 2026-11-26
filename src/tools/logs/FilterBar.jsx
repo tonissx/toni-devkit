@@ -144,11 +144,15 @@ export function SearchBox({ value, onChange, error, fields, inputRef }) {
 
 export function RangeChip({ range, onClear }) {
   if (!range) return null;
-  const date = !sameDay(range.from, range.to) || !sameDay(range.from, Date.now());
+  // `to: null` = do instante até o fim do log ("Filtrar a partir daqui" de um marco).
+  const open = range.to == null;
+  const date = (!open && !sameDay(range.from, range.to)) || !sameDay(range.from, Date.now());
   return (
     <span className="lg-range">
       <Icon name="clock" size={12} />
-      {fmtTime(range.from, { date, millis: false })} – {fmtTime(range.to, { date: !sameDay(range.from, range.to), millis: false })}
+      {open
+        ? <>a partir de {fmtTime(range.from, { date, millis: false })}</>
+        : <>{fmtTime(range.from, { date, millis: false })} – {fmtTime(range.to, { date: !sameDay(range.from, range.to), millis: false })}</>}
       <button type="button" onClick={onClear} title="Tirar o intervalo de tempo" aria-label="Tirar o intervalo de tempo"><Icon name="x" size={12} /></button>
     </span>
   );

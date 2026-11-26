@@ -18,11 +18,14 @@ import { Hits } from './Hits.jsx';
 import { Marks } from './Marks.jsx';
 import { Investigation } from './Investigation.jsx';
 import { normalizeCase, addItem, removeItem, relatedCases, MAX_ITEMS } from '../../logs/investigation.js';
+import { afterText } from '../../logs/milestones.js';
 import { useSameText, filterTermFor } from './sameText.js';
 import { escapeRe } from '../../logs/query.js';
 import { usePersisted } from '../../lib/store.js';
 import { detailWidth, hitsHeight, DETAIL_DEFAULT, DETAIL_WIDE, DETAIL_MIN, DETAIL_MAX, HITS_DEFAULT, HITS_TALL } from '../../logs/panel.js';
 import { useSplit } from './useSplit.js';
+import { useMilestones } from './useMilestones.js';
+import { RepoPicker } from './RepoPicker.jsx';
 
 const HITS_HEAD = 31; // altura do cabeçalho do painel de baixo (30 + a linha de cima)
 
@@ -101,6 +104,7 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
   const [live, setLive] = React.useState(src.live);
   const latest = React.useRef(0);
   const appended = React.useRef(false);
+  const [appendedNonce, setAppendedNonce] = React.useState(0); // muda a cada `appended`/`reset`/reabertura: refaz os marcos de deploy
   const first = React.useRef(true);
   const searchRef = React.useRef(null);
   const listRef = React.useRef(null);
@@ -177,9 +181,11 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
       if (!evt || evt.id !== id) return;
       if (evt.type === 'appended') {
         appended.current = true;
+        setAppendedNonce((n) => n + 1);
         if (!t) t = setTimeout(() => { t = null; runRef.current(); }, 450);
       } else if (evt.type === 'reset') {
         if (evt.info) onInfo(evt.info);
+        setAppendedNonce((n) => n + 1);
         setSel(null);
         setPins([]);
         first.current = true;
@@ -270,17 +276,20 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
   const caseObj = cases.find((x) => x.id === activeCase) || null;
   const inCase = (i) => !!caseObj && caseObj.items.some((x) => x.path === logKey && x.i === i);
   // Guarda / tira a entrada (a selecionada, ou a que vier em `entry`) da investigação ativa; sem caso, cria um.
+  // A investigação ativa; sem caso, cria um (e o deixa ativo).
+  const ensureCase = () => {
+    if (caseObj) return caseObj;
+    const target = normalizeCase({ title: `Investigação — ${src.name} ${new Date().toLocaleDateString('pt-BR')}` });
+    onCases((l) => [...l, target]);
+    onActiveCase(target.id);
+    return target;
+  };
   const toggleCase = async (entry) => {
     const i = entry ? entry.i : sel ? sel.i : null;
     if (i == null) return;
     let e = entry;
     if (!e || e.text == null) { try { e = await api.entry({ id, i }); } catch { return; } }
-    let target = caseObj;
-    if (!target) {
-      target = normalizeCase({ title: `Investigação — ${src.name} ${new Date().toLocaleDateString('pt-BR')}` });
-      onCases((l) => [...l, target]);
-      onActiveCase(target.id);
-    }
+    const target = ensureCase();
     const existing = target.items.find((x) => x.path === logKey && x.i === i);
     if (existing) {
       onCases((l) => l.map((c) => (c.id === target.id ? { ...c, items: removeItem(c.items, existing.id), updatedAt: Date.now() } : c)));
@@ -296,6 +305,20 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
     const note = rel.length ? ` · Parecido com «${rel[0].c.title}»${rel[0].c.status === 'done' ? ' (resolvida)' : ''}${rel.length > 1 ? ` e mais ${rel.length - 1}` : ''}` : '';
     toast(`Guardado na investigação (${r.items.length})`, target.title + note, 'ok');
   };
+  // Um marco (deploy, merge, manual) vira passo da investigação com a tag Suspeita — só a ordem no tempo, não a causa.
+  const markToCase = ({ m, group, gapMs }) => {
+    const target = ensureCase();
+    const title = group ? String(group.title || '').split('\n')[0].slice(0, 120) : '';
+    const raw = {
+      i: m.i != null ? m.i : null, ts: m.ts, level: 3, tag: 'suspeita', text: 'Marco: ' + m.label, log: src.name, path: logKey,
+      note: title && gapMs != null ? `«${title}» apareceu pela primeira vez ${afterText(m, gapMs)} (ordem no tempo, não indica causa).` : '',
+    };
+    const r = addItem(target.items, raw);
+    if (r.full) { toast('Investigação cheia', `O limite é de ${MAX_ITEMS} passos por investigação.`, 'error'); return; }
+    if (!r.added) { toast('Já está na investigação', target.title, 'ok'); return; }
+    onCases((l) => l.map((c) => (c.id === target.id ? { ...c, items: addItem(c.items, raw).items, updatedAt: Date.now() } : c)));
+    toast(`Marco guardado como suspeita (${r.items.length})`, target.title, 'ok');
+  };
   const jumpFromCase = (item) => { set({ tab: 'lines' }); jumpToEntry(item.i); };
   // Faixa de marcadores ao lado da rolagem: onde estão os achados e os fixados.
   React.useEffect(() => {
@@ -308,10 +331,10 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
     try { const on = await api.setLive(id, !live); setLive(on); toast(on ? 'Acompanhando ao vivo' : 'Parou de acompanhar', on ? 'Linhas novas entram sozinhas.' : 'O log fica como está agora.', 'ok'); } catch (e) { toast('Não foi possível', errText(e), 'error'); }
   };
   const reformat = async (patch) => {
-    try { const info = await api.reformat(id, patch); onInfo(info); first.current = true; setSel(null); runRef.current(); } catch (e) { toast('Não foi possível reabrir', errText(e), 'error'); }
+    try { const info = await api.reformat(id, patch); onInfo(info); setAppendedNonce((n) => n + 1); first.current = true; setSel(null); runRef.current(); } catch (e) { toast('Não foi possível reabrir', errText(e), 'error'); }
   };
   const switchFamily = async (family) => {
-    try { const info = await api.switchFamily(id, family); onInfo(info); first.current = true; setSel(null); runRef.current(); } catch (e) { toast('Não foi possível abrir', errText(e), 'error'); }
+    try { const info = await api.switchFamily(id, family); onInfo(info); setAppendedNonce((n) => n + 1); first.current = true; setSel(null); runRef.current(); } catch (e) { toast('Não foi possível abrir', errText(e), 'error'); }
   };
   const doExport = async (kind) => {
     if (!sum) return;
@@ -377,6 +400,7 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
   const detach = () => { setDetached(true); window.devkit.popout.open(popState()); };
   const fmtOptions = FORMAT_IDS.map((f) => [f, FORMATS[f].label]);
   const truncNote = src.truncated ? 'Arquivo grande: mostrando só o final (1,5 GB). Os arquivos/trechos mais antigos ficaram de fora.' : null;
+  const ms = useMilestones({ id, spec: src.spec, tsMin: sum ? sum.tsMin : null, tsMax: sum ? sum.tsMax : null, appendedNonce });
   const errorsTotal = sum ? sum.levelTotals[5] + sum.levelTotals[6] : 0;
 
   return (
@@ -397,6 +421,8 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
           <select className="lg-select" value={src.format} onChange={(e) => reformat({ format: e.target.value })} title={`Formato${src.detected ? ` (detectado: ${FORMATS[src.detected.format] ? FORMATS[src.detected.format].label : src.detected.format})` : ''}`}>
             {fmtOptions.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
+          <RepoPicker repos={ms.repos} linked={ms.linked} auto={ms.meta.repoAuto} error={ms.repoError} suggestions={ms.suggestions}
+            onChange={(list) => ms.setMeta({ repos: list })} />
           <select className="lg-select" value={src.encoding} onChange={(e) => reformat({ encoding: e.target.value })} title="Codificação do texto (troque se aparecerem acentos estranhos)">
             {ENCODINGS.map(([v, l]) => <option key={v} value={v}>{v === 'auto' ? 'Auto' : l}</option>)}
             {!ENCODINGS.some(([v]) => v === src.encoding) && <option value={src.encoding}>{src.encoding}</option>}
@@ -425,7 +451,13 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
 
       <Timeline hist={sum && sum.hist} range={range} onRange={(r) => set({ range: r })} onSeek={seek} spikes={tlMode === 'problems' || errorsTotal ? sum && sum.spikes : []}
         mode={tlMode} onMode={(m) => set({ tlMode: m })} loading={dimmed}
-        collapsed={tlFolded} onCollapse={(v) => set({ tlFolded: v })} />
+        collapsed={tlFolded} onCollapse={(v) => set({ tlFolded: v })}
+        milestones={ms.list} allMilestones={ms.all} show={ms.meta.show} onShow={(s) => ms.setMeta({ show: s })}
+        repos={ms.linked} failedRepos={ms.failedRepos} commitsOf={ms.commitsOf} commitsState={ms.commitsState}
+        onMarkHere={(ts, label) => ms.setMeta({ manual: [...ms.meta.manual, { ts, label }] })}
+        onMilestone={(a) => ms.setMeta({ manual: a.type === 'delete'
+          ? ms.meta.manual.filter((m) => m.id !== a.m.id)
+          : ms.meta.manual.map((m) => (m.id === a.m.id ? { ...m, label: a.label } : m)) })} />
 
       <div className="lg-tabs" role="tablist">
         {[
@@ -494,6 +526,8 @@ export function LogView({ src, state, setState, presets, onPresets, cases = [], 
             ) : tab === 'problems' ? (
               <Problems id={id} sum={sum} openedAt={openedAt} res={res} selKey={null}
                 onPick={(g) => setSel({ pos: null, i: g.lastIdx })} onFilter={addFilter}
+                milestones={ms.list} logStart={sum ? sum.tsMin : null} related={ms.related} repos={ms.linked} failedRepos={ms.failedRepos} allCommits={ms.allCommits} commitsOf={ms.commitsOf} commitsState={ms.commitsState}
+                onSeek={seek} onRange={(r) => set({ range: r })} onMilestone={(a) => { if (a.type === 'investigate') markToCase(a); }}
                 aiSlot={aiOn(cfg) ? (groups) => (
                   <>
                     <AiButton ai={aiInc} label="Resumir" onClick={() => summarize(groups)} title="Resumir os problemas do filtro com IA (os textos passam pelo filtro de segredos)" />
