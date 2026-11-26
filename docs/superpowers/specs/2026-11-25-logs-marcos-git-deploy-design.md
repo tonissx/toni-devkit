@@ -9,7 +9,7 @@ Logs mostra quando cada erro apareceu pela primeira vez (aba Problemas, `first`)
 ou no servidor naquele momento. A ideia é colocar no próprio log os **momentos em que algo novo entrou**:
 
 - **deploys no Fluig** (widgets/layouts publicados — lidos do próprio `server.log`);
-- **merges na main** (do repositório Git ligado ao log).
+- **merges na main** (dos repositórios Git ligados ao log — um ou vários).
 
 E, a partir disso, apontar em cada problema **o marco que veio logo antes** — com destaque quando o commit mexeu no
 arquivo onde o erro acontece.
@@ -86,10 +86,19 @@ Módulo puro novo `src/logs/milestones.js`:
 
 ### 3. Marcos de merge (Git)
 
-- **Ligar o log a um repositório**: um seletor pequeno no cabeçalho do log ("Repositório: —") com os repositórios de
-  `git-repos.json`. Escolha lembrada por caminho do log em `logs.json`.
-  - Sugestão automática: se algum deploy detectado tem nome de artefato igual a uma pasta de primeiro/segundo nível de
-    um repositório da lista (`wgPortalRH.war` ↔ `wgPortalRH/`), sugerir esse repositório ("Ligar a toni-fluig?").
+- **Ligar o log a repositórios**: um seletor compacto no cabeçalho do log ("Repositórios: fluig-navship ▾" ou
+  "Repositórios: 2") abre uma lista com caixas de marcar para cada repositório de `git-repos.json` + "Nenhum". Escolha
+  lembrada por caminho do log em `logs.json`: `repos: string[] | null` (até 10, sem repetir sem diferenciar
+  maiúsculas) e `repoAuto`. `null` = nunca escolhido; `[]` = o usuário escolheu nenhum. O `repo` antigo (um só) migra
+  para `repos: [repo]`.
+  - **Ligação automática**: `rankRepos(artefatos, [{ path, folders }])` conta quantos artefatos dos deploys têm pasta de
+    mesmo nome (em qualquer nível, `foldersOf(git.files(repo, 'HEAD'))`) em cada repositório; `autoRepo` liga sozinho o
+    primeiro quando ele vence sem empate (`repos: [path], repoAuto: true` — o seletor mostra "(automático)" e explica
+    que as pastas batem com as widgets publicadas). No empate, pergunta: até dois botões "Ligar a X?". Depois que o
+    usuário mexe no seletor (inclusive "Nenhum"), não liga mais sozinho.
+  - Cada repositório ligado é lido por conta própria (`git.milestones`, mesma janela); "carregando" até todos
+    responderem, "indisponível" só se todos falharem, e o erro de cada um aparece com o nome ("fluig-navship:
+    Repositório não encontrado"). Cada merge leva `repo`/`repoName` (id `merge:<repo>:<hash>`) e abre no Git dele.
 - Função nova (leitura) em `electron/git/service.js`: `milestones(repo, { since, until, ref })`
   - `ref` padrão: `origin/main` se existir, senão `main`/`master` local.
   - `git log --first-parent <ref> --since --until --format=%H%x1f%ct%x1f%s%x1f%an --name-only -m` (os arquivos de cada
@@ -137,6 +146,9 @@ Módulo puro novo `src/logs/milestones.js`:
 - Liga/desliga por tipo num botãozinho "Marcos" no cabeçalho da Linha do tempo (lembrado). Com a Linha do tempo
   recolhida, a faixa fina mostra "2 deploys · 5 merges".
 
+**Seletor de repositórios** (`RepoPicker.jsx`): ver a seção 3. Com mais de um ligado, o tooltip e o cabeçalho do menu
+de um merge mostram o nome do repositório, e na lista de commits de um deploy cada commit abre no seu repositório.
+
 **Problemas** (`Problems.jsx`): nova etiqueta na linha `lg-prob__meta`:
 
 - `▲ 14 min depois do deploy de wgPortalRH` / `◆ 2 h depois do #126 Logs: abrir outro…`
@@ -145,6 +157,11 @@ Módulo puro novo `src/logs/milestones.js`:
 - `preexisting` → texto discreto "já existia no início do log".
 - Clique na etiqueta: mesmo menu do marco.
 - Nova ordem "Depois do último marco" (os que surgiram depois do marco mais recente vêm primeiro).
+- **Dica de arquivo** (só em Problemas, não na Linha do tempo): o hook também lê, com prioridade baixa (depois dos
+  ligados, um por vez, em cache, falhas ignoradas), a main de **todos os repositórios cadastrados**. `fileCommitBefore`
+  (com o índice `indexCommitsByFile`, montado uma vez) acha o commit mais recente que mexeu no arquivo do frame até 7
+  dias antes da primeira ocorrência → etiqueta discreta `◆ WorkflowService.java mudou no #2194 (fluig-navship) 2 h
+  antes`; clicar abre o commit no Git. Não aparece quando o marco atribuído já é esse commit em destaque forte.
 
 **Investigação**: "Adicionar à investigação" também aceita um marco (vira item com tag `suspeita` e o texto do marco),
 para o relatório trazer "começou depois do deploy X".
