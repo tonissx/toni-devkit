@@ -252,3 +252,70 @@ test('isMergeCommit: PR ou assunto "Merge "; commit direto não', () => {
   assert.equal(M.isMergeCommit({ pr: null, subject: 'ajuste no formulário' }), false);
   assert.equal(M.isMergeCommit(null), false);
 });
+
+test('rankRepos: mais artefatos batendo primeiro, sem diferenciar maiúsculas, sem os de 0', () => {
+  const repos = [
+    { path: 'C:/a', folders: ['docs', 'wgA'] },
+    { path: 'C:/b', folders: ['WGA', 'wgB', 'wgb'] },
+    { path: 'C:/c', folders: ['x'] },
+  ];
+  assert.deepEqual(M.rankRepos(['wgA', 'wgB', 'wga'], repos), [{ path: 'C:/b', matches: 2 }, { path: 'C:/a', matches: 1 }]);
+  assert.deepEqual(M.rankRepos([], repos), []);
+  assert.deepEqual(M.rankRepos(['wgA'], []), []);
+  assert.deepEqual(M.rankRepos(null, null), []);
+});
+
+test('autoRepo: só liga quando o primeiro vence sozinho', () => {
+  assert.equal(M.autoRepo([{ path: 'C:/b', matches: 2 }, { path: 'C:/a', matches: 1 }]), 'C:/b');
+  assert.equal(M.autoRepo([{ path: 'C:/b', matches: 1 }]), 'C:/b');
+  assert.equal(M.autoRepo([{ path: 'C:/b', matches: 1 }, { path: 'C:/a', matches: 1 }]), null);
+  assert.equal(M.autoRepo([{ path: 'C:/b', matches: 0 }]), null);
+  assert.equal(M.autoRepo([]), null);
+  assert.equal(M.autoRepo(null), null);
+});
+
+test('suggestRepo devolve o candidato com mais artefatos batendo', () => {
+  assert.equal(M.suggestRepo(['wgA', 'wgB'], [{ path: 'C:/a', folders: ['wgA'] }, { path: 'C:/b', folders: ['wgA', 'wgB'] }]), 'C:/b');
+});
+
+test('fileCommitBefore: commit mais recente que mexeu no arquivo do frame, dentro da janela', () => {
+  const H = 3600e3;
+  const t = 100 * 86400e3;
+  const commits = [
+    { hash: 'old', ts: t - 8 * 86400e3, files: ['src/WorkflowService.java'], repo: 'r1' },
+    { hash: 'a', ts: t - 5 * H, files: ['src/WorkflowService.java'], repo: 'r1' },
+    { hash: 'b', ts: t - 2 * H, files: ['x/workflowservice.java', 'y.js'], repo: 'r2' },
+    { hash: 'other', ts: t - 1 * H, files: ['src/Outro.java'], repo: 'r1' },
+    { hash: 'later', ts: t + H, files: ['src/WorkflowService.java'], repo: 'r1' },
+  ];
+  const frame = 'com.x.WorkflowService$Inner.start';
+  assert.equal(M.fileCommitBefore(commits, frame, t).hash, 'b');
+  assert.equal(M.fileCommitBefore(commits, frame, t - 3 * H).hash, 'a');
+  assert.equal(M.fileCommitBefore(commits, frame, t - 6 * H), null); // só o de 8 dias, fora da janela
+  assert.equal(M.fileCommitBefore(commits, frame, t - 6 * H, 30 * 86400e3).hash, 'old');
+  assert.equal(M.fileCommitBefore(commits, '', t), null);
+  assert.equal(M.fileCommitBefore(commits, 'semponto', t), null);
+  assert.equal(M.fileCommitBefore([], frame, t), null);
+  // Exatamente no instante da primeira ocorrência conta; exatamente no limite da janela não.
+  assert.equal(M.fileCommitBefore([{ hash: 'eq', ts: t, files: ['WorkflowService.java'] }], frame, t).hash, 'eq');
+  assert.equal(M.fileCommitBefore([{ hash: 'edge', ts: t - 7 * 86400e3, files: ['WorkflowService.java'] }], frame, t), null);
+});
+
+test('indexCommitsByFile: nome do arquivo em minúsculas → commits por ts; o índice serve no fileCommitBefore', () => {
+  const idx = M.indexCommitsByFile([
+    { hash: '2', ts: 20, files: ['a/Foo.java', 'b\\Foo.java'] },
+    { hash: '1', ts: 10, files: ['Foo.java', 'Bar.js'] },
+  ]);
+  assert.deepEqual(idx.get('foo').map((c) => c.hash), ['1', '2']); // sem repetir o commit que mexeu em dois Foo
+  assert.deepEqual(idx.get('bar').map((c) => c.hash), ['1']);
+  assert.equal(M.fileCommitBefore(idx, 'com.x.Foo.run', 15).hash, '1');
+  assert.equal(M.fileCommitBefore(idx, 'com.x.Foo.run', 25).hash, '2');
+  assert.equal(M.fileCommitBefore(idx, 'com.x.Foo.run', 5), null);
+  assert.equal(M.fileCommitBefore(idx, 'com.x.Nada.run', 25), null);
+});
+
+test('fileHintText: "mudou … antes", nunca causa', () => {
+  assert.equal(M.fileHintText({ hash: 'abcdef1234', pr: 2194, repoName: 'fluig-navship' }, 'WorkflowService.java', 2 * 3600e3),
+    'WorkflowService.java mudou no #2194 (fluig-navship) 2 h antes');
+  assert.equal(M.fileHintText({ hash: 'abcdef1234' }, 'A.java', 30e3), 'A.java mudou no abcdef1 menos de 1 min antes');
+});

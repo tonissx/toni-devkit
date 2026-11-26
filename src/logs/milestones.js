@@ -142,11 +142,33 @@ function mergeMilestones(deploys, manual, merges, enabled = { deploy: true, merg
   ].sort((a, b) => a.ts - b.ts);
 }
 
-/** Primeiro repositório com pasta igual (sem diferenciar maiúsculas) a algum artefato. */
+/**
+ * Repositórios por quantos artefatos distintos (sem diferenciar maiúsculas) têm uma pasta de mesmo nome, do que mais
+ * bate para o que menos bate; os que não batem nenhum ficam de fora. → [{ path, matches }]
+ */
+function rankRepos(artifacts, repos) {
+  const arts = [...new Set((artifacts || []).map((a) => String(a).toLowerCase()))];
+  if (!arts.length) return [];
+  const out = [];
+  for (const r of repos || []) {
+    const folders = new Set((r.folders || []).map((f) => String(f).toLowerCase()));
+    const matches = arts.filter((a) => folders.has(a)).length;
+    if (matches > 0) out.push({ path: r.path, matches });
+  }
+  return out.sort((a, b) => b.matches - a.matches); // estável: no empate, a ordem da lista do Git
+}
+
+/** Liga sozinho só quando o primeiro vence sem empate; senão (null) pergunta. */
+function autoRepo(ranked) {
+  const [a, b] = ranked || [];
+  if (!a || !(a.matches >= 1)) return null;
+  return !b || a.matches > b.matches ? a.path : null;
+}
+
+/** Repositório com mais pastas iguais (sem diferenciar maiúsculas) aos artefatos, ou null. */
 function suggestRepo(artifacts, repos) {
-  const arts = new Set((artifacts || []).map((a) => String(a).toLowerCase()));
-  const r = (repos || []).find((x) => (x.folders || []).some((f) => arts.has(String(f).toLowerCase())));
-  return r ? r.path : null;
+  const r = rankRepos(artifacts, repos);
+  return r.length ? r[0].path : null;
 }
 
 /** Deploy/undeploy/restart anterior que compartilha algum artefato com este. */
@@ -275,6 +297,45 @@ function strongHint(m, file) {
   return 'Um commit na main desde o deploy anterior' + of + ' alterou ' + file + ', onde este erro acontece (estimativa)';
 }
 
+/* ── Dica de arquivo (commits de qualquer repositório cadastrado) ─────────── */
+
+const fileKey = (f) => String(f).split(/[\\/]/).pop().replace(/\.[^.]*$/, '').toLowerCase();
+
+/** Nome do arquivo sem pasta e sem extensão, em minúsculas → commits que mexeram nele, por `ts` (sem repetir). */
+function indexCommitsByFile(commits) {
+  const idx = new Map();
+  for (const c of commits || []) {
+    const seen = new Set();
+    for (const f of c.files || []) {
+      const k = fileKey(f);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      if (!idx.has(k)) idx.set(k, []);
+      idx.get(k).push(c);
+    }
+  }
+  for (const list of idx.values()) list.sort((a, b) => a.ts - b.ts);
+  return idx;
+}
+
+/**
+ * Commit mais recente com `first - windowMs < ts <= first` que mexeu no arquivo da classe do frame, ou null.
+ * `commits` pode ser a lista ou o índice de `indexCommitsByFile` (para muitos grupos, monte o índice uma vez).
+ */
+function fileCommitBefore(commits, frame, first, windowMs = 7 * DAY) {
+  const base = frameBase(frame).toLowerCase();
+  if (!base || first == null) return null;
+  const list = commits instanceof Map ? commits.get(base) || [] : indexCommitsByFile(commits).get(base) || [];
+  const c = previousMilestone(list, first);
+  return c && c.ts > first - windowMs ? c : null;
+}
+
+/** `WorkflowService.java mudou no #2194 (fluig-navship) 2 h antes`. Só a ordem no tempo, nunca a causa. */
+function fileHintText(c, file, gapMs) {
+  const ref = c.pr ? '#' + c.pr : String(c.hash || '').slice(0, 7);
+  return file + ' mudou no ' + ref + (c.repoName ? ' (' + c.repoName + ')' : '') + ' ' + fmtGap(gapMs) + ' antes';
+}
+
 /** Ordem "Depois do último marco": grupos com `first >= latestTs` primeiro; dentro de cada parte, por `count`. */
 function sortAfterLatest(groups, latestTs) {
   const after = (g) => (latestTs != null && g.first != null && g.first >= latestTs ? 1 : 0);
@@ -282,6 +343,7 @@ function sortAfterLatest(groups, latestTs) {
 }
 
 module.exports = {
+  rankRepos, autoRepo, indexCommitsByFile, fileCommitBefore, fileHintText,
   touchedFile, fmtGap, milestoneName, afterText, strongHint, sortAfterLatest,
   foldersOf, DEPLOY_RULES, matchDeploy, groupBursts,
   prNumber, isMergeCommit, frameBase, touchesFrame, previousMilestone, commitsInDeploy, attribute, mergeMilestones, suggestRepo, previousSameArtifact,
